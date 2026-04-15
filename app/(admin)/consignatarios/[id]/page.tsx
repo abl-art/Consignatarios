@@ -92,7 +92,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
                 <td className="px-6 py-3 text-gray-700">{a.firmado_por}</td>
                 <td className="px-6 py-3 text-right">
                   <a href={`/api/pdf/remito/${a.id}`} target="_blank" rel="noopener noreferrer"
-                    className="text-blue-600 text-xs hover:underline">PDF</a>
+                    className="text-magenta-600 text-xs hover:underline">PDF</a>
                 </td>
               </tr>
             ))}

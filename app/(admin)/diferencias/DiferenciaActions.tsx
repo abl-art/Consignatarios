@@ -42,7 +42,7 @@ export default function DiferenciaActions({ id, estado }: DiferenciaActionsProps
       <button
         onClick={() => handleUpdate('resuelto')}
         disabled={loading}
-        className="px-3 py-1 text-xs font-medium rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-1 text-xs font-medium rounded-md bg-magenta-100 text-magenta-700 hover:bg-magenta-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         Resuelto
       </button>

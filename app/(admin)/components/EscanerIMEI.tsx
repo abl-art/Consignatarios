@@ -112,7 +112,7 @@ export default function EscanerIMEI({ onScan, disabled = false }: EscanerIMEIPro
         className={`px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-50 ${
           camaraActiva
             ? 'bg-red-600 hover:bg-red-700'
-            : 'bg-blue-600 hover:bg-blue-700'
+            : 'bg-magenta-600 hover:bg-magenta-700'
         }`}
       >
         {camaraActiva ? 'Detener cámara' : 'Escanear con cámara'}
@@ -151,13 +151,13 @@ export default function EscanerIMEI({ onScan, disabled = false }: EscanerIMEIPro
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder="15 dígitos"
-            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-magenta-500 disabled:opacity-50"
           />
           <button
             type="button"
             onClick={agregarManual}
             disabled={disabled || inputManual.length === 0}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 disabled:opacity-50 transition-colors"
           >
             Agregar
           </button>

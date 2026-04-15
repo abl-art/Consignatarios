@@ -110,7 +110,7 @@ export default function NuevaAuditoriaForm({
           value={consignatarioId}
           onChange={(e) => handleConsignatarioChange(e.target.value)}
           disabled={submitting}
-          className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 disabled:opacity-50"
         >
           <option value="">Seleccioná un consignatario…</option>
           {consignatarios.map((c) => (
@@ -214,7 +214,7 @@ export default function NuevaAuditoriaForm({
           onChange={(e) => setRealizadaPor(e.target.value)}
           disabled={submitting}
           placeholder="Nombre del auditor"
-          className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 disabled:opacity-50"
         />
       </div>
 
@@ -229,7 +229,7 @@ export default function NuevaAuditoriaForm({
           disabled={submitting}
           rows={3}
           placeholder="Notas opcionales sobre la auditoría…"
-          className="w-full max-w-lg px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none"
+          className="w-full max-w-lg px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 disabled:opacity-50 resize-none"
         />
       </div>
 
@@ -257,7 +257,7 @@ export default function NuevaAuditoriaForm({
           type="button"
           onClick={() => handleSubmit(true)}
           disabled={submitting}
-          className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="px-5 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 disabled:opacity-50 transition-colors"
         >
           {submitting ? 'Guardando…' : 'Confirmar auditoría'}
         </button>

@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   ])
 
   const stats = [
-    { label: 'Dispositivos totales', value: totalDispositivos ?? 0, color: 'text-blue-700' },
+    { label: 'Dispositivos totales', value: totalDispositivos ?? 0, color: 'text-magenta-700' },
     { label: 'Disponibles', value: disponibles ?? 0, color: 'text-green-700' },
     { label: 'Asignados', value: asignados ?? 0, color: 'text-amber-700' },
     { label: 'Vendidos', value: vendidos ?? 0, color: 'text-purple-700' },
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
             <h2 className="text-base font-semibold text-gray-900">
               Comisiones a pagar — {mesActual}
             </h2>
-            <Link href="/reportes" className="text-sm text-blue-600 hover:text-blue-800">
+            <Link href="/reportes" className="text-sm text-magenta-600 hover:text-magenta-800">
               Ver reportes →
             </Link>
           </div>
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
               ))}
               <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-100">
                 <span className="font-semibold text-gray-900">Total</span>
-                <span className="font-bold text-blue-700">{formatearMoneda(totalComisiones)}</span>
+                <span className="font-bold text-magenta-700">{formatearMoneda(totalComisiones)}</span>
               </div>
             </div>
           )}
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
             <h2 className="text-base font-semibold text-gray-900">
               Diferencias pendientes
             </h2>
-            <Link href="/diferencias" className="text-sm text-blue-600 hover:text-blue-800">
+            <Link href="/diferencias" className="text-sm text-magenta-600 hover:text-magenta-800">
               Ver todas →
             </Link>
           </div>

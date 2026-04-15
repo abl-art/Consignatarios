@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     marginBottom: 2,
   },
-  summaryNumberEsperados: { color: '#2563eb' },
+  summaryNumberEsperados: { color: '#E91E7B' },
   summaryNumberPresentes: { color: '#16a34a' },
   summaryNumberFaltantes: { color: '#dc2626' },
   summaryLabel: {

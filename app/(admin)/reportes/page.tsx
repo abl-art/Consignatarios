@@ -196,7 +196,7 @@ export default async function ReportesPage() {
                 return (
                   <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-800">{c.nombre}</td>
-                    <td className="px-4 py-3 text-right text-blue-600 font-medium">{stock.asignados}</td>
+                    <td className="px-4 py-3 text-right text-magenta-600 font-medium">{stock.asignados}</td>
                     <td className="px-4 py-3 text-right text-gray-500 font-medium">{stock.vendidos}</td>
                     <td className="px-4 py-3 text-right font-bold text-gray-800">{total}</td>
                   </tr>

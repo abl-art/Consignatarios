@@ -116,7 +116,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         <select
           value={consignatarioId}
           onChange={(e) => setConsignatarioId(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500"
           required
         >
           <option value="">Seleccioná un consignatario</option>
@@ -139,7 +139,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
             placeholder="Filtrar por modelo..."
             value={filtroModelo}
             onChange={(e) => setFiltroModelo(e.target.value)}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 w-56"
           />
         </div>
 
@@ -151,7 +151,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
                   disabled={dispositivosFiltrados.length === 0}
                 />
               </th>
@@ -175,7 +175,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
                 return (
                   <tr
                     key={d.id}
-                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-magenta-50' : 'hover:bg-gray-50'}`}
                     onClick={() => toggleOne(d.id)}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -183,7 +183,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleOne(d.id)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
                       />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">{d.imei}</td>
@@ -209,7 +209,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
             <p className="text-xs text-gray-500 mb-1">Equipos</p>
-            <p className="text-3xl font-bold text-blue-700">{selected.size}</p>
+            <p className="text-3xl font-bold text-magenta-700">{selected.size}</p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
             <p className="text-xs text-gray-500 mb-1">Valor costo</p>
@@ -233,7 +233,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
             value={firmadoPor}
             onChange={(e) => setFirmadoPor(e.target.value)}
             placeholder="Nombre completo de quien recibe"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500"
           />
         </div>
 
@@ -258,7 +258,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         <button
           type="submit"
           disabled={!canSubmit}
-          className="px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-2.5 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {submitting
             ? 'Asignando...'

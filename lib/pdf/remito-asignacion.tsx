@@ -11,13 +11,13 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 16,
     borderBottomWidth: 2,
-    borderBottomColor: '#2563eb',
+    borderBottomColor: '#E91E7B',
     paddingBottom: 10,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: 'Helvetica-Bold',
-    color: '#2563eb',
+    color: '#E91E7B',
     marginBottom: 4,
   },
   headerSubtitle: {
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#2563eb',
+    backgroundColor: '#E91E7B',
     padding: 6,
     borderRadius: 4,
     marginBottom: 2,
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 12,
     fontFamily: 'Helvetica-Bold',
-    color: '#2563eb',
+    color: '#E91E7B',
   },
   signatureSection: {
     marginTop: 32,

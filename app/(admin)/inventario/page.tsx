@@ -12,7 +12,7 @@ const ESTADOS_LABELS: Record<string, string> = {
 
 const ESTADOS_COLORS: Record<string, string> = {
   disponible: 'bg-green-100 text-green-700',
-  asignado: 'bg-blue-100 text-blue-700',
+  asignado: 'bg-magenta-100 text-magenta-700',
   vendido: 'bg-gray-100 text-gray-600',
   devuelto: 'bg-yellow-100 text-yellow-700',
 }

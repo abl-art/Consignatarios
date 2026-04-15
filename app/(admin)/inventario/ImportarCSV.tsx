@@ -154,7 +154,7 @@ export default function ImportarCSV({ onImportado }: { onImportado: () => void }
             <button
               onClick={handleImportar}
               disabled={importando}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 disabled:opacity-50"
             >
               {importando ? 'Importando...' : `Importar ${resultado.validas.length} equipos`}
             </button>

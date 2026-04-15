@@ -63,7 +63,7 @@ export default async function DiferenciasPage({
   const estadoBadge: Record<string, string> = {
     pendiente: 'bg-red-100 text-red-700',
     cobrado: 'bg-green-100 text-green-700',
-    resuelto: 'bg-blue-100 text-blue-700',
+    resuelto: 'bg-magenta-100 text-magenta-700',
   }
 
   const tipoBadge: Record<string, string> = {

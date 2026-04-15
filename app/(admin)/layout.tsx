@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Sidebar */}
       <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-5 border-b border-gray-200">
-          <span className="text-lg font-bold text-gray-900">GOcelular</span>
+          <img src="/logo.png" alt="GOcelular" className="h-8" />
           <span className="text-xs text-gray-400 block">Panel Admin</span>
         </div>
         <nav className="flex-1 p-3 space-y-0.5">
@@ -32,7 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link
               key={item.href}
               href={item.href}
-              className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
             >
               {item.label}
             </Link>

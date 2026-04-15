@@ -64,7 +64,7 @@ export default async function ModelosPage() {
           </div>
           <button
             type="submit"
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700"
           >
             Actualizar
           </button>

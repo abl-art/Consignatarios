@@ -29,7 +29,7 @@ export default async function AuditoriasPage() {
         <h1 className="text-2xl font-bold text-gray-900">Auditorías</h1>
         <Link
           href="/auditorias/nueva"
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 transition-colors"
         >
           Nueva auditoría
         </Link>
