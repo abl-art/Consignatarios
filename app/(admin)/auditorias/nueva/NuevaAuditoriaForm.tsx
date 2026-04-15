@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { crearAuditoria } from '@/lib/actions/auditorias'
@@ -27,7 +27,10 @@ export default function NuevaAuditoriaForm({
   const [error, setError] = useState<string | null>(null)
   const [scanFeedback, setScanFeedback] = useState<{ message: string; type: 'green' | 'yellow' | 'red' } | null>(null)
 
-  const dispositivos = consignatarioId ? (dispositivosPorConsignatario[consignatarioId] ?? []) : []
+  const dispositivos = useMemo(
+    () => (consignatarioId ? (dispositivosPorConsignatario[consignatarioId] ?? []) : []),
+    [consignatarioId, dispositivosPorConsignatario],
+  )
 
   function handleConsignatarioChange(id: string) {
     setConsignatarioId(id)

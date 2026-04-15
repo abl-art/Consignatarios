@@ -35,11 +35,6 @@ export default async function ReportesPage() {
   const diferencias = rawDiferencias ?? []
   const dispositivos = rawDispositivos ?? []
 
-  // Build consigMap: id -> nombre
-  const consigMap: Record<string, string> = Object.fromEntries(
-    consignatarios.map((c) => [c.id, c.nombre]),
-  )
-
   // ── Section 1: Comisiones por consignatario y mes ──────────────────────────
 
   // Build nested map: comisionesMap[consignatario_id][YYYY-MM] = sum of comision_monto

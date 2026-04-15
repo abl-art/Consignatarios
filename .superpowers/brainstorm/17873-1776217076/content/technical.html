@@ -1,0 +1,92 @@
+<h2>Detalles técnicos</h2>
+<p class="subtitle">Sección 4 de 4 — Auth, PDF, firma digital, sync y deploy</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔐 Autenticación y roles (Supabase Auth)</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      Dos roles en Supabase:<br>
+      <code>admin</code> — acceso total a todo<br>
+      <code>consignatario</code> — RLS restringe todo a su propio ID<br><br>
+      El admin crea la cuenta del consignatario desde el panel. El consignatario recibe email con contraseña temporal y la cambia en el primer login.
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#059669;margin-bottom:10px">✍️ Firma digital + PDF</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      <strong>Firma:</strong> Canvas HTML5 con <code>react-signature-canvas</code> → guarda como base64 en Supabase Storage<br><br>
+      <strong>PDF:</strong> Generado server-side con <code>@react-pdf/renderer</code> → incluye fecha, IMEIs, datos de partes y firma capturada → URL guardada en el registro
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#0891b2;margin-bottom:10px">🔄 Sync Gocuotas T-1</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      Vercel Cron Job a las 6:00am (configurado en <code>vercel.json</code>):<br><br>
+      1. Conecta a DB backup de gocuotas (read-only)<br>
+      2. Query por <code>owner_id</code> / <code>store_id</code> de cada consignatario<br>
+      3. Por cada venta: busca IMEI en <code>dispositivos</code><br>
+      4. Marca IMEI como <code>vendido</code> + crea registro en <code>ventas</code><br>
+      5. Calcula comisión = precio_venta × comision_porcentaje
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#d97706;margin-bottom:10px">📦 Carga masiva de IMEIs</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      Upload de CSV con columnas:<br>
+      <code>imei, marca, modelo, color, capacidad, precio_costo</code><br><br>
+      Validación de formato IMEI (15 dígitos) y detección de duplicados antes de insertar. Feedback línea por línea de errores.
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:10px">⚠️ Detección de diferencias</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      Al cerrar una auditoría, trigger en Supabase compara:<br><br>
+      IMEIs <strong>asignados</strong> al consignatario<br>
+      − IMEIs <strong>vendidos</strong> en gocuotas<br>
+      − IMEIs <strong>presentes</strong> en auditoría<br>
+      = IMEIs en <strong>diferencia</strong> → crea registro en <code>diferencias</code> con monto = precio_costo
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#6b7280;margin-bottom:10px">💰 Comisiones (nuevo)</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      Campo <code>comision_porcentaje</code> en <code>consignatarios</code><br><br>
+      El sync T-1 calcula y guarda <code>comision_monto</code> en cada venta.<br><br>
+      Panel consignatario → <strong>"Comisiones a facturar"</strong>: lista ventas del período con comisión individual y total acumulado. Exportable a PDF/CSV para facturación.
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">📱 PWA + Deploy</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      <code>next-pwa</code> para hacer la app instalable desde el navegador.<br><br>
+      Deploy en <strong>Vercel</strong> (plan gratuito alcanza para el arranque).<br>
+      Variables de entorno: Supabase URL + anon key + service role + credenciales gocuotas DB.
+    </div>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">📁 Estructura del proyecto</div>
+    <div style="font-size:12px;color:#374151;line-height:1.8;font-family:monospace">
+      consignacion-app/<br>
+      ├── app/ (Next.js App Router)<br>
+      │ ├── (admin)/ → rutas admin<br>
+      │ ├── (consignatario)/ → rutas consig.<br>
+      │ └── api/ → cron sync + PDF<br>
+      ├── components/<br>
+      ├── lib/ (supabase, gocuotas)<br>
+      └── supabase/schema.sql
+    </div>
+  </div>
+
+</div>
+
+<div style="padding:14px;background:rgba(124,58,237,0.06);border-radius:10px;border-left:4px solid #7c3aed;font-size:13px">
+  ¿Todo esto te parece bien? Si aprobás esta sección escribo el documento de diseño completo y arrancamos con el plan de implementación.
+</div>

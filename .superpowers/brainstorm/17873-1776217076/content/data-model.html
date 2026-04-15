@@ -1,0 +1,118 @@
+<h2>Modelo de datos</h2>
+<p class="subtitle">Sección 2 de 4 — Tablas principales con relaciones y campos clave</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px">
+
+  <div style="background:white;border:2px solid #7c3aed;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:10px">consignatarios</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      nombre<br>
+      owner_id <span style="color:#7c3aed">(gocuotas)</span><br>
+      store_id <span style="color:#7c3aed">(gocuotas)</span><br>
+      email / teléfono<br>
+      punto_reorden (unidades)<br>
+      created_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #059669;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:10px">dispositivos <span style="font-size:10px">(IMEI)</span></div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      imei <span style="color:#059669">(UNIQUE)</span><br>
+      marca / modelo<br>
+      color / capacidad<br>
+      precio_costo<br>
+      estado: <code style="font-size:11px">disponible | asignado | vendido | devuelto</code><br>
+      consignatario_id (FK)<br>
+      created_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #d97706;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#d97706;margin-bottom:10px">asignaciones</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      consignatario_id (FK)<br>
+      fecha<br>
+      total_unidades<br>
+      total_valor<br>
+      firmado_por (nombre)<br>
+      firma_digital <span style="color:#d97706">(base64 / URL)</span><br>
+      documento_url <span style="color:#d97706">(PDF generado)</span><br>
+      created_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #dc2626;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#dc2626;margin-bottom:10px">asignacion_items</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      asignacion_id (FK)<br>
+      dispositivo_id (FK → IMEI)<br>
+      created_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #0891b2;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0891b2;margin-bottom:10px">ventas <span style="font-size:10px">(sync gocuotas)</span></div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      dispositivo_id (FK → IMEI)<br>
+      consignatario_id (FK)<br>
+      fecha_venta<br>
+      precio_venta<br>
+      gocuotas_sale_id <span style="color:#0891b2">(externo)</span><br>
+      synced_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #7c3aed;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#7c3aed;margin-bottom:10px">auditorias</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      consignatario_id (FK)<br>
+      realizada_por (nombre staff)<br>
+      fecha<br>
+      estado: <code style="font-size:11px">borrador | confirmada</code><br>
+      firma_digital <span style="color:#7c3aed">(base64 / URL)</span><br>
+      documento_url <span style="color:#7c3aed">(PDF generado)</span><br>
+      observaciones<br>
+      created_at
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #6b7280;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">auditoria_items</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      auditoria_id (FK)<br>
+      dispositivo_id (FK → IMEI)<br>
+      presente: <code style="font-size:11px">boolean</code><br>
+      observacion
+    </div>
+  </div>
+
+  <div style="background:white;border:2px solid #dc2626;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#dc2626;margin-bottom:10px">diferencias</div>
+    <div style="font-size:12px;color:#374151;line-height:2">
+      🔑 id (UUID)<br>
+      auditoria_id (FK)<br>
+      dispositivo_id (FK → IMEI)<br>
+      tipo: <code style="font-size:11px">faltante | sobrante</code><br>
+      estado: <code style="font-size:11px">pendiente | cobrado | resuelto</code><br>
+      monto_deuda<br>
+      created_at
+    </div>
+  </div>
+
+</div>
+
+<div style="padding:14px;background:rgba(16,185,129,0.06);border-radius:10px;border-left:4px solid #059669;font-size:13px;margin-bottom:12px">
+  <strong>Firma digital:</strong> El consignatario (para asignaciones) o el miembro del equipo (para auditorías) firma en pantalla táctil o mouse. Se guarda como imagen base64 en Supabase Storage y se genera un PDF con los datos + firma que queda guardado en <code>documento_url</code>.
+</div>
+
+<div style="padding:14px;background:rgba(124,58,237,0.06);border-radius:10px;border-left:4px solid #7c3aed;font-size:13px">
+  ¿El modelo de datos te parece correcto? ¿Falta algún campo o tabla? Contestame en la terminal.
+</div>

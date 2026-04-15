@@ -4,6 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import { calcularPrecioVenta } from '@/lib/utils'
 import { RemitoAsignacionPDF } from '@/lib/pdf/remito-asignacion'
 
+type AsignacionItemRow = {
+  dispositivo_id: string
+  dispositivos: {
+    imei: string
+    modelos: { marca: string; modelo: string; precio_costo: number } | null
+  } | null
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
@@ -43,7 +51,7 @@ export async function GET(
     .select('dispositivo_id, dispositivos(imei, modelos(marca, modelo, precio_costo))')
     .eq('asignacion_id', id)
 
-  const items = (asignacionItems ?? []).map((row: any) => {
+  const items = ((asignacionItems ?? []) as unknown as AsignacionItemRow[]).map((row) => {
     const dispositivo = row.dispositivos
     const modelo = dispositivo?.modelos
     const precioCosto = modelo?.precio_costo ?? 0
@@ -87,7 +95,7 @@ export async function GET(
 
   const buffer = await renderToBuffer(element)
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="remito-${id}.pdf"`,

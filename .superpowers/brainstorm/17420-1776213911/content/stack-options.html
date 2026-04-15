@@ -1,0 +1,88 @@
+<h2>¿Qué stack usamos?</h2>
+<p class="subtitle">Las 3 opciones para una app web con soporte mobile — con trade-offs reales</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>⭐ Next.js + Supabase + PWA <span style="background:#7c3aed;color:white;font-size:11px;padding:2px 8px;border-radius:99px;margin-left:8px">RECOMENDADO</span></h3>
+      <p>App web de alta calidad deployada como PWA (Progressive Web App) — instalable en celular desde el navegador sin pasar por una app store.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Mejor UX de escritorio de las 3 opciones</li>
+            <li>Server-side rendering → ideal para el sync T-1 de gocuotas</li>
+            <li>PWA: instalable en Android/iOS desde Chrome/Safari</li>
+            <li>Supabase ya lo conocés</li>
+            <li>Deploy en Vercel gratis</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Contras</h4>
+          <ul>
+            <li>No está en App Store / Play Store (es PWA, no nativa)</li>
+            <li>Stack nuevo (no es Expo)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Expo (React Native Web) + Supabase</h3>
+      <p>El mismo stack de tu app proveedores-app actual. Un solo código corre en web, iOS y Android.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Ya lo conocés y lo tenés configurado</li>
+            <li>Nativo real en iOS y Android</li>
+            <li>Un solo codebase</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Contras</h4>
+          <ul>
+            <li>Web UX inferior — React Native Web no está pensado para dashboards complejos</li>
+            <li>La imagen de referencia es un panel de escritorio que no queda bien en RN Web</li>
+            <li>Requiere build nativo para subir a stores</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>React + Vite + Capacitor + Supabase</h3>
+      <p>SPA web que se compila a app nativa mediante Capacitor (como Ionic). Lo mejor de los dos mundos en teoría.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Web UX excelente</li>
+            <li>Compilación nativa real para stores</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Contras</h4>
+          <ul>
+            <li>Más complejo de mantener (web + build nativo)</li>
+            <li>Sin SSR → sync T-1 más complicado</li>
+            <li>Menos adoptado en el ecosistema actual</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(124,58,237,0.08);border-radius:12px;border-left:4px solid #7c3aed">
+  <p style="margin:0"><strong>Mi recomendación:</strong> Opción A — Next.js + PWA. El panel de escritorio de la imagen de referencia se ve y funciona perfectamente en Next.js. En mobile, la PWA es instalable y funciona offline. El sync T-1 con gocuotas se maneja con un API Route o cron job de Vercel. Supabase ya lo tenés configurado.</p>
+</div>

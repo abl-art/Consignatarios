@@ -2,6 +2,13 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { ActaAuditoriaPDF } from '@/lib/pdf/acta-auditoria'
+import type { AuditoriaItem } from '@/lib/types'
+
+type DispositivoConModelos = {
+  id: string
+  imei: string
+  modelos: { marca: string; modelo: string } | null
+}
 
 export async function GET(
   _request: Request,
@@ -44,7 +51,7 @@ export async function GET(
       items: [],
     })
     const buffer = await renderToBuffer(element)
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="auditoria-${id}.pdf"`,
@@ -53,7 +60,7 @@ export async function GET(
   }
 
   // Load dispositivos with modelos for all dispositivo_ids in the auditoria
-  const dispositivoIds = auditoriaItems.map((ai: any) => ai.dispositivo_id)
+  const dispositivoIds = (auditoriaItems as AuditoriaItem[]).map((ai) => ai.dispositivo_id)
 
   const { data: dispositivos } = await supabase
     .from('dispositivos')
@@ -62,8 +69,8 @@ export async function GET(
 
   // Build a lookup map
   const dispositivoMap = new Map<string, { imei: string; marca: string; modelo: string }>()
-  for (const d of dispositivos ?? []) {
-    const modelo = (d as any).modelos
+  for (const d of (dispositivos ?? []) as unknown as DispositivoConModelos[]) {
+    const modelo = d.modelos
     dispositivoMap.set(d.id, {
       imei: d.imei,
       marca: modelo?.marca ?? '',
@@ -72,7 +79,7 @@ export async function GET(
   }
 
   // Build items array
-  const items = auditoriaItems.map((ai: any) => {
+  const items = (auditoriaItems as AuditoriaItem[]).map((ai) => {
     const disp = dispositivoMap.get(ai.dispositivo_id)
     return {
       imei: disp?.imei ?? ai.dispositivo_id,
@@ -109,7 +116,7 @@ export async function GET(
 
   const buffer = await renderToBuffer(element)
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="auditoria-${id}.pdf"`,
