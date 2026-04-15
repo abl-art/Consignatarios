@@ -75,13 +75,11 @@ export default async function AuditoriasPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-right">
-                    <Link
-                      href={`/auditorias/${a.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                    >
-                      Ver detalle →
-                    </Link>
+                  <td className="px-6 py-3 text-right flex gap-2 justify-end">
+                    {a.estado === 'confirmada' && (
+                      <a href={`/api/pdf/auditoria/${a.id}`} target="_blank" rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-800 text-xs font-medium">PDF</a>
+                    )}
                   </td>
                 </tr>
               ))}
