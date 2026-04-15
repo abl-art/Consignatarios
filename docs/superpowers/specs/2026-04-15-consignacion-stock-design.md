@@ -224,12 +224,12 @@ Cada IMEI resultante genera un registro en `diferencias` con:
 7. Dispositivos pasan a estado `asignado`, `consignatario_id` asignado
 8. Se crea registro en `asignaciones` + `asignacion_items`
 
-### Sync Gocuotas (diario, 6:00am)
-1. Vercel Cron invoca `/api/sync-gocuotas`
-2. Conecta a DB backup de Gocuotas (read-only)
-3. Por cada consignatario: query por `owner_id` / `store_id`
-4. Por cada venta: busca IMEI en `dispositivos`
-5. Marca dispositivo como `vendido`
+### Sync de ventas (diario, 6:00am)
+1. Vercel Cron invoca `/api/sync-ventas`
+2. Conecta a DB de GOcelular (PostgreSQL, read-only)
+3. Consulta órdenes de venta nuevas desde el último sync, con IMEI y consignatario
+4. Por cada registro: busca el IMEI en `dispositivos`
+5. Marca dispositivo como `vendido`, asigna `consignatario_id`
 6. Crea registro en `ventas` con `comision_monto` calculada
 7. Log del resultado guardado para revisión admin
 
@@ -275,8 +275,10 @@ Cada IMEI resultante genera un registro en `diferencias` con:
 
 - `config.multiplicador` — valor global editable por el admin (ej: 1.8)
 - `modelos.precio_costo` — costo de adquisición por modelo
-- `precio_venta` — calculado: `precio_costo × multiplicador`, nunca almacenado
-- `diferencias.monto_deuda` — captura el precio_venta al momento de la auditoría (sí almacenado, para no verse afectado por cambios futuros del multiplicador)
+- `precio_venta unitario` — calculado en tiempo real: `precio_costo × multiplicador`, **no se almacena en ninguna tabla como valor vivo**
+- **Excepción — snapshots históricos:** los valores de precio_venta sí se almacenan como foto al momento de cada transacción para que cambios futuros del multiplicador no alteren el historial:
+  - `asignaciones.total_valor_venta` — valor de venta total al momento de la asignación
+  - `diferencias.monto_deuda` — precio_venta al momento de la auditoría
 
 ---
 
@@ -284,7 +286,7 @@ Cada IMEI resultante genera un registro en `diferencias` con:
 
 CSV con columnas: `imei, marca, modelo`
 
-- El sistema busca o crea el modelo en la tabla `modelos`
+- El sistema busca el modelo por `(marca, modelo)` en la tabla `modelos`. Si no existe, lo crea con `precio_costo = 0` — el admin debe actualizarlo en la pantalla de Modelos antes de usar ese modelo en asignaciones
 - Valida formato IMEI (15 dígitos numéricos)
 - Detecta duplicados contra la tabla `dispositivos`
 - Muestra resultado línea por línea: éxito / error con descripción
@@ -295,8 +297,8 @@ CSV con columnas: `imei, marca, modelo`
 ## 11. Deploy y configuración
 
 - **Vercel** — deploy automático desde GitHub
-- **Variables de entorno:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GOCUOTAS_DB_URL`
-- **Cron:** configurado en `vercel.json` → `/api/sync-gocuotas` a las 6:00am diario
+- **Variables de entorno:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GOCELULAR_DB_URL`
+- **Cron:** configurado en `vercel.json` → `/api/sync-ventas` a las 6:00am diario + `/api/auditoria-mensual` el primer día hábil de cada mes
 - **PWA:** `next-pwa` para instalación desde Chrome (Android) y Safari (iOS)
 
 ---
@@ -339,8 +341,13 @@ consignacion-app/
 
 ---
 
-## 13. Decisiones pendientes (a resolver en implementación)
+## 13. Decisiones resueltas
 
-- Formato exacto de la API/DB de Gocuotas (estructura de tablas y campos disponibles)
-- Si el consignatario firma en su propio dispositivo o en el del operador GOcelular al momento de la entrega
-- Periodicidad de los controles de inventario del consignatario (¿mensual? ¿a demanda?)
+### Sync de ventas — fuente de datos
+El cron job consulta la **base de datos de GOcelular** (PostgreSQL, acceso read-only con credenciales a solicitar), no la de Gocuotas directamente. GOcelular ya tiene un registro de órdenes de venta vinculadas a IMEI y al vendedor (consignatario). El mapeo exacto de tablas y campos se define una vez obtenidas las credenciales. La variable de entorno `GOCUOTAS_DB_URL` del spec original pasa a llamarse `GOCELULAR_DB_URL`.
+
+### Firma del consignatario
+El consignatario firma **en el dispositivo del operador GOcelular** al momento de la entrega (ya sea en el depósito o en el local del consignatario). La firma es un **paso bloqueante**: no se puede confirmar la asignación sin completarla. Una vez firmado, el remito queda visible en el panel del consignatario como solo lectura.
+
+### Periodicidad de auditorías / controles de inventario
+Ciclo **mensual**, alineado al período de pago. El sistema dispara automáticamente una auditoría el **primer día hábil de cada mes** (vía Vercel Cron). El admin también puede crear auditorías **ad-hoc** en cualquier momento para controles sorpresa, o ante bajas, altas o modificaciones de consignatarios. El cierre de cada auditoría mensual determina lo que se le paga al consignatario (comisiones) o lo que se le descuenta (diferencias de stock).
