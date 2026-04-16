@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
+import ModeloRow from './ModeloRow'
 import type { Modelo, Config } from '@/lib/types'
 
 async function actualizarMultiplicador(formData: FormData) {
@@ -20,13 +20,6 @@ async function crearModelo(formData: FormData) {
   const precio_costo = parseFloat(formData.get('precio_costo') as string)
   if (!marca || !modelo || isNaN(precio_costo)) return
   await supabase.from('modelos').insert({ marca, modelo, precio_costo })
-  revalidatePath('/modelos')
-}
-
-async function eliminarModelo(id: string) {
-  'use server'
-  const supabase = createClient()
-  await supabase.from('modelos').delete().eq('id', id)
   revalidatePath('/modelos')
 }
 
@@ -121,21 +114,7 @@ export default async function ModelosPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {modelos?.map((m) => (
-              <tr key={m.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 text-gray-900">{m.marca}</td>
-                <td className="px-6 py-3 text-gray-900">{m.modelo}</td>
-                <td className="px-6 py-3 text-right text-gray-700">{formatearMoneda(m.precio_costo)}</td>
-                <td className="px-6 py-3 text-right font-medium text-gray-900">
-                  {formatearMoneda(calcularPrecioVenta(m.precio_costo, multiplicador))}
-                </td>
-                <td className="px-6 py-3 text-right">
-                  <form action={eliminarModelo.bind(null, m.id)}>
-                    <button type="submit" className="text-red-500 hover:text-red-700 text-xs">
-                      Eliminar
-                    </button>
-                  </form>
-                </td>
-              </tr>
+              <ModeloRow key={m.id} modelo={m} multiplicador={multiplicador} />
             ))}
             {(!modelos || modelos.length === 0) && (
               <tr>
