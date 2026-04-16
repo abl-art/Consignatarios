@@ -62,15 +62,27 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
        ORDER BY pendientes DESC`
     )
 
-    // Matchear product_name contra cada modelo del catálogo: normalizamos ambos
-    // textos y comparamos (fuzzy por inclusión).
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    // Match inteligente: extraer marca + número de modelo + storage de cada nombre.
+    // Ej: "Motorola Moto G06 4/128GB" → "motorola-g06-128"
+    //     "Motorola Moto G06 128GB"   → "motorola-g06-128" → MATCH
+    function matchKey(name: string): string {
+      const lower = name.toLowerCase()
+      const brand = lower.includes('samsung') ? 'samsung'
+        : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola' : 'other'
+      const modelMatch = lower.match(/[ga]\d{2,3}/i)
+      const model = modelMatch ? modelMatch[0].toLowerCase() : ''
+      // Buscar el storage más grande (ej: "4/128GB" → 128, "8/256GB 5G" → 256)
+      const storageMatches = [...lower.matchAll(/(\d+)\s*gb/gi)]
+      const storages = storageMatches.map((m) => Number(m[1])).filter((n) => n >= 32)
+      const storage = storages.length > 0 ? Math.max(...storages).toString() : ''
+      return `${brand}-${model}-${storage}`
+    }
+
     const pendPorModelo: Record<string, number> = {}
     for (const p of pendientesRes.rows) {
-      const target = norm(p.product_name)
+      const pKey = matchKey(p.product_name)
       for (const m of modelosRes.rows) {
-        const mName = norm(m.name)
-        if (target === mName || target.includes(mName) || mName.includes(target)) {
+        if (matchKey(m.name) === pKey) {
           pendPorModelo[m.model_code] = (pendPorModelo[m.model_code] ?? 0) + Number(p.pendientes)
           break
         }
