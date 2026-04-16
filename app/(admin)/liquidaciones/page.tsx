@@ -211,7 +211,11 @@ export default async function LiquidacionesPage({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <RowActions id={liq.id} estado={liq.estado} />
+                    <div className="flex items-center gap-3 justify-end">
+                      <a href={`/api/pdf/liquidacion/${liq.id}`} target="_blank" rel="noopener noreferrer"
+                        className="text-xs font-medium text-magenta-600 hover:text-magenta-800">PDF</a>
+                      <RowActions id={liq.id} estado={liq.estado} />
+                    </div>
                   </td>
                 </tr>
               ))}

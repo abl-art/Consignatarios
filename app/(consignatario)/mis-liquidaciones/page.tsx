@@ -57,6 +57,7 @@ export default async function MisLiquidacionesPage() {
                 <th className="text-right px-6 py-3 font-medium text-gray-600">Diferencias</th>
                 <th className="text-right px-6 py-3 font-medium text-gray-600">A pagar</th>
                 <th className="text-left px-6 py-3 font-medium text-gray-600">Estado</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -70,6 +71,10 @@ export default async function MisLiquidacionesPage() {
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_COLORS[l.estado]}`}>
                       {l.estado}
                     </span>
+                  </td>
+                  <td className="px-6 py-3 text-right">
+                    <a href={`/api/pdf/liquidacion/${l.id}`} target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-medium text-magenta-600 hover:text-magenta-800">PDF</a>
                   </td>
                 </tr>
               ))}

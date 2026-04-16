@@ -31,7 +31,7 @@ export default async function DashboardPage() {
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'vendido'),
     supabase.from('consignatarios').select('*', { count: 'exact', head: true }),
     supabase.from('modelos').select('*', { count: 'exact', head: true }),
-    supabase.from('ventas').select('consignatario_id, comision_monto, fecha_venta').gte('fecha_venta', primerDiaMes),
+    supabase.from('ventas').select('consignatario_id, comision_monto, precio_venta, fecha_venta').gte('fecha_venta', primerDiaMes),
     supabase.from('diferencias').select('*, auditorias(consignatario_id)').eq('estado', 'pendiente'),
     supabase.from('consignatarios').select('id, nombre'),
     supabase.from('liquidaciones').select('estado, monto_a_pagar'),
@@ -120,13 +120,17 @@ export default async function DashboardPage() {
     { label: 'Modelos', value: totalModelos ?? 0, color: 'text-gray-700' },
   ]
 
-  // Comisiones por consignatario this month
+  // Comisiones y ventas por consignatario this month
   const comisionesPorConsignatario: Record<string, number> = {}
-  for (const v of (ventas ?? []) as Pick<Venta, 'consignatario_id' | 'comision_monto' | 'fecha_venta'>[]) {
+  let totalVentasMontoMes = 0
+  let ventasCountMes = 0
+  for (const v of (ventas ?? []) as Pick<Venta, 'consignatario_id' | 'comision_monto' | 'precio_venta' | 'fecha_venta'>[]) {
     if (!comisionesPorConsignatario[v.consignatario_id]) {
       comisionesPorConsignatario[v.consignatario_id] = 0
     }
     comisionesPorConsignatario[v.consignatario_id] += v.comision_monto
+    totalVentasMontoMes += v.precio_venta ?? 0
+    ventasCountMes++
   }
   const comisionesOrdenadas = Object.entries(comisionesPorConsignatario).sort((a, b) => b[1] - a[1])
   const totalComisiones = comisionesOrdenadas.reduce((sum, [, monto]) => sum + monto, 0)
@@ -185,6 +189,28 @@ export default async function DashboardPage() {
           <div>
             <p className="text-xs text-gray-500 mb-1">Disponible</p>
             <p className="text-2xl font-bold text-green-700">{formatearMoneda(totalDisponibleAdmin)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Ventas del mes */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Ventas del mes — {mesActual}</h2>
+          <Link href="/ventas" className="text-sm text-magenta-600 hover:text-magenta-800">Ver detalle →</Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Cantidad</p>
+            <p className="text-2xl font-bold text-gray-900">{ventasCountMes}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Monto total</p>
+            <p className="text-2xl font-bold text-gray-900">{formatearMoneda(totalVentasMontoMes)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Comisiones</p>
+            <p className="text-2xl font-bold text-magenta-700">{formatearMoneda(totalComisiones)}</p>
           </div>
         </div>
       </div>
