@@ -395,23 +395,10 @@ async function VentasDelDia() {
                   <p className="text-xs text-gray-500">ventas</p>
                 </div>
               </div>
-              <p className={`text-xl font-bold ${canal.iconColor} mb-3`}>{formatearMoneda(canalMonto)}</p>
+              <p className={`text-xl font-bold ${canal.iconColor}`}>{formatearMoneda(canalMonto)}</p>
 
-              {items.length > 0 ? (
-                <div className="space-y-1.5">
-                  {items.map((v) => (
-                    <div key={v.store_name} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-700 truncate mr-2">
-                        {v.consignatarioNombre ?? v.store_name}
-                      </span>
-                      <span className="text-gray-600 shrink-0">
-                        {v.ventas} · {formatearMoneda(v.monto)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400">Sin ventas hoy</p>
+              {items.length === 0 && (
+                <p className="text-xs text-gray-400 mt-2">Sin ventas hoy</p>
               )}
             </div>
           )
