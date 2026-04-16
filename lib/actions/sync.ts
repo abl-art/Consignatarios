@@ -71,7 +71,7 @@ export async function sincronizarVentas() {
       const precio = Number(sale.price ?? sale.default_price ?? sale.total_order_amount ?? 0)
       const comision = consig ? precio * Number(consig.comision_porcentaje) : 0
 
-      if (consig?.store_prefix && sale.store_name && !sale.store_name.startsWith(consig.store_prefix)) {
+      if (consig?.store_prefix && sale.store_name && !sale.store_name.toLowerCase().startsWith(consig.store_prefix.toLowerCase())) {
         storeMismatches.push({
           imei: sale.imei,
           expected_prefix: consig.store_prefix,

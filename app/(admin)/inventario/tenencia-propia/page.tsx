@@ -43,25 +43,30 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
        ORDER BY brand, name`
     )
 
-    // 3. Órdenes activas que aún NO tienen un inventory_items con status='assigned' vinculado.
-    //    Intentamos matchear el modelo por store_name (en GOcelular las ventas de ecommerce
-    //    guardan el nombre del producto en store_name).
-    const pendientesRes = await client.query<{ store_name: string; pendientes: string }>(
-      `SELECT go.store_name, COUNT(*)::text AS pendientes
-       FROM gocuotas_orders go
-       WHERE go.order_discarded_at IS NULL
+    // 3. Pendientes de asignar: store_orders pagadas que aún no tienen device ni
+    //    inventory_items vinculado. Agrupamos por product_name (nombre del producto
+    //    legible) y mapeamos a nuestros modelos del catálogo.
+    const pendientesRes = await client.query<{ product_name: string; pendientes: string }>(
+      `SELECT so.product_name, COUNT(*)::text AS pendientes
+       FROM store_orders so
+       JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+       WHERE so.status = 'paid'
+         AND go.order_discarded_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
          AND NOT EXISTS (
            SELECT 1 FROM inventory_items ii
            WHERE ii.assigned_to_order_id = go.order_id AND ii.status = 'assigned'
          )
-       GROUP BY go.store_name`
+       GROUP BY so.product_name
+       ORDER BY pendientes DESC`
     )
 
-    // Matchear store_name contra cada modelo: normalizamos ambos textos y comparamos.
+    // Matchear product_name contra cada modelo del catálogo: normalizamos ambos
+    // textos y comparamos (fuzzy por inclusión).
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
     const pendPorModelo: Record<string, number> = {}
     for (const p of pendientesRes.rows) {
-      const target = norm(p.store_name)
+      const target = norm(p.product_name)
       for (const m of modelosRes.rows) {
         const mName = norm(m.name)
         if (target === mName || target.includes(mName) || mName.includes(target)) {
@@ -193,8 +198,8 @@ export default async function TenenciaPropiaPage() {
           )}
 
           <p className="text-xs text-gray-400 mt-3">
-            * &quot;Pendientes de asignar&quot; cuenta órdenes activas en GOcelular cuyo IMEI aún no está vinculado.
-            El match se hace por nombre de modelo en <code className="bg-gray-100 px-1 rounded">store_name</code>.
+            * &quot;Pendientes de asignar&quot; cuenta órdenes pagadas en GOcelular cuyo IMEI aún no fue vinculado.
+            El match se hace por <code className="bg-gray-100 px-1 rounded">product_name</code> de store_orders contra el catálogo de modelos.
           </p>
         </>
       )}
