@@ -22,6 +22,7 @@ export default async function DashboardPage() {
     { data: ventas },
     { data: diferencias },
     { data: consignatarios },
+    { data: liquidaciones },
   ] = await Promise.all([
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'disponible'),
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
     supabase.from('ventas').select('consignatario_id, comision_monto, fecha_venta').gte('fecha_venta', primerDiaMes),
     supabase.from('diferencias').select('*, auditorias(consignatario_id)').eq('estado', 'pendiente'),
     supabase.from('consignatarios').select('id, nombre'),
+    supabase.from('liquidaciones').select('estado, monto_a_pagar'),
   ])
 
   const stats = [
@@ -74,6 +76,12 @@ export default async function DashboardPage() {
   const totalDiferencias = diferenciasOrdenadas.reduce((sum, [, monto]) => sum + monto, 0)
   const hayDiferencias = diferenciasOrdenadas.length > 0
 
+  // Liquidaciones por estado
+  const liqPorEstado: Record<string, number> = { retenida: 0, pendiente: 0, bloqueada: 0, pagada: 0 }
+  for (const l of (liquidaciones ?? []) as { estado: string; monto_a_pagar: number }[]) {
+    liqPorEstado[l.estado] = (liqPorEstado[l.estado] ?? 0) + l.monto_a_pagar
+  }
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
@@ -90,7 +98,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Comisiones a pagar */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
@@ -145,6 +153,30 @@ export default async function DashboardPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Liquidaciones */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">Liquidaciones</h2>
+            <Link href="/liquidaciones" className="text-sm text-magenta-600 hover:text-magenta-800">
+              Ver todas →
+            </Link>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700">Por pagar</span>
+              <span className="font-medium text-blue-700">{formatearMoneda(liqPorEstado.pendiente)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700">Retenidas</span>
+              <span className="font-medium text-yellow-700">{formatearMoneda(liqPorEstado.retenida)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700">Bloqueadas</span>
+              <span className="font-medium text-red-700">{formatearMoneda(liqPorEstado.bloqueada)}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
