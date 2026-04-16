@@ -73,6 +73,7 @@ export default async function ConsignatariosPage() {
           Nuevo consignatario
         </h2>
         <form action={crearConsignatario} className="grid grid-cols-2 gap-4">
+          {/* Fila 1 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
             <input name="nombre" placeholder="Ej: Juan Pérez" required
@@ -83,57 +84,49 @@ export default async function ConsignatariosPage() {
             <input name="email" type="email" placeholder="email@dominio.com" required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
+
+          {/* Fila 2 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              Contraseña
-              <span className="text-gray-400 font-normal"> — mínimo 6 caracteres, el consignatario la usa para ingresar</span>
+              Contraseña <span className="text-gray-400 font-normal">(mín. 6)</span>
             </label>
             <input name="password" type="text" minLength={6} placeholder="Ej: juanperez2026" required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" />
           </div>
-          <div className="col-span-2">
+          <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono</label>
             <input name="telefono" placeholder="Opcional"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
+
+          {/* Fila 3 */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Comisión (%)
-              <span className="text-gray-400 font-normal"> — % sobre venta que cobra el consignatario</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input name="comision_porcentaje" type="number" step="0.1" min="0" max="100"
-                placeholder="10" defaultValue={10}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              <span className="text-sm text-gray-500">%</span>
-            </div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Comisión (%)</label>
+            <input name="comision_porcentaje" type="number" step="0.1" min="0" max="100"
+              placeholder="10" defaultValue={10}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Punto de reorden
-              <span className="text-gray-400 font-normal"> — alerta si stock baja de</span>
-            </label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Punto de reorden</label>
             <input name="punto_reorden" type="number" min="0" placeholder="10"
               defaultValue={10}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
+
+          {/* Fila 4 */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Garantía (pesos)
-              <span className="text-gray-400 font-normal"> — tope que respalda el consignatario</span>
-            </label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Garantía (pesos)</label>
             <input name="garantia" type="number" step="1000" min="0" placeholder="Ej: 3000000"
               defaultValue={0}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Prefijo sucursal (GOcelular)
-              <span className="text-gray-400 font-normal"> — primeros caracteres comunes de los nombres de sus sucursales en GOcelular, para matchear ventas</span>
-            </label>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Prefijo sucursal</label>
             <input name="store_prefix" placeholder="Ej: RIIIN (opcional)"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
+
+          {/* Fila 5: botón */}
           <div className="col-span-2 flex justify-end">
             <button type="submit"
               className="px-5 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700">
