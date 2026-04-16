@@ -16,6 +16,7 @@ export default function EditarForm({ consignatario }: { consignatario: Consignat
   const [comision, setComision] = useState(String(consignatario.comision_porcentaje))
   const [puntoReorden, setPuntoReorden] = useState(String(consignatario.punto_reorden))
   const [garantia, setGarantia] = useState(String(consignatario.garantia))
+  const [storePrefix, setStorePrefix] = useState(consignatario.store_prefix ?? '')
 
   function handleCancel() {
     setNombre(consignatario.nombre)
@@ -23,6 +24,7 @@ export default function EditarForm({ consignatario }: { consignatario: Consignat
     setComision(String(consignatario.comision_porcentaje))
     setPuntoReorden(String(consignatario.punto_reorden))
     setGarantia(String(consignatario.garantia))
+    setStorePrefix(consignatario.store_prefix ?? '')
     setError(null)
     setEditing(false)
   }
@@ -38,6 +40,7 @@ export default function EditarForm({ consignatario }: { consignatario: Consignat
         comision_porcentaje: parseFloat(comision),
         punto_reorden: parseInt(puntoReorden, 10),
         garantia: parseFloat(garantia),
+        store_prefix: storePrefix.trim() || null,
       })
       if ('error' in result && result.error) {
         setError(result.error)
@@ -117,6 +120,19 @@ export default function EditarForm({ consignatario }: { consignatario: Consignat
             step="0.01"
             value={garantia}
             onChange={(e) => setGarantia(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-magenta-500"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Prefijo sucursal GOcelular
+            <span className="text-gray-400 font-normal"> — primeros caracteres comunes de sus sucursales</span>
+          </label>
+          <input
+            type="text"
+            value={storePrefix}
+            onChange={(e) => setStorePrefix(e.target.value)}
+            placeholder="Ej: RIIIN (opcional)"
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-magenta-500"
           />
         </div>

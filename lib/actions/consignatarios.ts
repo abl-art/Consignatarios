@@ -10,6 +10,7 @@ interface EditInput {
   comision_porcentaje: number
   punto_reorden: number
   garantia: number
+  store_prefix: string | null
 }
 
 export async function editarConsignatario(input: EditInput) {
@@ -20,6 +21,7 @@ export async function editarConsignatario(input: EditInput) {
     comision_porcentaje: input.comision_porcentaje,
     punto_reorden: input.punto_reorden,
     garantia: input.garantia,
+    store_prefix: input.store_prefix,
   }).eq('id', input.id)
   if (error) return { error: error.message }
   revalidatePath(`/consignatarios/${input.id}`)

@@ -13,6 +13,7 @@ async function crearConsignatario(formData: FormData) {
   const comision = parseFloat(formData.get('comision_porcentaje') as string) / 100
   const punto_reorden = parseInt(formData.get('punto_reorden') as string)
   const garantia = parseFloat(formData.get('garantia') as string) || 0
+  const storePrefix = (formData.get('store_prefix') as string).trim() || null
 
   // Crear usuario en Supabase Auth con contraseña temporal
   const adminClient = createAdminClient()
@@ -32,6 +33,7 @@ async function crearConsignatario(formData: FormData) {
     comision_porcentaje: comision,
     punto_reorden: isNaN(punto_reorden) ? 10 : punto_reorden,
     garantia,
+    store_prefix: storePrefix,
     user_id: authData.user.id,
   })
   revalidatePath('/consignatarios')
@@ -111,6 +113,14 @@ export default async function ConsignatariosPage() {
             </label>
             <input name="garantia" type="number" step="1000" min="0" placeholder="Ej: 3000000"
               defaultValue={0}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Prefijo sucursal (GOcelular)
+              <span className="text-gray-400 font-normal"> — primeros caracteres comunes de los nombres de sus sucursales en GOcelular, para matchear ventas</span>
+            </label>
+            <input name="store_prefix" placeholder="Ej: RIIIN (opcional)"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div className="col-span-2 flex justify-end">
