@@ -2,9 +2,21 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
-const navItems = [
+interface NavItem {
+  href: string
+  label: string
+  children?: { href: string; label: string }[]
+}
+
+const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard' },
-  { href: '/inventario', label: 'Inventario' },
+  {
+    href: '/inventario',
+    label: 'Inventario',
+    children: [
+      { href: '/inventario/tenencia', label: 'Tenencia consignatarios' },
+    ],
+  },
   { href: '/asignar', label: 'Asignar stock' },
   { href: '/consignatarios', label: 'Consignatarios' },
   { href: '/modelos', label: 'Modelos y precios' },
@@ -31,15 +43,29 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <img src="/logo.png" alt="GOcelular" className="h-8" />
           <span className="text-xs text-gray-400 block">Panel Admin</span>
         </div>
-        <nav className="flex-1 p-3 space-y-0.5">
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
-            >
-              {item.label}
-            </Link>
+            <div key={item.href}>
+              <Link
+                href={item.href}
+                className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+              >
+                {item.label}
+              </Link>
+              {item.children && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      className="block px-3 py-1.5 text-xs text-gray-500 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+                    >
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
         <div className="p-3 border-t border-gray-200">

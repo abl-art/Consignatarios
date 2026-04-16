@@ -1,0 +1,141 @@
+import { createClient } from '@/lib/supabase/server'
+import { diasDesde, clasificarAntiguedad } from '@/lib/utils'
+import type { Consignatario } from '@/lib/types'
+
+type DispositivoRow = {
+  id: string
+  fecha_asignacion: string | null
+  consignatario_id: string | null
+  modelos: { marca: string; modelo: string } | null
+}
+
+interface GrupoModelo {
+  marca: string
+  modelo: string
+  cantidad: number
+  sumaDias: number
+  promedioDias: number | null
+}
+
+interface GrupoConsignatario {
+  id: string
+  nombre: string
+  total: number
+  modelos: GrupoModelo[]
+}
+
+export default async function TenenciaPage() {
+  const supabase = createClient()
+
+  const [{ data: dispositivos }, { data: consignatarios }] = await Promise.all([
+    supabase
+      .from('dispositivos')
+      .select('id, fecha_asignacion, consignatario_id, modelos(marca, modelo)')
+      .eq('estado', 'asignado'),
+    supabase
+      .from('consignatarios')
+      .select('id, nombre')
+      .order('nombre')
+      .returns<Pick<Consignatario, 'id' | 'nombre'>[]>(),
+  ])
+
+  const rows = ((dispositivos ?? []) as unknown as DispositivoRow[])
+
+  // Agrupar por consignatario -> modelo
+  const map: Record<string, Record<string, GrupoModelo>> = {}
+  for (const d of rows) {
+    if (!d.consignatario_id || !d.modelos) continue
+    const key = `${d.modelos.marca}__${d.modelos.modelo}`
+    if (!map[d.consignatario_id]) map[d.consignatario_id] = {}
+    const bucket = map[d.consignatario_id]
+    if (!bucket[key]) {
+      bucket[key] = { marca: d.modelos.marca, modelo: d.modelos.modelo, cantidad: 0, sumaDias: 0, promedioDias: null }
+    }
+    bucket[key].cantidad++
+    const dias = diasDesde(d.fecha_asignacion)
+    if (dias !== null) bucket[key].sumaDias += dias
+  }
+
+  const consigArray: GrupoConsignatario[] = (consignatarios ?? [])
+    .map((c) => {
+      const bucket = map[c.id] ?? {}
+      const modelos: GrupoModelo[] = Object.values(bucket)
+        .map((g) => ({ ...g, promedioDias: g.cantidad > 0 ? Math.round(g.sumaDias / g.cantidad) : null }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+      const total = modelos.reduce((s, m) => s + m.cantidad, 0)
+      return { id: c.id, nombre: c.nombre, total, modelos }
+    })
+    .filter((c) => c.total > 0)
+    .sort((a, b) => b.total - a.total)
+
+  const totalGeneral = consigArray.reduce((s, c) => s + c.total, 0)
+
+  return (
+    <div className="p-8 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Tenencia por consignatario</h1>
+      <p className="text-sm text-gray-500 mb-6">Equipos actualmente asignados, agrupados por consignatario y modelo</p>
+
+      <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-6 flex flex-wrap gap-6 text-sm">
+        <div>
+          <p className="text-xs text-gray-500">Consignatarios con stock</p>
+          <p className="font-bold text-gray-900">{consigArray.length}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Equipos asignados</p>
+          <p className="font-bold text-magenta-700">{totalGeneral}</p>
+        </div>
+      </div>
+
+      {consigArray.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+          Ningún consignatario tiene equipos asignados.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {consigArray.map((c) => (
+            <div key={c.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+                <h2 className="font-bold text-gray-900">{c.nombre}</h2>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-magenta-700">{c.total}</span>
+                  <span className="text-sm text-gray-500">{c.total === 1 ? 'equipo' : 'equipos'}</span>
+                </div>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-white">
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left px-6 py-2 font-medium text-gray-600">Marca</th>
+                    <th className="text-left px-6 py-2 font-medium text-gray-600">Modelo</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Cantidad</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Antigüedad prom.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {c.modelos.map((m) => {
+                    const clase = clasificarAntiguedad(m.promedioDias)
+                    return (
+                      <tr key={`${m.marca}-${m.modelo}`} className="hover:bg-gray-50">
+                        <td className="px-6 py-2 font-medium text-gray-900">{m.marca}</td>
+                        <td className="px-6 py-2 text-gray-700">{m.modelo}</td>
+                        <td className="px-6 py-2 text-right font-bold text-gray-900">{m.cantidad}</td>
+                        <td className="px-6 py-2 text-right">
+                          {m.promedioDias !== null ? (
+                            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${clase.textColor} ${clase.bgColor}`}>
+                              {m.promedioDias} {m.promedioDias === 1 ? 'día' : 'días'}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
