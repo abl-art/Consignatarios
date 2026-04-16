@@ -4,6 +4,7 @@ export type TipoAuditoria = 'fisica' | 'auto'
 export type TipoDiferencia = 'faltante' | 'sobrante'
 export type EstadoDiferencia = 'pendiente' | 'cobrado' | 'resuelto'
 export type EstadoLiquidacion = 'retenida' | 'pendiente' | 'bloqueada' | 'pagada'
+export type EstadoSync = 'running' | 'ok' | 'error'
 
 export interface Config {
   id: string
@@ -21,6 +22,7 @@ export interface Consignatario {
   punto_reorden: number
   comision_porcentaje: number
   garantia: number
+  store_prefix: string | null
   user_id: string | null
   created_at: string
 }
@@ -79,7 +81,24 @@ export interface Venta {
   precio_venta: number
   comision_monto: number
   gocelular_sale_id: string | null
+  store_name: string | null
   synced_at: string
+}
+
+export interface SyncLog {
+  id: string
+  started_at: string
+  finished_at: string | null
+  status: EstadoSync
+  ventas_nuevas: number
+  ventas_ya_existentes: number
+  dispositivos_no_encontrados: number
+  errores_monitoreo: number
+  error_msg: string | null
+  detalle: {
+    store_mismatches?: { imei: string; expected_prefix: string; actual_store: string }[]
+  } | null
+  created_by: string | null
 }
 
 export interface Auditoria {
