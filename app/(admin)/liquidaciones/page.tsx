@@ -5,6 +5,7 @@ import { RowActions, GenerarButton } from './LiquidacionesActions'
 import type { Consignatario, Liquidacion } from '@/lib/types'
 
 const ESTADO_COLORS: Record<string, string> = {
+  borrador: 'bg-gray-100 text-gray-700',
   retenida: 'bg-yellow-100 text-yellow-700',
   pendiente: 'bg-blue-100 text-blue-700',
   bloqueada: 'bg-red-100 text-red-700',
@@ -94,7 +95,7 @@ export default async function LiquidacionesPage({
 
       {/* Generate button */}
       <div className="mb-6">
-        <GenerarButton mes={mesFiltro} />
+        <GenerarButton />
       </div>
 
       {/* Filter form */}
@@ -137,6 +138,7 @@ export default async function LiquidacionesPage({
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
             <option value="">Todos</option>
+            <option value="borrador">Borrador</option>
             <option value="retenida">Retenida</option>
             <option value="pendiente">Pendiente</option>
             <option value="bloqueada">Bloqueada</option>
@@ -188,7 +190,15 @@ export default async function LiquidacionesPage({
             <tbody className="divide-y divide-gray-100">
               {liqs.map((liq) => (
                 <tr key={liq.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-gray-700">{liq.mes}</td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {liq.fecha_inicio && liq.fecha_fin ? (
+                      <div>
+                        <span className="text-xs">{new Date(liq.fecha_inicio + 'T12:00:00').toLocaleDateString('es-AR')} — {new Date(liq.fecha_fin + 'T12:00:00').toLocaleDateString('es-AR')}</span>
+                      </div>
+                    ) : (
+                      liq.mes
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-700">
                     {consigMap[liq.consignatario_id] ?? liq.consignatario_id}
                   </td>

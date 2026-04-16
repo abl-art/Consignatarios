@@ -4,35 +4,36 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { EstadoLiquidacion } from '@/lib/types'
 
-export async function generarLiquidacionesDelMes(mes: string) {
-  // mes format: YYYY-MM
+export async function generarBorradorLiquidacion(input: {
+  fechaInicio: string  // YYYY-MM-DD
+  fechaFin: string     // YYYY-MM-DD
+}) {
   const supabase = createClient()
+  const { fechaInicio, fechaFin } = input
 
-  // Compute first and last day of month
-  const inicioMes = `${mes}-01`
-  const [year, month] = mes.split('-').map(Number)
-  const finMes = new Date(year, month, 0).toISOString().split('T')[0] // last day of month
+  // Derivar etiqueta del mes (para display)
+  const mes = fechaInicio.slice(0, 7)
 
-  // Load ventas for the month
+  // Cargar ventas del período
   const { data: ventas } = await supabase
     .from('ventas')
     .select('consignatario_id, comision_monto')
-    .gte('fecha_venta', inicioMes)
-    .lte('fecha_venta', finMes)
+    .gte('fecha_venta', fechaInicio)
+    .lte('fecha_venta', fechaFin)
 
-  // Load pending diferencias with consignatario_id via auditorias join
+  // Cargar diferencias pendientes
   const { data: diferencias } = await supabase
     .from('diferencias')
     .select('monto_deuda, auditorias(consignatario_id)')
     .eq('estado', 'pendiente')
 
-  // Aggregate commissions by consignatario
+  // Agregar comisiones por consignatario
   const comisionesPorC: Record<string, number> = {}
   for (const v of ventas ?? []) {
     comisionesPorC[v.consignatario_id] = (comisionesPorC[v.consignatario_id] ?? 0) + (v.comision_monto ?? 0)
   }
 
-  // Aggregate pending differences by consignatario (via auditorias)
+  // Agregar diferencias por consignatario
   type DifRow = { monto_deuda: number; auditorias: { consignatario_id: string } | null }
   const difPorC: Record<string, number> = {}
   for (const d of ((diferencias ?? []) as unknown as DifRow[])) {
@@ -41,7 +42,6 @@ export async function generarLiquidacionesDelMes(mes: string) {
     difPorC[cid] = (difPorC[cid] ?? 0) + (d.monto_deuda ?? 0)
   }
 
-  // Insert liquidaciones (skip duplicates — unique constraint consignatario_id+mes)
   let creadas = 0
   let errores = 0
   for (const [cid, comisiones] of Object.entries(comisionesPorC)) {
@@ -49,13 +49,14 @@ export async function generarLiquidacionesDelMes(mes: string) {
     const { error } = await supabase.from('liquidaciones').insert({
       consignatario_id: cid,
       mes,
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
       total_comisiones: comisiones,
       total_diferencias_descontadas: dif,
       monto_a_pagar: Math.max(0, comisiones - dif),
-      estado: 'retenida',
+      estado: 'borrador',
     })
     if (error) {
-      // unique violation means liquidation already exists — don't count as error
       if (error.code !== '23505') errores++
     } else {
       creadas++
@@ -65,6 +66,32 @@ export async function generarLiquidacionesDelMes(mes: string) {
   revalidatePath('/liquidaciones')
   revalidatePath('/dashboard')
   return { ok: true, creadas, errores }
+}
+
+export async function confirmarLiquidacion(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('liquidaciones')
+    .update({ estado: 'pendiente' })
+    .eq('id', id)
+    .eq('estado', 'borrador')
+  if (error) return { error: error.message }
+  revalidatePath('/liquidaciones')
+  revalidatePath('/dashboard')
+  return { ok: true }
+}
+
+export async function eliminarLiquidacion(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('liquidaciones')
+    .delete()
+    .eq('id', id)
+    .eq('estado', 'borrador')
+  if (error) return { error: error.message }
+  revalidatePath('/liquidaciones')
+  revalidatePath('/dashboard')
+  return { ok: true }
 }
 
 export async function actualizarEstadoLiquidacion(id: string, estado: EstadoLiquidacion) {

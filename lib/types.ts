@@ -3,7 +3,7 @@ export type EstadoAuditoria = 'borrador' | 'confirmada'
 export type TipoAuditoria = 'fisica' | 'auto'
 export type TipoDiferencia = 'faltante' | 'sobrante'
 export type EstadoDiferencia = 'pendiente' | 'cobrado' | 'resuelto'
-export type EstadoLiquidacion = 'retenida' | 'pendiente' | 'bloqueada' | 'pagada'
+export type EstadoLiquidacion = 'borrador' | 'retenida' | 'pendiente' | 'bloqueada' | 'pagada'
 export type EstadoSync = 'running' | 'ok' | 'error'
 
 export interface Config {
@@ -118,6 +118,8 @@ export interface Liquidacion {
   id: string
   consignatario_id: string
   mes: string
+  fecha_inicio: string | null
+  fecha_fin: string | null
   total_comisiones: number
   total_diferencias_descontadas: number
   monto_a_pagar: number
