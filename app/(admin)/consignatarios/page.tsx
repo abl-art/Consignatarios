@@ -9,17 +9,20 @@ async function crearConsignatario(formData: FormData) {
   'use server'
   const nombre = (formData.get('nombre') as string).trim()
   const email = (formData.get('email') as string).trim()
+  const password = (formData.get('password') as string).trim()
   const telefono = (formData.get('telefono') as string).trim()
   const comision = parseFloat(formData.get('comision_porcentaje') as string) / 100
   const punto_reorden = parseInt(formData.get('punto_reorden') as string)
   const garantia = parseFloat(formData.get('garantia') as string) || 0
   const storePrefix = (formData.get('store_prefix') as string).trim() || null
 
-  // Crear usuario en Supabase Auth con contraseña temporal
+  if (!nombre || !email || !password || password.length < 6) return
+
+  // Crear usuario en Supabase Auth con la contraseña del admin
   const adminClient = createAdminClient()
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: Math.random().toString(36).slice(-10),
+    password,
     email_confirm: true,
     user_metadata: { rol: 'consignatario' },
   })
@@ -81,6 +84,14 @@ export default async function ConsignatariosPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Contraseña
+              <span className="text-gray-400 font-normal"> — mínimo 6 caracteres, el consignatario la usa para ingresar</span>
+            </label>
+            <input name="password" type="text" minLength={6} placeholder="Ej: juanperez2026" required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" />
+          </div>
+          <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono</label>
             <input name="telefono" placeholder="Opcional"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
