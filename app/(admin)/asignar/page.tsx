@@ -9,6 +9,8 @@ export default async function AsignarPage() {
     { data: consignatarios },
     { data: dispositivos },
     { data: config },
+    { data: asignados },
+    { data: diferencias },
   ] = await Promise.all([
     supabase
       .from('consignatarios')
@@ -26,9 +28,34 @@ export default async function AsignarPage() {
       .select('*')
       .limit(1)
       .single<Config>(),
+    supabase
+      .from('dispositivos')
+      .select('consignatario_id, modelos(precio_costo)')
+      .eq('estado', 'asignado'),
+    supabase
+      .from('diferencias')
+      .select('monto_deuda, auditorias(consignatario_id)')
+      .eq('estado', 'pendiente'),
   ])
 
   const multiplicador = config?.multiplicador ?? 1.8
+
+  // Build compromisoMap: sum precio_costo from assigned devices + monto_deuda from pending diferencias
+  const compromisoMap: Record<string, number> = {}
+
+  for (const row of asignados ?? []) {
+    const cid = row.consignatario_id as string | null
+    if (!cid) continue
+    const costo = (row.modelos as unknown as { precio_costo: number } | null)?.precio_costo ?? 0
+    compromisoMap[cid] = (compromisoMap[cid] ?? 0) + costo
+  }
+
+  for (const row of diferencias ?? []) {
+    const auditoria = row.auditorias as unknown as { consignatario_id: string | null } | null
+    const cid = auditoria?.consignatario_id ?? null
+    if (!cid) continue
+    compromisoMap[cid] = (compromisoMap[cid] ?? 0) + (row.monto_deuda ?? 0)
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -43,6 +70,7 @@ export default async function AsignarPage() {
         consignatarios={consignatarios ?? []}
         dispositivos={dispositivos ?? []}
         multiplicador={multiplicador}
+        compromisoMap={compromisoMap}
       />
     </div>
   )

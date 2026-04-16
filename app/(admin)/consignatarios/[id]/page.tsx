@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import type { Consignatario, Asignacion, Diferencia, DispositivoConModelo } from '@/lib/types'
+import EditarForm from './EditarForm'
 
 export default async function ConsignatarioDetallePage({ params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -15,7 +16,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
   if (!consignatario) notFound()
 
   const [{ data: dispositivos }, { data: asignaciones }, { data: auditorias }] = await Promise.all([
-    supabase.from('dispositivos').select('*, modelos(*)').eq('consignatario_id', params.id)
+    supabase.from('dispositivos').select('*, modelos(id, marca, modelo, precio_costo, created_at)').eq('consignatario_id', params.id)
       .eq('estado', 'asignado').returns<DispositivoConModelo[]>(),
     supabase.from('asignaciones').select('*').eq('consignatario_id', params.id)
       .order('created_at', { ascending: false }).returns<Asignacion[]>(),
@@ -29,6 +30,8 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
     : { data: [] as Diferencia[] }
 
   const totalDeuda = (diferencias ?? []).reduce((sum, d) => sum + d.monto_deuda, 0)
+  const valorStock = (dispositivos ?? []).reduce((sum, d) => sum + (d.modelos?.precio_costo ?? 0), 0)
+  const compromiso = valorStock + totalDeuda
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8">
@@ -37,12 +40,37 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
           <h1 className="text-2xl font-bold text-gray-900">{consignatario.nombre}</h1>
           <p className="text-sm text-gray-500">{consignatario.email} · {consignatario.telefono}</p>
         </div>
-        {totalDeuda > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-right">
-            <p className="text-xs text-red-600 font-medium uppercase tracking-wide">Deuda pendiente</p>
-            <p className="text-xl font-bold text-red-700">{formatearMoneda(totalDeuda)}</p>
+        <div className="flex items-center gap-3">
+          {totalDeuda > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-right">
+              <p className="text-xs text-red-600 font-medium uppercase tracking-wide">Deuda pendiente</p>
+              <p className="text-xl font-bold text-red-700">{formatearMoneda(totalDeuda)}</p>
+            </div>
+          )}
+          <EditarForm consignatario={consignatario} />
+        </div>
+      </div>
+
+      {/* Garantía */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <h2 className="font-semibold text-gray-900 mb-3">Garantía</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-gray-500">Garantía total</p>
+            <p className="text-xl font-bold text-gray-900">{formatearMoneda(consignatario.garantia)}</p>
           </div>
-        )}
+          <div>
+            <p className="text-xs text-gray-500">Comprometido</p>
+            <p className="text-xl font-bold text-amber-700">{formatearMoneda(compromiso)}</p>
+            <p className="text-xs text-gray-400 mt-1">Stock: {formatearMoneda(valorStock)} + Deuda: {formatearMoneda(totalDeuda)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Disponible</p>
+            <p className={`text-xl font-bold ${consignatario.garantia - compromiso < 0 ? 'text-red-700' : 'text-green-700'}`}>
+              {formatearMoneda(Math.max(0, consignatario.garantia - compromiso))}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Stock asignado */}

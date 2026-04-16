@@ -15,6 +15,7 @@ interface CrearAuditoriaInput {
   firma_base64?: string
   items: AuditoriaItem[]
   confirmar: boolean
+  tipo?: 'fisica' | 'auto'
 }
 
 export async function crearAuditoria(input: CrearAuditoriaInput): Promise<{ ok: true; auditoria_id: string } | { error: string }> {
@@ -31,6 +32,7 @@ export async function crearAuditoria(input: CrearAuditoriaInput): Promise<{ ok: 
       firma_url: input.firma_base64 ?? null,
       fecha: today,
       estado: 'borrador',
+      tipo: input.tipo ?? 'fisica',
     })
     .select()
     .single()

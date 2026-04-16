@@ -11,9 +11,10 @@ interface AsignarFormProps {
   consignatarios: Consignatario[]
   dispositivos: DispositivoConModelo[]
   multiplicador: number
+  compromisoMap: Record<string, number>
 }
 
-export default function AsignarForm({ consignatarios, dispositivos, multiplicador }: AsignarFormProps) {
+export default function AsignarForm({ consignatarios, dispositivos, multiplicador, compromisoMap }: AsignarFormProps) {
   const router = useRouter()
 
   const [consignatarioId, setConsignatarioId] = useState('')
@@ -74,12 +75,18 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
     [selectedDispositivos, multiplicador]
   )
 
+  const selectedConsig = consignatarios.find((c) => c.id === consignatarioId)
+  const garantia = selectedConsig?.garantia ?? 0
+  const compromisoActual = compromisoMap[consignatarioId] ?? 0
+  const excede = garantia > 0 && (compromisoActual + totalValorCosto) > garantia
+
   const canSubmit =
     consignatarioId !== '' &&
     selected.size > 0 &&
     firmadoPor.trim() !== '' &&
     firma !== null &&
-    !submitting
+    !submitting &&
+    !excede
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,6 +210,52 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
           </tbody>
         </table>
       </div>
+
+      {/* Garantía validation — only when a consignatario is selected */}
+      {consignatarioId && (() => {
+        const consig = consignatarios.find((c) => c.id === consignatarioId)
+        if (!consig) return null
+        const garantiaVal = consig.garantia ?? 0
+        const compromisoActualVal = compromisoMap[consignatarioId] ?? 0
+        const proyectado = compromisoActualVal + totalValorCosto
+        const disponible = garantiaVal - proyectado
+        const excedeVal = garantiaVal > 0 && proyectado > garantiaVal
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Garantía</h3>
+            <div className="grid grid-cols-4 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-gray-500">Garantía</p>
+                <p className="font-bold text-gray-900">{formatearMoneda(garantiaVal)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Ya comprometido</p>
+                <p className="font-bold text-amber-700">{formatearMoneda(compromisoActualVal)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Esta asignación</p>
+                <p className="font-bold text-magenta-700">{formatearMoneda(totalValorCosto)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Disponible</p>
+                <p className={`font-bold ${disponible < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                  {formatearMoneda(disponible)}
+                </p>
+              </div>
+            </div>
+            {excedeVal && (
+              <p className="text-sm text-red-700 mt-3 font-medium">
+                ⚠ Excede la garantía en {formatearMoneda(proyectado - garantiaVal)}
+              </p>
+            )}
+            {garantiaVal === 0 && (
+              <p className="text-sm text-amber-700 mt-3">
+                Este consignatario no tiene garantía configurada
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Summary — only when something is selected */}
       {selected.size > 0 && (

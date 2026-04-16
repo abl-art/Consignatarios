@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Consignatario } from '@/lib/types'
+import { formatearMoneda } from '@/lib/utils'
 
 async function crearConsignatario(formData: FormData) {
   'use server'
@@ -11,6 +12,7 @@ async function crearConsignatario(formData: FormData) {
   const telefono = (formData.get('telefono') as string).trim()
   const comision = parseFloat(formData.get('comision_porcentaje') as string) / 100
   const punto_reorden = parseInt(formData.get('punto_reorden') as string)
+  const garantia = parseFloat(formData.get('garantia') as string) || 0
 
   // Crear usuario en Supabase Auth con contraseña temporal
   const adminClient = createAdminClient()
@@ -29,6 +31,7 @@ async function crearConsignatario(formData: FormData) {
     telefono: telefono || null,
     comision_porcentaje: comision,
     punto_reorden: isNaN(punto_reorden) ? 10 : punto_reorden,
+    garantia,
     user_id: authData.user.id,
   })
   revalidatePath('/consignatarios')
@@ -74,6 +77,9 @@ export default async function ConsignatariosPage() {
           <input name="punto_reorden" type="number" min="0" placeholder="Punto de reorden (ej: 10)"
             defaultValue={10}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <input name="garantia" type="number" step="1000" min="0" placeholder="Garantía (pesos)"
+            defaultValue={0}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           <div className="flex items-center gap-2">
             <input name="comision_porcentaje" type="number" step="0.1" min="0" max="100"
               placeholder="Comisión %" defaultValue={10}
@@ -97,6 +103,7 @@ export default async function ConsignatariosPage() {
               <th className="text-left px-6 py-3 font-medium text-gray-600">Nombre</th>
               <th className="text-left px-6 py-3 font-medium text-gray-600">Email</th>
               <th className="text-right px-6 py-3 font-medium text-gray-600">Stock actual</th>
+              <th className="text-right px-6 py-3 font-medium text-gray-600">Garantía</th>
               <th className="text-right px-6 py-3 font-medium text-gray-600">Comisión</th>
               <th className="px-6 py-3"></th>
             </tr>
@@ -113,6 +120,9 @@ export default async function ConsignatariosPage() {
                     <span className={alerta ? 'text-orange-600 font-semibold' : 'text-gray-900'}>
                       {stock} {alerta && '⚠'}
                     </span>
+                  </td>
+                  <td className="px-6 py-3 text-right text-gray-700">
+                    {formatearMoneda(c.garantia ?? 0)}
                   </td>
                   <td className="px-6 py-3 text-right text-gray-700">
                     {(c.comision_porcentaje * 100).toFixed(1)}%
