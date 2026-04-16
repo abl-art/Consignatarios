@@ -1,7 +1,9 @@
 export type EstadoDispositivo = 'disponible' | 'asignado' | 'vendido' | 'devuelto'
 export type EstadoAuditoria = 'borrador' | 'confirmada'
+export type TipoAuditoria = 'fisica' | 'auto'
 export type TipoDiferencia = 'faltante' | 'sobrante'
 export type EstadoDiferencia = 'pendiente' | 'cobrado' | 'resuelto'
+export type EstadoLiquidacion = 'retenida' | 'pendiente' | 'bloqueada' | 'pagada'
 
 export interface Config {
   id: string
@@ -18,6 +20,7 @@ export interface Consignatario {
   telefono: string | null
   punto_reorden: number
   comision_porcentaje: number
+  garantia: number
   user_id: string | null
   created_at: string
 }
@@ -84,9 +87,24 @@ export interface Auditoria {
   realizada_por: string
   fecha: string
   estado: EstadoAuditoria
+  tipo: TipoAuditoria
   firma_url: string | null
   documento_url: string | null
   observaciones: string | null
+  created_at: string
+}
+
+export interface Liquidacion {
+  id: string
+  consignatario_id: string
+  mes: string
+  total_comisiones: number
+  total_diferencias_descontadas: number
+  monto_a_pagar: number
+  estado: EstadoLiquidacion
+  fecha_auto_auditoria: string | null
+  fecha_pago: string | null
+  firma_url: string | null
   created_at: string
 }
 
