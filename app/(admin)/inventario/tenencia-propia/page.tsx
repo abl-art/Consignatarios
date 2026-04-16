@@ -51,6 +51,7 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
        FROM store_orders so
        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
        WHERE so.status = 'paid'
+         AND so.cancelled_at IS NULL
          AND go.order_discarded_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
          AND NOT EXISTS (
