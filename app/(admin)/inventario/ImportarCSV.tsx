@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import Papa from 'papaparse'
 import { validarIMEI } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import DescargarTemplate from '@/components/DescargarTemplate'
 
 export interface FilaCSV {
   imei: string
@@ -127,9 +128,19 @@ export default function ImportarCSV({ onImportado }: { onImportado: () => void }
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6">
-      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-        Carga masiva por CSV
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+          Carga masiva por CSV
+        </h2>
+        <DescargarTemplate
+          filename="template-inventario.csv"
+          headers={['imei', 'marca', 'modelo', 'precio_costo']}
+          ejemplos={[
+            ['350000000000001', 'Samsung', 'Galaxy A54', '180000'],
+            ['350000000000002', 'Motorola', 'Moto G54', '150000'],
+          ]}
+        />
+      </div>
       <p className="text-xs text-gray-500 mb-4">
         Formato: <code className="bg-gray-100 px-1 rounded">imei,marca,modelo,precio_costo</code> — una línea por equipo. El precio del modelo se actualiza con cada carga.
       </p>
