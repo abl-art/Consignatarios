@@ -44,6 +44,7 @@ export interface Dispositivo {
   modelo_id: string
   estado: EstadoDispositivo
   consignatario_id: string | null
+  fecha_asignacion: string | null
   created_at: string
 }
 

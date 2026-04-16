@@ -52,10 +52,11 @@ export async function asignarStock(input: AsignarInput): Promise<
     return { error: errorItems.message }
   }
 
-  // 3. Update dispositivos: estado='asignado', consignatario_id set
+  // 3. Update dispositivos: estado='asignado', consignatario_id set, fecha_asignacion = today
+  const today = new Date().toISOString().slice(0, 10)
   const { error: errorUpdate } = await supabase
     .from('dispositivos')
-    .update({ estado: 'asignado', consignatario_id: input.consignatario_id })
+    .update({ estado: 'asignado', consignatario_id: input.consignatario_id, fecha_asignacion: today })
     .in('id', input.dispositivo_ids)
 
   if (errorUpdate) {

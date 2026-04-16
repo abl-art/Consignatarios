@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { formatearMoneda } from '@/lib/utils'
+import { formatearMoneda, diasDesde } from '@/lib/utils'
+import PermanenciaChart from '@/components/PermanenciaChart'
 import type { Consignatario, Venta, Diferencia } from '@/lib/types'
 
 export default async function DashboardPage() {
@@ -35,6 +36,29 @@ export default async function DashboardPage() {
     supabase.from('consignatarios').select('id, nombre'),
     supabase.from('liquidaciones').select('estado, monto_a_pagar'),
   ])
+
+  // Permanencia promedio por modelo (solo dispositivos asignados)
+  const { data: asignadosDetalle } = await supabase
+    .from('dispositivos')
+    .select('fecha_asignacion, modelos(marca, modelo)')
+    .eq('estado', 'asignado')
+
+  type AsignadoRow = { fecha_asignacion: string | null; modelos: { marca: string; modelo: string } | null }
+  const permanenciaMap: Record<string, { sumaDias: number; cantidad: number; marca: string; modelo: string }> = {}
+  for (const d of ((asignadosDetalle ?? []) as unknown as AsignadoRow[])) {
+    if (!d.modelos) continue
+    const key = `${d.modelos.marca} ${d.modelos.modelo}`
+    if (!permanenciaMap[key]) permanenciaMap[key] = { sumaDias: 0, cantidad: 0, marca: d.modelos.marca, modelo: d.modelos.modelo }
+    const dias = diasDesde(d.fecha_asignacion)
+    if (dias !== null) {
+      permanenciaMap[key].sumaDias += dias
+      permanenciaMap[key].cantidad++
+    }
+  }
+  const permanenciaData = Object.entries(permanenciaMap)
+    .filter(([, v]) => v.cantidad > 0)
+    .map(([key, v]) => ({ modelo: key, dias: Math.round(v.sumaDias / v.cantidad), cantidad: v.cantidad }))
+    .sort((a, b) => b.dias - a.dias)
 
   const stats = [
     { label: 'Dispositivos totales', value: totalDispositivos ?? 0, color: 'text-magenta-700' },
@@ -178,6 +202,26 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Permanencia promedio por modelo */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Permanencia promedio en stock</h2>
+            <p className="text-xs text-gray-500">Días promedio que un equipo asignado lleva sin venderse, por modelo</p>
+          </div>
+          <div className="flex gap-3 text-xs text-gray-500">
+            <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>{'<'} 30</span>
+            <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1"></span>30-60</span>
+            <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"></span>{'>'} 60</span>
+          </div>
+        </div>
+        {permanenciaData.length === 0 ? (
+          <p className="text-sm text-gray-500 py-8 text-center">Sin equipos asignados para medir permanencia.</p>
+        ) : (
+          <PermanenciaChart data={permanenciaData} />
+        )}
       </div>
     </div>
   )

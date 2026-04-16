@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import ImportarCSV from './ImportarCSV'
 import { revalidatePath } from 'next/cache'
+import { diasDesde, clasificarAntiguedad } from '@/lib/utils'
 import type { DispositivoConModelo, Consignatario } from '@/lib/types'
 
 const ESTADOS_LABELS: Record<string, string> = {
@@ -78,24 +79,38 @@ export default async function InventarioPage({
               <th className="text-left px-6 py-3 font-medium text-gray-600">IMEI</th>
               <th className="text-left px-6 py-3 font-medium text-gray-600">Modelo</th>
               <th className="text-left px-6 py-3 font-medium text-gray-600">Estado</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-600">Días en stock</th>
               <th className="text-left px-6 py-3 font-medium text-gray-600">Fecha ingreso</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {dispositivos?.map((d) => (
-              <tr key={d.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 font-mono text-xs text-gray-700">{d.imei}</td>
-                <td className="px-6 py-3 text-gray-900">{d.modelos.marca} {d.modelos.modelo}</td>
-                <td className="px-6 py-3">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ESTADOS_COLORS[d.estado]}`}>
-                    {ESTADOS_LABELS[d.estado]}
-                  </span>
-                </td>
-                <td className="px-6 py-3 text-gray-500">
-                  {new Date(d.created_at).toLocaleDateString('es-AR')}
-                </td>
-              </tr>
-            ))}
+            {dispositivos?.map((d) => {
+              const dias = d.estado === 'asignado' ? diasDesde(d.fecha_asignacion) : null
+              const clase = clasificarAntiguedad(dias)
+              return (
+                <tr key={d.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-3 font-mono text-xs text-gray-700">{d.imei}</td>
+                  <td className="px-6 py-3 text-gray-900">{d.modelos.marca} {d.modelos.modelo}</td>
+                  <td className="px-6 py-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ESTADOS_COLORS[d.estado]}`}>
+                      {ESTADOS_LABELS[d.estado]}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    {d.estado === 'asignado' && dias !== null ? (
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${clase.textColor} ${clase.bgColor}`}>
+                        {dias} {dias === 1 ? 'día' : 'días'}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-3 text-gray-500">
+                    {new Date(d.created_at).toLocaleDateString('es-AR')}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
