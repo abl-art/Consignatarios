@@ -159,9 +159,11 @@ export default async function DashboardPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
-      <p className="text-sm text-gray-500 mb-8">Resumen general del sistema de consignación</p>
+      <p className="text-sm text-gray-500 mb-6">Resumen general del sistema de consignación</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <VentasDelDia />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 mt-6">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
@@ -318,15 +320,11 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <VentasDelDia consignatariosPrefixes={
-        ((consignatarios ?? []) as Pick<Consignatario, 'id' | 'nombre'>[] & { store_prefix?: string | null }[])
-      } />
     </div>
   )
 }
 
-async function VentasDelDia({ consignatariosPrefixes }: { consignatariosPrefixes: (Pick<Consignatario, 'id' | 'nombre'> & { store_prefix?: string | null })[] }) {
-  // Cargar prefixes de consignatarios para clasificación
+async function VentasDelDia() {
   const supabase = createClient()
   const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
   const prefixes = (consigs ?? [])
