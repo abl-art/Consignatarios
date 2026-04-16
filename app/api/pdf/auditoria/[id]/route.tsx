@@ -112,6 +112,7 @@ export async function GET(
     observaciones: auditoria.observaciones,
     firmaBase64,
     items,
+    hideImei: auditoria.tipo === 'auto',
   })
 
   const buffer = await renderToBuffer(element)

@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/login') {
     if (user) {
       const rol = user.user_metadata?.rol
-      return NextResponse.redirect(new URL(rol === 'admin' ? '/dashboard' : '/stock', request.url))
+      return NextResponse.redirect(new URL(rol === 'admin' ? '/dashboard' : '/mi-dashboard', request.url))
     }
     return supabaseResponse
   }
@@ -48,15 +48,15 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/modelos') || pathname.startsWith('/consignatarios') ||
       pathname.startsWith('/asignar') || pathname.startsWith('/auditorias') ||
       pathname.startsWith('/diferencias') || pathname.startsWith('/sync') ||
-      pathname.startsWith('/reportes')) {
+      pathname.startsWith('/reportes') || pathname.startsWith('/liquidaciones')) {
     if (rol !== 'admin') {
-      return NextResponse.redirect(new URL('/stock', request.url))
+      return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }
   }
 
   // Rutas consignatario: solo consignatarios
-  if (pathname.startsWith('/stock') || pathname.startsWith('/ventas') ||
-      pathname.startsWith('/comisiones') || pathname.startsWith('/recibos')) {
+  if (pathname.startsWith('/mi-dashboard') || pathname.startsWith('/stock') ||
+      pathname.startsWith('/auto-auditoria') || pathname.startsWith('/mis-liquidaciones')) {
     if (rol !== 'consignatario') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }

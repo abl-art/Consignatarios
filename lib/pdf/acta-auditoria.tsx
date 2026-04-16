@@ -112,6 +112,9 @@ const styles = StyleSheet.create({
   colMarca: { width: '15%' },
   colModelo: { width: '30%' },
   colEstado: { width: '25%', textAlign: 'right' },
+  colMarcaNoImei: { width: '20%' },
+  colModeloNoImei: { width: '50%' },
+  colEstadoNoImei: { width: '30%', textAlign: 'right' },
   imeiText: {
     fontFamily: 'Courier',
     fontSize: 9,
@@ -189,10 +192,11 @@ interface ActaAuditoriaProps {
   observaciones?: string | null
   firmaBase64?: string
   items: AuditoriaItemDisplay[]
+  hideImei?: boolean
 }
 
 export function ActaAuditoriaPDF(props: ActaAuditoriaProps) {
-  const { fecha, consignatario, realizadaPor, observaciones, firmaBase64, items } = props
+  const { fecha, consignatario, realizadaPor, observaciones, firmaBase64, items, hideImei } = props
 
   const esperados = items.length
   const presentes = items.filter((i) => i.presente).length
@@ -242,19 +246,19 @@ export function ActaAuditoriaPDF(props: ActaAuditoriaProps) {
         {/* Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colImei]}>IMEI</Text>
-            <Text style={[styles.tableHeaderCell, styles.colMarca]}>Marca</Text>
-            <Text style={[styles.tableHeaderCell, styles.colModelo]}>Modelo</Text>
-            <Text style={[styles.tableHeaderCell, styles.colEstado]}>Estado</Text>
+            {!hideImei && <Text style={[styles.tableHeaderCell, styles.colImei]}>IMEI</Text>}
+            <Text style={[styles.tableHeaderCell, hideImei ? styles.colMarcaNoImei : styles.colMarca]}>Marca</Text>
+            <Text style={[styles.tableHeaderCell, hideImei ? styles.colModeloNoImei : styles.colModelo]}>Modelo</Text>
+            <Text style={[styles.tableHeaderCell, hideImei ? styles.colEstadoNoImei : styles.colEstado]}>Estado</Text>
           </View>
           {items.map((item, index) => (
             <View
               key={item.imei}
               style={[styles.tableRow, index % 2 === 1 ? styles.tableRowAlt : {}]}
             >
-              <Text style={[styles.imeiText, styles.colImei]}>{item.imei}</Text>
-              <Text style={styles.colMarca}>{item.marca}</Text>
-              <Text style={styles.colModelo}>{item.modelo}</Text>
+              {!hideImei && <Text style={[styles.imeiText, styles.colImei]}>{item.imei}</Text>}
+              <Text style={hideImei ? styles.colMarcaNoImei : styles.colMarca}>{item.marca}</Text>
+              <Text style={hideImei ? styles.colModeloNoImei : styles.colModelo}>{item.modelo}</Text>
               <Text style={item.presente ? styles.estadoPresente : styles.estadoFaltante}>
                 {item.presente ? 'Presente' : 'FALTANTE'}
               </Text>
