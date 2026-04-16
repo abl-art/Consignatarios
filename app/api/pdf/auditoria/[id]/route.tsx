@@ -41,68 +41,55 @@ export async function GET(
     .select('dispositivo_id, presente')
     .eq('auditoria_id', id)
 
-  if (!auditoriaItems || auditoriaItems.length === 0) {
-    // Render empty PDF
-    const element = ActaAuditoriaPDF({
-      fecha: auditoria.fecha,
-      consignatario: consignatario?.nombre ?? auditoria.consignatario_id,
-      realizadaPor: auditoria.realizada_por,
-      observaciones: auditoria.observaciones,
-      items: [],
-    })
-    const buffer = await renderToBuffer(element)
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="auditoria-${id}.pdf"`,
-      },
-    })
+  // Resolve firma: if it's already a data URL, pass it directly. Otherwise try to fetch it.
+  let firmaBase64: string | undefined
+  if (auditoria.firma_url) {
+    const url = auditoria.firma_url as string
+    if (url.startsWith('data:')) {
+      firmaBase64 = url
+    } else {
+      try {
+        const res = await fetch(url)
+        if (res.ok) {
+          const buffer = await res.arrayBuffer()
+          const base64 = Buffer.from(buffer).toString('base64')
+          const contentType = res.headers.get('content-type') ?? 'image/png'
+          firmaBase64 = `data:${contentType};base64,${base64}`
+        }
+      } catch {
+        // firma optional, continue without it
+      }
+    }
   }
 
   // Load dispositivos with modelos for all dispositivo_ids in the auditoria
-  const dispositivoIds = (auditoriaItems as AuditoriaItem[]).map((ai) => ai.dispositivo_id)
+  const dispositivoIds = (auditoriaItems ?? []).map((ai) => (ai as AuditoriaItem).dispositivo_id)
 
-  const { data: dispositivos } = await supabase
-    .from('dispositivos')
-    .select('id, imei, modelos(marca, modelo)')
-    .in('id', dispositivoIds)
+  let items: { imei: string; marca: string; modelo: string; presente: boolean }[] = []
+  if (dispositivoIds.length > 0) {
+    const { data: dispositivos } = await supabase
+      .from('dispositivos')
+      .select('id, imei, modelos(marca, modelo)')
+      .in('id', dispositivoIds)
 
-  // Build a lookup map
-  const dispositivoMap = new Map<string, { imei: string; marca: string; modelo: string }>()
-  for (const d of (dispositivos ?? []) as unknown as DispositivoConModelos[]) {
-    const modelo = d.modelos
-    dispositivoMap.set(d.id, {
-      imei: d.imei,
-      marca: modelo?.marca ?? '',
-      modelo: modelo?.modelo ?? '',
-    })
-  }
-
-  // Build items array
-  const items = (auditoriaItems as AuditoriaItem[]).map((ai) => {
-    const disp = dispositivoMap.get(ai.dispositivo_id)
-    return {
-      imei: disp?.imei ?? ai.dispositivo_id,
-      marca: disp?.marca ?? '',
-      modelo: disp?.modelo ?? '',
-      presente: ai.presente,
+    const dispositivoMap = new Map<string, { imei: string; marca: string; modelo: string }>()
+    for (const d of (dispositivos ?? []) as unknown as DispositivoConModelos[]) {
+      dispositivoMap.set(d.id, {
+        imei: d.imei,
+        marca: d.modelos?.marca ?? '',
+        modelo: d.modelos?.modelo ?? '',
+      })
     }
-  })
 
-  // Resolve firma
-  let firmaBase64: string | undefined
-  if (auditoria.firma_url) {
-    try {
-      const res = await fetch(auditoria.firma_url)
-      if (res.ok) {
-        const buffer = await res.arrayBuffer()
-        const base64 = Buffer.from(buffer).toString('base64')
-        const contentType = res.headers.get('content-type') ?? 'image/png'
-        firmaBase64 = `data:${contentType};base64,${base64}`
+    items = (auditoriaItems as AuditoriaItem[]).map((ai) => {
+      const disp = dispositivoMap.get(ai.dispositivo_id)
+      return {
+        imei: disp?.imei ?? ai.dispositivo_id,
+        marca: disp?.marca ?? '—',
+        modelo: disp?.modelo ?? '—',
+        presente: ai.presente,
       }
-    } catch {
-      // firma optional, continue without it
-    }
+    })
   }
 
   const element = ActaAuditoriaPDF({
