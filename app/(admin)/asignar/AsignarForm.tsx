@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
 import { asignarStock } from '@/lib/actions/asignar'
-import FirmaCanvas from '../components/FirmaCanvas'
+import FirmaCanvas from '@/components/FirmaCanvas'
 
 interface AsignarFormProps {
   consignatarios: Consignatario[]

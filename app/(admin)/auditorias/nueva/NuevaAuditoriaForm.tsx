@@ -4,8 +4,8 @@ import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { crearAuditoria } from '@/lib/actions/auditorias'
-import EscanerIMEI from '../../components/EscanerIMEI'
-import FirmaCanvas from '../../components/FirmaCanvas'
+import EscanerIMEI from '@/components/EscanerIMEI'
+import FirmaCanvas from '@/components/FirmaCanvas'
 
 interface NuevaAuditoriaFormProps {
   consignatarios: Consignatario[]
