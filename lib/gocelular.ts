@@ -1,5 +1,39 @@
 import { Client } from 'pg'
 
+export interface VentaDiaria {
+  store_name: string
+  ventas: number
+  monto: number
+}
+
+/**
+ * Ventas de hoy agrupadas por store_name (para el dashboard admin).
+ */
+export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ store_name: string; ventas: string; monto: string }>(
+      `SELECT go.store_name, COUNT(*)::text AS ventas, COALESCE(SUM(go.total_order_amount), 0)::text AS monto
+       FROM gocuotas_orders go
+       WHERE go.order_discarded_at IS NULL
+         AND go.created_at::date = CURRENT_DATE
+       GROUP BY go.store_name
+       ORDER BY ventas DESC`
+    )
+    return res.rows.map((r) => ({
+      store_name: r.store_name,
+      ventas: Number(r.ventas),
+      monto: Number(r.monto),
+    }))
+  } finally {
+    await client.end()
+  }
+}
+
 export interface GocelularSale {
   imei: string
   price: number | null
