@@ -9,6 +9,9 @@ import type { Modelo } from '@/lib/types'
 export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; multiplicador: number }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  // Local copy so we can update the displayed values optimistically after save
+  // (router.refresh() doesn't always re-render fast enough in dev)
+  const [current, setCurrent] = useState(modelo)
   const [form, setForm] = useState({
     marca: modelo.marca,
     modelo: modelo.modelo,
@@ -27,29 +30,40 @@ export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; m
       return
     }
     const result = await editarModelo({
-      id: modelo.id,
+      id: current.id,
       marca: form.marca.trim(),
       modelo: form.modelo.trim(),
       precio_costo: precio,
     })
     setSaving(false)
-    if ('error' in result && result.error) setError(result.error)
-    else { setEditing(false); router.refresh() }
+    if ('error' in result && result.error) {
+      setError(result.error)
+      return
+    }
+    // Optimistic local update so the UI reflects the new values immediately
+    setCurrent({
+      ...current,
+      marca: form.marca.trim(),
+      modelo: form.modelo.trim(),
+      precio_costo: precio,
+    })
+    setEditing(false)
+    router.refresh()
   }
 
   function cancelar() {
     setForm({
-      marca: modelo.marca,
-      modelo: modelo.modelo,
-      precio_costo: String(modelo.precio_costo),
+      marca: current.marca,
+      modelo: current.modelo,
+      precio_costo: String(current.precio_costo),
     })
     setError(null)
     setEditing(false)
   }
 
   async function eliminar() {
-    if (!confirm(`¿Eliminar ${modelo.marca} ${modelo.modelo}?`)) return
-    await eliminarModelo(modelo.id)
+    if (!confirm(`¿Eliminar ${current.marca} ${current.modelo}?`)) return
+    await eliminarModelo(current.id)
     router.refresh()
   }
 
@@ -102,11 +116,11 @@ export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; m
 
   return (
     <tr className="hover:bg-gray-50">
-      <td className="px-6 py-3 text-gray-900">{modelo.marca}</td>
-      <td className="px-6 py-3 text-gray-900">{modelo.modelo}</td>
-      <td className="px-6 py-3 text-right text-gray-700">{formatearMoneda(modelo.precio_costo)}</td>
+      <td className="px-6 py-3 text-gray-900">{current.marca}</td>
+      <td className="px-6 py-3 text-gray-900">{current.modelo}</td>
+      <td className="px-6 py-3 text-right text-gray-700">{formatearMoneda(current.precio_costo)}</td>
       <td className="px-6 py-3 text-right font-medium text-gray-900">
-        {formatearMoneda(calcularPrecioVenta(modelo.precio_costo, multiplicador))}
+        {formatearMoneda(calcularPrecioVenta(current.precio_costo, multiplicador))}
       </td>
       <td className="px-6 py-3 text-right">
         <div className="flex gap-3 justify-end">
