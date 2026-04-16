@@ -48,8 +48,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/modelos') || pathname.startsWith('/consignatarios') ||
       pathname.startsWith('/asignar') || pathname.startsWith('/auditorias') ||
       pathname.startsWith('/diferencias') || pathname.startsWith('/sync') ||
-      pathname.startsWith('/reportes') || pathname.startsWith('/liquidaciones') ||
-      pathname.startsWith('/garantias')) {
+      pathname.startsWith('/ventas') || pathname.startsWith('/reportes') ||
+      pathname.startsWith('/liquidaciones') || pathname.startsWith('/garantias')) {
     if (rol !== 'admin') {
       return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }
@@ -57,7 +57,8 @@ export async function middleware(request: NextRequest) {
 
   // Rutas consignatario: solo consignatarios
   if (pathname.startsWith('/mi-dashboard') || pathname.startsWith('/stock') ||
-      pathname.startsWith('/auto-auditoria') || pathname.startsWith('/mis-liquidaciones')) {
+      pathname.startsWith('/mis-ventas') || pathname.startsWith('/auto-auditoria') ||
+      pathname.startsWith('/mis-liquidaciones')) {
     if (rol !== 'consignatario') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }

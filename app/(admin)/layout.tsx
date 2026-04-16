@@ -12,7 +12,9 @@ const navItems = [
   { href: '/diferencias', label: 'Diferencias' },
   { href: '/garantias', label: 'Garantías' },
   { href: '/liquidaciones', label: 'Liquidaciones' },
+  { href: '/ventas', label: 'Ventas' },
   { href: '/reportes', label: 'Reportes' },
+  { href: '/sync', label: 'Sincronización' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
