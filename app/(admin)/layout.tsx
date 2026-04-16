@@ -1,32 +1,36 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import NavIcon, { type IconName } from '@/components/NavIcon'
 
 interface NavItem {
   href: string
   label: string
-  children?: { href: string; label: string }[]
+  icon: IconName
+  children?: { href: string; label: string; icon: IconName }[]
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   {
     href: '/inventario',
     label: 'Inventario',
+    icon: 'inventario',
     children: [
-      { href: '/inventario/tenencia', label: 'Tenencia consignatarios' },
+      { href: '/inventario/tenencia', label: 'Tenencia consignatarios', icon: 'tenencia' },
+      { href: '/inventario/tenencia-propia', label: 'Tenencia propia', icon: 'tenencia-propia' },
     ],
   },
-  { href: '/asignar', label: 'Asignar stock' },
-  { href: '/consignatarios', label: 'Consignatarios' },
-  { href: '/modelos', label: 'Modelos y precios' },
-  { href: '/auditorias', label: 'Auditorías' },
-  { href: '/diferencias', label: 'Diferencias' },
-  { href: '/garantias', label: 'Garantías' },
-  { href: '/liquidaciones', label: 'Liquidaciones' },
-  { href: '/ventas', label: 'Ventas' },
-  { href: '/reportes', label: 'Reportes' },
-  { href: '/sync', label: 'Sincronización' },
+  { href: '/asignar', label: 'Asignar stock', icon: 'asignar' },
+  { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios' },
+  { href: '/modelos', label: 'Modelos y precios', icon: 'modelos' },
+  { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
+  { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
+  { href: '/garantias', label: 'Garantías', icon: 'garantias' },
+  { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
+  { href: '/ventas', label: 'Ventas', icon: 'ventas' },
+  { href: '/reportes', label: 'Reportes', icon: 'reportes' },
+  { href: '/sync', label: 'Sincronización', icon: 'sync' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -48,9 +52,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <div key={item.href}>
               <Link
                 href={item.href}
-                className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
               >
-                {item.label}
+                <NavIcon name={item.icon} />
+                <span>{item.label}</span>
               </Link>
               {item.children && (
                 <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
@@ -58,9 +63,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                     <Link
                       key={child.href}
                       href={child.href}
-                      className="block px-3 py-1.5 text-xs text-gray-500 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
                     >
-                      {child.label}
+                      <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
+                      <span>{child.label}</span>
                     </Link>
                   ))}
                 </div>

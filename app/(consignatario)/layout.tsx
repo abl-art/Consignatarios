@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import NavIcon, { type IconName } from '@/components/NavIcon'
 
-const navItems = [
-  { href: '/mi-dashboard', label: 'Dashboard' },
-  { href: '/stock', label: 'Mi stock' },
-  { href: '/mis-ventas', label: 'Mis ventas' },
-  { href: '/auto-auditoria', label: 'Auto-auditoría' },
-  { href: '/mis-liquidaciones', label: 'Liquidaciones' },
+const navItems: { href: string; label: string; icon: IconName }[] = [
+  { href: '/mi-dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/stock', label: 'Mi stock', icon: 'stock' },
+  { href: '/mis-ventas', label: 'Mis ventas', icon: 'ventas' },
+  { href: '/auto-auditoria', label: 'Auto-auditoría', icon: 'auto-auditoria' },
+  { href: '/mis-liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
 ]
 
 export default async function ConsignatarioLayout({ children }: { children: React.ReactNode }) {
@@ -26,8 +27,9 @@ export default async function ConsignatarioLayout({ children }: { children: Reac
         <nav className="flex-1 p-3 space-y-0.5">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}
-              className="block px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors">
-              {item.label}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors">
+              <NavIcon name={item.icon} />
+              <span>{item.label}</span>
             </Link>
           ))}
         </nav>
