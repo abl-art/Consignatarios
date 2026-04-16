@@ -34,6 +34,28 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
   }
 }
 
+/**
+ * Dado un array de order_ids ya sincronizados, devuelve los que fueron
+ * anulados en GOcelular (order_discarded_at IS NOT NULL).
+ */
+export async function fetchAnuladas(orderIds: string[]): Promise<string[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url || orderIds.length === 0) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ order_id: string }>(
+      `SELECT order_id FROM gocuotas_orders
+       WHERE order_id = ANY($1) AND order_discarded_at IS NOT NULL`,
+      [orderIds]
+    )
+    return res.rows.map((r) => r.order_id)
+  } finally {
+    await client.end()
+  }
+}
+
 export interface GocelularSale {
   imei: string
   price: number | null

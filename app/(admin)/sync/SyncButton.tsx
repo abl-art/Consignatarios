@@ -15,7 +15,13 @@ export default function SyncButton() {
     const r = await sincronizarVentas()
     setRunning(false)
     if ('error' in r && r.error) setResult(`Error: ${r.error}`)
-    else if ('ok' in r) setResult(`${r.nuevas} ventas nuevas · ${r.yaExistentes} ya existentes · ${r.noEncontrados} sin match · ${r.storeMismatches} alertas de sucursal`)
+    else if ('ok' in r) {
+      const parts = [`${r.nuevas} nuevas`, `${r.yaExistentes} existentes`]
+      if (r.anuladas > 0) parts.push(`${r.anuladas} anuladas (devueltas a stock)`)
+      if (r.noEncontrados > 0) parts.push(`${r.noEncontrados} sin match`)
+      if (r.storeMismatches > 0) parts.push(`${r.storeMismatches} alertas`)
+      setResult(parts.join(' · '))
+    }
     router.refresh()
   }
 

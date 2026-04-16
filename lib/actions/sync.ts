@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { fetchNewSales } from '@/lib/gocelular'
+import { fetchNewSales, fetchAnuladas } from '@/lib/gocelular'
 
 interface DispositivoRow {
   id: string
@@ -101,6 +101,30 @@ export async function sincronizarVentas() {
       await admin.from('dispositivos').update({ estado: 'vendido' }).eq('id', dispositivo.id)
     }
 
+    // ── Paso 2: Detectar anulaciones ─────────────────────────────────
+    // Buscar ventas que ya sincronizamos pero cuya orden fue anulada en GOcelular.
+    // Para esas: borrar la venta + devolver el dispositivo a 'asignado'.
+    let anuladas = 0
+    const allSyncedIds = [...alreadySynced, ...sales.map((s) => s.assigned_to_order_id)].filter(Boolean)
+    if (allSyncedIds.length > 0) {
+      const idsAnulados = await fetchAnuladas(allSyncedIds)
+      for (const orderId of idsAnulados) {
+        // Buscar la venta en nuestra DB
+        const { data: ventaAnulada } = await admin
+          .from('ventas')
+          .select('id, dispositivo_id')
+          .eq('gocelular_sale_id', orderId)
+          .single()
+        if (!ventaAnulada) continue
+
+        // Borrar la venta
+        await admin.from('ventas').delete().eq('id', ventaAnulada.id)
+        // Devolver dispositivo a asignado
+        await admin.from('dispositivos').update({ estado: 'asignado' }).eq('id', ventaAnulada.dispositivo_id)
+        anuladas++
+      }
+    }
+
     await admin
       .from('sync_log')
       .update({
@@ -109,7 +133,13 @@ export async function sincronizarVentas() {
         ventas_nuevas: nuevas,
         ventas_ya_existentes: yaExistentes,
         dispositivos_no_encontrados: noEncontrados,
-        detalle: storeMismatches.length > 0 ? { store_mismatches: storeMismatches } : null,
+        errores_monitoreo: anuladas,
+        detalle: storeMismatches.length > 0 || anuladas > 0
+          ? {
+              store_mismatches: storeMismatches.length > 0 ? storeMismatches : undefined,
+              anuladas,
+            }
+          : null,
       })
       .eq('id', logId)
 
@@ -125,6 +155,7 @@ export async function sincronizarVentas() {
       nuevas,
       yaExistentes,
       noEncontrados,
+      anuladas,
       storeMismatches: storeMismatches.length,
     }
   } catch (e: unknown) {
