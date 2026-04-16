@@ -9,6 +9,7 @@ export interface FilaCSV {
   imei: string
   marca: string
   modelo: string
+  precio_costo: number
 }
 
 export interface ErrorCSV {
@@ -27,7 +28,6 @@ export function parsearCSVDispositivos(csv: string): ResultadoCSV {
 
   if (filas.length <= 1) return { validas: [], errores: [] }
 
-  // Saltar header
   const validas: FilaCSV[] = []
   const errores: ErrorCSV[] = []
 
@@ -37,21 +37,28 @@ export function parsearCSVDispositivos(csv: string): ResultadoCSV {
 
     if (!fila || fila.every(c => !c.trim())) continue
 
-    if (fila.length < 3 || !fila[0] || !fila[1] || !fila[2]) {
-      errores.push({ linea, error: 'Faltan columnas (se esperan: imei, marca, modelo)' })
+    if (fila.length < 4 || !fila[0] || !fila[1] || !fila[2] || !fila[3]) {
+      errores.push({ linea, error: 'Faltan columnas (se esperan: imei, marca, modelo, precio_costo)' })
       continue
     }
 
     const imei = fila[0].trim()
     const marca = fila[1].trim()
     const modelo = fila[2].trim()
+    const precioStr = fila[3].trim().replace(/[^\d.,-]/g, '').replace(',', '.')
+    const precio = parseFloat(precioStr)
 
     if (!validarIMEI(imei)) {
       errores.push({ linea, error: `IMEI inválido: "${imei}" (debe tener 15 dígitos numéricos)` })
       continue
     }
 
-    validas.push({ imei, marca, modelo })
+    if (isNaN(precio) || precio < 0) {
+      errores.push({ linea, error: `Precio costo inválido: "${fila[3]}"` })
+      continue
+    }
+
+    validas.push({ imei, marca, modelo, precio_costo: precio })
   }
 
   return { validas, errores }
@@ -84,7 +91,7 @@ export default function ImportarCSV({ onImportado }: { onImportado: () => void }
     let duplicados = 0
 
     for (const fila of resultado.validas) {
-      // Buscar o crear modelo
+      // Buscar o crear modelo. Si existe, actualizar el precio con el del CSV.
       let { data: modelo } = await supabase
         .from('modelos')
         .select('id')
@@ -92,10 +99,12 @@ export default function ImportarCSV({ onImportado }: { onImportado: () => void }
         .eq('modelo', fila.modelo)
         .single()
 
-      if (!modelo) {
+      if (modelo) {
+        await supabase.from('modelos').update({ precio_costo: fila.precio_costo }).eq('id', modelo.id)
+      } else {
         const { data: nuevoModelo } = await supabase
           .from('modelos')
-          .insert({ marca: fila.marca, modelo: fila.modelo, precio_costo: 0 })
+          .insert({ marca: fila.marca, modelo: fila.modelo, precio_costo: fila.precio_costo })
           .select('id')
           .single()
         modelo = nuevoModelo
@@ -122,7 +131,7 @@ export default function ImportarCSV({ onImportado }: { onImportado: () => void }
         Carga masiva por CSV
       </h2>
       <p className="text-xs text-gray-500 mb-4">
-        Formato: <code className="bg-gray-100 px-1 rounded">imei,marca,modelo</code> — una línea por equipo.
+        Formato: <code className="bg-gray-100 px-1 rounded">imei,marca,modelo,precio_costo</code> — una línea por equipo. El precio del modelo se actualiza con cada carga.
       </p>
 
       <input
