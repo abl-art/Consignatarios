@@ -37,28 +37,53 @@ export default async function DashboardPage() {
     supabase.from('liquidaciones').select('estado, monto_a_pagar'),
   ])
 
-  // Permanencia promedio por modelo (solo dispositivos asignados)
+  // Build consignatario name lookup (needed early for permanencia rows)
+  const nombrePorId: Record<string, string> = {}
+  for (const c of (consignatarios ?? []) as Pick<Consignatario, 'id' | 'nombre'>[]) {
+    nombrePorId[c.id] = c.nombre
+  }
+
+  // Permanencia promedio por modelo y consignatario (solo dispositivos asignados)
   const { data: asignadosDetalle } = await supabase
     .from('dispositivos')
-    .select('fecha_asignacion, modelos(marca, modelo)')
+    .select('fecha_asignacion, consignatario_id, modelos(marca, modelo)')
     .eq('estado', 'asignado')
 
-  type AsignadoRow = { fecha_asignacion: string | null; modelos: { marca: string; modelo: string } | null }
-  const permanenciaMap: Record<string, { sumaDias: number; cantidad: number; marca: string; modelo: string }> = {}
+  type AsignadoRow = {
+    fecha_asignacion: string | null
+    consignatario_id: string | null
+    modelos: { marca: string; modelo: string } | null
+  }
+  type PermaBucket = { sumaDias: number; cantidad: number; marca: string; modelo: string; consignatarioId: string }
+  const permanenciaMap: Record<string, PermaBucket> = {}
   for (const d of ((asignadosDetalle ?? []) as unknown as AsignadoRow[])) {
-    if (!d.modelos) continue
-    const key = `${d.modelos.marca} ${d.modelos.modelo}`
-    if (!permanenciaMap[key]) permanenciaMap[key] = { sumaDias: 0, cantidad: 0, marca: d.modelos.marca, modelo: d.modelos.modelo }
+    if (!d.modelos || !d.consignatario_id) continue
+    const key = `${d.consignatario_id}|${d.modelos.marca}|${d.modelos.modelo}`
+    if (!permanenciaMap[key]) {
+      permanenciaMap[key] = {
+        sumaDias: 0,
+        cantidad: 0,
+        marca: d.modelos.marca,
+        modelo: d.modelos.modelo,
+        consignatarioId: d.consignatario_id,
+      }
+    }
     const dias = diasDesde(d.fecha_asignacion)
     if (dias !== null) {
       permanenciaMap[key].sumaDias += dias
       permanenciaMap[key].cantidad++
     }
   }
-  const permanenciaData = Object.entries(permanenciaMap)
-    .filter(([, v]) => v.cantidad > 0)
-    .map(([key, v]) => ({ modelo: key, dias: Math.round(v.sumaDias / v.cantidad), cantidad: v.cantidad }))
-    .sort((a, b) => b.dias - a.dias)
+  const permanenciaRows = Object.values(permanenciaMap)
+    .filter((v) => v.cantidad > 0)
+    .map((v) => ({
+      modelo: v.modelo,
+      marca: v.marca,
+      consignatarioId: v.consignatarioId,
+      consignatarioNombre: nombrePorId[v.consignatarioId] ?? v.consignatarioId,
+      dias: Math.round(v.sumaDias / v.cantidad),
+      cantidad: v.cantidad,
+    }))
 
   const stats = [
     { label: 'Dispositivos totales', value: totalDispositivos ?? 0, color: 'text-magenta-700' },
@@ -68,12 +93,6 @@ export default async function DashboardPage() {
     { label: 'Consignatarios', value: totalConsignatarios ?? 0, color: 'text-cyan-700' },
     { label: 'Modelos', value: totalModelos ?? 0, color: 'text-gray-700' },
   ]
-
-  // Build consignatario name lookup
-  const nombrePorId: Record<string, string> = {}
-  for (const c of (consignatarios ?? []) as Pick<Consignatario, 'id' | 'nombre'>[]) {
-    nombrePorId[c.id] = c.nombre
-  }
 
   // Comisiones por consignatario this month
   const comisionesPorConsignatario: Record<string, number> = {}
@@ -217,10 +236,10 @@ export default async function DashboardPage() {
             <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"></span>{'>'} 60</span>
           </div>
         </div>
-        {permanenciaData.length === 0 ? (
+        {permanenciaRows.length === 0 ? (
           <p className="text-sm text-gray-500 py-8 text-center">Sin equipos asignados para medir permanencia.</p>
         ) : (
-          <PermanenciaChart data={permanenciaData} />
+          <PermanenciaChart rows={permanenciaRows} />
         )}
       </div>
     </div>
