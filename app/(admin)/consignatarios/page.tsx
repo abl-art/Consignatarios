@@ -67,29 +67,56 @@ export default async function ConsignatariosPage() {
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
           Nuevo consignatario
         </h2>
-        <form action={crearConsignatario} className="grid grid-cols-2 gap-3">
-          <input name="nombre" placeholder="Nombre" required
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <input name="email" type="email" placeholder="Email" required
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <input name="telefono" placeholder="Teléfono (opcional)"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <input name="punto_reorden" type="number" min="0" placeholder="Punto de reorden (ej: 10)"
-            defaultValue={10}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <input name="garantia" type="number" step="1000" min="0" placeholder="Garantía (pesos)"
-            defaultValue={0}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <div className="flex items-center gap-2">
-            <input name="comision_porcentaje" type="number" step="0.1" min="0" max="100"
-              placeholder="Comisión %" defaultValue={10}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            <span className="text-sm text-gray-500">%</span>
+        <form action={crearConsignatario} className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
+            <input name="nombre" placeholder="Ej: Juan Pérez" required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
-          <div className="flex justify-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+            <input name="email" type="email" placeholder="email@dominio.com" required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono</label>
+            <input name="telefono" placeholder="Opcional"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Comisión (%)
+              <span className="text-gray-400 font-normal"> — % sobre venta que cobra el consignatario</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input name="comision_porcentaje" type="number" step="0.1" min="0" max="100"
+                placeholder="10" defaultValue={10}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Punto de reorden
+              <span className="text-gray-400 font-normal"> — alerta si stock baja de</span>
+            </label>
+            <input name="punto_reorden" type="number" min="0" placeholder="10"
+              defaultValue={10}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Garantía (pesos)
+              <span className="text-gray-400 font-normal"> — tope que respalda el consignatario</span>
+            </label>
+            <input name="garantia" type="number" step="1000" min="0" placeholder="Ej: 3000000"
+              defaultValue={0}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div className="col-span-2 flex justify-end">
             <button type="submit"
               className="px-5 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700">
-              Crear
+              Crear consignatario
             </button>
           </div>
         </form>
