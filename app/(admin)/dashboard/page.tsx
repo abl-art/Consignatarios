@@ -37,6 +37,32 @@ export default async function DashboardPage() {
     supabase.from('liquidaciones').select('estado, monto_a_pagar'),
   ])
 
+  // Garantías totales
+  const [{ data: consigsConGarantia }, { data: asignadosValor }, { data: difPendientes }] = await Promise.all([
+    supabase.from('consignatarios').select('id, garantia'),
+    supabase.from('dispositivos').select('consignatario_id, modelos(precio_costo)').eq('estado', 'asignado'),
+    supabase.from('diferencias').select('monto_deuda, auditorias(consignatario_id)').eq('estado', 'pendiente'),
+  ])
+
+  const compromisoPorConsig: Record<string, number> = {}
+  for (const d of ((asignadosValor ?? []) as unknown as { consignatario_id: string | null; modelos: { precio_costo: number } | null }[])) {
+    if (!d.consignatario_id) continue
+    compromisoPorConsig[d.consignatario_id] = (compromisoPorConsig[d.consignatario_id] ?? 0) + (d.modelos?.precio_costo ?? 0)
+  }
+  for (const d of ((difPendientes ?? []) as unknown as { monto_deuda: number; auditorias: { consignatario_id: string } | null }[])) {
+    const cid = d.auditorias?.consignatario_id
+    if (!cid) continue
+    compromisoPorConsig[cid] = (compromisoPorConsig[cid] ?? 0) + (d.monto_deuda ?? 0)
+  }
+
+  let totalGarantiaAdmin = 0
+  let totalDisponibleAdmin = 0
+  for (const c of ((consigsConGarantia ?? []) as { id: string; garantia: number }[])) {
+    totalGarantiaAdmin += c.garantia
+    const comp = compromisoPorConsig[c.id] ?? 0
+    totalDisponibleAdmin += Math.max(0, c.garantia - comp)
+  }
+
   // Build consignatario name lookup (needed early for permanencia rows)
   const nombrePorId: Record<string, string> = {}
   for (const c of (consignatarios ?? []) as Pick<Consignatario, 'id' | 'nombre'>[]) {
@@ -130,7 +156,7 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
       <p className="text-sm text-gray-500 mb-8">Resumen general del sistema de consignación</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
@@ -139,6 +165,28 @@ export default async function DashboardPage() {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* Garantías */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Garantías</h2>
+          <Link href="/garantias" className="text-sm text-magenta-600 hover:text-magenta-800">Ver detalle →</Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Total</p>
+            <p className="text-2xl font-bold text-gray-900">{formatearMoneda(totalGarantiaAdmin)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Comprometido</p>
+            <p className="text-2xl font-bold text-amber-700">{formatearMoneda(totalGarantiaAdmin - totalDisponibleAdmin)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Disponible</p>
+            <p className="text-2xl font-bold text-green-700">{formatearMoneda(totalDisponibleAdmin)}</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

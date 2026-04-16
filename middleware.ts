@@ -48,7 +48,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/modelos') || pathname.startsWith('/consignatarios') ||
       pathname.startsWith('/asignar') || pathname.startsWith('/auditorias') ||
       pathname.startsWith('/diferencias') || pathname.startsWith('/sync') ||
-      pathname.startsWith('/reportes') || pathname.startsWith('/liquidaciones')) {
+      pathname.startsWith('/reportes') || pathname.startsWith('/liquidaciones') ||
+      pathname.startsWith('/garantias')) {
     if (rol !== 'admin') {
       return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }

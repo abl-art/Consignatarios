@@ -10,6 +10,7 @@ const navItems = [
   { href: '/modelos', label: 'Modelos y precios' },
   { href: '/auditorias', label: 'Auditorías' },
   { href: '/diferencias', label: 'Diferencias' },
+  { href: '/garantias', label: 'Garantías' },
   { href: '/liquidaciones', label: 'Liquidaciones' },
   { href: '/reportes', label: 'Reportes' },
 ]
