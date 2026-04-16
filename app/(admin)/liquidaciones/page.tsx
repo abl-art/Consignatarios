@@ -26,12 +26,12 @@ export default async function LiquidacionesPage({
   await autoBloquearRetenidas()
 
   const supabase = createClient()
-  const mesFiltro = searchParams.mes ?? mesAnterior()
+  const mesFiltro = searchParams.mes ?? ''
 
   let query = supabase
     .from('liquidaciones')
     .select('*')
-    .order('mes', { ascending: false })
+    .order('created_at', { ascending: false })
 
   if (mesFiltro) query = query.eq('mes', mesFiltro)
   if (searchParams.consignatario) query = query.eq('consignatario_id', searchParams.consignatario)
@@ -110,6 +110,7 @@ export default async function LiquidacionesPage({
             defaultValue={mesFiltro}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
+            <option value="">Todos los períodos</option>
             {meses.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
