@@ -364,10 +364,15 @@ export async function fetchCuotasStats(): Promise<{
   pct_en_termino: number
   pct_atrasado: number
   pct_mora: number
+  monto_adelantado: number
+  monto_en_termino: number
+  monto_atrasado: number
+  monto_mora: number
+  ppp_recupero: number
 }> {
+  const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, ppp_recupero: 0 }
   const url = process.env.GOCELULAR_DB_URL
-  if (!url)
-    return { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0 }
+  if (!url) return empty
 
   const client = new Client({ connectionString: url })
   await client.connect()
@@ -378,13 +383,30 @@ export async function fetchCuotasStats(): Promise<{
       en_termino: string
       atrasado: string
       mora: string
+      monto_adelantado: string
+      monto_en_termino: string
+      monto_atrasado: string
+      monto_mora: string
+      ppp_recupero: string
     }>(`
       SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date)::int AS adelantado,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date)::int AS en_termino,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)::int AS atrasado,
-        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)::int AS mora
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)::int AS mora,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date), 0) AS monto_adelantado,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date), 0) AS monto_en_termino,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0) AS monto_atrasado,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL), 0) AS monto_mora,
+        COALESCE(
+          SUM(
+            (i.installment_collected_at::date - i.installment_due_at::date) * i.installment_amount
+          ) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)
+          /
+          NULLIF(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0),
+          0
+        ) AS ppp_recupero
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
@@ -408,6 +430,11 @@ export async function fetchCuotasStats(): Promise<{
       pct_en_termino: pct(en_termino),
       pct_atrasado: pct(atrasado),
       pct_mora: pct(mora),
+      monto_adelantado: Number(row.monto_adelantado),
+      monto_en_termino: Number(row.monto_en_termino),
+      monto_atrasado: Number(row.monto_atrasado),
+      monto_mora: Number(row.monto_mora),
+      ppp_recupero: Math.round(Number(row.ppp_recupero)),
     }
   } finally {
     await client.end()
