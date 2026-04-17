@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,7 +33,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm p-8 bg-white rounded-2xl shadow-sm border border-gray-100">
-        <img src="/logo.png" alt="GOcelular" className="h-10 mb-1" />
+        <Image src="/logo.png" alt="GOcelular" width={160} height={62} className="h-10 w-auto mb-1" priority />
         <p className="text-sm text-gray-500 mb-8">Sistema de consignación</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
