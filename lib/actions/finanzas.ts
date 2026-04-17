@@ -687,7 +687,7 @@ export async function fetchPDIndicadores(): Promise<{
       SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
         AND (
           (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
-          OR i.installment_collected_at::date > i.installment_due_at::date
+          OR i.installment_collected_at::date > i.installment_due_at::date + 1
         ) THEN i.installment_amount ELSE 0 END) AS num_hard,
       SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30 THEN i.installment_amount ELSE 0 END) AS den_30,
       SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30
@@ -719,7 +719,7 @@ export async function fetchPDIndicadores(): Promise<{
           SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
             AND (
               (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
-              OR i.installment_collected_at::date > i.installment_due_at::date
+              OR i.installment_collected_at::date > i.installment_due_at::date + 1
             ) THEN i.installment_amount ELSE 0 END) AS num_hard,
           SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30 THEN i.installment_amount ELSE 0 END) AS den_30,
           SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30
