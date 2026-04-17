@@ -10,16 +10,22 @@ interface PDRow {
   pd_30: number
 }
 
+interface PDResumen {
+  cuota: number
+  pd_hard: number
+  pd_30: number
+}
+
 interface Props {
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
+  resumen: PDResumen[]
   maxCuota: number
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 function formatMes(mes: string): string {
-  // mes comes as e.g. "2026-01" or similar — extract month/year
   const parts = mes.split('-')
   if (parts.length >= 2) {
     const y = parts[0].slice(-2)
@@ -65,12 +71,7 @@ function PDTable({ rows }: { rows: PDRow[] }) {
 }
 
 function PDChart({ rows }: { rows: PDRow[] }) {
-  const data = rows.map((r) => ({
-    mes: formatMes(r.mes),
-    pd_hard: r.pd_hard,
-    pd_30: r.pd_30,
-  }))
-
+  const data = rows.map((r) => ({ mes: formatMes(r.mes), pd_hard: r.pd_hard, pd_30: r.pd_30 }))
   return (
     <div className="w-full h-56 mt-4">
       <ResponsiveContainer width="100%" height="100%">
@@ -92,8 +93,10 @@ function PDChart({ rows }: { rows: PDRow[] }) {
   )
 }
 
-export default function IndicadoresTab({ byOrigination, byDueMonth, maxCuota }: Props) {
+export default function IndicadoresTab({ byOrigination, byDueMonth, resumen, maxCuota }: Props) {
   const [selectedCuota, setSelectedCuota] = useState(2)
+
+  const cuotas = Array.from({ length: maxCuota }, (_, i) => i + 1)
 
   const filteredOrig = useMemo(
     () => byOrigination.filter((r) => r.cuota === selectedCuota),
@@ -105,44 +108,86 @@ export default function IndicadoresTab({ byOrigination, byDueMonth, maxCuota }: 
     [byDueMonth, selectedCuota],
   )
 
-  const cuotas = Array.from({ length: maxCuota }, (_, i) => i + 1)
-
   return (
     <div className="space-y-6">
+      {/* Summary card - FPD for all cuotas */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Payment Default por cuota</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr>
+                <th className="px-2 py-1 text-left text-gray-500 font-medium"></th>
+                {cuotas.map((c) => (
+                  <th key={c} className="px-2 py-1 text-center text-gray-600 font-bold">C{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-2 py-1.5 font-semibold text-red-600 whitespace-nowrap">FPD Hard</td>
+                {cuotas.map((c) => {
+                  const r = resumen.find((x) => x.cuota === c)
+                  const v = r?.pd_hard ?? 0
+                  return <td key={c} className={`px-2 py-1.5 text-center font-bold ${pdColor(v)}`}>{formatPd(v)}</td>
+                })}
+              </tr>
+              <tr>
+                <td className="px-2 py-1.5 font-semibold text-orange-600 whitespace-nowrap">FPD 30</td>
+                {cuotas.map((c) => {
+                  const r = resumen.find((x) => x.cuota === c)
+                  const v = r?.pd_30 ?? 0
+                  return <td key={c} className={`px-2 py-1.5 text-center font-bold ${pdColor(v)}`}>{formatPd(v)}</td>
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Cuota selector */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <p className="text-sm font-medium text-gray-600 mb-2">Cuota</p>
+        <p className="text-sm font-medium text-gray-600 mb-2">Detalle por cuota</p>
         <div className="flex flex-wrap gap-2">
           {cuotas.map((c) => (
             <button
               key={c}
               onClick={() => setSelectedCuota(c)}
-              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
                 selectedCuota === c
                   ? 'bg-magenta-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {c}
+              Cuota {c}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Two sections side by side */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Left: Por originacion */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Por originaci&oacute;n</h3>
-          <PDTable rows={filteredOrig} />
-          <PDChart rows={filteredOrig} />
+      {/* Two columns: origination and due month */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Por originación — Cuota {selectedCuota}</h3>
+          {filteredOrig.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">Sin datos</p>
+          ) : (
+            <>
+              <PDTable rows={filteredOrig} />
+              <PDChart rows={filteredOrig} />
+            </>
+          )}
         </div>
-
-        {/* Right: Por vencimiento */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Por vencimiento</h3>
-          <PDTable rows={filteredDue} />
-          <PDChart rows={filteredDue} />
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Por vencimiento — Cuota {selectedCuota}</h3>
+          {filteredDue.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">Sin datos</p>
+          ) : (
+            <>
+              <PDTable rows={filteredDue} />
+              <PDChart rows={filteredDue} />
+            </>
+          )}
         </div>
       </div>
     </div>

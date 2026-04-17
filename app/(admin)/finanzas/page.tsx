@@ -211,7 +211,7 @@ export default async function FinanzasPage({
         tabs={[
           { id: 'flujo', label: 'Flujo de fondos', content: flujoTab },
           { id: 'egresos', label: 'Egresos', content: egresosTab },
-          { id: 'indicadores', label: 'Indicadores', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} maxCuota={pdIndicadores.maxCuota} /> },
+          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
         ]}
       />
     </div>
