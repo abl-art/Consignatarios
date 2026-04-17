@@ -34,7 +34,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm p-8 bg-white rounded-2xl shadow-sm border border-gray-100">
         <Image src="/logo.png" alt="GOcelular" width={160} height={62} className="h-10 w-auto mb-1" priority />
-        <p className="text-sm text-gray-500 mb-8">Sistema de consignación</p>
+        <p className="text-sm text-gray-500 mb-8">GOcelular360</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

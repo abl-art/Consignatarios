@@ -14,8 +14,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "GOcelular - Consignación",
-  description: "Sistema de consignación GOcelular",
+  title: "GOcelular360",
+  description: "GOcelular360 - Plataforma integral GOcelular",
   icons: {
     icon: [
       { url: "/favicon.png" },
