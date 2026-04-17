@@ -69,7 +69,8 @@ export async function sincronizarVentas() {
       }
       const consig = consigById.get(dispositivo.consignatario_id)
       const precio = Number(sale.price ?? sale.default_price ?? sale.total_order_amount ?? 0)
-      const comision = consig ? precio * Number(consig.comision_porcentaje) : 0
+      const precioNeto = precio / 1.21
+      const comision = consig ? precioNeto * Number(consig.comision_porcentaje) : 0
 
       if (consig?.store_prefix && sale.store_name && !sale.store_name.toLowerCase().startsWith(consig.store_prefix.toLowerCase())) {
         storeMismatches.push({

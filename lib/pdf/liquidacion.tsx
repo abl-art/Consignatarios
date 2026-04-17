@@ -150,11 +150,12 @@ const styles = StyleSheet.create({
     color: MAGENTA,
     textAlign: 'right',
   },
-  colFecha: { width: '14%' },
-  colImei: { width: '28%' },
-  colModelo: { width: '28%' },
-  colMonto: { width: '15%', textAlign: 'right' },
-  colComision: { width: '15%', textAlign: 'right' },
+  colFecha: { width: '12%' },
+  colImei: { width: '22%' },
+  colModelo: { width: '24%' },
+  colMonto: { width: '14%', textAlign: 'right' },
+  colNeto: { width: '14%', textAlign: 'right' },
+  colComision: { width: '14%', textAlign: 'right' },
   colImeiDif: { width: '30%' },
   colModeloDif: { width: '40%' },
   colMontoDif: { width: '30%', textAlign: 'right' },
@@ -299,8 +300,12 @@ export function LiquidacionPDF(props: LiquidacionPDFProps) {
         {/* Summary recuadro */}
         <View style={styles.summaryBox}>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total ventas</Text>
+            <Text style={styles.summaryLabel}>Total ventas (bruto)</Text>
             <Text style={styles.summaryValue}>{formatCurrency(totalVentasMonto)}</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Total ventas (neto s/IVA)</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(totalVentasMonto / 1.21)}</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Total comisiones</Text>
@@ -330,7 +335,8 @@ export function LiquidacionPDF(props: LiquidacionPDFProps) {
                   <Text style={[styles.tableHeaderCell, styles.colFecha]}>Fecha</Text>
                   <Text style={[styles.tableHeaderCell, styles.colImei]}>IMEI</Text>
                   <Text style={[styles.tableHeaderCell, styles.colModelo]}>Modelo</Text>
-                  <Text style={[styles.tableHeaderCell, styles.colMonto]}>Venta</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colMonto]}>Bruto</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colNeto]}>Neto</Text>
                   <Text style={[styles.tableHeaderCell, styles.colComision]}>Comision</Text>
                 </View>
                 {grupo.ventas.map((v, index) => (
@@ -342,6 +348,7 @@ export function LiquidacionPDF(props: LiquidacionPDFProps) {
                     <Text style={[styles.imeiText, styles.colImei]}>{v.imei}</Text>
                     <Text style={styles.colModelo}>{v.marca} {v.modelo}</Text>
                     <Text style={styles.colMonto}>{formatCurrency(v.monto)}</Text>
+                    <Text style={styles.colNeto}>{formatCurrency(v.monto / 1.21)}</Text>
                     <Text style={styles.colComision}>{formatCurrency(v.comision)}</Text>
                   </View>
                 ))}
@@ -351,6 +358,7 @@ export function LiquidacionPDF(props: LiquidacionPDFProps) {
                   <Text style={[styles.subtotalLabel, styles.colImei]} />
                   <Text style={[styles.subtotalLabel, styles.colModelo]}>Subtotal</Text>
                   <Text style={[styles.subtotalValue, styles.colMonto]}>{formatCurrency(subtotalMonto)}</Text>
+                  <Text style={[styles.subtotalValue, styles.colNeto]}>{formatCurrency(subtotalMonto / 1.21)}</Text>
                   <Text style={[styles.subtotalValue, styles.colComision]}>{formatCurrency(subtotalComision)}</Text>
                 </View>
               </View>

@@ -30,13 +30,15 @@ export default function VentasView({ rows, hideConsignatarioLevel }: Props) {
   }
 
   const totalMonto = rows.reduce((s, r) => s + r.precio_venta, 0)
+  const totalNeto = totalMonto / 1.21
   const totalComision = rows.reduce((s, r) => s + r.comision_monto, 0)
 
   return (
     <div className="space-y-4">
       <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-5 flex flex-wrap gap-6">
         <div><p className="text-xs text-gray-500">Ventas</p><p className="text-xl font-bold">{rows.length}</p></div>
-        <div><p className="text-xs text-gray-500">Monto total</p><p className="text-xl font-bold text-gray-900">{formatearMoneda(totalMonto)}</p></div>
+        <div><p className="text-xs text-gray-500">Bruto</p><p className="text-xl font-bold text-gray-900">{formatearMoneda(totalMonto)}</p></div>
+        <div><p className="text-xs text-gray-500">Neto (s/IVA)</p><p className="text-xl font-bold text-gray-700">{formatearMoneda(totalNeto)}</p></div>
         <div><p className="text-xs text-gray-500">Comisiones</p><p className="text-xl font-bold text-magenta-700">{formatearMoneda(totalComision)}</p></div>
       </div>
 
@@ -111,7 +113,8 @@ function StoreGroup({ store, list }: { store: string; list: VentaRow[] }) {
               <th className="text-left px-6 py-2 font-medium text-gray-600">Fecha</th>
               <th className="text-left px-6 py-2 font-medium text-gray-600">IMEI</th>
               <th className="text-left px-6 py-2 font-medium text-gray-600">Modelo</th>
-              <th className="text-right px-6 py-2 font-medium text-gray-600">Venta</th>
+              <th className="text-right px-6 py-2 font-medium text-gray-600">Bruto</th>
+              <th className="text-right px-6 py-2 font-medium text-gray-600">Neto</th>
               <th className="text-right px-6 py-2 font-medium text-gray-600">Comisi&oacute;n</th>
             </tr>
           </thead>
@@ -122,6 +125,7 @@ function StoreGroup({ store, list }: { store: string; list: VentaRow[] }) {
                 <td className="px-6 py-2 font-mono text-xs text-gray-700">{r.imei}</td>
                 <td className="px-6 py-2 text-gray-800">{r.marca} {r.modelo}</td>
                 <td className="px-6 py-2 text-right text-gray-800">{formatearMoneda(r.precio_venta)}</td>
+                <td className="px-6 py-2 text-right text-gray-600">{formatearMoneda(r.precio_venta / 1.21)}</td>
                 <td className="px-6 py-2 text-right font-semibold text-magenta-700">{formatearMoneda(r.comision_monto)}</td>
               </tr>
             ))}
