@@ -17,9 +17,9 @@ export default function SyncButton() {
     if ('error' in r && r.error) setResult(`Error: ${r.error}`)
     else if ('ok' in r) {
       const parts = [`${r.nuevas} nuevas`, `${r.yaExistentes} existentes`]
-      if (r.anuladas > 0) parts.push(`${r.anuladas} anuladas (devueltas a stock)`)
-      if (r.noEncontrados > 0) parts.push(`${r.noEncontrados} sin match`)
-      if (r.storeMismatches > 0) parts.push(`${r.storeMismatches} alertas`)
+      if ((r.anuladas ?? 0) > 0) parts.push(`${r.anuladas} anuladas (devueltas a stock)`)
+      if ((r.noEncontrados ?? 0) > 0) parts.push(`${r.noEncontrados} sin match`)
+      if ((r.storeMismatches ?? 0) > 0) parts.push(`${r.storeMismatches} alertas`)
       setResult(parts.join(' · '))
     }
     router.refresh()
