@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import NavIcon, { type IconName } from '@/components/NavIcon'
+import NavGroup from '@/components/NavGroup'
 
 interface NavItem {
   href: string
@@ -22,13 +23,19 @@ const navItems: NavItem[] = [
     ],
   },
   { href: '/asignar', label: 'Asignar stock', icon: 'asignar' },
-  { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios' },
+  {
+    href: '/consignatarios',
+    label: 'Consignatarios',
+    icon: 'consignatarios',
+    children: [
+      { href: '/garantias', label: 'Garantías', icon: 'garantias' },
+      { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
+      { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
+      { href: '/ventas', label: 'Ventas', icon: 'ventas' },
+      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
+    ],
+  },
   { href: '/modelos', label: 'Modelos y precios', icon: 'modelos' },
-  { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
-  { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
-  { href: '/garantias', label: 'Garantías', icon: 'garantias' },
-  { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
-  { href: '/ventas', label: 'Ventas', icon: 'ventas' },
   { href: '/reportes', label: 'Reportes', icon: 'reportes' },
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
@@ -49,31 +56,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="text-xs text-gray-400 block">Panel Admin</span>
         </div>
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => (
-            <div key={item.href}>
+          {navItems.map((item) =>
+            item.children ? (
+              <NavGroup
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                children={item.children}
+              />
+            ) : (
               <Link
+                key={item.href}
                 href={item.href}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
               >
                 <NavIcon name={item.icon} />
                 <span>{item.label}</span>
               </Link>
-              {item.children && (
-                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
-                  {item.children.map((child) => (
-                    <Link
-                      key={child.href}
-                      href={child.href}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
-                    >
-                      <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
-                      <span>{child.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          )}
         </nav>
         <div className="p-3 border-t border-gray-200">
           <form action="/api/auth/signout" method="post">
