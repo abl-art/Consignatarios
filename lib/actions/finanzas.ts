@@ -14,6 +14,7 @@ interface FlujoDiario {
   in_en_termino: number
   in_atrasado: number
   in_pendiente: number
+  in_vencida: number
   in_asistencia: number
   out_celulares: number
   out_licencias: number
@@ -138,6 +139,7 @@ function emptyRow(cash_date: string): FlujoDiario {
     in_en_termino: 0,
     in_atrasado: 0,
     in_pendiente: 0,
+    in_vencida: 0,
     in_asistencia: 0,
     out_celulares: 0,
     out_licencias: 0,
@@ -164,7 +166,7 @@ function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
 // ---- Data source fetchers -------------------------------------------------
 
 async function fetchIncomeFromGocelular(): Promise<
-  { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number }[]
+  { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number; in_vencida: number }[]
 > {
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return []
@@ -178,6 +180,7 @@ async function fetchIncomeFromGocelular(): Promise<
       in_en_termino: string
       in_atrasado: string
       in_pendiente: string
+      in_vencida: string
     }>(`
       SELECT
         CASE
@@ -198,7 +201,8 @@ async function fetchIncomeFromGocelular(): Promise<
         SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_adelantado,
         SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_en_termino,
         SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_atrasado,
-        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL THEN i.installment_amount ELSE 0 END) AS in_pendiente
+        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at >= CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS in_pendiente,
+        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS in_vencida
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
@@ -214,6 +218,7 @@ async function fetchIncomeFromGocelular(): Promise<
         in_en_termino: Number(r.in_en_termino),
         in_atrasado: Number(r.in_atrasado),
         in_pendiente: Number(r.in_pendiente),
+        in_vencida: Number(r.in_vencida),
       }))
   } finally {
     await client.end()
@@ -294,6 +299,7 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
     row.in_en_termino += r.in_en_termino
     row.in_atrasado += r.in_atrasado
     row.in_pendiente += r.in_pendiente
+    row.in_vencida += r.in_vencida
   }
 
   // Merge asistencias
@@ -322,6 +328,7 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
   // Calculate net_flow and running cash_balance
   let balance = 0
   for (const row of sorted) {
+    // NOTE: in_vencida is intentionally excluded from net_flow
     row.net_flow =
       row.in_adelantado +
       row.in_en_termino +
@@ -341,4 +348,213 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
   }
 
   return sorted
+}
+
+// ---------------------------------------------------------------------------
+// fetchCuotasStats – installment payment status percentages
+// ---------------------------------------------------------------------------
+
+export async function fetchCuotasStats(): Promise<{
+  total: number
+  adelantado: number
+  en_termino: number
+  atrasado: number
+  pendiente: number
+  vencida: number
+  pct_adelantado: number
+  pct_en_termino: number
+  pct_atrasado: number
+  pct_pendiente: number
+  pct_vencida: number
+}> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url)
+    return {
+      total: 0,
+      adelantado: 0,
+      en_termino: 0,
+      atrasado: 0,
+      pendiente: 0,
+      vencida: 0,
+      pct_adelantado: 0,
+      pct_en_termino: 0,
+      pct_atrasado: 0,
+      pct_pendiente: 0,
+      pct_vencida: 0,
+    }
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      total: string
+      adelantado: string
+      en_termino: string
+      atrasado: string
+      pendiente: string
+      vencida: string
+    }>(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date)::int AS adelantado,
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date)::int AS en_termino,
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)::int AS atrasado,
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at >= CURRENT_DATE)::int AS pendiente,
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at < CURRENT_DATE)::int AS vencida
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN ('2026134', '2461631', '5495277')
+    `)
+
+    const row = res.rows[0]
+    const total = Number(row.total) || 0
+    const adelantado = Number(row.adelantado)
+    const en_termino = Number(row.en_termino)
+    const atrasado = Number(row.atrasado)
+    const pendiente = Number(row.pendiente)
+    const vencida = Number(row.vencida)
+
+    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 10000) / 100 : 0)
+
+    return {
+      total,
+      adelantado,
+      en_termino,
+      atrasado,
+      pendiente,
+      vencida,
+      pct_adelantado: pct(adelantado),
+      pct_en_termino: pct(en_termino),
+      pct_atrasado: pct(atrasado),
+      pct_pendiente: pct(pendiente),
+      pct_vencida: pct(vencida),
+    }
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// fetchEgresosStats – egreso breakdown by concepto and monthly pivot
+// ---------------------------------------------------------------------------
+
+export async function fetchEgresosStats(): Promise<{
+  breakdown: { concepto: string; monto: number; porcentaje: number }[]
+  mensual: {
+    mes: string
+    celulares: number
+    licencias: number
+    descartables: number
+    sueldos: number
+    envios: number
+    interes: number
+    otros: number
+    vta3ero: number
+  }[]
+}> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('flujo_egresos')
+    .select('flujo_dia, concepto, medio_de_pago, cuotas, monto')
+  if (error || !data) return { breakdown: [], mensual: [] }
+
+  // Expand tarjeta/cuotas into monthly installments
+  const expanded: { mes: string; concepto: string; monto: number }[] = []
+
+  for (const eg of data as {
+    flujo_dia: string
+    concepto: string
+    medio_de_pago: string
+    cuotas: number
+    monto: number
+  }[]) {
+    const isTarjeta = /tarjeta/i.test(eg.medio_de_pago)
+    const normalizedConcepto = eg.concepto.toLowerCase().trim()
+
+    if (isTarjeta && eg.cuotas > 1) {
+      const cuotaMonto = eg.monto / eg.cuotas
+      for (let c = 0; c < eg.cuotas; c++) {
+        const date = addMonths(eg.flujo_dia, c)
+        const mes = date.slice(0, 7)
+        expanded.push({ mes, concepto: normalizedConcepto, monto: Math.abs(cuotaMonto) })
+      }
+    } else {
+      const mes = eg.flujo_dia.slice(0, 7)
+      expanded.push({ mes, concepto: normalizedConcepto, monto: Math.abs(eg.monto) })
+    }
+  }
+
+  // --- Breakdown by concepto ---
+  const conceptoTotals = new Map<string, number>()
+  let grandTotal = 0
+  for (const r of expanded) {
+    conceptoTotals.set(r.concepto, (conceptoTotals.get(r.concepto) ?? 0) + r.monto)
+    grandTotal += r.monto
+  }
+
+  const breakdown = Array.from(conceptoTotals.entries())
+    .map(([concepto, monto]) => ({
+      concepto,
+      monto: Math.round(monto * 100) / 100,
+      porcentaje: grandTotal > 0 ? Math.round((monto / grandTotal) * 10000) / 100 : 0,
+    }))
+    .sort((a, b) => b.monto - a.monto)
+
+  // --- Monthly pivot ---
+  const CONCEPTO_PIVOT: Record<string, string> = {
+    celulares: 'celulares',
+    licencias: 'licencias',
+    descartables: 'descartables',
+    sueldos: 'sueldos',
+    envios: 'envios',
+    interes: 'interes',
+    vta3ero: 'vta3ero',
+  }
+
+  type MesRow = {
+    mes: string
+    celulares: number
+    licencias: number
+    descartables: number
+    sueldos: number
+    envios: number
+    interes: number
+    otros: number
+    vta3ero: number
+  }
+
+  const mesMap = new Map<string, MesRow>()
+
+  function getOrCreateMes(mes: string): MesRow {
+    let row = mesMap.get(mes)
+    if (!row) {
+      row = { mes, celulares: 0, licencias: 0, descartables: 0, sueldos: 0, envios: 0, interes: 0, otros: 0, vta3ero: 0 }
+      mesMap.set(mes, row)
+    }
+    return row
+  }
+
+  for (const r of expanded) {
+    const row = getOrCreateMes(r.mes)
+    const pivotKey = CONCEPTO_PIVOT[r.concepto] ?? 'otros'
+    ;(row as unknown as Record<string, number>)[pivotKey] += r.monto
+  }
+
+  const mensual = Array.from(mesMap.values())
+    .sort((a, b) => a.mes.localeCompare(b.mes))
+    .map((r) => ({
+      ...r,
+      celulares: Math.round(r.celulares * 100) / 100,
+      licencias: Math.round(r.licencias * 100) / 100,
+      descartables: Math.round(r.descartables * 100) / 100,
+      sueldos: Math.round(r.sueldos * 100) / 100,
+      envios: Math.round(r.envios * 100) / 100,
+      interes: Math.round(r.interes * 100) / 100,
+      otros: Math.round(r.otros * 100) / 100,
+      vta3ero: Math.round(r.vta3ero * 100) / 100,
+    }))
+
+  return { breakdown, mensual }
 }

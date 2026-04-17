@@ -1,7 +1,9 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos } from '@/lib/actions/finanzas'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats } from '@/lib/actions/finanzas'
 import { CargarAsistenciaButton, CargarEgresoButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
+import FinanzasTabs from './FinanzasTabs'
+import EgresosChart from './EgresosChart'
 
 export default async function FinanzasPage({
   searchParams,
@@ -12,10 +14,12 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujo, asistencias, egresos] = await Promise.all([
+  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
+    fetchCuotasStats(),
+    fetchEgresosStats(),
   ])
 
   // Filter by selected month (show selected month + 6 months forward)
@@ -23,22 +27,6 @@ export default async function FinanzasPage({
   const endDate = new Date(parseInt(mesSeleccionado.split('-')[0]), parseInt(mesSeleccionado.split('-')[1]) - 1 + 7, 0)
   const mesEnd = endDate.toISOString().slice(0, 10)
   const flujo = allFlujo.filter(r => r.cash_date >= mesStart && r.cash_date <= mesEnd)
-
-  // Summary calculations
-  const totalIngresos = flujo.reduce(
-    (sum: number, row) =>
-      sum + row.in_adelantado + row.in_en_termino + row.in_atrasado + row.in_pendiente + row.in_asistencia,
-    0
-  )
-
-  const totalEgresos = flujo.reduce(
-    (sum: number, row) =>
-      sum + row.out_celulares + row.out_licencias + row.out_descartables + row.out_sueldos + row.out_envios + row.out_interes + row.out_otros + row.out_vta3ero,
-    0
-  )
-
-  const balanceNeto = totalIngresos + totalEgresos
-  const saldoAcumulado = flujo.length > 0 ? flujo[flujo.length - 1].cash_balance : 0
 
   // Build month selector options (12 months back, 6 forward)
   const meses: string[] = []
@@ -52,30 +40,42 @@ export default async function FinanzasPage({
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
   }
 
-  return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
-      <p className="text-sm text-gray-500 mb-8">Flujo de fondos y control de caja</p>
+  const pctBar = (pct: number, color: string) => (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 bg-gray-100 rounded-full h-2">
+        <div className={`${color} h-2 rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className="text-xs font-medium text-gray-600 w-12 text-right">{pct.toFixed(1)}%</span>
+    </div>
+  )
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500 mb-1">Total ingresos</p>
-          <p className="text-2xl font-bold text-green-700">{formatearMoneda(totalIngresos)}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500 mb-1">Total egresos</p>
-          <p className="text-2xl font-bold text-red-700">{formatearMoneda(totalEgresos)}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500 mb-1">Balance neto</p>
-          <p className="text-2xl font-bold text-blue-700">{formatearMoneda(balanceNeto)}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500 mb-1">Saldo acumulado</p>
-          <p className={`text-2xl font-bold ${saldoAcumulado >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-            {formatearMoneda(saldoAcumulado)}
-          </p>
+  // Flujo tab content
+  const flujoTab = (
+    <div>
+      {/* Cuotas stats */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Estado de cuotas vencidas ({cuotasStats.total.toLocaleString('es-AR')} cuotas)</h3>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-20">Adelantado</span>
+            {pctBar(cuotasStats.pct_adelantado, 'bg-emerald-500')}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-20">En término</span>
+            {pctBar(cuotasStats.pct_en_termino, 'bg-green-500')}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-20">Atrasado</span>
+            {pctBar(cuotasStats.pct_atrasado, 'bg-yellow-500')}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-20">Pendiente</span>
+            {pctBar(cuotasStats.pct_pendiente, 'bg-blue-400')}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-20">Vencida</span>
+            {pctBar(cuotasStats.pct_vencida, 'bg-red-500')}
+          </div>
         </div>
       </div>
 
@@ -83,7 +83,6 @@ export default async function FinanzasPage({
       <div className="flex flex-wrap gap-3 items-end mb-6">
         <CargarAsistenciaButton />
         <CargarEgresoButton />
-
         <form method="GET" className="flex items-end gap-3 ml-auto">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">Mes</label>
@@ -163,7 +162,49 @@ export default async function FinanzasPage({
       )}
 
       {/* Manual entries */}
-      <FinanzasManual asistencias={asistencias} egresos={egresos} />
+      <FinanzasManual asistencias={asistencias} egresos={egresosRaw} />
+    </div>
+  )
+
+  // Egresos tab content
+  const egresosTab = (
+    <div>
+      {/* Breakdown by concepto */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Desglose por concepto</h3>
+        <div className="space-y-3">
+          {egresosStats.breakdown.map((item) => (
+            <div key={item.concepto} className="flex items-center gap-3">
+              <span className="text-xs text-gray-600 w-24">{item.concepto}</span>
+              <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+                <div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${Math.min(item.porcentaje, 100)}%` }} />
+              </div>
+              <span className="text-xs font-medium text-gray-600 w-12 text-right">{item.porcentaje.toFixed(1)}%</span>
+              <span className="text-xs font-bold text-red-700 w-28 text-right">{formatearMoneda(item.monto)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Monthly chart */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Egresos mensuales</h3>
+        <EgresosChart data={egresosStats.mensual} />
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
+      <p className="text-sm text-gray-500 mb-6">Flujo de fondos y control de caja</p>
+
+      <FinanzasTabs
+        tabs={[
+          { id: 'flujo', label: 'Flujo de fondos', content: flujoTab },
+          { id: 'egresos', label: 'Egresos', content: egresosTab },
+        ]}
+      />
     </div>
   )
 }
