@@ -44,8 +44,8 @@ function formatMes(mes: string): string {
 }
 
 function pctColor(value: number): string {
-  if (value < 3) return 'text-green-600'
-  if (value <= 8) return 'text-yellow-600'
+  if (value <= 10) return 'text-green-600'
+  if (value <= 30) return 'text-yellow-600'
   return 'text-red-600'
 }
 

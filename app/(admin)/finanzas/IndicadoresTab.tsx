@@ -40,8 +40,8 @@ function formatPd(value: number): string {
 }
 
 function pdColor(value: number): string {
-  if (value < 5) return 'text-green-600'
-  if (value <= 15) return 'text-yellow-600'
+  if (value <= 25) return 'text-green-600'
+  if (value <= 50) return 'text-yellow-600'
   return 'text-red-600'
 }
 
