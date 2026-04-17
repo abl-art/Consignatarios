@@ -65,7 +65,7 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
     // Match inteligente: extraer marca + número de modelo + storage de cada nombre.
     // Ej: "Motorola Moto G06 4/128GB" → "motorola-g06-128"
     //     "Motorola Moto G06 128GB"   → "motorola-g06-128" → MATCH
-    function matchKey(name: string): string {
+    const matchKey = (name: string): string => {
       const lower = name.toLowerCase()
       const brand = lower.includes('samsung') ? 'samsung'
         : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola' : 'other'
