@@ -21,9 +21,11 @@ const navItems: NavItem[] = [
     label: 'Inventario',
     icon: 'inventario',
     children: [
-      { href: '/asignar', label: 'Asignar stock', icon: 'asignar' },
-      { href: '/inventario/tenencia', label: 'Tenencia consignatarios', icon: 'tenencia' },
-      { href: '/inventario/tenencia-propia', label: 'Tenencia propia', icon: 'tenencia-propia' },
+      { href: '/inventario/celulares', label: 'Celulares', icon: 'modelos' },
+      { href: '/inventario/smartwatches', label: 'Smartwatches', icon: 'inventario' },
+      { href: '/inventario/parlantes', label: 'Parlantes', icon: 'inventario' },
+      { href: '/inventario/auriculares', label: 'Auriculares', icon: 'inventario' },
+      { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', icon: 'inventario' },
     ],
   },
   {
