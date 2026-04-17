@@ -12,11 +12,6 @@ const ESTADO_COLORS: Record<string, string> = {
   pagada: 'bg-green-100 text-green-700',
 }
 
-function mesAnterior(): string {
-  const now = new Date()
-  now.setMonth(now.getMonth() - 1)
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 export default async function LiquidacionesPage({
   searchParams,
