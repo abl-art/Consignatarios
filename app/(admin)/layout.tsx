@@ -18,11 +18,11 @@ const navItems: NavItem[] = [
     label: 'Inventario',
     icon: 'inventario',
     children: [
+      { href: '/asignar', label: 'Asignar stock', icon: 'asignar' },
       { href: '/inventario/tenencia', label: 'Tenencia consignatarios', icon: 'tenencia' },
       { href: '/inventario/tenencia-propia', label: 'Tenencia propia', icon: 'tenencia-propia' },
     ],
   },
-  { href: '/asignar', label: 'Asignar stock', icon: 'asignar' },
   {
     href: '/consignatarios',
     label: 'Consignatarios',
