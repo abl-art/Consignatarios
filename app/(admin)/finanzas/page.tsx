@@ -113,122 +113,49 @@ export default async function FinanzasPage({
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="overflow-y-auto" style={{ maxHeight: '360px' }}>
+            <table className="w-full" style={{ fontSize: '11px' }}>
+              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Fecha
-                  </th>
-                  {/* Income columns */}
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
-                    Adelantado
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
-                    En termino
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
-                    Atrasado
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
-                    Pendiente
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
-                    Asistencia
-                  </th>
-                  {/* Expense columns */}
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Celulares
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Licencias
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Descartables
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Sueldos
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Envios
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Interes
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Otros
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    Vta3ero
-                  </th>
-                  {/* Summary columns */}
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Flujo neto
-                  </th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Saldo
-                  </th>
+                  <th className="text-left px-1.5 py-2 font-semibold text-gray-500">Fecha</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-green-600">Adel.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-green-600">Térm.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-green-600">Atras.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-green-600">Pend.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-green-600">Asist.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Celul.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Licen.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Desc.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Sueld.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Envíos</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Inter.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Otros</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Vta3</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-gray-700">Neto</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-gray-700">Saldo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {flujo.map((row, i) => {
-                  return (
-                    <tr key={i} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-2 text-gray-700 font-medium whitespace-nowrap">
-                        {formatFecha(row.cash_date)}
-                      </td>
-                      {/* Income cells */}
-                      <td className="px-3 py-2 text-right text-green-700">
-                        {row.in_adelantado !== 0 ? formatearMoneda(row.in_adelantado) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-green-700">
-                        {row.in_en_termino !== 0 ? formatearMoneda(row.in_en_termino) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-green-700">
-                        {row.in_atrasado !== 0 ? formatearMoneda(row.in_atrasado) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-green-700">
-                        {row.in_pendiente !== 0 ? formatearMoneda(row.in_pendiente) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-green-700">
-                        {row.in_asistencia !== 0 ? formatearMoneda(row.in_asistencia) : ''}
-                      </td>
-                      {/* Expense cells */}
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_celulares !== 0 ? formatearMoneda(row.out_celulares) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_licencias !== 0 ? formatearMoneda(row.out_licencias) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_descartables !== 0 ? formatearMoneda(row.out_descartables) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_sueldos !== 0 ? formatearMoneda(row.out_sueldos) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_envios !== 0 ? formatearMoneda(row.out_envios) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_interes !== 0 ? formatearMoneda(row.out_interes) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_otros !== 0 ? formatearMoneda(row.out_otros) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right text-red-700">
-                        {row.out_vta3ero !== 0 ? formatearMoneda(row.out_vta3ero) : ''}
-                      </td>
-                      {/* Net flow */}
-                      <td className={`px-3 py-2 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                        {formatearMoneda(row.net_flow)}
-                      </td>
-                      {/* Balance */}
-                      <td className={`px-3 py-2 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                        {formatearMoneda(row.cash_balance)}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {flujo.map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-1.5 py-1 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
+                    <td className="px-1.5 py-1 text-right text-green-700">{row.in_adelantado !== 0 ? formatearMoneda(row.in_adelantado) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-green-700">{row.in_en_termino !== 0 ? formatearMoneda(row.in_en_termino) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-green-700">{row.in_atrasado !== 0 ? formatearMoneda(row.in_atrasado) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-green-700">{row.in_pendiente !== 0 ? formatearMoneda(row.in_pendiente) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-green-700">{row.in_asistencia !== 0 ? formatearMoneda(row.in_asistencia) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_celulares !== 0 ? formatearMoneda(row.out_celulares) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_licencias !== 0 ? formatearMoneda(row.out_licencias) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_descartables !== 0 ? formatearMoneda(row.out_descartables) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_sueldos !== 0 ? formatearMoneda(row.out_sueldos) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_envios !== 0 ? formatearMoneda(row.out_envios) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_interes !== 0 ? formatearMoneda(row.out_interes) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_otros !== 0 ? formatearMoneda(row.out_otros) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_vta3ero !== 0 ? formatearMoneda(row.out_vta3ero) : ''}</td>
+                    <td className={`px-1.5 py-1 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatearMoneda(row.net_flow)}</td>
+                    <td className={`px-1.5 py-1 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatearMoneda(row.cash_balance)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
