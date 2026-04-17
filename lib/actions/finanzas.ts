@@ -206,13 +206,15 @@ async function fetchIncomeFromGocelular(): Promise<
         AND o.client_id::text IN ('2026134', '2461631', '5495277')
       GROUP BY 1
     `)
-    return res.rows.map((r) => ({
-      cash_date: String(r.cash_date).slice(0, 10),
-      in_adelantado: Number(r.in_adelantado),
-      in_en_termino: Number(r.in_en_termino),
-      in_atrasado: Number(r.in_atrasado),
-      in_pendiente: Number(r.in_pendiente),
-    }))
+    return res.rows
+      .filter((r) => r.cash_date != null)
+      .map((r) => ({
+        cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date).slice(0, 10),
+        in_adelantado: Number(r.in_adelantado),
+        in_en_termino: Number(r.in_en_termino),
+        in_atrasado: Number(r.in_atrasado),
+        in_pendiente: Number(r.in_pendiente),
+      }))
   } finally {
     await client.end()
   }
