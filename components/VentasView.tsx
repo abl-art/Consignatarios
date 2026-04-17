@@ -75,8 +75,9 @@ function ConsigGroup({ nombre, stores, count, monto, comision, hideLevel }: { no
           <span className="font-bold text-gray-900">{nombre}</span>
           <span className="text-xs text-gray-500">{count} ventas</span>
         </div>
-        <div className="flex gap-6 text-sm">
+        <div className="flex gap-4 text-sm">
           <span className="text-gray-700">{formatearMoneda(monto)}</span>
+          <span className="text-gray-500">{formatearMoneda(monto / 1.21)}</span>
           <span className="font-bold text-magenta-700">{formatearMoneda(comision)}</span>
         </div>
       </button>
@@ -101,8 +102,9 @@ function StoreGroup({ store, list }: { store: string; list: VentaRow[] }) {
           <span className="font-medium text-gray-800">{store}</span>
           <span className="text-xs text-gray-500">{list.length} ventas</span>
         </div>
-        <div className="flex gap-6 text-sm">
+        <div className="flex gap-4 text-sm">
           <span className="text-gray-700">{formatearMoneda(monto)}</span>
+          <span className="text-gray-500">{formatearMoneda(monto / 1.21)}</span>
           <span className="font-semibold text-magenta-700">{formatearMoneda(comision)}</span>
         </div>
       </button>
