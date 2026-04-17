@@ -175,6 +175,29 @@ end;
 $$ language plpgsql security definer;
 
 -- ============================================================
+-- FLUJO: ASISTENCIAS (presencia diaria)
+-- ============================================================
+create table flujo_asistencias (
+  id uuid primary key default gen_random_uuid(),
+  fecha date not null,
+  monto numeric not null default 0,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+-- FLUJO: EGRESOS (gastos operativos)
+-- ============================================================
+create table flujo_egresos (
+  id uuid primary key default gen_random_uuid(),
+  flujo_dia date not null,
+  concepto text not null check (concepto in ('Celulares','Licencias','Descartables','Sueldos','Envios','Interes','Otros')),
+  medio_de_pago text not null default 'Efectivo',
+  cuotas integer not null default 1,
+  monto numeric not null default 0,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
 -- RLS
 -- ============================================================
 alter table config enable row level security;
@@ -187,6 +210,8 @@ alter table ventas enable row level security;
 alter table auditorias enable row level security;
 alter table auditoria_items enable row level security;
 alter table diferencias enable row level security;
+alter table flujo_asistencias enable row level security;
+alter table flujo_egresos enable row level security;
 
 -- Admin: acceso total (rol 'admin' en user_metadata)
 create policy "admin_all" on config for all
@@ -217,6 +242,12 @@ create policy "admin_all" on auditoria_items for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 create policy "admin_all" on diferencias for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on flujo_asistencias for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on flujo_egresos for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 -- Consignatario: solo sus propios registros

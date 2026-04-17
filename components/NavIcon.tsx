@@ -20,6 +20,7 @@ export type IconName =
   | 'sync'
   | 'stock'
   | 'auto-auditoria'
+  | 'finanzas'
 
 /**
  * Iconos de sidebar. Usa strokes de 1.8px para buena legibilidad a 16px.
@@ -162,6 +163,15 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
           <rect x="3" y="4" width="18" height="18" rx="2" />
           <path d="M16 2v4M8 2v4M3 10h18" />
           <path d="M9 16l2 2 4-4" />
+        </svg>
+      )
+    case 'finanzas':
+      return (
+        <svg {...common}>
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="M2 10h20" />
+          <path d="M6 16h4" />
+          <path d="M14 16h4" />
         </svg>
       )
     default:

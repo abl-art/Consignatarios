@@ -1,0 +1,242 @@
+import { formatearMoneda } from '@/lib/utils'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos } from '@/lib/actions/finanzas'
+import { CargarAsistenciaButton, CargarEgresoButton } from './FinanzasActions'
+import FinanzasManual from './FinanzasManual'
+
+export default async function FinanzasPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string }
+}) {
+  const now = new Date()
+  const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const mesSeleccionado = searchParams.mes || defaultMes
+
+  const [allFlujo, asistencias, egresos] = await Promise.all([
+    fetchFlujoDeFondos(),
+    fetchAsistencias(),
+    fetchEgresos(),
+  ])
+
+  // Filter by selected month (show selected month + 6 months forward)
+  const mesStart = mesSeleccionado + '-01'
+  const endDate = new Date(parseInt(mesSeleccionado.split('-')[0]), parseInt(mesSeleccionado.split('-')[1]) - 1 + 7, 0)
+  const mesEnd = endDate.toISOString().slice(0, 10)
+  const flujo = allFlujo.filter(r => r.cash_date >= mesStart && r.cash_date <= mesEnd)
+
+  // Summary calculations
+  const totalIngresos = flujo.reduce(
+    (sum: number, row) =>
+      sum + row.in_adelantado + row.in_en_termino + row.in_atrasado + row.in_pendiente + row.in_asistencia,
+    0
+  )
+
+  const totalEgresos = flujo.reduce(
+    (sum: number, row) =>
+      sum + row.out_celulares + row.out_licencias + row.out_descartables + row.out_sueldos + row.out_envios + row.out_interes + row.out_otros + row.out_vta3ero,
+    0
+  )
+
+  const balanceNeto = totalIngresos + totalEgresos
+  const saldoAcumulado = flujo.length > 0 ? flujo[flujo.length - 1].cash_balance : 0
+
+  // Build month selector options (12 months back, 6 forward)
+  const meses: string[] = []
+  for (let i = -12; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  const formatFecha = (fecha: string) => {
+    const d = new Date(fecha + 'T12:00:00')
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
+      <p className="text-sm text-gray-500 mb-8">Flujo de fondos y control de caja</p>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-500 mb-1">Total ingresos</p>
+          <p className="text-2xl font-bold text-green-700">{formatearMoneda(totalIngresos)}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-500 mb-1">Total egresos</p>
+          <p className="text-2xl font-bold text-red-700">{formatearMoneda(totalEgresos)}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-500 mb-1">Balance neto</p>
+          <p className="text-2xl font-bold text-blue-700">{formatearMoneda(balanceNeto)}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-500 mb-1">Saldo acumulado</p>
+          <p className={`text-2xl font-bold ${saldoAcumulado >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            {formatearMoneda(saldoAcumulado)}
+          </p>
+        </div>
+      </div>
+
+      {/* Action buttons and filter */}
+      <div className="flex flex-wrap gap-3 items-end mb-6">
+        <CargarAsistenciaButton />
+        <CargarEgresoButton />
+
+        <form method="GET" className="flex items-end gap-3 ml-auto">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-600">Mes</label>
+            <select
+              name="mes"
+              defaultValue={mesSeleccionado}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              {meses.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Filtrar
+          </button>
+        </form>
+      </div>
+
+      {/* Cash flow table */}
+      {flujo.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+          <p className="text-gray-400 text-sm">Sin datos de flujo de fondos para este período.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Fecha
+                  </th>
+                  {/* Income columns */}
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                    Adelantado
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                    En termino
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                    Atrasado
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                    Pendiente
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                    Asistencia
+                  </th>
+                  {/* Expense columns */}
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Celulares
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Licencias
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Descartables
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Sueldos
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Envios
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Interes
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Otros
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Vta3ero
+                  </th>
+                  {/* Summary columns */}
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Flujo neto
+                  </th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Saldo
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {flujo.map((row, i) => {
+                  return (
+                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2 text-gray-700 font-medium whitespace-nowrap">
+                        {formatFecha(row.cash_date)}
+                      </td>
+                      {/* Income cells */}
+                      <td className="px-3 py-2 text-right text-green-700">
+                        {row.in_adelantado !== 0 ? formatearMoneda(row.in_adelantado) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-700">
+                        {row.in_en_termino !== 0 ? formatearMoneda(row.in_en_termino) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-700">
+                        {row.in_atrasado !== 0 ? formatearMoneda(row.in_atrasado) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-700">
+                        {row.in_pendiente !== 0 ? formatearMoneda(row.in_pendiente) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-700">
+                        {row.in_asistencia !== 0 ? formatearMoneda(row.in_asistencia) : ''}
+                      </td>
+                      {/* Expense cells */}
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_celulares !== 0 ? formatearMoneda(row.out_celulares) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_licencias !== 0 ? formatearMoneda(row.out_licencias) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_descartables !== 0 ? formatearMoneda(row.out_descartables) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_sueldos !== 0 ? formatearMoneda(row.out_sueldos) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_envios !== 0 ? formatearMoneda(row.out_envios) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_interes !== 0 ? formatearMoneda(row.out_interes) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_otros !== 0 ? formatearMoneda(row.out_otros) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-700">
+                        {row.out_vta3ero !== 0 ? formatearMoneda(row.out_vta3ero) : ''}
+                      </td>
+                      {/* Net flow */}
+                      <td className={`px-3 py-2 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {formatearMoneda(row.net_flow)}
+                      </td>
+                      {/* Balance */}
+                      <td className={`px-3 py-2 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {formatearMoneda(row.cash_balance)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Manual entries */}
+      <FinanzasManual asistencias={asistencias} egresos={egresos} />
+    </div>
+  )
+}

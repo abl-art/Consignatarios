@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
   { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
   { href: '/ventas', label: 'Ventas', icon: 'ventas' },
   { href: '/reportes', label: 'Reportes', icon: 'reportes' },
+  { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
 ]
 
