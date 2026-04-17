@@ -8,11 +8,13 @@ interface NavItem {
   href: string
   label: string
   icon: IconName
+  external?: boolean
   children?: { href: string; label: string; icon: IconName }[]
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   {
     href: '/inventario',
     label: 'Inventario',
@@ -65,6 +67,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 icon={item.icon}
                 children={item.children}
               />
+            ) : item.external ? (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+              >
+                <NavIcon name={item.icon} />
+                <span>{item.label}</span>
+                <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              </a>
             ) : (
               <Link
                 key={item.href}
