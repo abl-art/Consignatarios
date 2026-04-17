@@ -227,7 +227,7 @@ async function fetchIncomeFromGocelular(): Promise<
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('2026134', '2461631', '5495277')
+        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
       GROUP BY 1
     `)
     return res.rows
@@ -499,7 +499,7 @@ export async function fetchCuotasStats(): Promise<{
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('2026134', '2461631', '5495277')
+        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
         AND i.installment_due_at::date < CURRENT_DATE
     `)
 
@@ -701,7 +701,7 @@ export async function fetchDPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN ('2026134', '2461631', '5495277')
+      AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
     GROUP BY 1
     ORDER BY 1
   `
@@ -804,7 +804,7 @@ export async function fetchPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN ('2026134', '2461631', '5495277')
+      AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
     GROUP BY 1, 2
     ORDER BY 1, 2
   `
@@ -836,7 +836,7 @@ export async function fetchPDIndicadores(): Promise<{
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN ('2026134', '2461631', '5495277')
+          AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
         GROUP BY 1
         ORDER BY 1
       `),
@@ -880,6 +880,178 @@ export async function fetchPDIndicadores(): Promise<{
     for (const r of resumen) { if (r.cuota > maxCuota) maxCuota = r.cuota }
 
     return { byOrigination, byDueMonth, resumen, maxCuota }
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// fetchVintageAnalysis – Vintage analysis by origination month
+// ---------------------------------------------------------------------------
+
+interface VintageRow {
+  origination_month: string // YYYY-MM
+  amt_total: number
+  amt_por_vencer: number
+  amt_cobrada_en_termino: number
+  amt_mora_1_29: number
+  amt_mora_30_59: number
+  amt_mora_60_89: number
+  amt_mora_90_119: number
+  amt_incobrable_120_plus: number
+  amt_recupero_1_29: number
+  amt_recupero_30_59: number
+  amt_recupero_60_89: number
+  amt_recupero_90_119: number
+  amt_recupero_120_plus: number
+  pct_por_vencer: number
+  pct_cobrada_en_termino: number
+  pct_mora_1_29: number
+  pct_mora_30_59: number
+  pct_mora_60_89: number
+  pct_mora_90_119: number
+  pct_incobrable_120_plus: number
+  pct_recupero_1_29: number
+  pct_recupero_30_59: number
+  pct_recupero_60_89: number
+  pct_recupero_90_119: number
+  pct_recupero_120_plus: number
+}
+
+export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      origination_month: Date | string
+      amt_total: string
+      amt_por_vencer: string
+      amt_cobrada_en_termino: string
+      amt_mora_1_29: string
+      amt_mora_30_59: string
+      amt_mora_60_89: string
+      amt_mora_90_119: string
+      amt_incobrable_120_plus: string
+      amt_recupero_1_29: string
+      amt_recupero_30_59: string
+      amt_recupero_60_89: string
+      amt_recupero_90_119: string
+      amt_recupero_120_plus: string
+    }>(`
+      WITH base AS (
+        SELECT
+          date_trunc('month', o.order_created_at)::date AS origination_month,
+          i.installment_due_at::date AS due_date,
+          i.installment_collected_at::date AS collected_date,
+          i.installment_amount AS amount,
+          (CURRENT_DATE - i.installment_due_at::date) AS days_past_due,
+          CASE
+            WHEN i.installment_collected_at IS NOT NULL
+              THEN (i.installment_collected_at::date - i.installment_due_at::date)
+            ELSE NULL
+          END AS days_late_paid
+        FROM gocuotas_installments i
+        JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+        WHERE o.order_delivered_at IS NOT NULL
+          AND o.order_discarded_at IS NULL
+          AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+      ),
+      classified AS (
+        SELECT
+          origination_month,
+          amount,
+          CASE
+            WHEN collected_date IS NOT NULL AND collected_date <= due_date THEN 'COBRADA_EN_TERMINO'
+            WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 1 AND 29 THEN 'RECUPERO_1_29'
+            WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 30 AND 59 THEN 'RECUPERO_30_59'
+            WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 60 AND 89 THEN 'RECUPERO_60_89'
+            WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 90 AND 119 THEN 'RECUPERO_90_119'
+            WHEN collected_date IS NOT NULL AND days_late_paid >= 120 THEN 'RECUPERO_120_PLUS'
+            WHEN collected_date IS NULL AND due_date >= CURRENT_DATE THEN 'POR_VENCER'
+            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 1 AND 29 THEN 'MORA_1_29'
+            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 30 AND 59 THEN 'MORA_30_59'
+            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 60 AND 89 THEN 'MORA_60_89'
+            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 90 AND 119 THEN 'MORA_90_119'
+            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due >= 120 THEN 'INCOBRABLE_120_PLUS'
+            ELSE 'OTRO'
+          END AS bucket
+        FROM base
+      ),
+      agg AS (
+        SELECT
+          origination_month,
+          SUM(amount) AS amt_total,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'POR_VENCER'), 0) AS amt_por_vencer,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'COBRADA_EN_TERMINO'), 0) AS amt_cobrada_en_termino,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_1_29'), 0) AS amt_mora_1_29,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_30_59'), 0) AS amt_mora_30_59,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_60_89'), 0) AS amt_mora_60_89,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_90_119'), 0) AS amt_mora_90_119,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'INCOBRABLE_120_PLUS'), 0) AS amt_incobrable_120_plus,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_1_29'), 0) AS amt_recupero_1_29,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_30_59'), 0) AS amt_recupero_30_59,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_60_89'), 0) AS amt_recupero_60_89,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_90_119'), 0) AS amt_recupero_90_119,
+          COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_120_PLUS'), 0) AS amt_recupero_120_plus
+        FROM classified
+        GROUP BY 1
+      )
+      SELECT * FROM agg ORDER BY origination_month
+    `)
+
+    return res.rows
+      .filter((r) => r.origination_month != null)
+      .map((r) => {
+        const total = Number(r.amt_total)
+        const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total * 100) * 100) / 100)
+
+        const amt_por_vencer = Number(r.amt_por_vencer)
+        const amt_cobrada_en_termino = Number(r.amt_cobrada_en_termino)
+        const amt_mora_1_29 = Number(r.amt_mora_1_29)
+        const amt_mora_30_59 = Number(r.amt_mora_30_59)
+        const amt_mora_60_89 = Number(r.amt_mora_60_89)
+        const amt_mora_90_119 = Number(r.amt_mora_90_119)
+        const amt_incobrable_120_plus = Number(r.amt_incobrable_120_plus)
+        const amt_recupero_1_29 = Number(r.amt_recupero_1_29)
+        const amt_recupero_30_59 = Number(r.amt_recupero_30_59)
+        const amt_recupero_60_89 = Number(r.amt_recupero_60_89)
+        const amt_recupero_90_119 = Number(r.amt_recupero_90_119)
+        const amt_recupero_120_plus = Number(r.amt_recupero_120_plus)
+
+        return {
+          origination_month: r.origination_month instanceof Date
+            ? r.origination_month.toISOString().slice(0, 7)
+            : String(r.origination_month).slice(0, 7),
+          amt_total: total,
+          amt_por_vencer,
+          amt_cobrada_en_termino,
+          amt_mora_1_29,
+          amt_mora_30_59,
+          amt_mora_60_89,
+          amt_mora_90_119,
+          amt_incobrable_120_plus,
+          amt_recupero_1_29,
+          amt_recupero_30_59,
+          amt_recupero_60_89,
+          amt_recupero_90_119,
+          amt_recupero_120_plus,
+          pct_por_vencer: pct(amt_por_vencer),
+          pct_cobrada_en_termino: pct(amt_cobrada_en_termino),
+          pct_mora_1_29: pct(amt_mora_1_29),
+          pct_mora_30_59: pct(amt_mora_30_59),
+          pct_mora_60_89: pct(amt_mora_60_89),
+          pct_mora_90_119: pct(amt_mora_90_119),
+          pct_incobrable_120_plus: pct(amt_incobrable_120_plus),
+          pct_recupero_1_29: pct(amt_recupero_1_29),
+          pct_recupero_30_59: pct(amt_recupero_30_59),
+          pct_recupero_60_89: pct(amt_recupero_60_89),
+          pct_recupero_90_119: pct(amt_recupero_90_119),
+          pct_recupero_120_plus: pct(amt_recupero_120_plus),
+        }
+      })
   } finally {
     await client.end()
   }

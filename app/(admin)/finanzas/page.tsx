@@ -1,11 +1,12 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores } from '@/lib/actions/finanzas'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis } from '@/lib/actions/finanzas'
 import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
 import EgresosChart from './EgresosChart'
 import IndicadoresTab from './IndicadoresTab'
 import DPDTab from './DPDTab'
+import VintageTab from './VintageTab'
 
 export default async function FinanzasPage({
   searchParams,
@@ -16,7 +17,7 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores] = await Promise.all([
+  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -25,6 +26,7 @@ export default async function FinanzasPage({
     getProyeccionDiaria(),
     fetchPDIndicadores(),
     fetchDPDIndicadores(),
+    fetchVintageAnalysis(),
   ])
 
   // Filter by selected month (show selected month + 6 months forward)
@@ -215,6 +217,7 @@ export default async function FinanzasPage({
           { id: 'egresos', label: 'Egresos', content: egresosTab },
           { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
           { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
+          { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
         ]}
       />
     </div>

@@ -170,7 +170,7 @@ export async function fetchContracargos(): Promise<ContracargosData> {
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('2026134', '2461631', '5495277')
+        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
     `)
     const r = res.rows[0]
     const contracargos = Number(r.monto_contracargos)
