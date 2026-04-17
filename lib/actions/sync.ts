@@ -68,7 +68,8 @@ export async function sincronizarVentas() {
         continue
       }
       const consig = consigById.get(dispositivo.consignatario_id)
-      const precio = Number(sale.price ?? sale.default_price ?? sale.total_order_amount ?? 0)
+      const precioRaw = Number(sale.price ?? sale.default_price ?? sale.total_order_amount ?? 0)
+      const precio = precioRaw > 5000000 ? precioRaw / 100 : precioRaw
       const precioNeto = precio / 1.21
       const comision = consig ? precioNeto * Number(consig.comision_porcentaje) : 0
 

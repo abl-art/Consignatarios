@@ -17,7 +17,7 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
   await client.connect()
   try {
     const res = await client.query<{ store_name: string; ventas: string; monto: string }>(
-      `SELECT go.store_name, COUNT(*)::text AS ventas, COALESCE(SUM(go.total_order_amount), 0)::text AS monto
+      `SELECT go.store_name, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
        FROM gocuotas_orders go
        WHERE go.order_discarded_at IS NULL
          AND go.created_at::date = CURRENT_DATE
@@ -214,7 +214,7 @@ export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
         o.order_created_at::date AS fecha,
         o.store_name,
         COUNT(*)::int AS ventas,
-        COALESCE(SUM(o.total_order_amount), 0) AS monto
+        COALESCE(SUM(CASE WHEN o.total_order_amount > 5000000 THEN o.total_order_amount / 100.0 ELSE o.total_order_amount END), 0) AS monto
       FROM gocuotas_orders o
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
