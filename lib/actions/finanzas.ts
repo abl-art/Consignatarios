@@ -181,11 +181,11 @@ async function fetchIncomeFromGocelular(): Promise<
     }>(`
       SELECT
         CASE
-          WHEN i.collected_at IS NOT NULL THEN (
+          WHEN i.installment_collected_at IS NOT NULL THEN (
             SELECT d::date
             FROM generate_series(
-              (i.collected_at::date + INTERVAL '1 day'),
-              (i.collected_at::date + INTERVAL '14 day'),
+              (i.installment_collected_at::date + INTERVAL '1 day'),
+              (i.installment_collected_at::date + INTERVAL '14 day'),
               INTERVAL '1 day'
             ) AS d
             WHERE EXTRACT(DOW FROM d) NOT IN (0, 6)
@@ -193,18 +193,17 @@ async function fetchIncomeFromGocelular(): Promise<
             OFFSET 1
             LIMIT 1
           )
-          ELSE i.expected_income_at::date
+          ELSE i.installment_due_at::date
         END AS cash_date,
-        SUM(CASE WHEN i.collected_at IS NOT NULL AND i.collected_at::date < i.due_at::date THEN (i.amount_in_cents / 100.0) ELSE 0 END) AS in_adelantado,
-        SUM(CASE WHEN i.collected_at IS NOT NULL AND i.collected_at::date = i.due_at::date THEN (i.amount_in_cents / 100.0) ELSE 0 END) AS in_en_termino,
-        SUM(CASE WHEN i.collected_at IS NOT NULL AND i.collected_at::date > i.due_at::date THEN (i.amount_in_cents / 100.0) ELSE 0 END) AS in_atrasado,
-        SUM(CASE WHEN i.collected_at IS NULL THEN (i.amount_in_cents / 100.0) ELSE 0 END) AS in_pendiente
-      FROM installments i
-      JOIN orders o ON o.id = i.order_id
-      WHERE o.delivered_at IS NOT NULL
-        AND o.discarded_at IS NULL
-        AND i.expected_income_at IS NOT NULL
-        AND o.client_id IN (2026134, 2461631, 5495277)
+        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_adelantado,
+        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_en_termino,
+        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_atrasado,
+        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL THEN i.installment_amount ELSE 0 END) AS in_pendiente
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN ('2026134', '2461631', '5495277')
       GROUP BY 1
     `)
     return res.rows.map((r) => ({
@@ -222,31 +221,9 @@ async function fetchIncomeFromGocelular(): Promise<
 async function fetchVta3eroFromGocelular(): Promise<
   { cash_date: string; out_vta3ero: number }[]
 > {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
-
-  const client = new Client({ connectionString: url })
-  await client.connect()
-  try {
-    const res = await client.query<{ cash_date: string; out_vta3ero: string }>(`
-      SELECT
-        o.due_expense_at::date AS cash_date,
-        -SUM(o.expense_amount_in_cents / 100.0) AS out_vta3ero
-      FROM orders o
-      WHERE o.client_id = 5495277
-        AND o.discarded_at IS NULL
-        AND o.delivered_at IS NOT NULL
-        AND o.due_expense_at IS NOT NULL
-        AND o.expense_amount_in_cents IS NOT NULL
-      GROUP BY 1
-    `)
-    return res.rows.map((r) => ({
-      cash_date: String(r.cash_date).slice(0, 10),
-      out_vta3ero: Number(r.out_vta3ero),
-    }))
-  } finally {
-    await client.end()
-  }
+  // La tabla gocuotas_orders en esta réplica no tiene due_expense_at ni expense_amount_in_cents
+  // Vta3ero se puede cargar manualmente como egreso hasta que se agreguen esas columnas
+  return []
 }
 
 async function fetchAsistenciasFromSupabase(): Promise<
