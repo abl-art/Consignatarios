@@ -40,42 +40,31 @@ export default async function FinanzasPage({
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
   }
 
-  const pctBar = (pct: number, color: string) => (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 bg-gray-100 rounded-full h-2">
-        <div className={`${color} h-2 rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
-      </div>
-      <span className="text-xs font-medium text-gray-600 w-12 text-right">{pct.toFixed(1)}%</span>
-    </div>
-  )
-
   // Flujo tab content
   const flujoTab = (
     <div>
-      {/* Cuotas stats */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Estado de cuotas vencidas ({cuotasStats.total.toLocaleString('es-AR')} cuotas)</h3>
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20">Adelantado</span>
-            {pctBar(cuotasStats.pct_adelantado, 'bg-emerald-500')}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20">En término</span>
-            {pctBar(cuotasStats.pct_en_termino, 'bg-green-500')}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20">Atrasado</span>
-            {pctBar(cuotasStats.pct_atrasado, 'bg-yellow-500')}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20">Pendiente</span>
-            {pctBar(cuotasStats.pct_pendiente, 'bg-blue-400')}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20">Vencida</span>
-            {pctBar(cuotasStats.pct_vencida, 'bg-red-500')}
-          </div>
+      {/* Cuotas vencidas stats - individual cards */}
+      <p className="text-xs text-gray-400 mb-2">Cuotas vencidas: {cuotasStats.total.toLocaleString('es-AR')}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Adelantado</p>
+          <p className="text-xl font-bold text-emerald-600">{cuotasStats.pct_adelantado.toFixed(1)}%</p>
+          <p className="text-xs text-gray-400">{cuotasStats.adelantado.toLocaleString('es-AR')} cuotas</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">En término</p>
+          <p className="text-xl font-bold text-green-600">{cuotasStats.pct_en_termino.toFixed(1)}%</p>
+          <p className="text-xs text-gray-400">{cuotasStats.en_termino.toLocaleString('es-AR')} cuotas</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Atrasado</p>
+          <p className="text-xl font-bold text-yellow-600">{cuotasStats.pct_atrasado.toFixed(1)}%</p>
+          <p className="text-xs text-gray-400">{cuotasStats.atrasado.toLocaleString('es-AR')} cuotas</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">En mora</p>
+          <p className="text-xl font-bold text-red-600">{cuotasStats.pct_mora.toFixed(1)}%</p>
+          <p className="text-xs text-gray-400">{cuotasStats.mora.toLocaleString('es-AR')} cuotas</p>
         </div>
       </div>
 

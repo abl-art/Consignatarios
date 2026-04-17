@@ -359,29 +359,15 @@ export async function fetchCuotasStats(): Promise<{
   adelantado: number
   en_termino: number
   atrasado: number
-  pendiente: number
-  vencida: number
+  mora: number
   pct_adelantado: number
   pct_en_termino: number
   pct_atrasado: number
-  pct_pendiente: number
-  pct_vencida: number
+  pct_mora: number
 }> {
   const url = process.env.GOCELULAR_DB_URL
   if (!url)
-    return {
-      total: 0,
-      adelantado: 0,
-      en_termino: 0,
-      atrasado: 0,
-      pendiente: 0,
-      vencida: 0,
-      pct_adelantado: 0,
-      pct_en_termino: 0,
-      pct_atrasado: 0,
-      pct_pendiente: 0,
-      pct_vencida: 0,
-    }
+    return { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0 }
 
   const client = new Client({ connectionString: url })
   await client.connect()
@@ -391,21 +377,20 @@ export async function fetchCuotasStats(): Promise<{
       adelantado: string
       en_termino: string
       atrasado: string
-      pendiente: string
-      vencida: string
+      mora: string
     }>(`
       SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date)::int AS adelantado,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date)::int AS en_termino,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)::int AS atrasado,
-        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at >= CURRENT_DATE)::int AS pendiente,
-        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at < CURRENT_DATE)::int AS vencida
+        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)::int AS mora
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
         AND o.client_id::text IN ('2026134', '2461631', '5495277')
+        AND i.installment_due_at::date < CURRENT_DATE
     `)
 
     const row = res.rows[0]
@@ -413,23 +398,16 @@ export async function fetchCuotasStats(): Promise<{
     const adelantado = Number(row.adelantado)
     const en_termino = Number(row.en_termino)
     const atrasado = Number(row.atrasado)
-    const pendiente = Number(row.pendiente)
-    const vencida = Number(row.vencida)
+    const mora = Number(row.mora)
 
     const pct = (n: number) => (total > 0 ? Math.round((n / total) * 10000) / 100 : 0)
 
     return {
-      total,
-      adelantado,
-      en_termino,
-      atrasado,
-      pendiente,
-      vencida,
+      total, adelantado, en_termino, atrasado, mora,
       pct_adelantado: pct(adelantado),
       pct_en_termino: pct(en_termino),
       pct_atrasado: pct(atrasado),
-      pct_pendiente: pct(pendiente),
-      pct_vencida: pct(vencida),
+      pct_mora: pct(mora),
     }
   } finally {
     await client.end()
