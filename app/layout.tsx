@@ -17,7 +17,13 @@ export const metadata: Metadata = {
   title: "GOcelular - Consignación",
   description: "Sistema de consignación GOcelular",
   icons: {
-    icon: "/favicon.png",
+    icon: [
+      { url: "/favicon.png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
 
