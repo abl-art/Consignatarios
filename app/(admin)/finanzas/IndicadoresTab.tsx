@@ -125,7 +125,7 @@ export default function IndicadoresTab({ byOrigination, byDueMonth, resumen, max
             </thead>
             <tbody>
               <tr>
-                <td className="px-2 py-1.5 font-semibold text-red-600 whitespace-nowrap">FPD Hard</td>
+                <td className="px-2 py-1.5 font-semibold text-red-600 whitespace-nowrap">PD Hard</td>
                 {cuotas.map((c) => {
                   const r = resumen.find((x) => x.cuota === c)
                   const v = r?.pd_hard ?? 0
@@ -133,7 +133,7 @@ export default function IndicadoresTab({ byOrigination, byDueMonth, resumen, max
                 })}
               </tr>
               <tr>
-                <td className="px-2 py-1.5 font-semibold text-orange-600 whitespace-nowrap">FPD 30</td>
+                <td className="px-2 py-1.5 font-semibold text-orange-600 whitespace-nowrap">PD 30</td>
                 {cuotas.map((c) => {
                   const r = resumen.find((x) => x.cuota === c)
                   const v = r?.pd_30 ?? 0
