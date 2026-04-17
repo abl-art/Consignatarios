@@ -1,9 +1,10 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria } from '@/lib/actions/finanzas'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores } from '@/lib/actions/finanzas'
 import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
 import EgresosChart from './EgresosChart'
+import IndicadoresTab from './IndicadoresTab'
 
 export default async function FinanzasPage({
   searchParams,
@@ -14,13 +15,14 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria] = await Promise.all([
+  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
     fetchCuotasStats(),
     fetchEgresosStats(),
     getProyeccionDiaria(),
+    fetchPDIndicadores(),
   ])
 
   // Filter by selected month (show selected month + 6 months forward)
@@ -209,6 +211,7 @@ export default async function FinanzasPage({
         tabs={[
           { id: 'flujo', label: 'Flujo de fondos', content: flujoTab },
           { id: 'egresos', label: 'Egresos', content: egresosTab },
+          { id: 'indicadores', label: 'Indicadores', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} maxCuota={pdIndicadores.maxCuota} /> },
         ]}
       />
     </div>

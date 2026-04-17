@@ -651,3 +651,100 @@ export async function fetchEgresosStats(): Promise<{
 
   return { breakdown, mensual }
 }
+
+// ---------------------------------------------------------------------------
+// fetchPDIndicadores – PD Hard & PD30 by origination month and due month
+// ---------------------------------------------------------------------------
+
+interface PDRow {
+  mes: string // YYYY-MM
+  cuota: number
+  pd_hard: number // percentage
+  pd_30: number // percentage
+}
+
+export async function fetchPDIndicadores(): Promise<{
+  byOrigination: PDRow[]
+  byDueMonth: PDRow[]
+  maxCuota: number
+}> {
+  const empty = { byOrigination: [], byDueMonth: [], maxCuota: 0 }
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return empty
+
+  const baseQuery = (mesExpr: string) => `
+    SELECT
+      ${mesExpr} AS mes,
+      i.installment_number AS cuota,
+      SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS den_hard,
+      SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
+        AND (
+          (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
+          OR i.installment_collected_at::date > i.installment_due_at::date
+        ) THEN i.installment_amount ELSE 0 END) AS num_hard,
+      SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30 THEN i.installment_amount ELSE 0 END) AS den_30,
+      SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE - 30
+        AND (
+          (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
+          OR i.installment_collected_at::date > i.installment_due_at::date + 30
+        ) THEN i.installment_amount ELSE 0 END) AS num_30
+    FROM gocuotas_installments i
+    JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+    WHERE o.order_delivered_at IS NOT NULL
+      AND o.order_discarded_at IS NULL
+      AND o.client_id::text IN ('2026134', '2461631', '5495277')
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const [resOrig, resDue] = await Promise.all([
+      client.query<{
+        mes: Date | string
+        cuota: string
+        den_hard: string
+        num_hard: string
+        den_30: string
+        num_30: string
+      }>(baseQuery("to_char(o.order_delivered_at, 'YYYY-MM')")),
+      client.query<{
+        mes: Date | string
+        cuota: string
+        den_hard: string
+        num_hard: string
+        den_30: string
+        num_30: string
+      }>(baseQuery("to_char(i.installment_due_at, 'YYYY-MM')")),
+    ])
+
+    function parseRows(rows: { mes: Date | string; cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }[]): PDRow[] {
+      return rows
+        .filter((r) => r.mes != null)
+        .map((r) => {
+          const denHard = Number(r.den_hard)
+          const numHard = Number(r.num_hard)
+          const den30 = Number(r.den_30)
+          const num30 = Number(r.num_30)
+          return {
+            mes: r.mes instanceof Date ? r.mes.toISOString().slice(0, 7) : String(r.mes).slice(0, 7),
+            cuota: Number(r.cuota),
+            pd_hard: denHard === 0 ? 0 : Math.round((100 * numHard / denHard) * 100) / 100,
+            pd_30: den30 === 0 ? 0 : Math.round((100 * num30 / den30) * 100) / 100,
+          }
+        })
+    }
+
+    const byOrigination = parseRows(resOrig.rows)
+    const byDueMonth = parseRows(resDue.rows)
+
+    let maxCuota = 0
+    for (const r of byOrigination) { if (r.cuota > maxCuota) maxCuota = r.cuota }
+    for (const r of byDueMonth) { if (r.cuota > maxCuota) maxCuota = r.cuota }
+
+    return { byOrigination, byDueMonth, maxCuota }
+  } finally {
+    await client.end()
+  }
+}
