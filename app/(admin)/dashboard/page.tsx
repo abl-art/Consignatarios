@@ -1,14 +1,35 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchVentasHoy, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, type VentaDiaria } from '@/lib/gocelular'
 
 export default async function DashboardPage() {
+  const contracargos = await fetchContracargos()
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard360</h1>
       <p className="text-sm text-gray-500 mb-6">Vista general de GOcelular</p>
 
       <VentasDelDia />
+
+      {/* Contracargos */}
+      <div className={`rounded-xl border p-5 mt-6 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Monto total</p>
+            <p className="text-2xl font-bold text-red-700">{formatearMoneda(contracargos.monto_contracargos)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
+            <p className="text-2xl font-bold text-red-700">{contracargos.porcentaje.toFixed(2)}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Cantidad</p>
+            <p className="text-2xl font-bold text-red-700">{contracargos.cantidad}</p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

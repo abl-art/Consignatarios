@@ -140,3 +140,48 @@ export async function fetchNewSales(params: {
     await client.end()
   }
 }
+
+export interface ContracargosData {
+  monto_contracargos: number
+  monto_total_ventas: number
+  porcentaje: number
+  cantidad: number
+}
+
+export async function fetchContracargos(): Promise<ContracargosData> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 }
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      monto_contracargos: string
+      monto_total: string
+      cantidad: string
+    }>(`
+      SELECT
+        COALESCE(SUM(CASE WHEN i.installment_number = 1 AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at::date < CURRENT_DATE
+          THEN i.installment_amount ELSE 0 END), 0) AS monto_contracargos,
+        COALESCE(SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
+          THEN i.installment_amount ELSE 0 END), 0) AS monto_total,
+        COUNT(*) FILTER (WHERE i.installment_number = 1 AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at::date < CURRENT_DATE) AS cantidad
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN ('2026134', '2461631', '5495277')
+    `)
+    const r = res.rows[0]
+    const contracargos = Number(r.monto_contracargos)
+    const total = Number(r.monto_total)
+    return {
+      monto_contracargos: contracargos,
+      monto_total_ventas: total,
+      porcentaje: total > 0 ? Math.round((contracargos / total) * 10000) / 100 : 0,
+      cantidad: Number(r.cantidad),
+    }
+  } finally {
+    await client.end()
+  }
+}
