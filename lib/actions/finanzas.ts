@@ -173,7 +173,7 @@ async function fetchIncomeFromGocelular(): Promise<
   await client.connect()
   try {
     const res = await client.query<{
-      cash_date: string
+      cash_date: Date | string
       in_adelantado: string
       in_en_termino: string
       in_atrasado: string
