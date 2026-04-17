@@ -653,6 +653,111 @@ export async function fetchEgresosStats(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
+// fetchDPDIndicadores – Days Past Due buckets by origination & due month
+// ---------------------------------------------------------------------------
+
+interface DPDRow {
+  mes: string // YYYY-MM
+  dpd_1_7_pct: number
+  dpd_1_7_monto: number
+  dpd_8_30_pct: number
+  dpd_8_30_monto: number
+  dpd_31_60_pct: number
+  dpd_31_60_monto: number
+  dpd_60_plus_pct: number
+  dpd_60_plus_monto: number
+  total_vencido: number
+}
+
+export async function fetchDPDIndicadores(): Promise<{
+  byOrigination: DPDRow[]
+  byDueMonth: DPDRow[]
+}> {
+  const empty = { byOrigination: [], byDueMonth: [] }
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return empty
+
+  const baseQuery = (mesExpr: string) => `
+    SELECT
+      ${mesExpr} AS mes,
+      SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS total_vencido,
+      SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND i.installment_due_at::date < CURRENT_DATE
+        AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 1 AND 7
+        THEN i.installment_amount ELSE 0 END) AS dpd_1_7,
+      SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND i.installment_due_at::date < CURRENT_DATE
+        AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 8 AND 30
+        THEN i.installment_amount ELSE 0 END) AS dpd_8_30,
+      SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND i.installment_due_at::date < CURRENT_DATE
+        AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 31 AND 60
+        THEN i.installment_amount ELSE 0 END) AS dpd_31_60,
+      SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND i.installment_due_at::date < CURRENT_DATE
+        AND (CURRENT_DATE - i.installment_due_at::date) > 60
+        THEN i.installment_amount ELSE 0 END) AS dpd_60_plus
+    FROM gocuotas_installments i
+    JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+    WHERE o.order_delivered_at IS NOT NULL
+      AND o.order_discarded_at IS NULL
+      AND o.client_id::text IN ('2026134', '2461631', '5495277')
+    GROUP BY 1
+    ORDER BY 1
+  `
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    type QRow = {
+      mes: Date | string
+      total_vencido: string
+      dpd_1_7: string
+      dpd_8_30: string
+      dpd_31_60: string
+      dpd_60_plus: string
+    }
+
+    const [resOrig, resDue] = await Promise.all([
+      client.query<QRow>(baseQuery("to_char(o.order_delivered_at, 'YYYY-MM')")),
+      client.query<QRow>(baseQuery("to_char(i.installment_due_at, 'YYYY-MM')")),
+    ])
+
+    function parseRows(rows: QRow[]): DPDRow[] {
+      return rows
+        .filter((r) => r.mes != null)
+        .map((r) => {
+          const total = Number(r.total_vencido)
+          const d17 = Number(r.dpd_1_7)
+          const d830 = Number(r.dpd_8_30)
+          const d3160 = Number(r.dpd_31_60)
+          const d60p = Number(r.dpd_60_plus)
+          const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total * 100) * 100) / 100)
+          return {
+            mes: r.mes instanceof Date ? r.mes.toISOString().slice(0, 7) : String(r.mes).slice(0, 7),
+            dpd_1_7_pct: pct(d17),
+            dpd_1_7_monto: d17,
+            dpd_8_30_pct: pct(d830),
+            dpd_8_30_monto: d830,
+            dpd_31_60_pct: pct(d3160),
+            dpd_31_60_monto: d3160,
+            dpd_60_plus_pct: pct(d60p),
+            dpd_60_plus_monto: d60p,
+            total_vencido: total,
+          }
+        })
+    }
+
+    return {
+      byOrigination: parseRows(resOrig.rows),
+      byDueMonth: parseRows(resDue.rows),
+    }
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // fetchPDIndicadores – PD Hard & PD30 by origination month and due month
 // ---------------------------------------------------------------------------
 
