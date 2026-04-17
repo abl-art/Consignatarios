@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { agregarAsistencia, agregarEgreso, eliminarAsistencia, eliminarEgreso } from '@/lib/actions/finanzas'
+import { agregarAsistencia, agregarEgreso, eliminarAsistencia, eliminarEgreso, setProyeccionDiaria } from '@/lib/actions/finanzas'
 
 export function CargarAsistenciaButton() {
   const router = useRouter()
@@ -197,6 +197,74 @@ export function CargarEgresoButton() {
                   type="submit"
                   disabled={loading}
                   className="px-5 py-2 bg-magenta-600 text-white text-sm font-semibold rounded-lg hover:bg-magenta-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export function ProyeccionButton({ valorActual }: { valorActual: number }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [monto, setMonto] = useState(String(valorActual))
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    await setProyeccionDiaria(Number(monto))
+    setLoading(false)
+    setOpen(false)
+    router.refresh()
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => { setMonto(String(valorActual)); setOpen(true) }}
+        className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        Ingreso proyectado {valorActual > 0 ? `($${new Intl.NumberFormat('es-AR').format(valorActual)}/día)` : ''}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Ingreso proyectado diario</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Se aplica desde hoy + 2 días hábiles. Martes se triplica (cobro de fin de semana). Poné 0 para desactivar.
+            </p>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Monto diario base</label>
+                <input
+                  type="number"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  required
+                  min="0"
+                  step="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {loading ? 'Guardando...' : 'Guardar'}
                 </button>

@@ -16,6 +16,7 @@ interface FlujoDiario {
   in_pendiente: number
   in_vencida: number
   in_asistencia: number
+  in_proyectado: number
   out_celulares: number
   out_licencias: number
   out_descartables: number
@@ -141,6 +142,7 @@ function emptyRow(cash_date: string): FlujoDiario {
     in_pendiente: 0,
     in_vencida: 0,
     in_asistencia: 0,
+    in_proyectado: 0,
     out_celulares: 0,
     out_licencias: 0,
     out_descartables: 0,
@@ -280,14 +282,72 @@ async function fetchEgresosFromSupabase(): Promise<
   return rows
 }
 
+// ---- Proyección de ingresos ------------------------------------------------
+
+export async function getProyeccionDiaria(): Promise<number> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', 'proyeccion_diaria').single()
+  return data ? Number(data.value) : 0
+}
+
+export async function setProyeccionDiaria(monto: number) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').upsert({ key: 'proyeccion_diaria', value: String(monto), updated_at: new Date().toISOString() })
+  if (error) return { error: error.message }
+  revalidatePath('/finanzas')
+  return { ok: true }
+}
+
+/** Advance N business days from a date */
+function addBusinessDays(from: Date, days: number): Date {
+  const d = new Date(from)
+  let added = 0
+  while (added < days) {
+    d.setDate(d.getDate() + 1)
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) added++
+  }
+  return d
+}
+
+function generateProjection(baseDiario: number, endDateStr: string): { cash_date: string; in_proyectado: number }[] {
+  if (baseDiario <= 0) return []
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Start from today + 2 business days
+  const start = addBusinessDays(today, 2)
+  const end = new Date(endDateStr + 'T00:00:00')
+
+  const rows: { cash_date: string; in_proyectado: number }[] = []
+  const d = new Date(start)
+
+  while (d <= end) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) {
+      // Martes (2) = triple because weekend collections
+      const mult = dow === 2 ? 3 : 1
+      rows.push({
+        cash_date: d.toISOString().slice(0, 10),
+        in_proyectado: baseDiario * mult,
+      })
+    }
+    d.setDate(d.getDate() + 1)
+  }
+
+  return rows
+}
+
 // ---- Main aggregation -----------------------------------------------------
 
 export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
-  const [income, vta3ero, asistencias, egresos] = await Promise.all([
+  const [income, vta3ero, asistencias, egresos, baseDiario] = await Promise.all([
     fetchIncomeFromGocelular(),
     fetchVta3eroFromGocelular(),
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
+    getProyeccionDiaria(),
   ])
 
   const map = new Map<string, FlujoDiario>()
@@ -320,6 +380,15 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
     row.out_vta3ero += r.out_vta3ero
   }
 
+  // Generate and merge projections (7 months forward from today)
+  const today = new Date()
+  const projEnd = new Date(today.getFullYear(), today.getMonth() + 7, 0)
+  const projections = generateProjection(baseDiario, projEnd.toISOString().slice(0, 10))
+  for (const p of projections) {
+    const row = getOrCreate(map, p.cash_date)
+    row.in_proyectado += p.in_proyectado
+  }
+
   // Sort by cash_date
   const sorted = Array.from(map.values()).sort((a, b) =>
     a.cash_date.localeCompare(b.cash_date)
@@ -335,6 +404,7 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
       row.in_atrasado +
       row.in_pendiente +
       row.in_asistencia +
+      row.in_proyectado +
       row.out_celulares +
       row.out_licencias +
       row.out_descartables +

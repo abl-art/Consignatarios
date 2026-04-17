@@ -1,6 +1,6 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats } from '@/lib/actions/finanzas'
-import { CargarAsistenciaButton, CargarEgresoButton } from './FinanzasActions'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria } from '@/lib/actions/finanzas'
+import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
 import EgresosChart from './EgresosChart'
@@ -14,12 +14,13 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats] = await Promise.all([
+  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
     fetchCuotasStats(),
     fetchEgresosStats(),
+    getProyeccionDiaria(),
   ])
 
   // Filter by selected month (show selected month + 6 months forward)
@@ -85,6 +86,7 @@ export default async function FinanzasPage({
       <div className="flex flex-wrap gap-3 items-end mb-6">
         <CargarAsistenciaButton />
         <CargarEgresoButton />
+        <ProyeccionButton valorActual={proyeccionDiaria} />
         <form method="GET" className="flex items-end gap-3 ml-auto">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">Mes</label>
@@ -124,6 +126,7 @@ export default async function FinanzasPage({
                   <th className="text-right px-1.5 py-2 font-semibold text-green-600">Atras.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-green-600">Pend.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-green-600">Asist.</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-blue-500">Proy.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Celul.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Licen.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Desc.</th>
@@ -145,6 +148,7 @@ export default async function FinanzasPage({
                     <td className="px-1.5 py-1 text-right text-green-700">{row.in_atrasado !== 0 ? formatearMoneda(row.in_atrasado) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-green-700">{row.in_pendiente !== 0 ? formatearMoneda(row.in_pendiente) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-green-700">{row.in_asistencia !== 0 ? formatearMoneda(row.in_asistencia) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-blue-600">{row.in_proyectado !== 0 ? formatearMoneda(row.in_proyectado) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_celulares !== 0 ? formatearMoneda(row.out_celulares) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_licencias !== 0 ? formatearMoneda(row.out_licencias) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_descartables !== 0 ? formatearMoneda(row.out_descartables) : ''}</td>
