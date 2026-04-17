@@ -185,3 +185,50 @@ export async function fetchContracargos(): Promise<ContracargosData> {
     await client.end()
   }
 }
+
+export interface VentaHistorica {
+  fecha: string // YYYY-MM-DD
+  store_name: string
+  ventas: number
+  monto: number
+}
+
+/**
+ * Ventas historicas agrupadas por fecha y store_name.
+ * Devuelve store_name crudo para que el consumidor clasifique por canal.
+ */
+export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      fecha: Date
+      store_name: string
+      ventas: number
+      monto: string
+    }>(
+      `SELECT
+        o.order_created_at::date AS fecha,
+        o.store_name,
+        COUNT(*)::int AS ventas,
+        COALESCE(SUM(o.total_order_amount), 0) AS monto
+      FROM gocuotas_orders o
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+      GROUP BY 1, 2
+      ORDER BY 1`
+    )
+    return res.rows.map((r) => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
+      store_name: r.store_name,
+      ventas: r.ventas,
+      monto: Number(r.monto),
+    }))
+  } finally {
+    await client.end()
+  }
+}

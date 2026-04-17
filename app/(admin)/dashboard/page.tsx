@@ -1,9 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, type VentaDiaria } from '@/lib/gocelular'
+import VentasHistoricasChart from './VentasHistoricasChart'
 
 export default async function DashboardPage() {
-  const contracargos = await fetchContracargos()
+  const [contracargos, ventasHistoricas] = await Promise.all([
+    fetchContracargos(),
+    fetchVentasHistoricas(),
+  ])
+
+  const supabase = createClient()
+  const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
+  const prefixes = (consigs ?? [])
+    .filter((c: { store_prefix: string | null }) => c.store_prefix)
+    .map((c: { nombre: string; store_prefix: string | null }) => ({
+      nombre: c.nombre,
+      prefix: c.store_prefix!.toLowerCase(),
+    }))
 
   return (
     <div className="p-8">
@@ -29,6 +42,11 @@ export default async function DashboardPage() {
             <p className="text-2xl font-bold text-red-700">{contracargos.cantidad}</p>
           </div>
         </div>
+      </div>
+
+      {/* Ventas históricas */}
+      <div className="mt-6">
+        <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
       </div>
     </div>
   )
