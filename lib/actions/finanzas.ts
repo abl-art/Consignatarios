@@ -44,6 +44,14 @@ export async function agregarAsistencia(input: { fecha: string; monto: number })
   return { ok: true }
 }
 
+export async function editarAsistencia(id: string, input: { fecha: string; monto: number }) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_asistencias').update({ fecha: input.fecha, monto: input.monto }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/finanzas')
+  return { ok: true }
+}
+
 export async function eliminarAsistencia(id: string) {
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_asistencias').delete().eq('id', id)
@@ -71,6 +79,16 @@ export async function agregarEgreso(input: {
     cuotas: input.cuotas,
     monto: input.monto,
   })
+  if (error) return { error: error.message }
+  revalidatePath('/finanzas')
+  return { ok: true }
+}
+
+export async function editarEgreso(id: string, input: { flujo_dia: string; concepto: string; medio_de_pago: string; cuotas: number; monto: number }) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_egresos').update({
+    flujo_dia: input.flujo_dia, concepto: input.concepto, medio_de_pago: input.medio_de_pago, cuotas: input.cuotas, monto: input.monto,
+  }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/finanzas')
   return { ok: true }

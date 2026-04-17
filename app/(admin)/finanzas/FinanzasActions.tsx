@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { agregarAsistencia, agregarEgreso, eliminarAsistencia, eliminarEgreso, setProyeccionDiaria } from '@/lib/actions/finanzas'
+import { agregarAsistencia, agregarEgreso, eliminarAsistencia, eliminarEgreso, editarAsistencia, editarEgreso, setProyeccionDiaria } from '@/lib/actions/finanzas'
 
 export function CargarAsistenciaButton() {
   const router = useRouter()
@@ -268,6 +268,121 @@ export function ProyeccionButton({ valorActual }: { valorActual: number }) {
                 >
                   {loading ? 'Guardando...' : 'Guardar'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export function EditarAsistenciaButton({ id, fecha: initFecha, monto: initMonto }: { id: string; fecha: string; monto: number }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [fecha, setFecha] = useState(initFecha)
+  const [monto, setMonto] = useState(String(initMonto))
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    await editarAsistencia(id, { fecha, monto: Number(monto) })
+    setLoading(false)
+    setOpen(false)
+    router.refresh()
+  }
+
+  return (
+    <>
+      <button onClick={() => { setFecha(initFecha); setMonto(String(initMonto)); setOpen(true) }} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+        ✏️
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Editar asistencia</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
+                <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} required min="0" step="1" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+                <button type="submit" disabled={loading} className="px-5 py-2 bg-magenta-600 text-white text-sm font-semibold rounded-lg hover:bg-magenta-700 disabled:opacity-50">{loading ? 'Guardando...' : 'Guardar'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export function EditarEgresoButton({ id, flujo_dia: initDia, concepto: initConcepto, medio_de_pago: initMedio, cuotas: initCuotas, monto: initMonto }: { id: string; flujo_dia: string; concepto: string; medio_de_pago: string; cuotas: number; monto: number }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [flujoDia, setFlujoDia] = useState(initDia)
+  const [concepto, setConcepto] = useState(initConcepto)
+  const [medioDePago, setMedioDePago] = useState(initMedio)
+  const [cuotas, setCuotas] = useState(String(initCuotas))
+  const [monto, setMonto] = useState(String(initMonto))
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    await editarEgreso(id, { flujo_dia: flujoDia, concepto, medio_de_pago: medioDePago, cuotas: Number(cuotas), monto: Number(monto) })
+    setLoading(false)
+    setOpen(false)
+    router.refresh()
+  }
+
+  return (
+    <>
+      <button onClick={() => { setFlujoDia(initDia); setConcepto(initConcepto); setMedioDePago(initMedio); setCuotas(String(initCuotas)); setMonto(String(initMonto)); setOpen(true) }} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+        ✏️
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Editar egreso</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
+                <input type="date" value={flujoDia} onChange={(e) => setFlujoDia(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+                <select value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="Celulares">Celulares</option>
+                  <option value="Licencias">Licencias</option>
+                  <option value="Descartables">Descartables</option>
+                  <option value="Sueldos">Sueldos</option>
+                  <option value="Envios">Envios</option>
+                  <option value="Interes">Interes</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Medio de pago</label>
+                <input type="text" value={medioDePago} onChange={(e) => setMedioDePago(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cuotas</label>
+                <input type="number" value={cuotas} onChange={(e) => setCuotas(e.target.value)} min="1" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} required step="1" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+                <button type="submit" disabled={loading} className="px-5 py-2 bg-magenta-600 text-white text-sm font-semibold rounded-lg hover:bg-magenta-700 disabled:opacity-50">{loading ? 'Guardando...' : 'Guardar'}</button>
               </div>
             </form>
           </div>

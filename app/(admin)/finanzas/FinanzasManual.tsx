@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { formatearMoneda } from '@/lib/utils'
-import { EliminarButton } from './FinanzasActions'
+import { EliminarButton, EditarAsistenciaButton, EditarEgresoButton } from './FinanzasActions'
 
 interface Asistencia {
   id: string
@@ -79,7 +79,8 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
                     <tr key={a.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-2 text-gray-700">{formatFecha(a.fecha)}</td>
                       <td className="px-4 py-2 text-right text-gray-700">{formatearMoneda(a.monto)}</td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right flex gap-1 justify-end">
+                        <EditarAsistenciaButton id={a.id} fecha={a.fecha} monto={a.monto} />
                         <EliminarButton type="asistencia" id={a.id} />
                       </td>
                     </tr>
@@ -147,7 +148,8 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
                       <td className="px-4 py-2 text-gray-700">{eg.medio_de_pago}</td>
                       <td className="px-4 py-2 text-right text-gray-700">{eg.cuotas}</td>
                       <td className="px-4 py-2 text-right text-gray-700">{formatearMoneda(eg.monto)}</td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right flex gap-1 justify-end">
+                        <EditarEgresoButton id={eg.id} flujo_dia={eg.flujo_dia} concepto={eg.concepto} medio_de_pago={eg.medio_de_pago} cuotas={eg.cuotas} monto={eg.monto} />
                         <EliminarButton type="egreso" id={eg.id} />
                       </td>
                     </tr>
