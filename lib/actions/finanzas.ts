@@ -316,6 +316,35 @@ export async function setProyeccionDiaria(monto: number) {
   return { ok: true }
 }
 
+export async function getForecastEvents(): Promise<Record<string, number>> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', 'forecast_events').single()
+  return data ? JSON.parse(data.value) : {}
+}
+
+export async function setForecastEvents(events: Record<string, number>) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').upsert({ key: 'forecast_events', value: JSON.stringify(events), updated_at: new Date().toISOString() })
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard')
+  revalidatePath('/inventario/celulares')
+  return { ok: true }
+}
+
+export async function getComprasDias(): Promise<number> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', 'compras_dias').single()
+  return data ? Number(data.value) : 15
+}
+
+export async function setComprasDias(dias: number) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').upsert({ key: 'compras_dias', value: String(dias), updated_at: new Date().toISOString() })
+  if (error) return { error: error.message }
+  revalidatePath('/inventario/celulares')
+  return { ok: true }
+}
+
 /** Advance N business days from a date */
 function addBusinessDays(from: Date, days: number): Date {
   const d = new Date(from)

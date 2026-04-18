@@ -1,13 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, type VentaDiaria } from '@/lib/gocelular'
+import { getForecastEvents } from '@/lib/actions/finanzas'
 import VentasHistoricasChart from './VentasHistoricasChart'
+import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
 
 export default async function DashboardPage() {
-  const [contracargos, ventasHistoricas] = await Promise.all([
+  const [contracargos, ventasHistoricas, events] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
+    getForecastEvents(),
   ])
 
   const supabase = createClient()
@@ -50,9 +53,14 @@ export default async function DashboardPage() {
         <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
       </div>
 
+      {/* Forecast Events */}
+      <div className="mt-6">
+        <ForecastEvents events={events} />
+      </div>
+
       {/* Forecast */}
       <div className="mt-6">
-        <ForecastChart apiUrl="https://gocelular-forecast-production.up.railway.app" />
+        <ForecastChart apiUrl="https://gocelular-forecast-production.up.railway.app" events={events} />
       </div>
     </div>
   )

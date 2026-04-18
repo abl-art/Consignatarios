@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchVentasPorModelo } from '@/lib/gocelular'
+import { getForecastEvents, getComprasDias } from '@/lib/actions/finanzas'
 import ModelosChart from './ModelosChart'
 import ComprasTab from './ComprasTab'
 
@@ -9,10 +10,12 @@ export default async function CelularesPage() {
   const supabase = createClient()
   const admin = createAdminClient()
 
-  const [ventasGocelular, { data: consigs }, { data: ventasConsig }] = await Promise.all([
+  const [ventasGocelular, { data: consigs }, { data: ventasConsig }, events, dias] = await Promise.all([
     fetchVentasPorModelo(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     admin.from('ventas').select('fecha_venta, dispositivos(modelos(marca, modelo))'),
+    getForecastEvents(),
+    getComprasDias(),
   ])
 
   const prefixes = (consigs ?? [])
@@ -69,7 +72,7 @@ export default async function CelularesPage() {
       <ModelosChart data={combined} />
 
       <div className="mt-6">
-        <ComprasTab apiUrl="https://gocelular-forecast-production.up.railway.app" />
+        <ComprasTab apiUrl="https://gocelular-forecast-production.up.railway.app" events={events} dias={dias} />
       </div>
     </div>
   )

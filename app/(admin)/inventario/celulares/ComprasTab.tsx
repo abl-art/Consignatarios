@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   BarChart,
   Bar,
@@ -12,6 +13,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import { setComprasDias } from '@/lib/actions/finanzas'
 
 interface CompraRecomendacion {
   modelo: string
@@ -22,16 +24,28 @@ interface CompraRecomendacion {
 
 interface Props {
   apiUrl: string // e.g. "https://gocelular-forecast-production.up.railway.app"
+  events: Record<string, number>
+  dias: number
 }
 
 const formatoNumero = new Intl.NumberFormat('es-AR')
+const DIAS_OPTIONS = [15, 30, 45, 60, 90]
 
-export default function ComprasTab({ apiUrl }: Props) {
+export default function ComprasTab({ apiUrl, events, dias: initialDias }: Props) {
+  const router = useRouter()
   const [data, setData] = useState<CompraRecomendacion[]>([])
   const [loading, setLoading] = useState(true)
+  const [dias, setDias] = useState(initialDias)
+  const [customDias, setCustomDias] = useState('')
+  const isCustom = !DIAS_OPTIONS.includes(dias)
 
   useEffect(() => {
-    fetch(`${apiUrl}/forecast/compras`)
+    setLoading(true)
+    fetch(`${apiUrl}/forecast/compras`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events, days: dias }),
+    })
       .then((res) => res.json())
       .then((json: CompraRecomendacion[]) => {
         setData(json)
@@ -40,7 +54,13 @@ export default function ComprasTab({ apiUrl }: Props) {
       .catch(() => {
         setLoading(false)
       })
-  }, [apiUrl])
+  }, [apiUrl, events, dias])
+
+  async function handleDiasChange(newDias: number) {
+    setDias(newDias)
+    await setComprasDias(newDias)
+    router.refresh()
+  }
 
   if (loading) {
     return (
@@ -54,10 +74,57 @@ export default function ComprasTab({ apiUrl }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Dias selector */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-xs font-medium text-gray-500 mb-2">Horizonte de compras</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {DIAS_OPTIONS.map((d) => (
+            <button
+              key={d}
+              onClick={() => handleDiasChange(d)}
+              className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                dias === d
+                  ? 'bg-magenta-600 text-white border-magenta-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-magenta-300'
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min="1"
+              placeholder="Otro"
+              className="w-16 text-sm text-center border border-gray-300 rounded-full px-2 py-1"
+              value={isCustom ? dias : customDias}
+              onChange={(e) => setCustomDias(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = parseInt(customDias, 10)
+                  if (v > 0) handleDiasChange(v)
+                }
+              }}
+            />
+            {customDias && (
+              <button
+                onClick={() => {
+                  const v = parseInt(customDias, 10)
+                  if (v > 0) handleDiasChange(v)
+                }}
+                className="text-xs text-magenta-600 hover:underline"
+              >
+                OK
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Table card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900">
-          Recomendaci&oacute;n de compras &mdash; pr&oacute;ximos 15 d&iacute;as
+          Recomendaci&oacute;n de compras &mdash; pr&oacute;ximos {dias} d&iacute;as
         </h2>
         <p className="text-sm text-gray-500 mt-1 mb-4">
           Basado en forecast de ventas vs stock actual
@@ -68,7 +135,7 @@ export default function ComprasTab({ apiUrl }: Props) {
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
                 <th className="py-2 pr-4 font-medium">Modelo</th>
-                <th className="py-2 pr-4 font-medium text-right">Forecast 15d</th>
+                <th className="py-2 pr-4 font-medium text-right">Forecast {dias}d</th>
                 <th className="py-2 pr-4 font-medium text-right">Stock actual</th>
                 <th className="py-2 font-medium text-right">Comprar</th>
               </tr>

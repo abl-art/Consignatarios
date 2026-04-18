@@ -13,6 +13,7 @@ interface ForecastRow {
 
 interface Props {
   apiUrl: string // e.g. "https://gocelular-forecast-production.up.railway.app"
+  events: Record<string, number>
 }
 
 function formatDsMm(ds: string): string {
@@ -22,24 +23,28 @@ function formatDsMm(ds: string): string {
 
 const fmtNumber = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
-export default function ForecastChart({ apiUrl }: Props) {
+export default function ForecastChart({ apiUrl, events }: Props) {
   const [data, setData] = useState<ForecastRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${apiUrl}/forecast/total?days=60`)
+    fetch(`${apiUrl}/forecast/total`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events, days: 90 }),
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`Error ${res.status}`)
         return res.json()
       })
       .then((rows: ForecastRow[]) => setData(rows))
       .catch((err) => setError(err.message))
-  }, [apiUrl])
+  }, [apiUrl, events])
 
   if (error) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (60 días)</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (90 días)</h3>
         <p className="text-sm text-red-500">Error: {error}</p>
       </div>
     )
@@ -48,7 +53,7 @@ export default function ForecastChart({ apiUrl }: Props) {
   if (!data) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (60 días)</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (90 días)</h3>
         <p className="text-sm text-gray-500">Cargando forecast...</p>
       </div>
     )
@@ -62,7 +67,7 @@ export default function ForecastChart({ apiUrl }: Props) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (60 días)</h3>
+      <h3 className="text-sm font-semibold text-gray-800 mb-4">Forecast de ventas (90 días)</h3>
 
       <div className="w-full h-64">
         <ResponsiveContainer width="100%" height="100%">
