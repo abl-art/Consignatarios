@@ -7,14 +7,16 @@ import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
 
 export default async function DashboardPage() {
-  const [contracargos, ventasHistoricas, events] = await Promise.all([
+  const supabase = createClient()
+
+  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, { count: stockPropio }] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
     getForecastEvents(),
+    supabase.from('consignatarios').select('nombre, store_prefix'),
+    supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
+    supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'disponible'),
   ])
-
-  const supabase = createClient()
-  const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
   const prefixes = (consigs ?? [])
     .filter((c: { store_prefix: string | null }) => c.store_prefix)
     .map((c: { nombre: string; store_prefix: string | null }) => ({
@@ -29,21 +31,41 @@ export default async function DashboardPage() {
 
       <VentasDelDia />
 
-      {/* Contracargos */}
-      <div className={`rounded-xl border p-5 mt-6 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Monto total</p>
-            <p className="text-2xl font-bold text-red-700">{formatearMoneda(contracargos.monto_contracargos)}</p>
+      {/* Contracargos + Stock */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Monto total</p>
+              <p className="text-xl font-bold text-red-700">{formatearMoneda(contracargos.monto_contracargos)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
+              <p className="text-xl font-bold text-red-700">{contracargos.porcentaje.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Cantidad</p>
+              <p className="text-xl font-bold text-red-700">{contracargos.cantidad}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
-            <p className="text-2xl font-bold text-red-700">{contracargos.porcentaje.toFixed(2)}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Cantidad</p>
-            <p className="text-2xl font-bold text-red-700">{contracargos.cantidad}</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Tenencia propia</p>
+              <p className="text-xl font-bold text-blue-700">{stockPropio ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">En consignatarios</p>
+              <p className="text-xl font-bold text-amber-700">{stockConsignatarios ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Total</p>
+              <p className="text-xl font-bold text-gray-900">{(stockPropio ?? 0) + (stockConsignatarios ?? 0)}</p>
+            </div>
           </div>
         </div>
       </div>
