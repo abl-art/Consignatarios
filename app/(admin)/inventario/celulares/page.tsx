@@ -1,13 +1,17 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchVentasPorModelo } from '@/lib/gocelular'
 import ModelosChart from './ModelosChart'
 
 export default async function CelularesPage() {
   const supabase = createClient()
-  const [ventasModelos, { data: consigs }] = await Promise.all([
+  const admin = createAdminClient()
+
+  const [ventasGocelular, { data: consigs }, { data: ventasConsig }] = await Promise.all([
     fetchVentasPorModelo(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
+    admin.from('ventas').select('fecha_venta, dispositivos(modelos(marca, modelo))'),
   ])
 
   const prefixes = (consigs ?? [])
@@ -16,6 +20,26 @@ export default async function CelularesPage() {
       nombre: c.nombre,
       prefix: c.store_prefix!.toLowerCase(),
     }))
+
+  // Build consignatario ventas with modelo from our DB
+  const ventasConsigModelos = (ventasConsig ?? []).map((v: Record<string, unknown>) => {
+    const disp = v.dispositivos as Record<string, unknown> | null
+    const mod = disp?.modelos as { marca: string; modelo: string } | null
+    return {
+      fecha: v.fecha_venta as string,
+      modelo: mod ? `${mod.marca} ${mod.modelo}` : 'Desconocido',
+      ventas: 1,
+      canal: 'consignatarios' as const,
+    }
+  })
+
+  // Combine: GOcelular data (ecommerce only) + consignatario data from our DB
+  const combined = [
+    ...ventasGocelular
+      .filter(v => v.store_name.toLowerCase().startsWith('ecommerce'))
+      .map(v => ({ fecha: v.fecha, modelo: v.modelo, ventas: v.ventas, canal: 'gocelular' as const })),
+    ...ventasConsigModelos,
+  ]
 
   const subpages = [
     { href: '/asignar', label: 'Asignar stock' },
@@ -41,7 +65,7 @@ export default async function CelularesPage() {
         ))}
       </div>
 
-      <ModelosChart data={ventasModelos} prefixes={prefixes} />
+      <ModelosChart data={combined} />
     </div>
   )
 }
