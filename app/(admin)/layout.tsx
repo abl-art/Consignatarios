@@ -44,6 +44,7 @@ const navItems: NavItem[] = [
   { href: '/modelos', label: 'Modelos y precios', icon: 'modelos' },
   { href: '/reportes', label: 'Reportes', icon: 'reportes' },
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
+  { href: '/compras', label: 'Compras', icon: 'tienda' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
 ]
 

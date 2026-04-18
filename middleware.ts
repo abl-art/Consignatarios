@@ -50,7 +50,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/diferencias') || pathname.startsWith('/sync') ||
       pathname.startsWith('/ventas') || pathname.startsWith('/reportes') ||
       pathname.startsWith('/liquidaciones') || pathname.startsWith('/garantias') ||
-      pathname.startsWith('/finanzas')) {
+      pathname.startsWith('/finanzas') ||
+      pathname.startsWith('/compras')) {
     if (rol !== 'admin') {
       return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }
