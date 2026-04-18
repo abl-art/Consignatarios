@@ -261,13 +261,11 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
       `SELECT
         o.order_created_at::date AS fecha,
         o.store_name,
-        COALESCE(dm.model_code, ii.model_code, dm2.model_code, 'Desconocido') AS modelo,
+        COALESCE(ii.model_code, d.brand || ' ' || d.model, 'Desconocido') AS modelo,
         COUNT(*)::int AS ventas
       FROM gocuotas_orders o
       LEFT JOIN inventory_items ii ON ii.assigned_to_order_id = o.order_id::text
-      LEFT JOIN device_models dm ON dm.model_code = ii.model_code
       LEFT JOIN devices d ON d.order_id = o.order_id
-      LEFT JOIN device_models dm2 ON dm2.model_code = d.model_code
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
         AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
