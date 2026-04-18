@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 interface VentaModelo {
   fecha: string // YYYY-MM-DD
   store_name: string
+  modelo: string
   ventas: number
 }
 
@@ -121,7 +122,7 @@ export default function ModelosChart({ data, prefixes }: Props) {
     // Group by cleaned model name and sum ventas
     const groups = new Map<string, number>()
     for (const row of filtered) {
-      const model = cleanModelName(row.store_name)
+      const model = row.modelo || 'Desconocido'
       groups.set(model, (groups.get(model) ?? 0) + row.ventas)
     }
 
