@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchVentasPorModelo } from '@/lib/gocelular'
 import ModelosChart from './ModelosChart'
+import ComprasTab from './ComprasTab'
 
 export default async function CelularesPage() {
   const supabase = createClient()
@@ -66,6 +67,10 @@ export default async function CelularesPage() {
       </div>
 
       <ModelosChart data={combined} />
+
+      <div className="mt-6">
+        <ComprasTab apiUrl="https://gocelular-forecast-production.up.railway.app" />
+      </div>
     </div>
   )
 }
