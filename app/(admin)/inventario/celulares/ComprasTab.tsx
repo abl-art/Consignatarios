@@ -17,7 +17,7 @@ import { setComprasDias } from '@/lib/actions/finanzas'
 
 interface CompraRecomendacion {
   modelo: string
-  forecast_15d: number
+  forecast: number
   stock_actual: number
   comprar: number
 }
@@ -145,7 +145,7 @@ export default function ComprasTab({ apiUrl, events, dias: initialDias }: Props)
                 <tr key={row.modelo} className="border-b border-gray-100">
                   <td className="py-2 pr-4 text-gray-900">{row.modelo}</td>
                   <td className="py-2 pr-4 text-right text-gray-700">
-                    {formatoNumero.format(row.forecast_15d)}
+                    {formatoNumero.format(row.forecast)}
                   </td>
                   <td className="py-2 pr-4 text-right text-gray-700">
                     {formatoNumero.format(row.stock_actual)}
