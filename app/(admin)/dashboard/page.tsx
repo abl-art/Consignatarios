@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ForecastEvents from './ForecastEvents'
@@ -9,13 +9,13 @@ import ForecastChart from './ForecastChart'
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, { count: stockPropio }] = await Promise.all([
+  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
     getForecastEvents(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
-    supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'disponible'),
+    fetchStockPropio(),
   ])
   const prefixes = (consigs ?? [])
     .filter((c: { store_prefix: string | null }) => c.store_prefix)
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-gray-500 mb-1">Tenencia propia</p>
-              <p className="text-xl font-bold text-blue-700">{stockPropio ?? 0}</p>
+              <p className="text-xl font-bold text-blue-700">{stockPropio}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">En consignatarios</p>
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">Total</p>
-              <p className="text-xl font-bold text-gray-900">{(stockPropio ?? 0) + (stockConsignatarios ?? 0)}</p>
+              <p className="text-xl font-bold text-gray-900">{(stockPropio) + (stockConsignatarios ?? 0)}</p>
             </div>
           </div>
         </div>
