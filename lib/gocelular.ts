@@ -232,3 +232,55 @@ export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
     await client.end()
   }
 }
+
+export interface VentaPorModelo {
+  fecha: string // YYYY-MM-DD
+  store_name: string
+  modelo: string // this will be the store_name from the order which contains the model name
+  ventas: number
+}
+
+/**
+ * Ventas agrupadas por fecha, store_name y modelo.
+ * Intenta obtener el modelo desde inventory_items/device_models (ecommerce)
+ * o desde devices (consignación). Si no se encuentra, usa 'Desconocido'.
+ */
+export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      fecha: Date
+      store_name: string
+      modelo: string
+      ventas: number
+    }>(
+      `SELECT
+        o.order_created_at::date AS fecha,
+        o.store_name,
+        COALESCE(dm.model_code, ii.model_code, dm2.model_code, 'Desconocido') AS modelo,
+        COUNT(*)::int AS ventas
+      FROM gocuotas_orders o
+      LEFT JOIN inventory_items ii ON ii.assigned_to_order_id = o.order_id::text
+      LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+      LEFT JOIN devices d ON d.order_id = o.order_id
+      LEFT JOIN device_models dm2 ON dm2.model_code = d.model_code
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+      GROUP BY 1, 2, 3
+      ORDER BY 1`
+    )
+    return res.rows.map((r) => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
+      store_name: r.store_name,
+      modelo: r.modelo,
+      ventas: r.ventas,
+    }))
+  } finally {
+    await client.end()
+  }
+}
