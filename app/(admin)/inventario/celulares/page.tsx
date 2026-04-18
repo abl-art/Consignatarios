@@ -2,20 +2,16 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchVentasPorModelo } from '@/lib/gocelular'
-import { getForecastEvents, getComprasDias } from '@/lib/actions/finanzas'
 import ModelosChart from './ModelosChart'
-import ComprasTab from './ComprasTab'
 
 export default async function CelularesPage() {
   const supabase = createClient()
   const admin = createAdminClient()
 
-  const [ventasGocelular, { data: consigs }, { data: ventasConsig }, events, dias] = await Promise.all([
+  const [ventasGocelular, { data: consigs }, { data: ventasConsig }] = await Promise.all([
     fetchVentasPorModelo(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     admin.from('ventas').select('fecha_venta, dispositivos(modelos(marca, modelo))'),
-    getForecastEvents(),
-    getComprasDias(),
   ])
 
   const prefixes = (consigs ?? [])
@@ -25,7 +21,6 @@ export default async function CelularesPage() {
       prefix: c.store_prefix!.toLowerCase(),
     }))
 
-  // Build consignatario ventas with modelo from our DB
   const ventasConsigModelos = (ventasConsig ?? []).map((v: Record<string, unknown>) => {
     const disp = v.dispositivos as Record<string, unknown> | null
     const mod = disp?.modelos as { marca: string; modelo: string } | null
@@ -37,7 +32,6 @@ export default async function CelularesPage() {
     }
   })
 
-  // Combine: GOcelular data (ecommerce only) + consignatario data from our DB
   const combined = [
     ...ventasGocelular
       .filter(v => v.store_name.toLowerCase().startsWith('ecommerce'))
@@ -49,6 +43,7 @@ export default async function CelularesPage() {
     { href: '/asignar', label: 'Asignar stock' },
     { href: '/inventario/tenencia', label: 'Tenencia consignatarios' },
     { href: '/inventario/tenencia-propia', label: 'Tenencia propia' },
+    { href: '/inventario/celulares/compras', label: 'Compras' },
   ]
 
   return (
@@ -56,7 +51,7 @@ export default async function CelularesPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Celulares</h1>
       <p className="text-sm text-gray-500 mb-6">Inventario de celulares</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {subpages.map((sp) => (
           <Link
             key={sp.href}
@@ -70,10 +65,6 @@ export default async function CelularesPage() {
       </div>
 
       <ModelosChart data={combined} />
-
-      <div className="mt-6">
-        <ComprasTab apiUrl="https://gocelular-forecast-production.up.railway.app" events={events} dias={dias} />
-      </div>
     </div>
   )
 }
