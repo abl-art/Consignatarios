@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Consignatario, DispositivoConModelo, Config } from '@/lib/types'
+import { fetchInventarioDisponible } from '@/lib/gocelular'
 import AsignarForm from './AsignarForm'
 
 export default async function AsignarPage() {
@@ -7,7 +8,7 @@ export default async function AsignarPage() {
 
   const [
     { data: consignatarios },
-    { data: dispositivos },
+    inventarioGo,
     { data: config },
     { data: asignados },
     { data: diferencias },
@@ -17,12 +18,7 @@ export default async function AsignarPage() {
       .select('*')
       .order('nombre')
       .returns<Consignatario[]>(),
-    supabase
-      .from('dispositivos')
-      .select('*, modelos(*)')
-      .eq('estado', 'disponible')
-      .order('created_at', { ascending: false })
-      .returns<DispositivoConModelo[]>(),
+    fetchInventarioDisponible(),
     supabase
       .from('config')
       .select('*')
@@ -37,6 +33,24 @@ export default async function AsignarPage() {
       .select('monto_deuda, auditorias(consignatario_id)')
       .eq('estado', 'pendiente'),
   ])
+
+  // Transform GOcelular inventory to DispositivoConModelo format
+  const dispositivos: DispositivoConModelo[] = inventarioGo.map((item) => ({
+    id: item.imei,
+    imei: item.imei,
+    estado: 'disponible' as const,
+    modelo_id: item.model_code,
+    consignatario_id: null,
+    fecha_asignacion: null,
+    created_at: new Date().toISOString(),
+    modelos: {
+      id: item.model_code,
+      marca: item.brand,
+      modelo: item.model_name,
+      precio_costo: item.precio_costo,
+      created_at: new Date().toISOString(),
+    },
+  }))
 
   const multiplicador = config?.multiplicador ?? 1.8
 
@@ -68,7 +82,7 @@ export default async function AsignarPage() {
 
       <AsignarForm
         consignatarios={consignatarios ?? []}
-        dispositivos={dispositivos ?? []}
+        dispositivos={dispositivos}
         multiplicador={multiplicador}
         compromisoMap={compromisoMap}
       />

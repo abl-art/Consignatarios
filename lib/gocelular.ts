@@ -233,6 +233,46 @@ export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
   }
 }
 
+export interface InventoryItem {
+  imei: string
+  model_code: string
+  brand: string
+  model_name: string
+  precio_costo: number
+}
+
+export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      imei: string
+      model_code: string
+      brand: string
+      model_name: string
+      precio_costo: string
+    }>(
+      `SELECT ii.imei, ii.model_code, COALESCE(dm.brand, 'Desconocido') AS brand, COALESCE(dm.name, ii.model_code) AS model_name, COALESCE(dm.default_price, 0) AS precio_costo
+       FROM inventory_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       WHERE ii.status = 'available'
+       ORDER BY dm.brand, dm.name, ii.imei`
+    )
+    return res.rows.map((r) => ({
+      imei: r.imei,
+      model_code: r.model_code,
+      brand: r.brand,
+      model_name: r.model_name,
+      precio_costo: Number(r.precio_costo),
+    }))
+  } finally {
+    await client.end()
+  }
+}
+
 export async function fetchStockPropio(): Promise<number> {
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return 0

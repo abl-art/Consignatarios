@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
@@ -24,6 +24,64 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
   const [filtroModelo, setFiltroModelo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // IMEI search state
+  const [imeiInput, setImeiInput] = useState('')
+  const [imeiFeedback, setImeiFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const imeiInputRef = useRef<HTMLInputElement>(null)
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clear feedback after 2 seconds
+  useEffect(() => {
+    if (imeiFeedback) {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+      feedbackTimerRef.current = setTimeout(() => setImeiFeedback(null), 2000)
+    }
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    }
+  }, [imeiFeedback])
+
+  // Build a map of IMEI -> dispositivo for fast lookup
+  const imeiMap = useMemo(() => {
+    const map = new Map<string, DispositivoConModelo>()
+    for (const d of dispositivos) {
+      map.set(d.imei, d)
+    }
+    return map
+  }, [dispositivos])
+
+  const handleImeiSubmit = useCallback(() => {
+    const trimmed = imeiInput.trim()
+    if (!trimmed) return
+
+    const device = imeiMap.get(trimmed)
+    if (device) {
+      if (selected.has(device.id)) {
+        setImeiFeedback({ type: 'success', message: `IMEI ya seleccionado` })
+      } else {
+        setSelected((prev) => {
+          const next = new Set(prev)
+          next.add(device.id)
+          return next
+        })
+        setImeiFeedback({ type: 'success', message: `IMEI agregado` })
+      }
+      setImeiInput('')
+    } else {
+      setImeiFeedback({ type: 'error', message: 'IMEI no encontrado' })
+    }
+
+    // Keep focus on input for rapid scanning
+    imeiInputRef.current?.focus()
+  }, [imeiInput, imeiMap, selected])
+
+  const handleImeiKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleImeiSubmit()
+    }
+  }, [handleImeiSubmit])
 
   const dispositivosFiltrados = useMemo(() => {
     if (!filtroModelo.trim()) return dispositivos
@@ -126,7 +184,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500"
           required
         >
-          <option value="">Seleccioná un consignatario</option>
+          <option value="">Selecciona un consignatario</option>
           {consignatarios.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nombre}
@@ -135,11 +193,51 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         </select>
       </div>
 
+      {/* IMEI Search — prominent input */}
+      <div className="bg-white border-2 border-magenta-200 rounded-xl p-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Agregar IMEI
+        </label>
+        <p className="text-xs text-gray-500 mb-3">
+          Escribe o pega un IMEI y presiona Enter para agregarlo a la seleccion
+        </p>
+        <div className="flex gap-3">
+          <input
+            ref={imeiInputRef}
+            type="text"
+            value={imeiInput}
+            onChange={(e) => setImeiInput(e.target.value)}
+            onKeyDown={handleImeiKeyDown}
+            placeholder="Ingresa un IMEI..."
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg font-mono focus:outline-none focus:ring-2 focus:ring-magenta-500 focus:border-magenta-500"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            onClick={handleImeiSubmit}
+            className="px-6 py-3 bg-magenta-600 text-white font-medium rounded-lg hover:bg-magenta-700 transition-colors"
+          >
+            Agregar
+          </button>
+        </div>
+        {imeiFeedback && (
+          <div
+            className={`mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              imeiFeedback.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {imeiFeedback.message}
+          </div>
+        )}
+      </div>
+
       {/* Device table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
           <span className="text-sm text-gray-500">
-            {dispositivos.length} equipos disponibles
+            {dispositivos.length} equipos disponibles &middot; {selected.size} seleccionados
           </span>
           <input
             type="text"
@@ -193,7 +291,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
                         className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
                       />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{d.imei}</td>
+                    <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{d.imei}</td>
                     <td className="px-4 py-3 text-gray-900">
                       {d.modelos.marca} {d.modelos.modelo}
                     </td>
@@ -211,7 +309,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         </table>
       </div>
 
-      {/* Garantía validation — only when a consignatario is selected */}
+      {/* Garantia validation -- only when a consignatario is selected */}
       {consignatarioId && (() => {
         const consig = consignatarios.find((c) => c.id === consignatarioId)
         if (!consig) return null
@@ -222,10 +320,10 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         const excedeVal = garantiaVal > 0 && proyectado > garantiaVal
         return (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Garantía</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Garantia</h3>
             <div className="grid grid-cols-4 gap-3 text-sm">
               <div>
-                <p className="text-xs text-gray-500">Garantía</p>
+                <p className="text-xs text-gray-500">Garantia</p>
                 <p className="font-bold text-gray-900">{formatearMoneda(garantiaVal)}</p>
               </div>
               <div>
@@ -233,7 +331,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
                 <p className="font-bold text-amber-700">{formatearMoneda(compromisoActualVal)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Esta asignación</p>
+                <p className="text-xs text-gray-500">Esta asignacion</p>
                 <p className="font-bold text-magenta-700">{formatearMoneda(totalValorCosto)}</p>
               </div>
               <div>
@@ -245,19 +343,19 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
             </div>
             {excedeVal && (
               <p className="text-sm text-red-700 mt-3 font-medium">
-                ⚠ Excede la garantía en {formatearMoneda(proyectado - garantiaVal)}
+                Excede la garantia en {formatearMoneda(proyectado - garantiaVal)}
               </p>
             )}
             {garantiaVal === 0 && (
               <p className="text-sm text-amber-700 mt-3">
-                Este consignatario no tiene garantía configurada
+                Este consignatario no tiene garantia configurada
               </p>
             )}
           </div>
         )
       })()}
 
-      {/* Summary — only when something is selected */}
+      {/* Summary -- only when something is selected */}
       {selected.size > 0 && (
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
