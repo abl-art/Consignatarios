@@ -133,14 +133,24 @@ export default function GestorClient({
       .catch(() => setForecastLoading(false))
   }, [forecastApiUrl, forecastEvents, forecastDias])
 
+  // Normalize name for matching: remove RAM prefix (4/, 8/), extra spaces, case
+  function normalizeName(name: string): string {
+    return name.toLowerCase().replace(/\d+\//g, '').replace(/\s+/g, ' ').trim()
+  }
+
   // Match forecast to product by name similarity
   function getForecastForProduct(prodName: string): number {
     // Direct match
     if (forecastByModel[prodName]) return forecastByModel[prodName]
-    // Partial match
-    const lower = prodName.toLowerCase()
+    // Normalized match
+    const norm = normalizeName(prodName)
     for (const [model, qty] of Object.entries(forecastByModel)) {
-      if (lower.includes(model.toLowerCase()) || model.toLowerCase().includes(lower)) return qty
+      if (normalizeName(model) === norm) return qty
+    }
+    // Partial match - check if key parts match
+    for (const [model, qty] of Object.entries(forecastByModel)) {
+      const normModel = normalizeName(model)
+      if (norm.includes(normModel) || normModel.includes(norm)) return qty
     }
     return 0
   }
