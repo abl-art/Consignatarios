@@ -155,7 +155,13 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
 
     const result = await asignarStock({
       consignatario_id: consignatarioId,
-      dispositivo_ids: Array.from(selected),
+      dispositivos: selectedDispositivos.map(d => ({
+        imei: d.imei,
+        modelo_id: d.modelo_id,
+        marca: d.modelos.marca,
+        modelo: d.modelos.modelo,
+        precio_costo: d.modelos.precio_costo,
+      })),
       firmado_por: firmadoPor.trim(),
       firma_base64: firma!,
       total_valor_costo: totalValorCosto,
