@@ -192,7 +192,25 @@ export default function GestorClient({
     })
   }, [proveedores, filtroCategoria, filtroMarca])
 
+  // Find kit product IDs (products in "Kits de Seguridad" category)
+  const kitProductIds = useMemo(() => productos.filter(p => p.categoria === 'Kits de Seguridad').map(p => p.id), [productos])
+
+  // Kit prices by proveedor: { provId: Precio }
+  const kitPreciosPorProv = useMemo(() => {
+    const map: Record<string, Precio> = {}
+    kitProductIds.forEach(kitId => {
+      precios.filter(p => p.producto_id === kitId).forEach(p => {
+        map[p.proveedor_id] = p
+      })
+    })
+    return map
+  }, [precios, kitProductIds])
+
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
+    // In kit mode, use the generic kit price for any celular model
+    if (filtroCategoria === 'Kits de Seguridad') {
+      return kitPreciosPorProv[proveedorId]
+    }
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
   }
 
