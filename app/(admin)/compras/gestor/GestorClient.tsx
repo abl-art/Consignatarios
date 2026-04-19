@@ -493,8 +493,18 @@ export default function GestorClient({
               {/* Summary cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs text-gray-500 mb-1">Total del pedido</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatearMoneda(totalPedido)}</p>
+                  <p className="text-xs text-gray-500 mb-1">Subtotal (Neto)</p>
+                  <p className="text-xl font-bold text-gray-900">{formatearMoneda(totalPedido)}</p>
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">IVA 21%</span>
+                      <span className="text-gray-700">{formatearMoneda(totalPedido * 0.21)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="font-semibold text-gray-900">Total General</span>
+                      <span className="font-bold text-blue-700">{formatearMoneda(totalPedido * 1.21)}</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs text-gray-500 mb-1">Items</p>
@@ -502,13 +512,17 @@ export default function GestorClient({
                   <p className="text-xs text-gray-400">{cart.length} lineas</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs text-gray-500 mb-2">Por plazo</p>
+                  <p className="text-xs text-gray-500 mb-2">Por plazo (con IVA)</p>
                   {resumenPorPlazo.map(([plazo, total]) => (
                     <div key={plazo} className="flex justify-between text-sm">
                       <span className="text-gray-600">{plazo}</span>
-                      <span className="font-medium text-gray-900">{formatearMoneda(total)}</span>
+                      <span className="font-medium text-gray-900">{formatearMoneda(total * 1.21)}</span>
                     </div>
                   ))}
+                  <div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-100">
+                    <span className="font-semibold text-gray-900">Total</span>
+                    <span className="font-bold text-blue-700">{formatearMoneda(totalPedido * 1.21)}</span>
+                  </div>
                 </div>
               </div>
 
