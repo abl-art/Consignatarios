@@ -428,13 +428,14 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     pedidosGuardados.forEach(p => { if (p.entregadoAt) map[p.id] = p.entregadoAt })
     return map
   })
-  const pedidosConfirmados = pedidosGuardados.filter(p => p.estado === 'confirmado' || p.estado === 'enviado')
+  const pedidosEnviados = pedidosGuardados.filter(p => p.estado === 'enviado')
+  const notasSinEnviar = notas.filter(n => n.estado !== 'enviado')
 
   const tabs = [
     { key: 'catalogo' as Tab, label: 'Catalogo' },
     { key: 'pedido' as Tab, label: `Mi Pedido (${cart.length})` },
-    { key: 'notas' as Tab, label: `Notas de Pedido (${notas.filter(n => n.estado === 'borrador').length})` },
-    { key: 'confirmados' as Tab, label: `Confirmados (${pedidosConfirmados.length})` },
+    { key: 'notas' as Tab, label: `Notas de Pedido (${notasSinEnviar.length})` },
+    { key: 'confirmados' as Tab, label: `Enviados (${pedidosEnviados.length})` },
   ]
 
   return (
@@ -720,13 +721,13 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       {/* Notas de Pedido tab */}
       {tab === 'notas' && (
         <div>
-          {notas.length === 0 ? (
+          {notasSinEnviar.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <p className="text-gray-400 text-sm">No hay notas de pedido. Arma un pedido desde el Catalogo y genera las notas.</p>
             </div>
           ) : (
             <div className="space-y-6">
-              {notas.map((nota) => {
+              {notasSinEnviar.map((nota) => {
                 const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                 return (
                   <div key={nota.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -831,7 +832,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       {/* Confirmados tab */}
       {tab === 'confirmados' && (
         <div>
-          {pedidosConfirmados.length === 0 ? (
+          {pedidosEnviados.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <p className="text-gray-400 text-sm">No hay pedidos confirmados.</p>
             </div>
@@ -850,7 +851,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                   </tr>
                 </thead>
                 <tbody>
-                  {pedidosConfirmados.map((p) => {
+                  {pedidosEnviados.map((p) => {
                     const totalNeto = p.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                     const totalConIva = totalNeto * 1.21
                     const totalUnidades = p.items.reduce((s, i) => s + i.cantidad, 0)
