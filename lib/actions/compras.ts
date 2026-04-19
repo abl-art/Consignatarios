@@ -162,3 +162,69 @@ export async function eliminarPrecio(producto_id: string, proveedor_id: string) 
   revalidatePath('/compras')
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// Pedidos (stored as JSON in flujo_config with key 'pedido_<id>')
+// ---------------------------------------------------------------------------
+
+interface PedidoItem {
+  productoId: string
+  productoNombre: string
+  productoCodigo: string
+  proveedorId: string
+  proveedorNombre: string
+  proveedorWhatsapp: string
+  proveedorEmail: string
+  precio: number
+  plazo: string
+  cantidad: number
+}
+
+interface Pedido {
+  id: string
+  proveedorId: string
+  proveedorNombre: string
+  proveedorWhatsapp: string
+  proveedorEmail: string
+  items: PedidoItem[]
+  estado: 'borrador' | 'confirmado' | 'enviado'
+  fecha: string
+  enviadoPor?: string
+}
+
+export async function getPedidos(): Promise<Pedido[]> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('key, value').like('key', 'pedido_%')
+  if (!data) return []
+  return data.map(r => JSON.parse(r.value) as Pedido).sort((a, b) => b.fecha.localeCompare(a.fecha))
+}
+
+export async function guardarPedido(pedido: Pedido) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').upsert({
+    key: `pedido_${pedido.id}`,
+    value: JSON.stringify(pedido),
+    updated_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/compras')
+  return { ok: true }
+}
+
+export async function actualizarEstadoPedido(pedidoId: string, estado: 'borrador' | 'confirmado' | 'enviado', enviadoPor?: string) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.estado = estado
+  if (enviadoPor) pedido.enviadoPor = enviadoPor
+  return guardarPedido(pedido)
+}
+
+export async function eliminarPedido(pedidoId: string) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').delete().eq('key', `pedido_${pedidoId}`)
+  if (error) return { error: error.message }
+  revalidatePath('/compras')
+  return { ok: true }
+}

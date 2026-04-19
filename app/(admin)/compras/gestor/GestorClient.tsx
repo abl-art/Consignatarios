@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido } from '@/lib/actions/compras'
 
 interface Proveedor {
   id: string
@@ -53,21 +55,51 @@ interface NotaPedido {
 
 type Tab = 'catalogo' | 'pedido' | 'notas'
 
+interface PedidoGuardado {
+  id: string
+  proveedorId: string
+  proveedorNombre: string
+  proveedorWhatsapp: string
+  proveedorEmail: string
+  items: { productoId: string; productoNombre: string; productoCodigo: string; proveedorId: string; proveedorNombre: string; proveedorWhatsapp: string; proveedorEmail: string; precio: number; plazo: string; cantidad: number }[]
+  estado: 'borrador' | 'confirmado' | 'enviado'
+  fecha: string
+  enviadoPor?: string
+}
+
 export default function GestorClient({
   productos,
   proveedores,
   precios,
+  pedidosGuardados,
 }: {
   productos: Producto[]
   proveedores: Proveedor[]
   precios: Precio[]
+  pedidosGuardados: PedidoGuardado[]
 }) {
-  const [tab, setTab] = useState<Tab>('catalogo')
+  const router = useRouter()
+  const [tab, setTab] = useState<Tab>(pedidosGuardados.length > 0 ? 'notas' : 'catalogo')
   const [busqueda, setBusqueda] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('Celulares')
   const [filtroMarca, setFiltroMarca] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
-  const [notas, setNotas] = useState<NotaPedido[]>([])
+  const [notas, setNotas] = useState<NotaPedido[]>(() =>
+    pedidosGuardados.map(p => ({
+      id: p.id,
+      proveedor: { id: p.proveedorId, nombre: p.proveedorNombre, whatsapp: p.proveedorWhatsapp, email: p.proveedorEmail, direccion: '', notas: '' },
+      items: p.items.map(i => ({
+        id: `${i.productoId}-${i.proveedorId}`,
+        producto: { id: i.productoId, codigo: i.productoCodigo, nombre: i.productoNombre, categoria: '' },
+        proveedor: { id: i.proveedorId, nombre: i.proveedorNombre, whatsapp: i.proveedorWhatsapp, email: i.proveedorEmail, direccion: '', notas: '' },
+        precio: i.precio,
+        plazo: i.plazo,
+        cantidad: i.cantidad,
+      })),
+      estado: p.estado,
+      fecha: p.fecha,
+    }))
+  )
   // cantidadesPorProv: { "prodId-provId": number }
   const [cantidadesPorProv, setCantidadesPorProv] = useState<Record<string, number>>({})
 
@@ -183,27 +215,48 @@ export default function GestorClient({
     return Object.entries(map)
   }, [cart])
 
-  function generarNotas() {
+  async function generarNotas() {
     const porProveedor: Record<string, CartItem[]> = {}
     cart.forEach((item) => {
       if (!porProveedor[item.proveedor.id]) porProveedor[item.proveedor.id] = []
       porProveedor[item.proveedor.id].push(item)
     })
 
+    const fecha = new Date().toLocaleDateString('es-AR')
     const nuevasNotas: NotaPedido[] = Object.entries(porProveedor).map(([provId, items]) => ({
       id: `NP-${Date.now()}-${provId}`,
       proveedor: items[0].proveedor,
       items,
-      estado: 'borrador',
-      fecha: new Date().toLocaleDateString('es-AR'),
+      estado: 'borrador' as const,
+      fecha,
     }))
 
-    setNotas(nuevasNotas)
+    // Save each to DB
+    for (const nota of nuevasNotas) {
+      await guardarPedido({
+        id: nota.id,
+        proveedorId: nota.proveedor.id,
+        proveedorNombre: nota.proveedor.nombre,
+        proveedorWhatsapp: nota.proveedor.whatsapp,
+        proveedorEmail: nota.proveedor.email,
+        items: nota.items.map(i => ({
+          productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo,
+          proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email,
+          precio: i.precio, plazo: i.plazo, cantidad: i.cantidad,
+        })),
+        estado: 'borrador',
+        fecha,
+      })
+    }
+
+    setNotas(prev => [...prev, ...nuevasNotas])
     setCart([])
     setTab('notas')
+    router.refresh()
   }
 
-  function confirmarNota(notaId: string) {
+  async function confirmarNota(notaId: string) {
+    await actualizarEstadoPedido(notaId, 'confirmado')
     setNotas((prev) =>
       prev.map((n) => (n.id === notaId ? { ...n, estado: 'confirmado' } : n))
     )
@@ -215,7 +268,8 @@ export default function GestorClient({
     setSendModal({ nota })
   }
 
-  function marcarEnviada(notaId: string) {
+  async function marcarEnviada(notaId: string, via: string) {
+    await actualizarEstadoPedido(notaId, 'enviado', via)
     setNotas((prev) =>
       prev.map((n) => (n.id === notaId ? { ...n, estado: 'enviado' } : n))
     )
@@ -238,14 +292,14 @@ export default function GestorClient({
     const phone = (nota.proveedor.whatsapp || '').replace(/\D/g, '')
     const msg = encodeURIComponent(buildMessage(nota))
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
-    marcarEnviada(nota.id)
+    marcarEnviada(nota.id, 'whatsapp')
   }
 
   function openEmail(nota: NotaPedido) {
     const subject = encodeURIComponent(`Nota de Pedido - GOcelular - ${nota.fecha}`)
     const body = encodeURIComponent(buildMessage(nota))
     window.open(`mailto:${nota.proveedor.email || ''}?subject=${subject}&body=${body}`, '_blank')
-    marcarEnviada(nota.id)
+    marcarEnviada(nota.id, 'email')
   }
 
   function openPrintPreview(nota: NotaPedido) {

@@ -1,11 +1,12 @@
-import { getProductos, getProveedores, getPrecios } from '@/lib/actions/compras'
+import { getProductos, getProveedores, getPrecios, getPedidos } from '@/lib/actions/compras'
 import GestorClient from './GestorClient'
 
 export default async function GestorPage() {
-  const [productos, proveedores, precios] = await Promise.all([
+  const [productos, proveedores, precios, pedidos] = await Promise.all([
     getProductos(),
     getProveedores(),
     getPrecios(),
+    getPedidos(),
   ])
-  return <GestorClient productos={productos} proveedores={proveedores} precios={precios} />
+  return <GestorClient productos={productos} proveedores={proveedores} precios={precios} pedidosGuardados={pedidos} />
 }
