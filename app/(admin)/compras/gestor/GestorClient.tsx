@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
@@ -74,11 +74,17 @@ export default function GestorClient({
   proveedores,
   precios,
   pedidosGuardados,
+  forecastApiUrl,
+  forecastEvents,
+  forecastDias,
 }: {
   productos: Producto[]
   proveedores: Proveedor[]
   precios: Precio[]
   pedidosGuardados: PedidoGuardado[]
+  forecastApiUrl: string
+  forecastEvents: Record<string, number>
+  forecastDias: number
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>(pedidosGuardados.length > 0 ? 'notas' : 'catalogo')
@@ -104,6 +110,40 @@ export default function GestorClient({
   )
   // cantidadesPorProv: { "prodId-provId": number }
   const [cantidadesPorProv, setCantidadesPorProv] = useState<Record<string, number>>({})
+
+  // Forecast data: { "Motorola Moto G06 64GB": 258, ... }
+  const [forecastByModel, setForecastByModel] = useState<Record<string, number>>({})
+  const [forecastLoading, setForecastLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${forecastApiUrl}/forecast/compras`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: forecastEvents, days: forecastDias }),
+    })
+      .then(res => res.json())
+      .then((data: { modelo: string; forecast: number }[]) => {
+        if (Array.isArray(data)) {
+          const map: Record<string, number> = {}
+          data.forEach(d => { map[d.modelo] = d.forecast })
+          setForecastByModel(map)
+        }
+        setForecastLoading(false)
+      })
+      .catch(() => setForecastLoading(false))
+  }, [forecastApiUrl, forecastEvents, forecastDias])
+
+  // Match forecast to product by name similarity
+  function getForecastForProduct(prodName: string): number {
+    // Direct match
+    if (forecastByModel[prodName]) return forecastByModel[prodName]
+    // Partial match
+    const lower = prodName.toLowerCase()
+    for (const [model, qty] of Object.entries(forecastByModel)) {
+      if (lower.includes(model.toLowerCase()) || model.toLowerCase().includes(lower)) return qty
+    }
+    return 0
+  }
 
   // Send modal
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
@@ -491,6 +531,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                 ) : (
                   filtrados.map((prod) => {
                     const enCarrito = cart.some(item => item.producto.id === prod.id)
+                    const forecast = getForecastForProduct(prod.nombre)
                     return (
                     <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${enCarrito ? 'bg-green-50' : ''}`}>
                       <td className="px-4 py-3 text-gray-500 font-mono text-xs">
@@ -499,7 +540,12 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           <span>{prod.codigo || '-'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{prod.nombre}</div>
+                        {forecast > 0 && (
+                          <div className="text-[10px] text-blue-600 mt-0.5">Forecast {forecastDias}d: {forecast} u.</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
                       </td>
@@ -516,7 +562,8 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                   min="0"
                                   value={cant || ''}
                                   onChange={(e) => setCantProv(prod.id, prov.id, Number(e.target.value) || 0)}
-                                  placeholder="0"
+                                  placeholder={forecast > 0 ? String(forecast) : '0'}
+                                  onFocus={(e) => { if (!cant && forecast > 0) { setCantProv(prod.id, prov.id, forecast); e.target.value = String(forecast) } }}
                                   className={`w-16 px-2 py-1 border rounded text-sm text-center ${cant > 0 ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
                                 />
                               </div>
