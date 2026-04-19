@@ -9,6 +9,14 @@ interface Proveedor {
   nombre: string
   whatsapp: string
   email: string
+  direccion: string
+  notas: string
+}
+
+const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
+
+function parseProvMarcas(notas: string): string[] {
+  try { return JSON.parse(notas)?.marcas || [] } catch { return [] }
 }
 
 interface Producto {
@@ -56,7 +64,8 @@ export default function GestorClient({
 }) {
   const [tab, setTab] = useState<Tab>('catalogo')
   const [busqueda, setBusqueda] = useState('')
-  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('Celulares')
+  const [filtroMarca, setFiltroMarca] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [notas, setNotas] = useState<NotaPedido[]>([])
   const [cantidades, setCantidades] = useState<Record<string, number>>({})
@@ -70,6 +79,9 @@ export default function GestorClient({
   const filtrados = useMemo(() => {
     let result = productos
     if (filtroCategoria) result = result.filter((p) => p.categoria === filtroCategoria)
+    if (filtroMarca && filtroCategoria === 'Celulares') {
+      result = result.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
+    }
     if (busqueda) {
       const q = busqueda.toLowerCase()
       result = result.filter(
@@ -77,7 +89,19 @@ export default function GestorClient({
       )
     }
     return result
-  }, [productos, filtroCategoria, busqueda])
+  }, [productos, filtroCategoria, filtroMarca, busqueda])
+
+  const proveedoresFiltrados = useMemo(() => {
+    return proveedores.filter((prov) => {
+      const tipoProducto = prov.direccion || ''
+      if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
+      if (filtroMarca && filtroCategoria === 'Celulares') {
+        const marcasProv = parseProvMarcas(prov.notas)
+        if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
+      }
+      return true
+    })
+  }, [proveedores, filtroCategoria, filtroMarca])
 
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
@@ -266,7 +290,7 @@ export default function GestorClient({
       {/* Catalogo tab */}
       {tab === 'catalogo' && (
         <div>
-          <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
             <input
               type="text"
               value={busqueda}
@@ -275,18 +299,10 @@ export default function GestorClient({
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-72"
             />
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFiltroCategoria('')}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                  !filtroCategoria ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Todas
-              </button>
               {categoriasUsadas.map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setFiltroCategoria(cat)}
+                  onClick={() => { setFiltroCategoria(cat); setFiltroMarca('') }}
                   className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
                     filtroCategoria === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -296,6 +312,29 @@ export default function GestorClient({
               ))}
             </div>
           </div>
+          {filtroCategoria === 'Celulares' && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                onClick={() => setFiltroMarca('')}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                  !filtroMarca ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Todas las marcas
+              </button>
+              {MARCAS_CELULARES.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setFiltroMarca(m)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                    filtroMarca === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
@@ -304,7 +343,7 @@ export default function GestorClient({
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Codigo</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
-                  {proveedores.map((prov) => (
+                  {proveedoresFiltrados.map((prov) => (
                     <th key={prov.id} className="text-center px-4 py-3 font-medium text-gray-600 min-w-[100px]">
                       {prov.nombre}
                     </th>
@@ -316,7 +355,7 @@ export default function GestorClient({
               <tbody>
                 {filtrados.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + proveedores.length} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={5 + proveedoresFiltrados.length} className="px-4 py-8 text-center text-gray-400">
                       No hay productos
                     </td>
                   </tr>
@@ -328,7 +367,7 @@ export default function GestorClient({
                       <td className="px-4 py-3">
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
                       </td>
-                      {proveedores.map((prov) => {
+                      {proveedoresFiltrados.map((prov) => {
                         const precio = getPrecio(prod.id, prov.id)
                         const isSelected = selectedProv[prod.id] === prov.id
                         return (
