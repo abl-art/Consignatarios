@@ -257,7 +257,55 @@ export default function GestorClient({
       )
       .join('')
 
-    const html = `<!DOCTYPE html><html><head><title>Nota de Pedido</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;color:#333}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;text-align:left;border-bottom:2px solid #d1d5db}h1{color:#4f46e5}@media print{body{margin:0}}</style></head><body><h1>Nota de Pedido</h1><p><strong>Proveedor:</strong> ${nota.proveedor.nombre}</p><p><strong>Fecha:</strong> ${nota.fecha}</p><p><strong>Estado:</strong> ${nota.estado}</p><table><thead><tr><th>Codigo</th><th>Producto</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio</th><th>Plazo</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="5" style="padding:12px 8px;font-weight:bold;text-align:right;border-top:2px solid #d1d5db">Total:</td><td style="padding:12px 8px;font-weight:bold;text-align:right;border-top:2px solid #d1d5db">${formatearMoneda(total)}</td></tr></tfoot></table></body></html>`
+    const iva = total * 0.21
+    const totalGral = total * 1.21
+    const html = `<!DOCTYPE html><html><head><title>Nota de Pedido - ${nota.proveedor.nombre}</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#333}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #E91E7B;padding-bottom:16px;margin-bottom:24px}
+.header-left h1{color:#E91E7B;font-size:24px;margin:0 0 4px 0;font-weight:800}
+.header-left p{margin:0;color:#666;font-size:12px}
+.header-right{text-align:right;font-size:12px;color:#666}
+.header-right strong{display:block;font-size:14px;color:#333}
+.info-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:32px;font-size:13px}
+.info-box span{color:#666}
+.info-box strong{color:#333}
+table{width:100%;border-collapse:collapse;margin:16px 0}
+th{background:#f3f4f6;padding:10px 12px;text-align:left;border-bottom:2px solid #d1d5db;font-size:12px;color:#374151}
+td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
+.text-right{text-align:right}
+.text-center{text-align:center}
+.totals td{border-bottom:none;padding:4px 12px}
+.total-final td{font-weight:bold;font-size:15px;color:#E91E7B;padding-top:8px;border-top:2px solid #E91E7B}
+.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb;text-align:center;font-size:10px;color:#9ca3af}
+@media print{body{margin:0;padding:20px}}
+</style></head><body>
+<div class="header">
+  <div class="header-left">
+    <h1>GOcelular</h1>
+    <p>NOTA DE PEDIDO</p>
+  </div>
+  <div class="header-right">
+    <strong>${nota.fecha}</strong>
+    <span>ID: ${nota.id}</span>
+  </div>
+</div>
+<div class="info-box">
+  <div><span>Proveedor: </span><strong>${nota.proveedor.nombre}</strong></div>
+  <div><span>Email: </span><strong>${nota.proveedor.email || '-'}</strong></div>
+  <div><span>Estado: </span><strong>${nota.estado}</strong></div>
+</div>
+<table>
+  <thead><tr><th>Codigo</th><th>Producto</th><th class="text-center">Cant.</th><th class="text-right">Precio Unit.</th><th>Plazo</th><th class="text-right">Subtotal</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tbody>
+    <tr class="totals"><td colspan="5" class="text-right">Subtotal Neto:</td><td class="text-right">${formatearMoneda(total)}</td></tr>
+    <tr class="totals"><td colspan="5" class="text-right" style="color:#666;font-size:12px">IVA 21%:</td><td class="text-right" style="color:#666;font-size:12px">${formatearMoneda(iva)}</td></tr>
+    <tr class="total-final"><td colspan="5" class="text-right">TOTAL GENERAL:</td><td class="text-right">${formatearMoneda(totalGral)}</td></tr>
+  </tbody>
+</table>
+<div class="footer">Generado por GOcelular360 | ${nota.fecha}</div>
+</body></html>`
 
     const w = window.open('', '_blank')
     if (w) {
@@ -374,9 +422,16 @@ export default function GestorClient({
                     </td>
                   </tr>
                 ) : (
-                  filtrados.map((prod) => (
-                    <tr key={prod.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{prod.codigo || '-'}</td>
+                  filtrados.map((prod) => {
+                    const enCarrito = cart.some(item => item.producto.id === prod.id)
+                    return (
+                    <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${enCarrito ? 'bg-green-50' : ''}`}>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                        <div className="flex items-center gap-1">
+                          {enCarrito && <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          <span>{prod.codigo || '-'}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
@@ -423,7 +478,8 @@ export default function GestorClient({
                         })()}
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -600,12 +656,16 @@ export default function GestorClient({
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan={5} className="pt-3 text-right font-bold text-gray-900 border-t border-gray-200">
-                              Total:
-                            </td>
-                            <td className="pt-3 text-right font-bold text-gray-900 border-t border-gray-200">
-                              {formatearMoneda(total)}
-                            </td>
+                            <td colSpan={5} className="pt-3 text-right text-gray-700 border-t border-gray-200">Subtotal (Neto):</td>
+                            <td className="pt-3 text-right text-gray-700 border-t border-gray-200">{formatearMoneda(total)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={5} className="pt-1 text-right text-gray-500 text-xs">IVA 21%:</td>
+                            <td className="pt-1 text-right text-gray-500 text-xs">{formatearMoneda(total * 0.21)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={5} className="pt-1 text-right font-bold text-blue-700">Total General:</td>
+                            <td className="pt-1 text-right font-bold text-blue-700">{formatearMoneda(total * 1.21)}</td>
                           </tr>
                         </tfoot>
                       </table>
