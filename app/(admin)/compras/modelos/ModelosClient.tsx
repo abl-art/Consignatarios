@@ -78,16 +78,31 @@ export default function ModelosClient({
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
 
-  // Filter proveedores: only show those that supply the selected category + marca
+  // Filter proveedores: only show those that supply the selected category
+  // When filtering by marca, also filter proveedores by marca
   const proveedoresFiltrados = proveedores.filter((prov) => {
     const tipoProducto = prov.direccion || ''
+    // If proveedor has a tipo_producto set and it doesn't match, hide it
     if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
+    // If filtering by marca, only show proveedores that carry that marca
     if (filtroMarca && filtroCategoria === 'Celulares') {
       const marcasProv = parseProvMarcas(prov.notas)
+      // Only filter if proveedor has marcas configured
       if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
     }
     return true
   })
+
+  // Helper to get proveedor plazo from their notas
+  function getProveedorPlazo(provId: string): string {
+    const prov = proveedores.find(p => p.id === provId)
+    if (!prov) return ''
+    try {
+      return JSON.parse(prov.notas)?.plazos || ''
+    } catch {
+      return ''
+    }
+  }
 
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
@@ -145,7 +160,9 @@ export default function ModelosClient({
     const existing = getPrecio(productoId, proveedorId)
     setPriceModal({ productoId, proveedorId, precioActual: existing })
     setPrecioInput(existing ? String(existing.precio) : '')
-    setPlazoInput(existing?.plazo || 'Contado')
+    // Use proveedor's plazo, fallback to existing price plazo
+    const provPlazo = getProveedorPlazo(proveedorId)
+    setPlazoInput(existing?.plazo || provPlazo || '')
   }
 
   async function handlePriceSubmit(e: React.FormEvent) {
@@ -376,9 +393,12 @@ export default function ModelosClient({
       {priceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-lg shadow border border-gray-200 p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">
               {priceModal.precioActual ? 'Editar Precio' : 'Agregar Precio'}
             </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              {productos.find(p => p.id === priceModal.productoId)?.nombre} — {proveedores.find(p => p.id === priceModal.proveedorId)?.nombre}
+            </p>
             <form onSubmit={handlePriceSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Precio</label>
@@ -392,18 +412,12 @@ export default function ModelosClient({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Plazo de entrega</label>
-                <select
-                  value={plazoInput}
-                  onChange={(e) => setPlazoInput(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  {PLAZOS.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
+              {plazoInput && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Condición de pago</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">{plazoInput}</div>
+                </div>
+              )}
               <div className="flex gap-3 justify-between">
                 <div>
                   {priceModal.precioActual && (
