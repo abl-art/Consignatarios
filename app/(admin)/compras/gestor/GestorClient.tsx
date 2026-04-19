@@ -808,28 +808,28 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900">{formatearMoneda(totalConIva)}</td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                            p.estado === 'enviado' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {p.estado === 'enviado' ? `Enviado (${p.enviadoPor || ''})` : 'Confirmado'}
-                          </span>
+                          {p.entregadoAt ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                              Recibido
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">En tránsito</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {p.entregadoAt ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                              <span className="text-xs text-green-700">{new Date(p.entregadoAt).toLocaleDateString('es-AR')}</span>
-                            </div>
+                            <span className="text-xs text-green-700">{new Date(p.entregadoAt).toLocaleDateString('es-AR')}</span>
                           ) : (
                             <button
                               onClick={async () => {
-                                if (!confirm('¿Marcar como entregado?')) return
+                                if (!confirm('¿Marcar como recibido?')) return
                                 await marcarEntregado(p.id)
                                 router.refresh()
                               }}
                               className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                             >
-                              Recibido
+                              Marcar recibido
                             </button>
                           )}
                         </td>
