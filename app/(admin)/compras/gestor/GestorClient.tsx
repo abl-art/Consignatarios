@@ -372,6 +372,11 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     }
   }
 
+  const [entregados, setEntregados] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    pedidosGuardados.forEach(p => { if (p.entregadoAt) map[p.id] = p.entregadoAt })
+    return map
+  })
   const pedidosConfirmados = pedidosGuardados.filter(p => p.estado === 'confirmado' || p.estado === 'enviado')
 
   const tabs = [
@@ -791,10 +796,11 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     const totalNeto = p.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                     const totalConIva = totalNeto * 1.21
                     const totalUnidades = p.items.reduce((s, i) => s + i.cantidad, 0)
+                    const entregadoAt = entregados[p.id] || p.entregadoAt
 
                     let demora = ''
-                    if (p.entregadoAt && p.confirmadoAt) {
-                      const dias = Math.round((new Date(p.entregadoAt).getTime() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
+                    if (entregadoAt && p.confirmadoAt) {
+                      const dias = Math.round((new Date(entregadoAt).getTime() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
                       demora = `${dias} día${dias !== 1 ? 's' : ''}`
                     } else if (p.confirmadoAt) {
                       const dias = Math.round((Date.now() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -802,13 +808,13 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     }
 
                     return (
-                      <tr key={p.id} className={`border-b border-gray-100 ${p.entregadoAt ? 'bg-green-50' : ''}`}>
+                      <tr key={p.id} className={`border-b border-gray-100 ${entregadoAt ? 'bg-green-50' : ''}`}>
                         <td className="px-4 py-3 font-medium text-gray-900">{p.proveedorNombre}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{p.fecha}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900">{formatearMoneda(totalConIva)}</td>
                         <td className="px-4 py-3 text-center">
-                          {p.entregadoAt ? (
+                          {entregadoAt ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                               Recibido
@@ -818,12 +824,14 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {p.entregadoAt ? (
-                            <span className="text-xs text-green-700">{new Date(p.entregadoAt).toLocaleDateString('es-AR')}</span>
+                          {entregadoAt ? (
+                            <span className="text-xs text-green-700">{new Date(entregadoAt).toLocaleDateString('es-AR')}</span>
                           ) : (
                             <button
                               onClick={async () => {
                                 if (!confirm('¿Marcar como recibido?')) return
+                                const now = new Date().toISOString()
+                                setEntregados(prev => ({ ...prev, [p.id]: now }))
                                 await marcarEntregado(p.id)
                                 router.refresh()
                               }}
