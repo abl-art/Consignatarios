@@ -9,6 +9,8 @@ import { formatearMoneda } from '@/lib/utils'
 interface Proveedor {
   id: string
   nombre: string
+  direccion: string // tipo_producto
+  notas: string // JSON with marcas
 }
 
 interface Producto {
@@ -28,8 +30,17 @@ interface Precio {
 
 const CATEGORIAS = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Kits de Seguridad', 'Accesorios', 'Otros']
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
+const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 
 const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares' }
+
+function parseProvMarcas(notas: string): string[] {
+  try {
+    return JSON.parse(notas)?.marcas || []
+  } catch {
+    return []
+  }
+}
 
 export default function ModelosClient({
   productos,
@@ -41,7 +52,8 @@ export default function ModelosClient({
   precios: Precio[]
 }) {
   const router = useRouter()
-  const [filtroCategoria, setFiltroCategoria] = useState<string>('')
+  const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
+  const [filtroMarca, setFiltroMarca] = useState<string>('')
   const [showProductForm, setShowProductForm] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [productForm, setProductForm] = useState(emptyProduct)
@@ -56,11 +68,26 @@ export default function ModelosClient({
   const [precioInput, setPrecioInput] = useState('')
   const [plazoInput, setPlazoInput] = useState('Contado')
 
-  const filtrados = filtroCategoria
+  // Filter products by category and brand
+  let filtrados = filtroCategoria
     ? productos.filter((p) => p.categoria === filtroCategoria)
     : productos
+  if (filtroMarca && filtroCategoria === 'Celulares') {
+    filtrados = filtrados.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
+  }
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
+
+  // Filter proveedores: only show those that supply the selected category + marca
+  const proveedoresFiltrados = proveedores.filter((prov) => {
+    const tipoProducto = prov.direccion || ''
+    if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
+    if (filtroMarca && filtroCategoria === 'Celulares') {
+      const marcasProv = parseProvMarcas(prov.notas)
+      if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
+    }
+    return true
+  })
 
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
@@ -218,19 +245,11 @@ export default function ModelosClient({
       )}
 
       {/* Category filter pills */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          onClick={() => setFiltroCategoria('')}
-          className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-            !filtroCategoria ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Todas
-        </button>
+      <div className="flex flex-wrap gap-2 mb-3">
         {categoriasUsadas.map((cat) => (
           <button
             key={cat}
-            onClick={() => setFiltroCategoria(cat)}
+            onClick={() => { setFiltroCategoria(cat); setFiltroMarca('') }}
             className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
               filtroCategoria === cat ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
@@ -240,6 +259,31 @@ export default function ModelosClient({
         ))}
       </div>
 
+      {/* Marca filter (only for Celulares) */}
+      {filtroCategoria === 'Celulares' && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setFiltroMarca('')}
+            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              !filtroMarca ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Todas las marcas
+          </button>
+          {MARCAS_CELULARES.map((m) => (
+            <button
+              key={m}
+              onClick={() => setFiltroMarca(m)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                filtroMarca === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Products table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
@@ -248,7 +292,7 @@ export default function ModelosClient({
               <th className="text-left px-4 py-3 font-medium text-gray-600">Codigo</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
-              {proveedores.map((prov) => (
+              {proveedoresFiltrados.map((prov) => (
                 <th key={prov.id} className="text-center px-4 py-3 font-medium text-gray-600 min-w-[120px]">
                   {prov.nombre}
                 </th>
@@ -259,7 +303,7 @@ export default function ModelosClient({
           <tbody>
             {filtrados.length === 0 ? (
               <tr>
-                <td colSpan={3 + proveedores.length + 1} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={3 + proveedoresFiltrados.length + 1} className="px-4 py-8 text-center text-gray-400">
                   No hay productos
                 </td>
               </tr>
@@ -273,7 +317,7 @@ export default function ModelosClient({
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
                     </td>
-                    {proveedores.map((prov) => {
+                    {proveedoresFiltrados.map((prov) => {
                       const precio = getPrecio(prod.id, prov.id)
                       const isBest = precio && best !== null && precio.precio === best
                       return (
