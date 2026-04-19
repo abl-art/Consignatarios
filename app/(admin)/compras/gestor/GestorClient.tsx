@@ -68,8 +68,8 @@ export default function GestorClient({
   const [filtroMarca, setFiltroMarca] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [notas, setNotas] = useState<NotaPedido[]>([])
-  const [cantidades, setCantidades] = useState<Record<string, number>>({})
-  const [selectedProv, setSelectedProv] = useState<Record<string, string>>({})
+  // cantidadesPorProv: { "prodId-provId": number }
+  const [cantidadesPorProv, setCantidadesPorProv] = useState<Record<string, number>>({})
 
   // Send modal
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
@@ -107,45 +107,60 @@ export default function GestorClient({
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
   }
 
+  function getCantKey(prodId: string, provId: string) {
+    return `${prodId}-${provId}`
+  }
+
+  function getCantProv(prodId: string, provId: string): number {
+    return cantidadesPorProv[getCantKey(prodId, provId)] || 0
+  }
+
+  function setCantProv(prodId: string, provId: string, qty: number) {
+    setCantidadesPorProv(prev => ({ ...prev, [getCantKey(prodId, provId)]: Math.max(0, qty) }))
+  }
+
+  function getTotalCant(prodId: string): number {
+    return proveedoresFiltrados.reduce((sum, prov) => sum + getCantProv(prodId, prov.id), 0)
+  }
+
   function addToCart(producto: Producto) {
-    const provId = selectedProv[producto.id]
-    if (!provId) return
-    const precio = getPrecio(producto.id, provId)
-    if (!precio) return
-    const prov = proveedores.find((p) => p.id === provId)
-    if (!prov) return
-    const qty = cantidades[producto.id] || 1
+    const newItems: CartItem[] = []
+    proveedoresFiltrados.forEach(prov => {
+      const qty = getCantProv(producto.id, prov.id)
+      if (qty <= 0) return
+      const precio = getPrecio(producto.id, prov.id)
+      if (!precio) return
 
-    const existingIdx = cart.findIndex(
-      (item) => item.producto.id === producto.id && item.proveedor.id === provId
-    )
+      const existingIdx = cart.findIndex(
+        item => item.producto.id === producto.id && item.proveedor.id === prov.id
+      )
 
-    if (existingIdx >= 0) {
-      setCart((prev) => {
-        const updated = [...prev]
-        updated[existingIdx] = { ...updated[existingIdx], cantidad: updated[existingIdx].cantidad + qty }
-        return updated
-      })
-    } else {
-      setCart((prev) => [
-        ...prev,
-        {
-          id: `${producto.id}-${provId}-${Date.now()}`,
+      if (existingIdx >= 0) {
+        setCart(prev => {
+          const updated = [...prev]
+          updated[existingIdx] = { ...updated[existingIdx], cantidad: updated[existingIdx].cantidad + qty }
+          return updated
+        })
+      } else {
+        newItems.push({
+          id: `${producto.id}-${prov.id}-${Date.now()}`,
           producto,
           proveedor: prov,
           precio: precio.precio,
           plazo: precio.plazo,
           cantidad: qty,
-        },
-      ])
+        })
+      }
+    })
+
+    if (newItems.length > 0) {
+      setCart(prev => [...prev, ...newItems])
     }
 
-    setCantidades((prev) => ({ ...prev, [producto.id]: 1 }))
-    setSelectedProv((prev) => {
-      const next = { ...prev }
-      delete next[producto.id]
-      return next
-    })
+    // Reset quantities for this product
+    const resetKeys: Record<string, number> = {}
+    proveedoresFiltrados.forEach(prov => { resetKeys[getCantKey(producto.id, prov.id)] = 0 })
+    setCantidadesPorProv(prev => ({ ...prev, ...resetKeys }))
   }
 
   function removeFromCart(id: string) {
@@ -344,18 +359,17 @@ export default function GestorClient({
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
                   {proveedoresFiltrados.map((prov) => (
-                    <th key={prov.id} className="text-center px-4 py-3 font-medium text-gray-600 min-w-[100px]">
+                    <th key={prov.id} className="text-center px-3 py-3 font-medium text-gray-600 min-w-[120px]">
                       {prov.nombre}
                     </th>
                   ))}
-                  <th className="text-center px-4 py-3 font-medium text-gray-600 w-20">Cant.</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600 w-20">Agregar</th>
+                  <th className="text-center px-3 py-3 font-medium text-gray-600 w-24">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + proveedoresFiltrados.length} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={4 + proveedoresFiltrados.length} className="px-4 py-8 text-center text-gray-400">
                       No hay productos
                     </td>
                   </tr>
@@ -369,54 +383,44 @@ export default function GestorClient({
                       </td>
                       {proveedoresFiltrados.map((prov) => {
                         const precio = getPrecio(prod.id, prov.id)
-                        const isSelected = selectedProv[prod.id] === prov.id
+                        const cant = getCantProv(prod.id, prov.id)
                         return (
-                          <td key={prov.id} className="px-4 py-3 text-center">
+                          <td key={prov.id} className="px-3 py-2 text-center">
                             {precio ? (
-                              <button
-                                onClick={() =>
-                                  setSelectedProv((prev) => ({
-                                    ...prev,
-                                    [prod.id]: prov.id,
-                                  }))
-                                }
-                                className={`inline-flex flex-col items-center px-2 py-1 rounded-lg transition-all ${
-                                  isSelected
-                                    ? 'bg-blue-50 border-2 border-blue-500 text-blue-700'
-                                    : 'hover:bg-gray-100 text-gray-700 border border-transparent'
-                                }`}
-                              >
-                                <span className="font-medium text-sm">{formatearMoneda(precio.precio)}</span>
-                                <span className="text-[10px] text-gray-400">{precio.plazo}</span>
-                              </button>
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="font-medium text-sm text-gray-800">{formatearMoneda(precio.precio)}</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={cant || ''}
+                                  onChange={(e) => setCantProv(prod.id, prov.id, Number(e.target.value) || 0)}
+                                  placeholder="0"
+                                  className={`w-16 px-2 py-1 border rounded text-sm text-center ${cant > 0 ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+                                />
+                              </div>
                             ) : (
                               <span className="text-xs text-gray-300">-</span>
                             )}
                           </td>
                         )
                       })}
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="number"
-                          min="1"
-                          value={cantidades[prod.id] || 1}
-                          onChange={(e) =>
-                            setCantidades((prev) => ({
-                              ...prev,
-                              [prod.id]: Math.max(1, Number(e.target.value)),
-                            }))
-                          }
-                          className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => addToCart(prod)}
-                          disabled={!selectedProv[prod.id]}
-                          className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Agregar
-                        </button>
+                      <td className="px-3 py-2 text-center">
+                        {(() => {
+                          const total = getTotalCant(prod.id)
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-lg font-bold ${total > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{total}</span>
+                              {total > 0 && (
+                                <button
+                                  onClick={() => addToCart(prod)}
+                                  className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                  Agregar
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </td>
                     </tr>
                   ))
