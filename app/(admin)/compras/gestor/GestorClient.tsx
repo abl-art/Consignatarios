@@ -158,12 +158,17 @@ export default function GestorClient({
   // Send modal
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
 
-  const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
+  const categoriasUsadas = Array.from(new Set([...productos.map((p) => p.categoria), 'Kits de Seguridad']))
 
   const filtrados = useMemo(() => {
     let result = productos
-    if (filtroCategoria) result = result.filter((p) => p.categoria === filtroCategoria)
-    if (filtroMarca && filtroCategoria === 'Celulares') {
+    // Kits de Seguridad: show celulares models (same models, different proveedor)
+    if (filtroCategoria === 'Kits de Seguridad') {
+      result = productos.filter((p) => p.categoria === 'Celulares')
+    } else if (filtroCategoria) {
+      result = result.filter((p) => p.categoria === filtroCategoria)
+    }
+    if (filtroMarca && (filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad')) {
       result = result.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
     }
     if (busqueda) {
@@ -179,7 +184,7 @@ export default function GestorClient({
     return proveedores.filter((prov) => {
       const tipoProducto = prov.direccion || ''
       if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
-      if (filtroMarca && filtroCategoria === 'Celulares') {
+      if (filtroMarca && (filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad')) {
         const marcasProv = parseProvMarcas(prov.notas)
         if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
       }
@@ -493,7 +498,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
               ))}
             </div>
           </div>
-          {filtroCategoria === 'Celulares' && (
+          {(filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad') && (
             <div className="flex flex-wrap gap-2 mb-4">
               <button
                 onClick={() => setFiltroMarca('')}
