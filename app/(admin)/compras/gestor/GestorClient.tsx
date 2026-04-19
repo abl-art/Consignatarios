@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
@@ -372,6 +372,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     }
   }
 
+  const [expandedPedido, setExpandedPedido] = useState<string | null>(null)
   const [entregados, setEntregados] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {}
     pedidosGuardados.forEach(p => { if (p.entregadoAt) map[p.id] = p.entregadoAt })
@@ -808,8 +809,12 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     }
 
                     return (
-                      <tr key={p.id} className={`border-b border-gray-100 ${entregadoAt ? 'bg-green-50' : ''}`}>
-                        <td className="px-4 py-3 font-medium text-gray-900">{p.proveedorNombre}</td>
+                      <React.Fragment key={p.id}>
+                      <tr onClick={() => setExpandedPedido(prev => prev === p.id ? null : p.id)} className={`border-b border-gray-100 cursor-pointer transition-colors ${entregadoAt ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'}`}>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          <span className="mr-1 text-gray-400">{expandedPedido === p.id ? '▾' : '▸'}</span>
+                          {p.proveedorNombre}
+                        </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{p.fecha}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900">{formatearMoneda(totalConIva)}</td>
@@ -843,6 +848,39 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         </td>
                         <td className="px-4 py-3 text-center text-xs text-gray-500">{demora}</td>
                       </tr>
+                      {expandedPedido === p.id && (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-gray-200">
+                                  <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+                                  <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
+                                  <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
+                                  <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {p.items.map((item, idx) => (
+                                  <tr key={idx} className="border-b border-gray-100">
+                                    <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
+                                    <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
+                                    <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
+                                    <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
+                                <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
+                                <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalConIva)}</td></tr>
+                              </tfoot>
+                            </table>
+                            {p.enviadoPor && <p className="text-xs text-gray-400 mt-2">Enviado por {p.enviadoPor}</p>}
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     )
                   })}
                 </tbody>
