@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado } from '@/lib/actions/compras'
 
 interface Proveedor {
   id: string
@@ -53,7 +53,7 @@ interface NotaPedido {
   fecha: string
 }
 
-type Tab = 'catalogo' | 'pedido' | 'notas'
+type Tab = 'catalogo' | 'pedido' | 'notas' | 'confirmados'
 
 interface PedidoGuardado {
   id: string
@@ -65,6 +65,8 @@ interface PedidoGuardado {
   estado: 'borrador' | 'confirmado' | 'enviado'
   fecha: string
   enviadoPor?: string
+  confirmadoAt?: string
+  entregadoAt?: string
 }
 
 export default function GestorClient({
@@ -284,7 +286,9 @@ export default function GestorClient({
       msg += `- ${item.producto.codigo || ''} ${item.producto.nombre} x${item.cantidad} @ ${formatearMoneda(item.precio)} = ${formatearMoneda(item.precio * item.cantidad)}\n`
     })
     const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
-    msg += `\n*Total: ${formatearMoneda(total)}*`
+    msg += `\nSubtotal Neto: ${formatearMoneda(total)}`
+    msg += `\nIVA 21%: ${formatearMoneda(total * 0.21)}`
+    msg += `\n*Total General: ${formatearMoneda(total * 1.21)}*`
     return msg
   }
 
@@ -298,7 +302,7 @@ export default function GestorClient({
   function openEmail(nota: NotaPedido) {
     const subject = encodeURIComponent(`Nota de Pedido - GOcelular - ${nota.fecha}`)
     const body = encodeURIComponent(buildMessage(nota))
-    window.open(`mailto:${nota.proveedor.email || ''}?subject=${subject}&body=${body}`, '_blank')
+    window.location.href = `mailto:${nota.proveedor.email || ''}?subject=${subject}&body=${body}`
     marcarEnviada(nota.id, 'email')
   }
 
@@ -368,10 +372,13 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     }
   }
 
+  const pedidosConfirmados = pedidosGuardados.filter(p => p.estado === 'confirmado' || p.estado === 'enviado')
+
   const tabs = [
     { key: 'catalogo' as Tab, label: 'Catalogo' },
     { key: 'pedido' as Tab, label: `Mi Pedido (${cart.length})` },
-    { key: 'notas' as Tab, label: `Notas de Pedido (${notas.length})` },
+    { key: 'notas' as Tab, label: `Notas de Pedido (${notas.filter(n => n.estado === 'borrador').length})` },
+    { key: 'confirmados' as Tab, label: `Confirmados (${pedidosConfirmados.length})` },
   ]
 
   return (
@@ -753,6 +760,85 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirmados tab */}
+      {tab === 'confirmados' && (
+        <div>
+          {pedidosConfirmados.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <p className="text-gray-400 text-sm">No hay pedidos confirmados.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Proveedor</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha pedido</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Items</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">Total c/IVA</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Entrega</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Demora</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pedidosConfirmados.map((p) => {
+                    const totalNeto = p.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
+                    const totalConIva = totalNeto * 1.21
+                    const totalUnidades = p.items.reduce((s, i) => s + i.cantidad, 0)
+
+                    let demora = ''
+                    if (p.entregadoAt && p.confirmadoAt) {
+                      const dias = Math.round((new Date(p.entregadoAt).getTime() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
+                      demora = `${dias} día${dias !== 1 ? 's' : ''}`
+                    } else if (p.confirmadoAt) {
+                      const dias = Math.round((Date.now() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
+                      demora = `${dias}d en tránsito`
+                    }
+
+                    return (
+                      <tr key={p.id} className={`border-b border-gray-100 ${p.entregadoAt ? 'bg-green-50' : ''}`}>
+                        <td className="px-4 py-3 font-medium text-gray-900">{p.proveedorNombre}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">{p.fecha}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900">{formatearMoneda(totalConIva)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                            p.estado === 'enviado' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {p.estado === 'enviado' ? `Enviado (${p.enviadoPor || ''})` : 'Confirmado'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {p.entregadoAt ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                              <span className="text-xs text-green-700">{new Date(p.entregadoAt).toLocaleDateString('es-AR')}</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                if (!confirm('¿Marcar como entregado?')) return
+                                await marcarEntregado(p.id)
+                                router.refresh()
+                              }}
+                              className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              Recibido
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center text-xs text-gray-500">{demora}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

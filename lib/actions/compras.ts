@@ -190,6 +190,8 @@ interface Pedido {
   estado: 'borrador' | 'confirmado' | 'enviado'
   fecha: string
   enviadoPor?: string
+  confirmadoAt?: string
+  entregadoAt?: string
 }
 
 export async function getPedidos(): Promise<Pedido[]> {
@@ -218,6 +220,16 @@ export async function actualizarEstadoPedido(pedidoId: string, estado: 'borrador
   const pedido = JSON.parse(data.value) as Pedido
   pedido.estado = estado
   if (enviadoPor) pedido.enviadoPor = enviadoPor
+  if (estado === 'confirmado') pedido.confirmadoAt = new Date().toISOString()
+  return guardarPedido(pedido)
+}
+
+export async function marcarEntregado(pedidoId: string) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.entregadoAt = new Date().toISOString()
   return guardarPedido(pedido)
 }
 
