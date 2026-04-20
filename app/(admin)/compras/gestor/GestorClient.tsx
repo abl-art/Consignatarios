@@ -975,6 +975,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Items</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600">Total c/IVA</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">IMEI</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Entrega</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Demora</th>
                   </tr>
@@ -1016,6 +1017,27 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
+                          {p.imeiFile ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const blob = new Blob([p.imeiFile!], { type: 'text/csv' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `IMEI_${p.proveedorNombre.replace(/\s+/g, '_')}_${p.fecha.replace(/\//g, '-')}.csv`
+                                a.click()
+                                URL.revokeObjectURL(url)
+                              }}
+                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Descargar
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
                           {entregadoAt ? (
                             <span className="text-xs text-green-700">{new Date(entregadoAt).toLocaleDateString('es-AR')}</span>
                           ) : (
@@ -1037,7 +1059,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                       </tr>
                       {expandedPedido === p.id && (
                         <tr>
-                          <td colSpan={7} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                          <td colSpan={8} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="border-b border-gray-200">
