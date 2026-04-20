@@ -374,6 +374,11 @@ function StockResumen({
     return result
   }, [dispositivos, filtroModelo])
 
+  // Only show models that have at least one selected device
+  const groupsConSeleccion = useMemo(() => {
+    return groups.filter(g => g.dispositivos.some(d => selected.has(d.id)))
+  }, [groups, selected])
+
   const toggleExpand = (key: string) => {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -399,10 +404,10 @@ function StockResumen({
       </div>
 
       <div className="divide-y divide-gray-100">
-        {groups.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-400 text-sm">No hay equipos disponibles</div>
+        {groupsConSeleccion.length === 0 ? (
+          <div className="px-6 py-8 text-center text-gray-400 text-sm">Ingresá IMEIs arriba para ir armando la asignación</div>
         ) : (
-          groups.map(group => {
+          groupsConSeleccion.map(group => {
             const key = `${group.marca}|${group.modelo}`
             const isExpanded = expanded.has(key)
             const selectedCount = group.dispositivos.filter(d => selected.has(d.id)).length
