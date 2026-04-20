@@ -43,7 +43,7 @@ export default async function CelularesPage() {
     { href: '/asignar', label: 'Asignar stock' },
     { href: '/inventario/tenencia', label: 'Tenencia consignatarios' },
     { href: '/inventario/tenencia-propia', label: 'Tenencia propia' },
-    { href: '/inventario/celulares/compras', label: 'Compras' },
+    { href: '/inventario/celulares/compras', label: 'Recomendación de Compra' },
   ]
 
   return (

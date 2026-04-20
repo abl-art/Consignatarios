@@ -1,7 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import ImportarCSV from './ImportarCSV'
-import CargaIndividual from './CargaIndividual'
-import { revalidatePath } from 'next/cache'
 import { diasDesde, clasificarAntiguedad } from '@/lib/utils'
 import type { DispositivoConModelo, Consignatario } from '@/lib/types'
 
@@ -42,11 +39,6 @@ export default async function InventarioPage({
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Inventario de dispositivos</h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <CargaIndividual onCreado={async () => { 'use server'; revalidatePath('/inventario') }} />
-        <ImportarCSV onImportado={async () => { 'use server'; revalidatePath('/inventario') }} />
-      </div>
 
       {/* Filtros */}
       <form className="flex gap-3 mb-6 flex-wrap">
