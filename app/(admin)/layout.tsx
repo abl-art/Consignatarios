@@ -40,10 +40,10 @@ const navItems: NavItem[] = [
       { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
       { href: '/ventas', label: 'Ventas', icon: 'ventas' },
       { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
+      { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
   { href: '/modelos', label: 'Modelos y precios', icon: 'modelos' },
-  { href: '/reportes', label: 'Reportes', icon: 'reportes' },
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
 ]
