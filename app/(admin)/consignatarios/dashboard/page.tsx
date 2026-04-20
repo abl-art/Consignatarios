@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatearMoneda, diasDesde } from '@/lib/utils'
+import { fetchStockPropio } from '@/lib/gocelular'
 import PermanenciaChart from '@/components/PermanenciaChart'
 import type { Consignatario, Venta, Diferencia } from '@/lib/types'
 
 export default async function ConsignatariosDashboardPage() {
   const supabase = createClient()
+  const admin = createAdminClient()
 
   const now = new Date()
   const year = now.getFullYear()
@@ -14,28 +17,29 @@ export default async function ConsignatariosDashboardPage() {
   const primerDiaMes = `${mesActual}-01`
 
   const [
-    { count: totalDispositivos },
-    { count: disponibles },
+    stockDisponible,
     { count: asignados },
     { count: vendidos },
     { count: totalConsignatarios },
-    { count: totalModelos },
+    { count: totalProductosCompras },
     { data: ventas },
     { data: diferencias },
     { data: consignatarios },
     { data: liquidaciones },
   ] = await Promise.all([
-    supabase.from('dispositivos').select('*', { count: 'exact', head: true }),
-    supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'disponible'),
+    fetchStockPropio(),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'vendido'),
     supabase.from('consignatarios').select('*', { count: 'exact', head: true }),
-    supabase.from('modelos').select('*', { count: 'exact', head: true }),
+    admin.from('compras_productos').select('*', { count: 'exact', head: true }),
     supabase.from('ventas').select('consignatario_id, comision_monto, precio_venta, fecha_venta').gte('fecha_venta', primerDiaMes),
     supabase.from('diferencias').select('*, auditorias(consignatario_id)').eq('estado', 'pendiente'),
     supabase.from('consignatarios').select('id, nombre'),
     supabase.from('liquidaciones').select('estado, monto_a_pagar'),
   ])
+
+  const totalDispositivos = stockDisponible + (asignados ?? 0) + (vendidos ?? 0)
+  const disponibles = stockDisponible
 
   // Garantías totales
   const [{ data: consigsConGarantia }, { data: asignadosValor }, { data: difPendientes }] = await Promise.all([
@@ -91,12 +95,12 @@ export default async function ConsignatariosDashboardPage() {
     .map((v) => ({ modelo: v.modelo, marca: v.marca, consignatarioId: v.consignatarioId, consignatarioNombre: nombrePorId[v.consignatarioId] ?? v.consignatarioId, dias: Math.round(v.sumaDias / v.cantidad), cantidad: v.cantidad }))
 
   const stats = [
-    { label: 'Dispositivos totales', value: totalDispositivos ?? 0, color: 'text-magenta-700' },
-    { label: 'Disponibles', value: disponibles ?? 0, color: 'text-green-700' },
+    { label: 'Dispositivos totales', value: totalDispositivos, color: 'text-magenta-700' },
+    { label: 'Disponibles', value: disponibles, color: 'text-green-700' },
     { label: 'Asignados', value: asignados ?? 0, color: 'text-amber-700' },
     { label: 'Vendidos', value: vendidos ?? 0, color: 'text-purple-700' },
     { label: 'Consignatarios', value: totalConsignatarios ?? 0, color: 'text-cyan-700' },
-    { label: 'Modelos', value: totalModelos ?? 0, color: 'text-gray-700' },
+    { label: 'Modelos', value: totalProductosCompras ?? 0, color: 'text-gray-700' },
   ]
 
   // Comisiones
