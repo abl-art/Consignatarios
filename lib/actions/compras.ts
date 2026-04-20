@@ -192,6 +192,7 @@ interface Pedido {
   enviadoPor?: string
   confirmadoAt?: string
   entregadoAt?: string
+  imeiFile?: string
 }
 
 export async function getPedidos(): Promise<Pedido[]> {
@@ -230,6 +231,15 @@ export async function marcarEntregado(pedidoId: string) {
   if (!data) return { error: 'Pedido no encontrado' }
   const pedido = JSON.parse(data.value) as Pedido
   pedido.entregadoAt = new Date().toISOString()
+  return guardarPedido(pedido)
+}
+
+export async function subirImeiPedido(pedidoId: string, imeiData: string) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.imeiFile = imeiData
   return guardarPedido(pedido)
 }
 

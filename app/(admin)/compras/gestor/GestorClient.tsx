@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, subirImeiPedido } from '@/lib/actions/compras'
 
 interface Proveedor {
   id: string
@@ -67,6 +67,7 @@ interface PedidoGuardado {
   enviadoPor?: string
   confirmadoAt?: string
   entregadoAt?: string
+  imeiFile?: string
 }
 
 export default function GestorClient({
@@ -1063,6 +1064,9 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                               </tfoot>
                             </table>
                             {p.enviadoPor && <p className="text-xs text-gray-400 mt-2">Enviado por {p.enviadoPor}</p>}
+
+                            {/* IMEI upload/download */}
+                            <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
                           </td>
                         </tr>
                       )}
@@ -1121,6 +1125,55 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedidoId: string; proveedorNombre: string; fecha: string; imeiData?: string }) {
+  const router = useRouter()
+  const [uploading, setUploading] = useState(false)
+  const [localData, setLocalData] = useState(imeiData)
+
+  function handleDownload() {
+    if (!localData) return
+    const blob = new Blob([localData], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `IMEI_${proveedorNombre.replace(/\s+/g, '_')}_${fecha.replace(/\//g, '-')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const text = await file.text()
+    await subirImeiPedido(pedidoId, text)
+    setLocalData(text)
+    setUploading(false)
+    router.refresh()
+  }
+
+  return (
+    <div className="mt-4 pt-3 border-t border-gray-200">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-600">IMEI</p>
+        <div className="flex gap-2">
+          {localData ? (
+            <button onClick={handleDownload} className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
+              Descargar IMEI
+            </button>
+          ) : (
+            <span className="text-xs text-gray-400">Sin archivo</span>
+          )}
+          <label className={`px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
+            {uploading ? 'Subiendo...' : localData ? 'Reemplazar' : 'Cargar Excel'}
+            <input type="file" accept=".csv,.xlsx,.xls,.txt" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        </div>
+      </div>
     </div>
   )
 }
