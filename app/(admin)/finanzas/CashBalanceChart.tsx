@@ -1,10 +1,13 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 
 interface Props {
   data: { cash_date: string; cash_balance: number }[]
 }
+
+type Periodo = 'total' | '3m' | '2m' | '1m'
 
 const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
@@ -19,22 +22,66 @@ function formatLabel(value: number): string {
   return String(value)
 }
 
+function getEndDate(months: number): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + months + 1, 0) // last day of target month
+  return d.toISOString().slice(0, 10)
+}
+
+function getStartOfMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 export default function CashBalanceChart({ data }: Props) {
+  const [periodo, setPeriodo] = useState<Periodo>('1m')
+
+  const filteredData = useMemo(() => {
+    if (periodo === 'total') return data
+    const start = getStartOfMonth()
+    const months = periodo === '3m' ? 3 : periodo === '2m' ? 2 : 1
+    const end = getEndDate(months)
+    return data.filter(d => d.cash_date >= start && d.cash_date <= end)
+  }, [data, periodo])
+
   if (data.length === 0) return null
 
-  const chartData = data.map(d => ({
+  const chartData = filteredData.map(d => ({
     label: formatDate(d.cash_date),
     saldo: Math.round(d.cash_balance),
   }))
 
-  const minSaldo = Math.min(...chartData.map(d => d.saldo))
-  const maxSaldo = Math.max(...chartData.map(d => d.saldo))
+  const minSaldo = chartData.length > 0 ? Math.min(...chartData.map(d => d.saldo)) : 0
   const hasNegative = minSaldo < 0
+
+  const periodos: { key: Periodo; label: string }[] = [
+    { key: '1m', label: '1 mes' },
+    { key: '2m', label: '2 meses' },
+    { key: '3m', label: '3 meses' },
+    { key: 'total', label: 'Total' },
+  ]
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-      <h3 className="text-sm font-semibold text-gray-700 mb-1">Saldo acumulado</h3>
-      <p className="text-xs text-gray-400 mb-3">Evolución diaria del cash balance</p>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Saldo acumulado</h3>
+          <p className="text-xs text-gray-400">Evolución diaria del cash balance</p>
+        </div>
+        <div className="flex gap-1">
+          {periodos.map(p => (
+            <button
+              key={p.key}
+              onClick={() => setPeriodo(p.key)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                periodo === p.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="w-full h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
