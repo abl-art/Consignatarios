@@ -239,81 +239,8 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         )}
       </div>
 
-      {/* Device table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
-          <span className="text-sm text-gray-500">
-            {dispositivos.length} equipos disponibles &middot; {selected.size} seleccionados
-          </span>
-          <input
-            type="text"
-            placeholder="Filtrar por modelo..."
-            value={filtroModelo}
-            onChange={(e) => setFiltroModelo(e.target.value)}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 w-56"
-          />
-        </div>
-
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
-                  disabled={dispositivosFiltrados.length === 0}
-                />
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">IMEI</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Modelo</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">P. Costo</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">P. Venta</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {dispositivosFiltrados.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  No hay equipos disponibles
-                </td>
-              </tr>
-            ) : (
-              dispositivosFiltrados.map((d) => {
-                const isSelected = selected.has(d.id)
-                const precioVenta = calcularPrecioVenta(d.modelos.precio_costo, multiplicador)
-                return (
-                  <tr
-                    key={d.id}
-                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-magenta-50' : 'hover:bg-gray-50'}`}
-                    onClick={() => toggleOne(d.id)}
-                  >
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleOne(d.id)}
-                        className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{d.imei}</td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {d.modelos.marca} {d.modelos.modelo}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">
-                      {formatearMoneda(d.modelos.precio_costo)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">
-                      {formatearMoneda(precioVenta)}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Stock summary by model */}
+      <StockResumen dispositivos={dispositivos} selected={selected} filtroModelo={filtroModelo} setFiltroModelo={setFiltroModelo} toggleOne={toggleOne} />
 
       {/* Garantia validation -- only when a consignatario is selected */}
       {consignatarioId && (() => {
@@ -363,19 +290,9 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
 
       {/* Summary -- only when something is selected */}
       {selected.size > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
-            <p className="text-xs text-gray-500 mb-1">Equipos</p>
-            <p className="text-3xl font-bold text-magenta-700">{selected.size}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
-            <p className="text-xs text-gray-500 mb-1">Valor costo</p>
-            <p className="text-xl font-bold text-gray-900">{formatearMoneda(totalValorCosto)}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5 text-center">
-            <p className="text-xs text-gray-500 mb-1">Valor venta</p>
-            <p className="text-xl font-bold text-gray-900">{formatearMoneda(totalValorVenta)}</p>
-          </div>
+        <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-5 text-center">
+          <p className="text-xs text-gray-500 mb-1">Equipos seleccionados</p>
+          <p className="text-3xl font-bold text-magenta-700">{selected.size}</p>
         </div>
       )}
 
@@ -423,5 +340,127 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         </button>
       </div>
     </form>
+  )
+}
+
+// Stock summary grouped by model with expandable IMEIs
+function StockResumen({
+  dispositivos,
+  selected,
+  filtroModelo,
+  setFiltroModelo,
+  toggleOne,
+}: {
+  dispositivos: DispositivoConModelo[]
+  selected: Set<string>
+  filtroModelo: string
+  setFiltroModelo: (v: string) => void
+  toggleOne: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const groups = useMemo(() => {
+    const map: Record<string, { marca: string; modelo: string; dispositivos: DispositivoConModelo[] }> = {}
+    for (const d of dispositivos) {
+      const key = `${d.modelos.marca}|${d.modelos.modelo}`
+      if (!map[key]) map[key] = { marca: d.modelos.marca, modelo: d.modelos.modelo, dispositivos: [] }
+      map[key].dispositivos.push(d)
+    }
+    let result = Object.values(map).sort((a, b) => b.dispositivos.length - a.dispositivos.length)
+    if (filtroModelo.trim()) {
+      const q = filtroModelo.toLowerCase()
+      result = result.filter(g => g.marca.toLowerCase().includes(q) || g.modelo.toLowerCase().includes(q))
+    }
+    return result
+  }, [dispositivos, filtroModelo])
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+        <span className="text-sm text-gray-500">
+          {dispositivos.length} equipos disponibles · {selected.size} seleccionados
+        </span>
+        <input
+          type="text"
+          placeholder="Filtrar por modelo..."
+          value={filtroModelo}
+          onChange={(e) => setFiltroModelo(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500 w-56"
+        />
+      </div>
+
+      <div className="divide-y divide-gray-100">
+        {groups.length === 0 ? (
+          <div className="px-6 py-8 text-center text-gray-400 text-sm">No hay equipos disponibles</div>
+        ) : (
+          groups.map(group => {
+            const key = `${group.marca}|${group.modelo}`
+            const isExpanded = expanded.has(key)
+            const selectedCount = group.dispositivos.filter(d => selected.has(d.id)).length
+
+            return (
+              <div key={key}>
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(key)}
+                  className="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-400 text-sm">{isExpanded ? '▾' : '▸'}</span>
+                    <span className="font-medium text-gray-900">{group.marca} {group.modelo}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {selectedCount > 0 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-magenta-100 text-magenta-700">
+                        {selectedCount} seleccionados
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-500">{group.dispositivos.length} u.</span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="bg-gray-50 px-6 py-2 space-y-1 border-t border-gray-100">
+                    {group.dispositivos.map(d => {
+                      const isSelected = selected.has(d.id)
+                      return (
+                        <div
+                          key={d.id}
+                          onClick={() => toggleOne(d.id)}
+                          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-magenta-50' : 'hover:bg-white'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleOne(d.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
+                          />
+                          <span className="font-mono text-xs text-gray-700">{d.imei}</span>
+                          {isSelected && (
+                            <svg className="w-4 h-4 text-green-600 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
   )
 }
