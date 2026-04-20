@@ -1,24 +1,24 @@
 import Link from 'next/link'
 import { getPedidos } from '@/lib/actions/compras'
-import { formatearMoneda } from '@/lib/utils'
+import TransitoTable from './TransitoTable'
 
 export default async function EnTransitoPage() {
   const pedidos = await getPedidos()
   const enTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt)
 
-  // Merge all items by modelo (single line per model)
-  const byModel: Record<string, { modelo: string; cantidad: number; proveedores: Set<string> }> = {}
+  // Build summary: one line per modelo, with breakdown by proveedor
+  const byModel: Record<string, { modelo: string; total: number; proveedores: Record<string, number> }> = {}
   enTransito.forEach(p => {
     p.items.forEach(item => {
       if (!byModel[item.productoNombre]) {
-        byModel[item.productoNombre] = { modelo: item.productoNombre, cantidad: 0, proveedores: new Set() }
+        byModel[item.productoNombre] = { modelo: item.productoNombre, total: 0, proveedores: {} }
       }
-      byModel[item.productoNombre].cantidad += item.cantidad
-      byModel[item.productoNombre].proveedores.add(p.proveedorNombre)
+      byModel[item.productoNombre].total += item.cantidad
+      byModel[item.productoNombre].proveedores[p.proveedorNombre] = (byModel[item.productoNombre].proveedores[p.proveedorNombre] || 0) + item.cantidad
     })
   })
-  const summary = Object.values(byModel).sort((a, b) => b.cantidad - a.cantidad)
-  const totalUnidades = summary.reduce((s, m) => s + m.cantidad, 0)
+  const summary = Object.values(byModel).sort((a, b) => b.total - a.total)
+  const totalUnidades = summary.reduce((s, m) => s + m.total, 0)
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -31,12 +31,8 @@ export default async function EnTransitoPage() {
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-blue-700 font-medium">{enTransito.length} pedido{enTransito.length !== 1 ? 's' : ''} en tránsito</p>
-            <p className="text-2xl font-bold text-blue-800">{totalUnidades} unidades</p>
-          </div>
-        </div>
+        <p className="text-sm text-blue-700 font-medium">{enTransito.length} pedido{enTransito.length !== 1 ? 's' : ''} en tránsito</p>
+        <p className="text-2xl font-bold text-blue-800">{totalUnidades} unidades</p>
       </div>
 
       {summary.length === 0 ? (
@@ -44,31 +40,7 @@ export default async function EnTransitoPage() {
           <p className="text-gray-400 text-sm">No hay pedidos en tránsito</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">Modelo</th>
-                <th className="text-center px-5 py-3 font-medium text-gray-600">Cantidad</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">Proveedor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {summary.map(m => (
-                <tr key={m.modelo} className="hover:bg-gray-50">
-                  <td className="px-5 py-3 font-medium text-gray-900">{m.modelo}</td>
-                  <td className="px-5 py-3 text-center font-bold text-blue-700">{m.cantidad}</td>
-                  <td className="px-5 py-3 text-gray-600">{Array.from(m.proveedores).join(', ')}</td>
-                </tr>
-              ))}
-              <tr className="bg-blue-50">
-                <td className="px-5 py-3 font-bold text-gray-900">Total</td>
-                <td className="px-5 py-3 text-center font-bold text-blue-800">{totalUnidades}</td>
-                <td className="px-5 py-3"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <TransitoTable summary={summary} totalUnidades={totalUnidades} />
       )}
     </div>
   )
