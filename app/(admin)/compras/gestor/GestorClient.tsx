@@ -356,7 +356,7 @@ export default function GestorClient({
     msg += `Fecha: ${nota.fecha}\n`
     msg += `Proveedor: ${nota.proveedor.nombre}\n\n`
     nota.items.forEach((item) => {
-      msg += `- ${item.producto.codigo || ''} ${item.producto.nombre} x${item.cantidad} @ ${formatearMoneda(item.precio)} = ${formatearMoneda(item.precio * item.cantidad)}\n`
+      msg += `- ${item.producto.nombre} x${item.cantidad} @ ${formatearMoneda(item.precio)} = ${formatearMoneda(item.precio * item.cantidad)}\n`
     })
     const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
     msg += `\nSubtotal Neto: ${formatearMoneda(total)}`
@@ -384,7 +384,7 @@ export default function GestorClient({
     const rows = nota.items
       .map(
         (i) =>
-          `<tr><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.codigo || '-'}</td><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.nombre}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${i.cantidad}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio)}</td><td style="padding:8px;border-bottom:1px solid #eee">${i.plazo}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio * i.cantidad)}</td></tr>`
+          `<tr><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.codigo || '-'}</td><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.nombre}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${i.cantidad}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio * i.cantidad)}</td></tr>`
       )
       .join('')
 
@@ -427,12 +427,12 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   <div><span>Estado: </span><strong>${nota.estado}</strong></div>
 </div>
 <table>
-  <thead><tr><th>Codigo</th><th>Producto</th><th class="text-center">Cant.</th><th class="text-right">Precio Unit.</th><th>Plazo</th><th class="text-right">Subtotal</th></tr></thead>
+  <thead><tr><th>Codigo</th><th>Producto</th><th class="text-center">Cant.</th><th class="text-right">Precio Unit.</th><th class="text-right">Subtotal</th></tr></thead>
   <tbody>${rows}</tbody>
   <tbody>
-    <tr class="totals"><td colspan="5" class="text-right">Subtotal Neto:</td><td class="text-right">${formatearMoneda(total)}</td></tr>
-    <tr class="totals"><td colspan="5" class="text-right" style="color:#666;font-size:12px">IVA 21%:</td><td class="text-right" style="color:#666;font-size:12px">${formatearMoneda(iva)}</td></tr>
-    <tr class="total-final"><td colspan="5" class="text-right">TOTAL GENERAL:</td><td class="text-right">${formatearMoneda(totalGral)}</td></tr>
+    <tr class="totals"><td colspan="4" class="text-right">Subtotal Neto:</td><td class="text-right">${formatearMoneda(total)}</td></tr>
+    <tr class="totals"><td colspan="4" class="text-right" style="color:#666;font-size:12px">IVA 21%:</td><td class="text-right" style="color:#666;font-size:12px">${formatearMoneda(iva)}</td></tr>
+    <tr class="total-final"><td colspan="4" class="text-right">TOTAL GENERAL:</td><td class="text-right">${formatearMoneda(totalGral)}</td></tr>
   </tbody>
 </table>
 <div class="footer">Generado por GOcelular360 | ${nota.fecha}</div>
@@ -786,7 +786,6 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             <th className="text-left py-2 font-medium text-gray-600">Producto</th>
                             <th className="text-center py-2 font-medium text-gray-600">Cant.</th>
                             <th className="text-right py-2 font-medium text-gray-600">Precio</th>
-                            <th className="text-left py-2 font-medium text-gray-600">Plazo</th>
                             <th className="text-right py-2 font-medium text-gray-600">Subtotal</th>
                           </tr>
                         </thead>
@@ -797,22 +796,21 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                               <td className="py-2 text-gray-900">{item.producto.nombre}</td>
                               <td className="py-2 text-center">{item.cantidad}</td>
                               <td className="py-2 text-right">{formatearMoneda(item.precio)}</td>
-                              <td className="py-2 text-gray-500 text-xs">{item.plazo}</td>
                               <td className="py-2 text-right font-medium">{formatearMoneda(item.precio * item.cantidad)}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan={5} className="pt-3 text-right text-gray-700 border-t border-gray-200">Subtotal (Neto):</td>
+                            <td colSpan={4} className="pt-3 text-right text-gray-700 border-t border-gray-200">Subtotal (Neto):</td>
                             <td className="pt-3 text-right text-gray-700 border-t border-gray-200">{formatearMoneda(total)}</td>
                           </tr>
                           <tr>
-                            <td colSpan={5} className="pt-1 text-right text-gray-500 text-xs">IVA 21%:</td>
+                            <td colSpan={4} className="pt-1 text-right text-gray-500 text-xs">IVA 21%:</td>
                             <td className="pt-1 text-right text-gray-500 text-xs">{formatearMoneda(total * 0.21)}</td>
                           </tr>
                           <tr>
-                            <td colSpan={5} className="pt-1 text-right font-bold text-blue-700">Total General:</td>
+                            <td colSpan={4} className="pt-1 text-right font-bold text-blue-700">Total General:</td>
                             <td className="pt-1 text-right font-bold text-blue-700">{formatearMoneda(total * 1.21)}</td>
                           </tr>
                         </tfoot>
