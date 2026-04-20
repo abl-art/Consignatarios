@@ -216,35 +216,77 @@ export default function DevolucionesClient({
       )}
 
       {tab === 'historial' && (
-        <div>
-          {devueltos.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
-              <p className="text-gray-400 text-sm">No hay devoluciones registradas</p>
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-5 py-3 font-medium text-gray-600">IMEI</th>
-                    <th className="text-left px-5 py-3 font-medium text-gray-600">Modelo</th>
-                    <th className="text-left px-5 py-3 font-medium text-gray-600">Fecha devolución</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {devueltos.map(d => (
-                    <tr key={d.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 font-mono text-xs text-gray-700">{d.imei}</td>
-                      <td className="px-5 py-3 text-gray-900">{d.modelos?.marca} {d.modelos?.modelo}</td>
-                      <td className="px-5 py-3 text-gray-500 text-xs">{new Date(d.created_at).toLocaleDateString('es-AR')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <HistorialDevoluciones devueltos={devueltos} />
       )}
+    </div>
+  )
+}
+
+function HistorialDevoluciones({ devueltos }: { devueltos: Devuelto[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  if (devueltos.length === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+        <p className="text-gray-400 text-sm">No hay devoluciones registradas</p>
+      </div>
+    )
+  }
+
+  // Group by date
+  const byDate: Record<string, Devuelto[]> = {}
+  devueltos.forEach(d => {
+    const fecha = new Date(d.created_at).toLocaleDateString('es-AR')
+    if (!byDate[fecha]) byDate[fecha] = []
+    byDate[fecha].push(d)
+  })
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(byDate).map(([fecha, items]) => {
+        const isExpanded = expanded === fecha
+        // Group items by model for summary
+        const byModel: Record<string, number> = {}
+        items.forEach(d => {
+          const name = d.modelos ? `${d.modelos.marca} ${d.modelos.modelo}` : 'Desconocido'
+          byModel[name] = (byModel[name] || 0) + 1
+        })
+        const modelSummary = Object.entries(byModel).map(([m, c]) => `${c}x ${m}`).join(', ')
+
+        return (
+          <div key={fecha} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setExpanded(isExpanded ? null : fecha)}
+              className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-gray-400">{isExpanded ? '▾' : '▸'}</span>
+                <div>
+                  <span className="font-semibold text-gray-900">{fecha}</span>
+                  <span className="text-xs text-gray-500 ml-3">{modelSummary}</span>
+                </div>
+              </div>
+              <span className="text-sm font-bold text-orange-700">{items.length} equipo{items.length !== 1 ? 's' : ''}</span>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-gray-100 divide-y divide-gray-50">
+                {items.map(d => (
+                  <div key={d.id} className="px-5 py-2 flex items-center justify-between bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <svg className="w-4 h-4 text-orange-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      <span className="font-mono text-xs text-gray-700">{d.imei}</span>
+                    </div>
+                    <span className="text-xs text-gray-500">{d.modelos?.marca} {d.modelos?.modelo}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
