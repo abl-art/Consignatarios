@@ -13,10 +13,10 @@ export default async function DevolucionesPage() {
     .eq('estado', 'asignado')
     .order('fecha_asignacion', { ascending: false })
 
-  // Get recent devoluciones
+  // Get recent devoluciones — we need to find the last asignacion to know the consignatario
   const { data: devueltos } = await admin
     .from('dispositivos')
-    .select('id, imei, estado, fecha_asignacion, created_at, modelos(marca, modelo)')
+    .select('id, imei, estado, fecha_asignacion, created_at, modelos(marca, modelo), asignacion_items(asignacion_id, asignaciones(consignatario_id, consignatarios(nombre)))')
     .eq('estado', 'devuelto')
     .order('created_at', { ascending: false })
     .limit(50)
@@ -47,7 +47,11 @@ export default async function DevolucionesPage() {
 
       <DevolucionesClient
         asignados={(asignados ?? []) as unknown as Asignado[]}
-        devueltos={(devueltos ?? []) as unknown as Devuelto[]}
+        devueltos={(devueltos ?? []).map((d: Record<string, unknown>) => {
+          const items = d.asignacion_items as { asignaciones: { consignatarios: { nombre: string } | null } | null }[] | null
+          const consigNombre = items?.[0]?.asignaciones?.consignatarios?.nombre || undefined
+          return { id: d.id, imei: d.imei, estado: d.estado, fecha_asignacion: d.fecha_asignacion, created_at: d.created_at, modelos: d.modelos, consignatarioNombre: consigNombre } as unknown as Devuelto
+        })}
       />
     </div>
   )

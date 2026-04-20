@@ -21,6 +21,7 @@ interface Devuelto {
   fecha_asignacion: string | null
   created_at: string
   modelos: { marca: string; modelo: string } | null
+  consignatarioNombre?: string
 }
 
 interface DevolucionPendiente {
@@ -233,19 +234,21 @@ function HistorialDevoluciones({ devueltos }: { devueltos: Devuelto[] }) {
     )
   }
 
-  // Group by date
-  const byDate: Record<string, Devuelto[]> = {}
+  // Group by date + consignatario
+  const byGroup: Record<string, Devuelto[]> = {}
   devueltos.forEach(d => {
     const fecha = new Date(d.created_at).toLocaleDateString('es-AR')
-    if (!byDate[fecha]) byDate[fecha] = []
-    byDate[fecha].push(d)
+    const consig = d.consignatarioNombre || 'Sin consignatario'
+    const key = `${fecha}|${consig}`
+    if (!byGroup[key]) byGroup[key] = []
+    byGroup[key].push(d)
   })
 
   return (
     <div className="space-y-3">
-      {Object.entries(byDate).map(([fecha, items]) => {
-        const isExpanded = expanded === fecha
-        // Group items by model for summary
+      {Object.entries(byGroup).map(([key, items]) => {
+        const [fecha, consig] = key.split('|')
+        const isExpanded = expanded === key
         const byModel: Record<string, number> = {}
         items.forEach(d => {
           const name = d.modelos ? `${d.modelos.marca} ${d.modelos.modelo}` : 'Desconocido'
@@ -254,16 +257,18 @@ function HistorialDevoluciones({ devueltos }: { devueltos: Devuelto[] }) {
         const modelSummary = Object.entries(byModel).map(([m, c]) => `${c}x ${m}`).join(', ')
 
         return (
-          <div key={fecha} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div key={key} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <button
-              onClick={() => setExpanded(isExpanded ? null : fecha)}
+              onClick={() => setExpanded(isExpanded ? null : key)}
               className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 text-left"
             >
               <div className="flex items-center gap-3">
                 <span className="text-gray-400">{isExpanded ? '▾' : '▸'}</span>
                 <div>
                   <span className="font-semibold text-gray-900">{fecha}</span>
-                  <span className="text-xs text-gray-500 ml-3">{modelSummary}</span>
+                  <span className="text-xs text-gray-500 mx-2">·</span>
+                  <span className="text-sm text-gray-700">{consig}</span>
+                  <span className="text-xs text-gray-400 ml-3">{modelSummary}</span>
                 </div>
               </div>
               <span className="text-sm font-bold text-orange-700">{items.length} equipo{items.length !== 1 ? 's' : ''}</span>
