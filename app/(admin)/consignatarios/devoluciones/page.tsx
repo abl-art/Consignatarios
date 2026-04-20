@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import DevolucionesClient from './DevolucionesClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DevolucionesPage() {
   const admin = createAdminClient()
 

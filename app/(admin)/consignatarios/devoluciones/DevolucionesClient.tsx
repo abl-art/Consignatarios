@@ -44,7 +44,7 @@ export default function DevolucionesClient({
   const [tab, setTab] = useState<'devolver' | 'historial'>('devolver')
 
   const handleImeiSubmit = useCallback(() => {
-    const imei = imeiInput.trim()
+    const imei = imeiInput.trim().replace(/\s+/g, '').replace(/\D/g, '')
     if (!imei) return
 
     // Check if already in pendientes
