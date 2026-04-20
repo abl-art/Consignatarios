@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
     children: [
       { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
       { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
+      { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
       { href: '/garantias', label: 'Garantías', icon: 'garantias' },
       { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
       { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
