@@ -435,27 +435,23 @@ function StockResumen({
 
                 {isExpanded && (
                   <div className="bg-gray-50 px-6 py-2 space-y-1 border-t border-gray-100">
-                    {group.dispositivos.map(d => {
-                      const isSelected = selected.has(d.id)
+                    {group.dispositivos.filter(d => selected.has(d.id)).map(d => {
                       return (
                         <div
                           key={d.id}
-                          onClick={() => toggleOne(d.id)}
-                          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-magenta-50' : 'hover:bg-white'}`}
+                          className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-green-50"
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleOne(d.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="rounded border-gray-300 text-magenta-600 focus:ring-magenta-500"
-                          />
+                          <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
                           <span className="font-mono text-xs text-gray-700">{d.imei}</span>
-                          {isSelected && (
-                            <svg className="w-4 h-4 text-green-600 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => toggleOne(d.id)}
+                            className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors"
+                          >
+                            Quitar
+                          </button>
                         </div>
                       )
                     })}
