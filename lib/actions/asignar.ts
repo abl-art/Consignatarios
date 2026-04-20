@@ -63,25 +63,73 @@ async function ensureDispositivosExist(admin: ReturnType<typeof createAdminClien
   }
 }
 
-async function notificarGocelular(admin: ReturnType<typeof createAdminClient>, imeis: string[], consignatarioNombre: string, action: string) {
+async function notificarGocelular(
+  admin: ReturnType<typeof createAdminClient>,
+  imeis: string[],
+  consignatarioId: string,
+  consignatarioNombre: string,
+  action: 'assign_to_consignee' | 'return_from_consignee'
+) {
   const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_assign_endpoint').single()
   const endpoint = config?.value
 
+  // Get store_id from consignatario
+  let storeId: string | null = null
+  if (consignatarioId) {
+    const { data: consig } = await admin.from('consignatarios').select('store_id').eq('id', consignatarioId).single()
+    storeId = consig?.store_id ?? null
+  }
+
+  const timestamp = new Date().toISOString().replace('Z', '-03:00') // Argentina timezone
+  const payload = {
+    action,
+    imeis,
+    consignatario: consignatarioNombre,
+    ...(storeId ? { gocuotas_store_id: storeId } : {}),
+    timestamp,
+  }
+
+  let response: { processed?: number; skipped?: number; error?: string } | null = null
+
   if (endpoint) {
-    try {
-      await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, imeis, consignatario: consignatarioNombre, timestamp: new Date().toISOString() }),
-      })
-    } catch (e) {
-      console.error('GOcelular notification error:', e)
+    // Retry with backoff: 2s, 4s, 8s
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        const body = await res.json().catch(() => null)
+
+        if (res.status === 200) {
+          response = { processed: body?.counts?.processed ?? 0, skipped: body?.counts?.skipped ?? 0 }
+          break
+        } else if (res.status >= 400 && res.status < 500) {
+          // 4xx: don't retry, payload issue
+          response = { error: body?.error ?? `HTTP ${res.status}` }
+          console.error('GOcelular webhook 4xx:', body)
+          break
+        } else {
+          // 5xx: retry
+          console.error(`GOcelular webhook attempt ${attempt + 1} failed: HTTP ${res.status}`)
+          if (attempt < 2) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
+        }
+      } catch (e) {
+        console.error(`GOcelular webhook attempt ${attempt + 1} error:`, e)
+        if (attempt < 2) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
+      }
     }
   }
 
+  // Log the operation
   await admin.from('flujo_config').upsert({
     key: `asignacion_log_${Date.now()}`,
-    value: JSON.stringify({ action, imeis, consignatario: consignatarioNombre, timestamp: new Date().toISOString(), notified: !!endpoint }),
+    value: JSON.stringify({
+      action, imeis, consignatario: consignatarioNombre, storeId,
+      timestamp, notified: !!endpoint, response,
+    }),
     updated_at: new Date().toISOString(),
   })
 }
@@ -145,7 +193,7 @@ export async function prepararAsignacion(input: PrepararAsignacionInput): Promis
 
   // 4. Notify GOcelular
   const { data: consig } = await admin.from('consignatarios').select('nombre').eq('id', input.consignatario_id).single()
-  notificarGocelular(admin, imeis, consig?.nombre || '', 'assign_to_consignee').catch(() => {})
+  notificarGocelular(admin, imeis, input.consignatario_id, consig?.nombre || '', 'assign_to_consignee').catch(() => {})
 
   revalidatePath('/asignar')
   revalidatePath('/inventario')
@@ -173,7 +221,11 @@ export async function eliminarBorrador(asignacionId: string): Promise<{ ok: true
   // Notify GOcelular to return to stock
   const imeis = (items ?? []).map(i => (i.dispositivos as unknown as { imei: string } | null)?.imei).filter(Boolean) as string[]
   if (imeis.length > 0) {
-    notificarGocelular(admin, imeis, '', 'return_to_stock').catch(() => {})
+    // Get consignatario info for the return notification
+    const { data: asig } = await admin.from('asignaciones').select('consignatario_id, consignatarios(nombre)').eq('id', asignacionId).single()
+    const cid = (asig as unknown as { consignatario_id: string })?.consignatario_id || ''
+    const cname = (asig as unknown as { consignatarios: { nombre: string } | null })?.consignatarios?.nombre || ''
+    notificarGocelular(admin, imeis, cid, cname, 'return_from_consignee').catch(() => {})
   }
 
   // Delete items and asignacion
@@ -252,8 +304,12 @@ export async function devolverEquipo(dispositivoId: string): Promise<{ ok: true 
 
   if (error) return { error: error.message }
 
+  // Get consignatario name for notification
+  const consigId = disp.consignatario_id || ''
+  const { data: consigData } = consigId ? await admin.from('consignatarios').select('nombre').eq('id', consigId).single() : { data: null }
+
   // Notify GOcelular to re-add to available stock
-  notificarGocelular(admin, [disp.imei], '', 'return_to_stock').catch(() => {})
+  notificarGocelular(admin, [disp.imei], consigId, consigData?.nombre || '', 'return_from_consignee').catch(() => {})
 
   revalidatePath('/asignar')
   revalidatePath('/inventario')
