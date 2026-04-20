@@ -833,6 +833,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             <th className="text-center py-2 font-medium text-gray-600">Cant.</th>
                             <th className="text-right py-2 font-medium text-gray-600">Precio</th>
                             <th className="text-right py-2 font-medium text-gray-600">Subtotal</th>
+                            {nota.estado === 'borrador' && <th className="py-2 w-8"></th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -840,9 +841,63 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             <tr key={item.id} className="border-b border-gray-50">
                               <td className="py-2 text-gray-500 font-mono text-xs">{item.producto.codigo || '-'}</td>
                               <td className="py-2 text-gray-900">{item.producto.nombre}</td>
-                              <td className="py-2 text-center">{item.cantidad}</td>
+                              <td className="py-2 text-center">
+                                {nota.estado === 'borrador' ? (
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={item.cantidad}
+                                    onChange={(e) => {
+                                      const newQty = Math.max(1, Number(e.target.value))
+                                      setNotas(prev => prev.map(n =>
+                                        n.id === nota.id
+                                          ? { ...n, items: n.items.map(i => i.id === item.id ? { ...i, cantidad: newQty } : i) }
+                                          : n
+                                      ))
+                                      // Update in DB
+                                      const updated = { ...nota, items: nota.items.map(i => i.id === item.id ? { ...i, cantidad: newQty } : i) }
+                                      const totalN = updated.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
+                                      guardarPedido({
+                                        id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
+                                        proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
+                                        items: updated.items.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
+                                        estado: 'borrador', fecha: nota.fecha,
+                                      })
+                                    }}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                  />
+                                ) : (
+                                  item.cantidad
+                                )}
+                              </td>
                               <td className="py-2 text-right">{formatearMoneda(item.precio)}</td>
                               <td className="py-2 text-right font-medium">{formatearMoneda(item.precio * item.cantidad)}</td>
+                              {nota.estado === 'borrador' && (
+                                <td className="py-2 text-center">
+                                  <button
+                                    onClick={() => {
+                                      if (nota.items.length <= 1) {
+                                        if (!confirm('Es el último item. ¿Eliminar toda la nota?')) return
+                                        eliminarPedido(nota.id)
+                                        setNotas(prev => prev.filter(n => n.id !== nota.id))
+                                        router.refresh()
+                                        return
+                                      }
+                                      const updated = nota.items.filter(i => i.id !== item.id)
+                                      setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, items: updated } : n))
+                                      guardarPedido({
+                                        id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
+                                        proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
+                                        items: updated.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
+                                        estado: 'borrador', fecha: nota.fecha,
+                                      })
+                                    }}
+                                    className="text-xs text-red-400 hover:text-red-600"
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
