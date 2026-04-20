@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
       { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
-  { href: '/modelos', label: 'Modelos y precios', icon: 'modelos' },
+  // /modelos page kept for admin access but hidden from nav - managed via Compras now
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
 ]
