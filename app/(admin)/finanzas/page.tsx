@@ -4,6 +4,7 @@ import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
 import EgresosChart from './EgresosChart'
+import CashBalanceChart from './CashBalanceChart'
 import IndicadoresTab from './IndicadoresTab'
 import DPDTab from './DPDTab'
 import VintageTab from './VintageTab'
@@ -87,6 +88,9 @@ export default async function FinanzasPage({
           <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_mora)}</p>
         </div>
       </div>
+
+      {/* Cash balance chart */}
+      <CashBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} />
 
       {/* Action buttons and filter */}
       <div className="flex flex-wrap gap-3 items-end mb-6">
