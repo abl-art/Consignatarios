@@ -87,13 +87,13 @@ export default function GestorClient({
   forecastDias: number
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>(pedidosGuardados.length > 0 ? 'notas' : 'catalogo')
+  const [tab, setTab] = useState<Tab>('catalogo')
   const [busqueda, setBusqueda] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('Celulares')
   const [filtroMarca, setFiltroMarca] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [notas, setNotas] = useState<NotaPedido[]>(() =>
-    pedidosGuardados.map(p => ({
+    pedidosGuardados.filter(p => p.estado === 'borrador' || p.estado === 'confirmado').map(p => ({
       id: p.id,
       proveedor: { id: p.proveedorId, nombre: p.proveedorNombre, whatsapp: p.proveedorWhatsapp, email: p.proveedorEmail, direccion: '', notas: '' },
       items: p.items.map(i => ({
