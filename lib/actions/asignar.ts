@@ -155,6 +155,38 @@ export async function prepararAsignacion(input: PrepararAsignacionInput): Promis
 }
 
 // ---------------------------------------------------------------------------
+// Eliminar borrador (devuelve equipos a disponible)
+// ---------------------------------------------------------------------------
+
+export async function eliminarBorrador(asignacionId: string): Promise<{ ok: true } | { error: string }> {
+  const admin = createAdminClient()
+
+  // Get items to revert dispositivos
+  const { data: items } = await admin.from('asignacion_items').select('dispositivo_id, dispositivos(imei)').eq('asignacion_id', asignacionId)
+
+  // Revert dispositivos to disponible
+  const dispIds = (items ?? []).map(i => i.dispositivo_id)
+  if (dispIds.length > 0) {
+    await admin.from('dispositivos').update({ estado: 'disponible', consignatario_id: null, fecha_asignacion: null }).in('id', dispIds)
+  }
+
+  // Notify GOcelular to return to stock
+  const imeis = (items ?? []).map(i => (i.dispositivos as unknown as { imei: string } | null)?.imei).filter(Boolean) as string[]
+  if (imeis.length > 0) {
+    notificarGocelular(admin, imeis, '', 'return_to_stock').catch(() => {})
+  }
+
+  // Delete items and asignacion
+  await admin.from('asignacion_items').delete().eq('asignacion_id', asignacionId)
+  await admin.from('asignaciones').delete().eq('id', asignacionId)
+
+  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
+  revalidatePath('/inventario')
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
 // Step 2: Confirmar asignación (firma del consignatario)
 // ---------------------------------------------------------------------------
 

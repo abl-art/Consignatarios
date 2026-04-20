@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { confirmarAsignacion } from '@/lib/actions/asignar'
+import { confirmarAsignacion, eliminarBorrador } from '@/lib/actions/asignar'
 import FirmaCanvas from '@/components/FirmaCanvas'
 
 interface Asignacion {
@@ -132,14 +132,29 @@ export default function AsignacionesTabs({ borradores, confirmados }: { borrador
                       </div>
                     )}
 
-                    {/* Confirm button for borradores */}
+                    {/* Actions for borradores */}
                     {tab === 'borradores' && !isConfirming && (
-                      <button
-                        onClick={() => setConfirming(a.id)}
-                        className="mt-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        Confirmar entrega
-                      </button>
+                      <div className="flex gap-3 mt-2">
+                        <button
+                          onClick={() => setConfirming(a.id)}
+                          className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          Confirmar entrega
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('¿Eliminar este borrador? Los equipos volverán al stock disponible.')) return
+                            setLoading(true)
+                            await eliminarBorrador(a.id)
+                            setLoading(false)
+                            router.refresh()
+                          }}
+                          disabled={loading}
+                          className="px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40 transition-colors"
+                        >
+                          Eliminar borrador
+                        </button>
+                      </div>
                     )}
 
                     {isConfirming && (

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { confirmarAsignacion } from '@/lib/actions/asignar'
+import { confirmarAsignacion, eliminarBorrador } from '@/lib/actions/asignar'
 import FirmaCanvas from '@/components/FirmaCanvas'
 
 interface Borrador {
@@ -95,12 +95,24 @@ export default function BorradoresList({ borradores }: { borradores: Borrador[] 
 
                   {/* Confirm button or firma form */}
                   {!isConfirming ? (
-                    <button
-                      onClick={() => setConfirming(b.id)}
-                      className="mt-3 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Confirmar entrega
-                    </button>
+                    <div className="flex gap-3 mt-3">
+                      <button
+                        onClick={() => setConfirming(b.id)}
+                        className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Confirmar entrega
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('¿Eliminar este borrador? Los equipos volverán al stock disponible.')) return
+                          await eliminarBorrador(b.id)
+                          router.refresh()
+                        }}
+                        className="px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   ) : (
                     <div className="mt-3 bg-white border border-gray-200 rounded-xl p-5 space-y-4">
                       <h4 className="text-sm font-semibold text-gray-700">Firma del consignatario</h4>
