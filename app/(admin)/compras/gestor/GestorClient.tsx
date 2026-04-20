@@ -445,6 +445,52 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     }
   }
 
+  function downloadPDF(nota: NotaPedido) {
+    // Open print preview in a new window and trigger print/save as PDF
+    const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const iva = total * 0.21
+    const totalGral = total * 1.21
+    const rows = nota.items
+      .map(
+        (i) =>
+          `<tr><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.codigo || '-'}</td><td style="padding:8px;border-bottom:1px solid #eee">${i.producto.nombre}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${i.cantidad}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${formatearMoneda(i.precio * i.cantidad)}</td></tr>`
+      )
+      .join('')
+
+    const html = `<!DOCTYPE html><html><head><title>Nota de Pedido - ${nota.proveedor.nombre}</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#333}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #E91E7B;padding-bottom:16px;margin-bottom:24px}
+.header-left h1{color:#E91E7B;font-size:24px;margin:0 0 4px 0;font-weight:800}
+.header-left p{margin:0;color:#666;font-size:12px}
+.header-right{text-align:right;font-size:12px;color:#666}
+.header-right strong{display:block;font-size:14px;color:#333}
+.info-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:32px;font-size:13px}
+table{width:100%;border-collapse:collapse;margin:16px 0}
+th{background:#f3f4f6;padding:10px 12px;text-align:left;border-bottom:2px solid #d1d5db;font-size:12px;color:#374151}
+td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
+.totals td{border-bottom:none;padding:4px 12px}
+.total-final td{font-weight:bold;font-size:15px;color:#E91E7B;padding-top:8px;border-top:2px solid #E91E7B}
+.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb;text-align:center;font-size:10px;color:#9ca3af}
+</style></head><body>
+<div class="header"><div class="header-left"><h1>GOcelular</h1><p>NOTA DE PEDIDO</p></div><div class="header-right"><strong>${nota.fecha}</strong><span>ID: ${nota.id}</span></div></div>
+<div class="info-box"><div><span>Proveedor: </span><strong>${nota.proveedor.nombre}</strong></div><div><span>Email: </span><strong>${nota.proveedor.email || '-'}</strong></div></div>
+<table><thead><tr><th>Codigo</th><th>Producto</th><th class="text-center">Cant.</th><th class="text-right">Precio Unit.</th><th class="text-right">Subtotal</th></tr></thead>
+<tbody>${rows}</tbody>
+<tbody><tr class="totals"><td colspan="4" class="text-right">Subtotal Neto:</td><td class="text-right">${formatearMoneda(total)}</td></tr>
+<tr class="totals"><td colspan="4" class="text-right" style="color:#666;font-size:12px">IVA 21%:</td><td class="text-right" style="color:#666;font-size:12px">${formatearMoneda(iva)}</td></tr>
+<tr class="total-final"><td colspan="4" class="text-right">TOTAL GENERAL:</td><td class="text-right">${formatearMoneda(totalGral)}</td></tr></tbody></table>
+<div class="footer">Generado por GOcelular360 | ${nota.fecha}</div>
+<script>window.onload=function(){window.print()}</script>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (w) {
+      w.document.write(html)
+      w.document.close()
+    }
+  }
+
   const [expandedPedido, setExpandedPedido] = useState<string | null>(null)
   const [entregados, setEntregados] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {}
@@ -823,6 +869,12 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                           Ver PDF
+                        </button>
+                        <button
+                          onClick={() => downloadPDF(nota)}
+                          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Descargar PDF
                         </button>
                         {nota.estado === 'borrador' && (
                           <button
