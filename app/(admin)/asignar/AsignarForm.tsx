@@ -4,8 +4,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
-import { asignarStock } from '@/lib/actions/asignar'
-import FirmaCanvas from '@/components/FirmaCanvas'
+import { prepararAsignacion } from '@/lib/actions/asignar'
 
 interface AsignarFormProps {
   consignatarios: Consignatario[]
@@ -19,11 +18,10 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
 
   const [consignatarioId, setConsignatarioId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [firmadoPor, setFirmadoPor] = useState('')
-  const [firma, setFirma] = useState<string | null>(null)
   const [filtroModelo, setFiltroModelo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   // IMEI search state
   const [imeiInput, setImeiInput] = useState('')
@@ -141,8 +139,6 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
   const canSubmit =
     consignatarioId !== '' &&
     selected.size > 0 &&
-    firmadoPor.trim() !== '' &&
-    firma !== null &&
     !submitting &&
     !excede
 
@@ -152,8 +148,9 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
 
     setSubmitting(true)
     setError(null)
+    setSuccess(null)
 
-    const result = await asignarStock({
+    const result = await prepararAsignacion({
       consignatario_id: consignatarioId,
       dispositivos: selectedDispositivos.map(d => ({
         imei: d.imei,
@@ -162,8 +159,6 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         modelo: d.modelos.modelo,
         precio_costo: d.modelos.precio_costo,
       })),
-      firmado_por: firmadoPor.trim(),
-      firma_base64: firma!,
       total_valor_costo: totalValorCosto,
       total_valor_venta: totalValorVenta,
     })
@@ -174,7 +169,10 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
       return
     }
 
-    router.push('/inventario')
+    setSuccess(`Borrador creado con ${selected.size} equipos. Pendiente de firma del consignatario.`)
+    setSelected(new Set())
+    setSubmitting(false)
+    router.refresh()
   }
 
   return (
@@ -296,29 +294,12 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
         </div>
       )}
 
-      {/* Recibido por + Firma */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Recibido por
-          </label>
-          <input
-            type="text"
-            value={firmadoPor}
-            onChange={(e) => setFirmadoPor(e.target.value)}
-            placeholder="Nombre completo de quien recibe"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500"
-          />
+      {/* Success */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 text-sm text-green-700">
+          {success}
         </div>
-
-        <FirmaCanvas
-          onSave={(base64) => setFirma(base64)}
-        />
-
-        {firma && (
-          <p className="text-xs text-green-600 font-medium">Firma guardada correctamente.</p>
-        )}
-      </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -335,8 +316,8 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
           className="px-6 py-2.5 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {submitting
-            ? 'Asignando...'
-            : `Asignar ${selected.size > 0 ? selected.size : ''} equipo${selected.size !== 1 ? 's' : ''}`}
+            ? 'Preparando...'
+            : `Preparar borrador (${selected.size} equipo${selected.size !== 1 ? 's' : ''})`}
         </button>
       </div>
     </form>

@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Consignatario, DispositivoConModelo, Config } from '@/lib/types'
 import { fetchInventarioDisponible } from '@/lib/gocelular'
+import { getBorradores } from '@/lib/actions/asignar'
 import AsignarForm from './AsignarForm'
+import BorradoresList from './BorradoresList'
 
 export default async function AsignarPage() {
   const supabase = createClient()
@@ -12,6 +14,7 @@ export default async function AsignarPage() {
     { data: config },
     { data: asignados },
     { data: diferencias },
+    borradores,
   ] = await Promise.all([
     supabase
       .from('consignatarios')
@@ -32,6 +35,7 @@ export default async function AsignarPage() {
       .from('diferencias')
       .select('monto_deuda, auditorias(consignatario_id)')
       .eq('estado', 'pendiente'),
+    getBorradores(),
   ])
 
   // Transform GOcelular inventory to DispositivoConModelo format
@@ -76,9 +80,16 @@ export default async function AsignarPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Asignar stock</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Seleccioná equipos disponibles para entregar a un consignatario
+          Preparar equipos en depósito — confirmar con firma al entregar
         </p>
       </div>
+
+      {/* Borradores pendientes */}
+      {borradores.length > 0 && (
+        <div className="mb-8">
+          <BorradoresList borradores={borradores} />
+        </div>
+      )}
 
       <AsignarForm
         consignatarios={consignatarios ?? []}

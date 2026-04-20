@@ -12,6 +12,227 @@ interface DispositivoInfo {
   precio_costo: number
 }
 
+interface PrepararAsignacionInput {
+  consignatario_id: string
+  dispositivos: DispositivoInfo[]
+  total_valor_costo: number
+  total_valor_venta: number
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function ensureDispositivosExist(admin: ReturnType<typeof createAdminClient>, dispositivos: DispositivoInfo[]) {
+  for (const d of dispositivos) {
+    let modeloId: string | null = null
+    const { data: existingModelo } = await admin
+      .from('modelos')
+      .select('id')
+      .or(`modelo.eq.${d.modelo},modelo.ilike.%${d.modelo}%`)
+      .eq('marca', d.marca)
+      .limit(1)
+      .single()
+
+    if (existingModelo) {
+      modeloId = existingModelo.id
+    } else {
+      const { data: newModelo } = await admin
+        .from('modelos')
+        .insert({ marca: d.marca, modelo: d.modelo, precio_costo: d.precio_costo })
+        .select('id')
+        .single()
+      modeloId = newModelo?.id ?? null
+    }
+
+    if (!modeloId) continue
+
+    const { data: existingDisp } = await admin
+      .from('dispositivos')
+      .select('id')
+      .eq('imei', d.imei)
+      .single()
+
+    if (!existingDisp) {
+      await admin.from('dispositivos').insert({
+        imei: d.imei,
+        modelo_id: modeloId,
+        estado: 'disponible',
+      })
+    }
+  }
+}
+
+async function notificarGocelular(admin: ReturnType<typeof createAdminClient>, imeis: string[], consignatarioNombre: string, action: string) {
+  const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_assign_endpoint').single()
+  const endpoint = config?.value
+
+  if (endpoint) {
+    try {
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, imeis, consignatario: consignatarioNombre, timestamp: new Date().toISOString() }),
+      })
+    } catch (e) {
+      console.error('GOcelular notification error:', e)
+    }
+  }
+
+  await admin.from('flujo_config').upsert({
+    key: `asignacion_log_${Date.now()}`,
+    value: JSON.stringify({ action, imeis, consignatario: consignatarioNombre, timestamp: new Date().toISOString(), notified: !!endpoint }),
+    updated_at: new Date().toISOString(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Preparar asignación (borrador - sin firma)
+// ---------------------------------------------------------------------------
+
+export async function prepararAsignacion(input: PrepararAsignacionInput): Promise<
+  { ok: true; asignacion_id: string } | { error: string }
+> {
+  const admin = createAdminClient()
+
+  // Ensure dispositivos exist in Supabase
+  await ensureDispositivosExist(admin, input.dispositivos)
+
+  const imeis = input.dispositivos.map(d => d.imei)
+
+  // Get dispositivo IDs by IMEI
+  const { data: dispRows } = await admin.from('dispositivos').select('id, imei').in('imei', imeis)
+  if (!dispRows || dispRows.length === 0) {
+    return { error: 'No se encontraron dispositivos con los IMEIs proporcionados' }
+  }
+
+  const dispositivo_ids = dispRows.map(d => d.id)
+  const today = new Date().toISOString().slice(0, 10)
+
+  // 1. Create asignacion in borrador state
+  const { data: asignacion, error: errorAsignacion } = await admin
+    .from('asignaciones')
+    .insert({
+      consignatario_id: input.consignatario_id,
+      fecha: today,
+      total_unidades: dispositivo_ids.length,
+      total_valor_costo: input.total_valor_costo,
+      total_valor_venta: input.total_valor_venta,
+      firmado_por: null,
+      firma_url: null,
+    })
+    .select('id')
+    .single()
+
+  if (errorAsignacion || !asignacion) {
+    return { error: errorAsignacion?.message ?? 'Error al crear la asignación' }
+  }
+
+  // 2. Insert asignacion_items
+  const items = dispositivo_ids.map(dispositivo_id => ({ asignacion_id: asignacion.id, dispositivo_id }))
+  const { error: errorItems } = await admin.from('asignacion_items').insert(items)
+
+  if (errorItems) {
+    await admin.from('asignaciones').delete().eq('id', asignacion.id)
+    return { error: errorItems.message }
+  }
+
+  // 3. Mark dispositivos as en_transito
+  await admin
+    .from('dispositivos')
+    .update({ estado: 'asignado', consignatario_id: input.consignatario_id, fecha_asignacion: today })
+    .in('id', dispositivo_ids)
+
+  // 4. Notify GOcelular
+  const { data: consig } = await admin.from('consignatarios').select('nombre').eq('id', input.consignatario_id).single()
+  notificarGocelular(admin, imeis, consig?.nombre || '', 'assign_to_consignee').catch(() => {})
+
+  revalidatePath('/asignar')
+  revalidatePath('/inventario')
+  revalidatePath('/dashboard')
+
+  return { ok: true, asignacion_id: asignacion.id }
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Confirmar asignación (firma del consignatario)
+// ---------------------------------------------------------------------------
+
+export async function confirmarAsignacion(asignacionId: string, firmadoPor: string, firmaBase64: string): Promise<
+  { ok: true } | { error: string }
+> {
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('asignaciones')
+    .update({ firmado_por: firmadoPor, firma_url: firmaBase64 })
+    .eq('id', asignacionId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/asignar')
+  revalidatePath('/inventario')
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Get borradores (asignaciones sin firma)
+// ---------------------------------------------------------------------------
+
+export async function getBorradores() {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('asignaciones')
+    .select('id, consignatario_id, fecha, total_unidades, total_valor_costo, total_valor_venta, firmado_por, firma_url, consignatarios(nombre), asignacion_items(dispositivo_id, dispositivos(imei, modelos(marca, modelo)))')
+    .is('firma_url', null)
+    .order('fecha', { ascending: false })
+
+  return (data ?? []) as unknown as {
+    id: string
+    consignatario_id: string
+    fecha: string
+    total_unidades: number
+    total_valor_costo: number
+    total_valor_venta: number
+    firmado_por: string | null
+    firma_url: string | null
+    consignatarios: { nombre: string } | null
+    asignacion_items: { dispositivo_id: string; dispositivos: { imei: string; modelos: { marca: string; modelo: string } | null } | null }[]
+  }[]
+}
+
+// ---------------------------------------------------------------------------
+// Devolver equipo (return to GOcelular stock)
+// ---------------------------------------------------------------------------
+
+export async function devolverEquipo(dispositivoId: string): Promise<{ ok: true } | { error: string }> {
+  const admin = createAdminClient()
+
+  // Get device info
+  const { data: disp } = await admin.from('dispositivos').select('imei, consignatario_id').eq('id', dispositivoId).single()
+  if (!disp) return { error: 'Dispositivo no encontrado' }
+
+  // Update estado
+  const { error } = await admin
+    .from('dispositivos')
+    .update({ estado: 'devuelto', consignatario_id: null })
+    .eq('id', dispositivoId)
+
+  if (error) return { error: error.message }
+
+  // Notify GOcelular to re-add to available stock
+  notificarGocelular(admin, [disp.imei], '', 'return_to_stock').catch(() => {})
+
+  revalidatePath('/asignar')
+  revalidatePath('/inventario')
+  revalidatePath('/consignatarios')
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy: asignarStock (backward compatibility)
+// ---------------------------------------------------------------------------
+
 interface AsignarInput {
   consignatario_id: string
   dispositivos: DispositivoInfo[]
@@ -21,179 +242,21 @@ interface AsignarInput {
   total_valor_venta: number
 }
 
-// Legacy interface for backward compatibility
-interface AsignarInputLegacy {
-  consignatario_id: string
-  dispositivo_ids: string[]
-  firmado_por: string
-  firma_base64: string
-  total_valor_costo: number
-  total_valor_venta: number
-}
-
-async function notificarGocelular(imeis: string[], consignatarioNombre: string) {
-  const admin = createAdminClient()
-
-  // Get the endpoint URL from config
-  const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_assign_endpoint').single()
-  const endpoint = config?.value
-
-  if (endpoint) {
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'assign_to_consignee',
-          imeis,
-          consignatario: consignatarioNombre,
-          timestamp: new Date().toISOString(),
-        }),
-      })
-      if (!res.ok) {
-        console.error('GOcelular notification failed:', res.status)
-      }
-    } catch (e) {
-      console.error('GOcelular notification error:', e)
-    }
-  }
-
-  // Always log the assignment for traceability
-  await admin.from('flujo_config').upsert({
-    key: `asignacion_log_${Date.now()}`,
-    value: JSON.stringify({
-      imeis,
-      consignatario: consignatarioNombre,
-      timestamp: new Date().toISOString(),
-      notified: !!endpoint,
-    }),
-    updated_at: new Date().toISOString(),
-  })
-}
-
-export async function asignarStock(input: AsignarInput | AsignarInputLegacy): Promise<
+export async function asignarStock(input: AsignarInput): Promise<
   { ok: true; asignacion_id: string } | { error: string }
 > {
-  const supabase = createClient()
-  const admin = createAdminClient()
+  // Use new flow: prepare + confirm immediately
+  const result = await prepararAsignacion({
+    consignatario_id: input.consignatario_id,
+    dispositivos: input.dispositivos,
+    total_valor_costo: input.total_valor_costo,
+    total_valor_venta: input.total_valor_venta,
+  })
 
-  // Determine if using new format (with dispositivos info) or legacy (just IDs)
-  const isNew = 'dispositivos' in input && Array.isArray(input.dispositivos)
-  const dispositivos = isNew ? (input as AsignarInput).dispositivos : []
-  const imeis = isNew
-    ? dispositivos.map(d => d.imei)
-    : (input as AsignarInputLegacy).dispositivo_ids
+  if ('error' in result) return result
 
-  // For new format: ensure dispositivos exist in our Supabase
-  if (isNew && dispositivos.length > 0) {
-    for (const d of dispositivos) {
-      // Check if modelo exists
-      let modeloId: string | null = null
-      const { data: existingModelo } = await admin
-        .from('modelos')
-        .select('id')
-        .or(`modelo.eq.${d.modelo},modelo.ilike.%${d.modelo}%`)
-        .eq('marca', d.marca)
-        .limit(1)
-        .single()
+  // Immediately confirm with firma
+  await confirmarAsignacion(result.asignacion_id, input.firmado_por, input.firma_base64)
 
-      if (existingModelo) {
-        modeloId = existingModelo.id
-      } else {
-        // Create the modelo
-        const { data: newModelo } = await admin
-          .from('modelos')
-          .insert({ marca: d.marca, modelo: d.modelo, precio_costo: d.precio_costo })
-          .select('id')
-          .single()
-        modeloId = newModelo?.id ?? null
-      }
-
-      if (!modeloId) continue
-
-      // Check if dispositivo exists
-      const { data: existingDisp } = await admin
-        .from('dispositivos')
-        .select('id')
-        .eq('imei', d.imei)
-        .single()
-
-      if (!existingDisp) {
-        // Create dispositivo
-        await admin.from('dispositivos').insert({
-          imei: d.imei,
-          modelo_id: modeloId,
-          estado: 'disponible',
-        })
-      }
-    }
-  }
-
-  // Get dispositivo IDs by IMEI
-  const { data: dispRows } = await admin
-    .from('dispositivos')
-    .select('id, imei')
-    .in('imei', imeis)
-
-  if (!dispRows || dispRows.length === 0) {
-    return { error: 'No se encontraron dispositivos con los IMEIs proporcionados' }
-  }
-
-  const dispositivo_ids = dispRows.map(d => d.id)
-
-  // 1. Create asignacion row
-  const { data: asignacion, error: errorAsignacion } = await supabase
-    .from('asignaciones')
-    .insert({
-      consignatario_id: input.consignatario_id,
-      fecha: new Date().toISOString().slice(0, 10),
-      total_unidades: dispositivo_ids.length,
-      total_valor_costo: input.total_valor_costo,
-      total_valor_venta: input.total_valor_venta,
-      firmado_por: input.firmado_por,
-      firma_url: input.firma_base64,
-    })
-    .select('id')
-    .single()
-
-  if (errorAsignacion || !asignacion) {
-    return { error: errorAsignacion?.message ?? 'Error al crear la asignación' }
-  }
-
-  const asignacion_id = asignacion.id
-
-  // 2. Insert asignacion_items
-  const items = dispositivo_ids.map((dispositivo_id) => ({
-    asignacion_id,
-    dispositivo_id,
-  }))
-
-  const { error: errorItems } = await supabase.from('asignacion_items').insert(items)
-
-  if (errorItems) {
-    await supabase.from('asignaciones').delete().eq('id', asignacion_id)
-    return { error: errorItems.message }
-  }
-
-  // 3. Update dispositivos: estado='asignado'
-  const today = new Date().toISOString().slice(0, 10)
-  const { error: errorUpdate } = await admin
-    .from('dispositivos')
-    .update({ estado: 'asignado', consignatario_id: input.consignatario_id, fecha_asignacion: today })
-    .in('id', dispositivo_ids)
-
-  if (errorUpdate) {
-    await supabase.from('asignaciones').delete().eq('id', asignacion_id)
-    return { error: errorUpdate.message }
-  }
-
-  // 4. Notify GOcelular (async, don't block)
-  const { data: consig } = await admin.from('consignatarios').select('nombre').eq('id', input.consignatario_id).single()
-  notificarGocelular(imeis, consig?.nombre || 'Desconocido').catch(() => {})
-
-  revalidatePath('/asignar')
-  revalidatePath('/inventario')
-  revalidatePath('/dashboard')
-
-  return { ok: true, asignacion_id }
+  return result
 }
