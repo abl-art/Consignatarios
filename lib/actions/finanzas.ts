@@ -486,8 +486,9 @@ export async function fetchCuotasStats(): Promise<{
   monto_atrasado: number
   monto_mora: number
   ppp_recupero: number
+  ppp_mora: number
 }> {
-  const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, ppp_recupero: 0 }
+  const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, ppp_recupero: 0, ppp_mora: 0 }
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return empty
 
@@ -505,6 +506,7 @@ export async function fetchCuotasStats(): Promise<{
       monto_atrasado: string
       monto_mora: string
       ppp_recupero: string
+      ppp_mora: string
     }>(`
       SELECT
         COUNT(*)::int AS total,
@@ -523,7 +525,15 @@ export async function fetchCuotasStats(): Promise<{
           /
           NULLIF(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0),
           0
-        ) AS ppp_recupero
+        ) AS ppp_recupero,
+        COALESCE(
+          SUM(
+            (CURRENT_DATE - i.installment_due_at::date) * i.installment_amount
+          ) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
+          /
+          NULLIF(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL), 0),
+          0
+        ) AS ppp_mora
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
@@ -552,6 +562,7 @@ export async function fetchCuotasStats(): Promise<{
       monto_atrasado: Number(row.monto_atrasado),
       monto_mora: Number(row.monto_mora),
       ppp_recupero: Math.round(Number(row.ppp_recupero)),
+      ppp_mora: Math.round(Number(row.ppp_mora)),
     }
   } finally {
     await client.end()

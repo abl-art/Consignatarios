@@ -86,6 +86,7 @@ export default async function FinanzasPage({
             <p className="text-xs text-gray-400">{cuotasStats.mora.toLocaleString('es-AR')} cuotas</p>
           </div>
           <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_mora)}</p>
+          <p className="text-xs text-gray-500 mt-1">PPP Mora: <span className="font-bold text-red-700">{cuotasStats.ppp_mora} días</span></p>
         </div>
       </div>
 
