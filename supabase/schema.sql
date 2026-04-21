@@ -27,6 +27,7 @@ create table consignatarios (
   nombre text not null,
   owner_id text,
   store_id text,
+  store_prefix text,
   email text unique not null,
   telefono text,
   punto_reorden integer not null default 10,
@@ -91,6 +92,7 @@ create table ventas (
   fecha_venta date not null,
   precio_venta numeric not null,
   comision_monto numeric not null,
+  store_name text,
   gocelular_sale_id text unique,
   synced_at timestamptz not null default now()
 );
@@ -198,6 +200,23 @@ create table flujo_egresos (
 );
 
 -- ============================================================
+-- SYNC LOG (registro de cada sincronización con GOcelular)
+-- ============================================================
+create table sync_log (
+  id uuid primary key default uuid_generate_v4(),
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  status text not null default 'running',
+  ventas_nuevas integer not null default 0,
+  ventas_ya_existentes integer not null default 0,
+  dispositivos_no_encontrados integer not null default 0,
+  errores_monitoreo integer not null default 0,
+  error_msg text,
+  detalle jsonb,
+  created_by uuid references auth.users(id)
+);
+
+-- ============================================================
 -- RLS
 -- ============================================================
 alter table config enable row level security;
@@ -212,6 +231,7 @@ alter table auditoria_items enable row level security;
 alter table diferencias enable row level security;
 alter table flujo_asistencias enable row level security;
 alter table flujo_egresos enable row level security;
+alter table sync_log enable row level security;
 
 -- Admin: acceso total (rol 'admin' en user_metadata)
 create policy "admin_all" on config for all
@@ -248,6 +268,9 @@ create policy "admin_all" on flujo_asistencias for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 create policy "admin_all" on flujo_egresos for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on sync_log for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 -- Consignatario: solo sus propios registros

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, subirImeiPedido } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido } from '@/lib/actions/compras'
 
 interface Proveedor {
   id: string
@@ -67,6 +67,7 @@ interface PedidoGuardado {
   enviadoPor?: string
   confirmadoAt?: string
   entregadoAt?: string
+  ingresoStockAt?: string
   imeiFile?: string
 }
 
@@ -496,6 +497,11 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   const [entregados, setEntregados] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {}
     pedidosGuardados.forEach(p => { if (p.entregadoAt) map[p.id] = p.entregadoAt })
+    return map
+  })
+  const [ingresosStock, setIngresosStock] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    pedidosGuardados.forEach(p => { if (p.ingresoStockAt) map[p.id] = p.ingresoStockAt })
     return map
   })
   const pedidosEnviados = pedidosGuardados.filter(p => p.estado === 'enviado')
@@ -978,6 +984,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     <th className="text-center px-4 py-3 font-medium text-gray-600">IMEI</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Entrega</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Demora</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Ingreso stock</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1021,13 +1028,28 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                const blob = new Blob([p.imeiFile!], { type: 'text/csv' })
-                                const url = URL.createObjectURL(blob)
-                                const a = document.createElement('a')
-                                a.href = url
-                                a.download = `IMEI_${p.proveedorNombre.replace(/\s+/g, '_')}_${p.fecha.replace(/\//g, '-')}.csv`
-                                a.click()
-                                URL.revokeObjectURL(url)
+                                const raw = p.imeiFile!
+                                const b64 = raw.length >= 50 && /^[A-Za-z0-9+/\n]+=*$/.test(raw.slice(0, 200))
+                                if (b64) {
+                                  const byteChars = atob(raw)
+                                  const byteArray = new Uint8Array(byteChars.length)
+                                  for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
+                                  const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+                                  const url = URL.createObjectURL(blob)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = `IMEI_${p.proveedorNombre.replace(/\s+/g, '_')}_${p.fecha.replace(/\//g, '-')}.xlsx`
+                                  a.click()
+                                  URL.revokeObjectURL(url)
+                                } else {
+                                  const blob = new Blob([raw], { type: 'text/csv' })
+                                  const url = URL.createObjectURL(blob)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = `IMEI_${p.proveedorNombre.replace(/\s+/g, '_')}_${p.fecha.replace(/\//g, '-')}.csv`
+                                  a.click()
+                                  URL.revokeObjectURL(url)
+                                }
                               }}
                               className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
                             >
@@ -1056,10 +1078,34 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           )}
                         </td>
                         <td className="px-4 py-3 text-center text-xs text-gray-500">{demora}</td>
+                        <td className="px-4 py-3 text-center">
+                          {(() => {
+                            const ingresoAt = ingresosStock[p.id] || p.ingresoStockAt
+                            return ingresoAt ? (
+                              <div className="flex flex-col items-center">
+                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                <span className="text-[10px] text-gray-400">{new Date(ingresoAt).toLocaleDateString('es-AR')}</span>
+                              </div>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 accent-green-600 cursor-pointer"
+                                onChange={async (e) => {
+                                  e.stopPropagation()
+                                  const now = new Date().toISOString()
+                                  setIngresosStock(prev => ({ ...prev, [p.id]: now }))
+                                  await marcarIngresoStock(p.id)
+                                  router.refresh()
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )
+                          })()}
+                        </td>
                       </tr>
                       {expandedPedido === p.id && (
                         <tr>
-                          <td colSpan={8} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                          <td colSpan={9} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="border-b border-gray-200">
@@ -1156,24 +1202,47 @@ function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedid
   const [uploading, setUploading] = useState(false)
   const [localData, setLocalData] = useState(imeiData)
 
+  function isBase64(str: string): boolean {
+    if (str.length < 50) return false
+    return /^[A-Za-z0-9+/\n]+=*$/.test(str.slice(0, 200))
+  }
+
   function handleDownload() {
     if (!localData) return
-    const blob = new Blob([localData], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `IMEI_${proveedorNombre.replace(/\s+/g, '_')}_${fecha.replace(/\//g, '-')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    if (isBase64(localData)) {
+      const byteChars = atob(localData)
+      const byteArray = new Uint8Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `IMEI_${proveedorNombre.replace(/\s+/g, '_')}_${fecha.replace(/\//g, '-')}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } else {
+      // Legacy: datos guardados como texto plano
+      const blob = new Blob([localData], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `IMEI_${proveedorNombre.replace(/\s+/g, '_')}_${fecha.replace(/\//g, '-')}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const text = await file.text()
-    await subirImeiPedido(pedidoId, text)
-    setLocalData(text)
+    const base64: string = await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string).split(',')[1])
+      reader.readAsDataURL(file)
+    })
+    await subirImeiPedido(pedidoId, base64)
+    setLocalData(base64)
     setUploading(false)
     router.refresh()
   }
