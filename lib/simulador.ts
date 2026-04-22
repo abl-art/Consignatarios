@@ -272,7 +272,6 @@ function simularFlujo(
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
   const volumenTotal = order_amount * totalOps
   const rentSobreOrder = volumenTotal > 0 ? resultado / volumenTotal : 0
-  const volumenTotal = order_amount * totalOps
   const ctDeudaRatio = volumenTotal > 0 ? capitalRequerido / volumenTotal : 0
 
   const indicadores: Indicadores = {
