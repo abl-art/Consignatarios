@@ -234,6 +234,10 @@ export default function SimuladorTab({ productos }: Props) {
             <p className={`text-xl font-bold ${ind.van >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatearMoneda(Math.round(ind.van))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-[10px] text-gray-500 mb-1">Capital invertido</p>
+            <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_invertido))}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Máx. endeudamiento</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.max_endeudamiento))}</p>
           </div>
@@ -242,7 +246,7 @@ export default function SimuladorTab({ productos }: Props) {
             <p className="text-xl font-bold text-gray-900">{ind.payback > 0 ? `Mes ${ind.payback}` : 'No recupera'}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Rentabilidad s/capital</p>
+            <p className="text-[10px] text-gray-500 mb-1">Rentabilidad s/cap. invertido</p>
             <p className={`text-xl font-bold ${ind.rentabilidad_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rentabilidad_capital)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">

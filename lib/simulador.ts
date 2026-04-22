@@ -36,8 +36,9 @@ export interface Indicadores {
   tir_anual: number
   van: number
   max_endeudamiento: number
+  capital_invertido: number // suma de flujos negativos
   payback: number // mes en que acumulado > 0, 0 si nunca
-  rentabilidad_capital: number // resultado / max endeudamiento
+  rentabilidad_capital: number // resultado / capital invertido
   margen_neto_op: number // resultado / total operaciones
 }
 
@@ -246,6 +247,8 @@ function simularFlujo(
 
   // Indicadores
   const totalOps = operaciones_por_mes.reduce((s, n) => s + n, 0)
+  const trimmedSubtotal = trim(subtotal)
+  const capitalInvertido = Math.abs(trimmedSubtotal.filter(v => v < 0).reduce((s, v) => s + v, 0))
   const maxEndeudamiento = Math.abs(Math.min(...trim(acumulado), 0))
   const resultado = acumulado[meses - 1]
   let payback = 0
@@ -253,16 +256,17 @@ function simularFlujo(
     if (acumulado[m] > 0) { payback = m + 1; break }
   }
 
-  const tirMensual = calcTIR(trim(subtotal))
+  const tirMensual = calcTIR(trimmedSubtotal)
   const tasaMensual = costo_financiacion_tna / 100 / 12
 
   const indicadores: Indicadores = {
     tir_mensual: tirMensual,
     tir_anual: Math.pow(1 + tirMensual, 12) - 1,
-    van: calcVAN(trim(subtotal), tasaMensual),
+    van: calcVAN(trimmedSubtotal, tasaMensual),
     max_endeudamiento: maxEndeudamiento,
+    capital_invertido: capitalInvertido,
     payback,
-    rentabilidad_capital: maxEndeudamiento > 0 ? resultado / maxEndeudamiento : 0,
+    rentabilidad_capital: capitalInvertido > 0 ? resultado / capitalInvertido : 0,
     margen_neto_op: totalOps > 0 ? resultado / totalOps : 0,
   }
 
