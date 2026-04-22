@@ -124,11 +124,13 @@ function simularFlujo(
   const impDeb = imp_debitos_pct / 100
   const iibb = iibb_pct / 100
 
-  // Monto financiado por operación
-  const montoFinanciado = order_amount * (1 - dp)
-  const montoCuota = montoFinanciado / cuotas
+  // Cuota 1 = down payment (% del order_amount)
+  // Cuotas 2 a N = resto dividido en (cuotas - 1)
+  const cuota1 = order_amount * dp
+  const montoFinanciado = order_amount - cuota1
+  const cuotasRestantes = cuotas - 1
+  const montoCuotaResto = cuotasRestantes > 0 ? montoFinanciado / cuotasRestantes : 0
   const liquidacionTotal = order_amount * (1 - descuento)
-  const downPaymentMonto = order_amount * dp
 
   // Calcular en qué mes cae cada split (plazo_dias / 30 redondeado)
   const splitsPorMes = splits.map(s => ({
@@ -144,7 +146,6 @@ function simularFlujo(
 
   // Inicializar filas
   const cobroCuota = new Array(totalMeses).fill(0)
-  const downPaymentFila = new Array(totalMeses).fill(0)
   const liquidacionComercio = new Array(totalMeses).fill(0)
   const costoOperativo = new Array(totalMeses).fill(0)
   const impCreditosFila = new Array(totalMeses).fill(0)
@@ -158,20 +159,17 @@ function simularFlujo(
     const ops = operaciones_por_mes[mesInicio] || 0
     if (ops === 0) continue
 
-    // Down payment en mes de inicio (mes 1 del préstamo = mesInicio en array)
-    downPaymentFila[mesInicio] += ops * downPaymentMonto
-
-    // Cuota 1 siempre se cobra en mes de inicio (sin incobrabilidad)
-    cobroCuota[mesInicio] += ops * montoCuota
+    // Cuota 1 (= down payment) en mes de inicio, siempre se cobra, sin incobrabilidad
+    cobroCuota[mesInicio] += ops * cuota1
 
     // Cuotas 2 a N con incobrabilidad
     for (let c = 2; c <= cuotas; c++) {
       const mesDelay = Math.ceil(moraDias / 30)
       const mesCobro = mesInicio + (c - 1) + mesDelay
       if (mesCobro < totalMeses) {
-        const cobroNeto = montoCuota * (1 - incobrabilidad)
+        const cobroNeto = montoCuotaResto * (1 - incobrabilidad)
         cobroCuota[mesCobro] += ops * cobroNeto
-        incobrabilidadFila[mesCobro] += -(ops * montoCuota * incobrabilidad)
+        incobrabilidadFila[mesCobro] += -(ops * montoCuotaResto * incobrabilidad)
       }
     }
 
@@ -193,8 +191,8 @@ function simularFlujo(
 
   // Imp créditos sobre cobros, imp débitos sobre liquidaciones
   for (let m = 0; m < totalMeses; m++) {
-    if (cobroCuota[m] + downPaymentFila[m] > 0) {
-      impCreditosFila[m] = -((cobroCuota[m] + downPaymentFila[m]) * impCred)
+    if (cobroCuota[m] > 0) {
+      impCreditosFila[m] = -(cobroCuota[m] * impCred)
     }
     if (liquidacionComercio[m] < 0) {
       impDebitosFila[m] = liquidacionComercio[m] * impDeb // ya es negativo * positivo = negativo
@@ -207,7 +205,7 @@ function simularFlujo(
 
   // Primera pasada: subtotal sin financiación
   for (let m = 0; m < totalMeses; m++) {
-    subtotal[m] = cobroCuota[m] + downPaymentFila[m] + liquidacionComercio[m] +
+    subtotal[m] = cobroCuota[m] + liquidacionComercio[m] +
       costoOperativo[m] + impCreditosFila[m] + impDebitosFila[m] + iibbFila[m] + incobrabilidadFila[m]
   }
 
@@ -233,7 +231,6 @@ function simularFlujo(
 
   const filas: FlujoFila[] = [
     { concepto: 'Cobro cuotas', valores: trim(cobroCuota) },
-    { concepto: 'Down payment', valores: trim(downPaymentFila) },
     { concepto: 'Liquidación comercio', valores: trim(liquidacionComercio) },
     { concepto: 'Costo operativo', valores: trim(costoOperativo) },
     { concepto: 'Imp. créditos', valores: trim(impCreditosFila) },
