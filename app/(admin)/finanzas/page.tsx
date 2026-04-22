@@ -113,7 +113,7 @@ export default async function FinanzasPage({
 
       {/* Cash balance chart */}
       <CashBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} />
-      <DeudaBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} prestamos={prestamos} />
+      <DeudaBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} prestamos={prestamos} limite={deudaConfig.limite} />
 
       {/* Action buttons and filter */}
       <div className="flex flex-wrap gap-3 items-end mb-6">

@@ -7,6 +7,7 @@ import type { DeudaPrestamo } from '@/lib/types'
 interface Props {
   data: { cash_date: string; cash_balance: number }[]
   prestamos: DeudaPrestamo[]
+  limite: number
 }
 
 type Periodo = 'total' | '3m' | '2m' | '1m'
@@ -35,15 +36,13 @@ function getStartOfMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
-export default function DeudaBalanceChart({ data, prestamos }: Props) {
+export default function DeudaBalanceChart({ data, prestamos, limite }: Props) {
   const [periodo, setPeriodo] = useState<Periodo>('1m')
 
-  // Calcular saldo de deuda por día
   const chartData = useMemo(() => {
     const activos = prestamos.filter(p => p.estado === 'activo')
 
     const deudaPorDia = data.map(d => {
-      // Sumar saldo capital de préstamos activos a esa fecha
       let saldoDeuda = 0
       for (const p of activos) {
         if (d.cash_date >= p.fecha_toma) {
@@ -64,6 +63,12 @@ export default function DeudaBalanceChart({ data, prestamos }: Props) {
 
   if (data.length === 0) return null
 
+  // Determinar color según uso del límite
+  const maxDeuda = Math.max(...chartData.map(d => d.deuda), 0)
+  const usoPct = limite > 0 ? (maxDeuda / limite) * 100 : 0
+  const lineColor = usoPct >= 80 ? '#EF4444' : usoPct >= 50 ? '#F59E0B' : '#3B82F6'
+  const btnColor = usoPct >= 80 ? 'bg-red-600' : usoPct >= 50 ? 'bg-yellow-500' : 'bg-blue-600'
+
   const mapped = chartData.map(d => ({
     label: formatDate(d.cash_date),
     deuda: Math.round(d.deuda),
@@ -81,7 +86,7 @@ export default function DeudaBalanceChart({ data, prestamos }: Props) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-700">Saldo de deuda</h3>
-          <p className="text-xs text-gray-400">Evolución diaria del endeudamiento</p>
+          <p className="text-xs text-gray-400">Evolución diaria del endeudamiento (límite: {formatLabel(limite)})</p>
         </div>
         <div className="flex gap-1">
           {periodos.map(p => (
@@ -89,7 +94,7 @@ export default function DeudaBalanceChart({ data, prestamos }: Props) {
               key={p.key}
               onClick={() => setPeriodo(p.key)}
               className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                periodo === p.key ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                periodo === p.key ? `${btnColor} text-white` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {p.label}
@@ -102,8 +107,8 @@ export default function DeudaBalanceChart({ data, prestamos }: Props) {
           <LineChart data={mapped} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="label" stroke="#6b7280" fontSize={10} interval="preserveStartEnd" />
-            <YAxis stroke="#6b7280" fontSize={10} tickFormatter={formatLabel} domain={[0, 'auto']} />
-            <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
+            <YAxis stroke="#6b7280" fontSize={10} tickFormatter={formatLabel} domain={[0, limite]} />
+            <ReferenceLine y={limite} stroke="#EF4444" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: 'Límite', position: 'right', fill: '#EF4444', fontSize: 10 }} />
             <Tooltip
               formatter={(value) => [`$${fmt.format(Number(value))}`, 'Deuda']}
               labelStyle={{ color: '#374151' }}
@@ -112,10 +117,10 @@ export default function DeudaBalanceChart({ data, prestamos }: Props) {
             <Line
               type="monotone"
               dataKey="deuda"
-              stroke="#EF4444"
+              stroke={lineColor}
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 4, fill: '#EF4444' }}
+              activeDot={{ r: 4, fill: lineColor }}
             />
           </LineChart>
         </ResponsiveContainer>
