@@ -22,8 +22,8 @@ export interface SimuladorParams {
   incobrabilidad_desvio: number   // % (ej: 1.5)
   mora_media_dias: number         // días (ej: 15)
   mora_desvio_dias: number        // días (ej: 7)
-  fondos_propios: boolean         // true = capital propio, false = financiado con deuda
-  costo_oportunidad_tna: number   // % TNA - solo se usa con fondos propios para VAN
+  venta_propia: boolean           // true = venta propia, false = financiamos a tercero
+  costo_oportunidad_tna: number   // % TNA - reservado para uso futuro
 }
 
 export interface FlujoFila {
@@ -176,20 +176,26 @@ function simularFlujo(
       }
     }
 
-    // Splits de liquidación (plazo en días desde día 0)
-    for (const split of splitsPorMes) {
-      const mesLiq = mesInicio + split.mes
-      if (mesLiq < totalMeses) {
-        liquidacionComercio[mesLiq] += -(ops * split.monto)
+    // Splits de liquidación (solo si no es venta propia)
+    if (!params.venta_propia) {
+      for (const split of splitsPorMes) {
+        const mesLiq = mesInicio + split.mes
+        if (mesLiq < totalMeses) {
+          liquidacionComercio[mesLiq] += -(ops * split.monto)
+        }
       }
     }
 
     // Costos operativos en mes de inicio
     costoOperativo[mesInicio] += -(ops * order_amount * costosOp)
 
-    // IIBB en mes 1: comisión * iibb% (comisión = order_amount * tasa_descuento)
-    const comision = order_amount * descuento
-    iibbFila[mesInicio] += -(ops * comision * iibb)
+    // IIBB: venta propia = sobre order_amount, tercero = sobre comisión
+    if (params.venta_propia) {
+      iibbFila[mesInicio] += -(ops * order_amount * iibb)
+    } else {
+      const comision = order_amount * descuento
+      iibbFila[mesInicio] += -(ops * comision * iibb)
+    }
   }
 
   // Imp créditos sobre ingresos y débitos sobre egresos de cada mes
@@ -217,7 +223,7 @@ function simularFlujo(
   const ingresoColocacion = new Array(totalMeses).fill(0)
   let acum = 0
   for (let m = 0; m < totalMeses; m++) {
-    if (!params.fondos_propios && acum < 0) {
+    if (!params.venta_propia && acum < 0) {
       costoFinanciacion[m] = acum * costoFinMensual // negativo * positivo = negativo
     }
     if (acum > 0) {
@@ -288,7 +294,7 @@ function simularFlujo(
     rent_anual_capital: rentAnualCapital,
     rent_sobre_order: rentSobreOrder,
     margen_neto_op: margenNetoOp,
-    fondos_propios: params.fondos_propios,
+    fondos_propios: params.venta_propia,
   }
 
   return { filas, indicadores, meses }

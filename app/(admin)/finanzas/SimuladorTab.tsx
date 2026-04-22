@@ -30,7 +30,7 @@ const defaultParams: SimuladorParams = {
   incobrabilidad_desvio: 1.5,
   mora_media_dias: 15,
   mora_desvio_dias: 7,
-  fondos_propios: true,
+  venta_propia: false,
   costo_oportunidad_tna: 0,
 }
 
@@ -182,8 +182,8 @@ export default function SimuladorTab({ productos }: Props) {
               <input type="number" step="0.1" value={params.incobrabilidad_media} onChange={e => updateParam('incobrabilidad_media', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
             </div>
             <div className="flex items-center gap-2">
-              <input type="checkbox" checked={params.fondos_propios} onChange={e => updateParam('fondos_propios', e.target.checked)} className="w-4 h-4 accent-blue-600" />
-              <label className="text-gray-600 text-xs">Fondos propios</label>
+              <input type="checkbox" checked={params.venta_propia} onChange={e => updateParam('venta_propia', e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              <label className="text-gray-600 text-xs">Venta propia</label>
             </div>
             {modo === 'est' && (
               <>
@@ -229,12 +229,12 @@ export default function SimuladorTab({ productos }: Props) {
         {/* Indicadores */}
         <div className="space-y-3">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
+            <p className="text-[10px] text-gray-500 mb-1">{params.venta_propia ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_requerido))}</p>
             <p className="text-[10px] text-gray-400 mt-1">Promedio: {formatearMoneda(Math.round(ind.capital_promedio))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'CT' : 'Deuda'} / OA</p>
+            <p className="text-[10px] text-gray-500 mb-1">{params.venta_propia ? 'CT' : 'Deuda'} / OA</p>
             <p className="text-xl font-bold text-gray-900">{(ind.ct_deuda_ratio * 100).toFixed(1)}%</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
