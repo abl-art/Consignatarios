@@ -41,6 +41,13 @@
   - Existencia final de cada mes (snapshot último día del mes): crear tabla o guardar en flujo_config como `existencia_YYYY-MM` con valor del stock valorizado a costo
   - Automatizar: al cargar Finanzas, si es último día del mes y no existe snapshot, generarlo
 
+### Cron automático sync consignatarios (cada hora)
+- API route ya creada en `/api/cron/sync` con CRON_SECRET configurado en Vercel
+- `vercel.json` ya tiene el cron definido (`0 * * * *`)
+- **Bloqueado por plan Hobby**: Vercel Hobby solo permite crons diarios
+- **Acción**: upgrade a Vercel Pro ($20/mes) y el cron se activa automáticamente
+- Mientras tanto: sync manual desde `/sync`
+
 ## Prioridad Media
 
 ### Endpoint de GOcelular
