@@ -189,12 +189,15 @@ function simularFlujo(
     // Costos operativos en mes de inicio
     costoOperativo[mesInicio] += -(ops * order_amount * costosOp)
 
-    // Flete (solo venta propia, valor plano por operación)
+    // Flete (solo venta propia, mes vencido = mesInicio + 1)
     if (params.modalidad === 'propia') {
-      fleteFila[mesInicio] += -(ops * params.flete)
+      const mesFlete = mesInicio + 1
+      if (mesFlete < totalMeses) {
+        fleteFila[mesFlete] += -(ops * params.flete)
+      }
     }
 
-    // Comisión consignatario (% OA, se paga a 30 días = mes 1)
+    // Comisión consignatario (% OA, se paga a 30 días = mesInicio + 1)
     if (params.modalidad === 'consignatarios') {
       const mesComision = mesInicio + 1
       if (mesComision < totalMeses) {
@@ -202,12 +205,15 @@ function simularFlujo(
       }
     }
 
-    // IIBB: venta propia = sobre order_amount, terceros/consignatarios = sobre comisión
-    if (params.modalidad === 'propia') {
-      iibbFila[mesInicio] += -(ops * order_amount * iibb)
-    } else {
-      const comision = order_amount * descuento
-      iibbFila[mesInicio] += -(ops * comision * iibb)
+    // IIBB: mes vencido (mesInicio + 1). Propia = sobre OA, terceros/consig = sobre comisión
+    const mesIibb = mesInicio + 1
+    if (mesIibb < totalMeses) {
+      if (params.modalidad === 'propia') {
+        iibbFila[mesIibb] += -(ops * order_amount * iibb)
+      } else {
+        const comision = order_amount * descuento
+        iibbFila[mesIibb] += -(ops * comision * iibb)
+      }
     }
   }
 
