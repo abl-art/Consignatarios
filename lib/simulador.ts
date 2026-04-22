@@ -42,7 +42,7 @@ export interface Indicadores {
   ct_deuda_ratio: number        // capital requerido / order amount
   payback: number               // mes en que acumulado > 0, 0 si nunca
   rent_anual_capital: number    // (resultado / capital promedio) * (12 / meses)
-  rent_anual_order: number      // (resultado / (OA * ops)) * (12 / meses)
+  rent_sobre_order: number      // resultado / (OA * ops) — sin anualizar
   margen_neto_op: number        // resultado / total operaciones
   fondos_propios: boolean
 }
@@ -251,12 +251,13 @@ function simularFlujo(
     if (acumulado[m] > 0) { payback = m + 1; break }
   }
 
-  // Capital promedio ponderado por tiempo (suma de saldos negativos / total meses)
+  // Capital promedio ponderado por los meses que hay plata invertida (saldo negativo)
+  const mesesInvertidos = trimmedAcumulado.filter(v => v < 0).length
   const sumaNegativos = trimmedAcumulado.reduce((s, v) => s + (v < 0 ? Math.abs(v) : 0), 0)
-  const capitalPromedio = meses > 0 ? sumaNegativos / meses : 0
+  const capitalPromedio = mesesInvertidos > 0 ? sumaNegativos / mesesInvertidos : 0
 
-  // Rentabilidad anual sobre capital = (resultado / capital promedio) * (12 / meses)
-  const rentAnualCapital = capitalPromedio > 0 ? (resultado / capitalPromedio) * (12 / meses) : 0
+  // Rentabilidad anual sobre capital = (resultado / capital promedio) * (12 / meses invertidos)
+  const rentAnualCapital = capitalPromedio > 0 ? (resultado / capitalPromedio) * (12 / mesesInvertidos) : 0
 
   // TIR: solo tiene sentido con fondos propios
   const tirMensual = params.fondos_propios ? calcTIR(trimmedSubtotal) : 0
@@ -267,7 +268,7 @@ function simularFlujo(
 
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
   const volumenTotal = order_amount * totalOps
-  const rentAnualOrder = volumenTotal > 0 ? (resultado / volumenTotal) * (12 / meses) : 0
+  const rentSobreOrder = volumenTotal > 0 ? resultado / volumenTotal : 0
   const ctDeudaRatio = order_amount > 0 ? capitalRequerido / order_amount : 0
 
   const indicadores: Indicadores = {
@@ -279,7 +280,7 @@ function simularFlujo(
     ct_deuda_ratio: ctDeudaRatio,
     payback,
     rent_anual_capital: rentAnualCapital,
-    rent_anual_order: rentAnualOrder,
+    rent_sobre_order: rentSobreOrder,
     margen_neto_op: margenNetoOp,
     fondos_propios: params.fondos_propios,
   }
