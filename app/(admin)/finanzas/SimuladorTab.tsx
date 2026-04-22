@@ -51,6 +51,7 @@ export default function SimuladorTab({ productos }: Props) {
   const [modo, setModo] = useState<'det' | 'est'>('det')
   const [saving, setSaving] = useState(false)
   const [showProductos, setShowProductos] = useState(false)
+  const [filtroModalidad, setFiltroModalidad] = useState<'todos' | 'terceros' | 'propia' | 'consignatarios'>('todos')
   const [opsStr, setOpsStr] = useState('1')
 
   function updateParam<K extends keyof SimuladorParams>(key: K, value: SimuladorParams[K]) {
@@ -324,9 +325,20 @@ export default function SimuladorTab({ productos }: Props) {
         </button>
         {showProductos && (
           <div className="border-t border-gray-200">
-            {productos.length === 0 ? (
-              <p className="p-5 text-sm text-gray-400 text-center">No hay productos guardados</p>
-            ) : (
+            <div className="px-4 py-2 flex gap-1 bg-gray-50 border-b border-gray-200">
+              {(['todos', 'terceros', 'propia', 'consignatarios'] as const).map(m => (
+                <button key={m} onClick={() => setFiltroModalidad(m)} className={`px-3 py-1 text-[10px] font-medium rounded-full transition-colors ${filtroModalidad === m ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  {m === 'todos' ? 'Todos' : m === 'terceros' ? 'Vta Terceros' : m === 'propia' ? 'Vta Propia' : 'Consignatarios'}
+                </button>
+              ))}
+            </div>
+            {(() => {
+              const filtrados = filtroModalidad === 'todos' ? productos : productos.filter(p => {
+                const pm = (p.parametros as unknown as SimuladorParams).modalidad
+                return pm === filtroModalidad
+              })
+              if (filtrados.length === 0) return <p className="p-5 text-sm text-gray-400 text-center">No hay productos para este filtro</p>
+              return (
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
@@ -338,7 +350,7 @@ export default function SimuladorTab({ productos }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {productos.map(p => {
+                  {filtrados.map(p => {
                     const pInd = p.indicadores as unknown as Indicadores
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -355,7 +367,8 @@ export default function SimuladorTab({ productos }: Props) {
                   })}
                 </tbody>
               </table>
-            )}
+              )
+            })()}
           </div>
         )}
       </div>
