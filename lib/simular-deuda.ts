@@ -29,10 +29,6 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function daysBetween(a: string, b: string): number {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24))
-}
-
 function recalcNetFlow(row: FlujoDiario): number {
   return (
     row.in_adelantado + row.in_en_termino + row.in_atrasado + row.in_pendiente +
@@ -57,9 +53,10 @@ export function simularDeuda(
   const getRow = (date: string): FlujoDiario | undefined => map.get(date)
   const alertas: DeudaAlerta[] = []
 
-  // --- Step 2: Inyectar egresos de préstamos activos ---
+  // Inyectar egresos de préstamos activos en el flujo
   for (const p of prestamos.filter(p => p.estado === 'activo')) {
     if (p.tipo === 'bullet') {
+      // Interés mensual: cada 30 días desde la toma
       const tasaDiaria = p.tasa_anual / 365
       const interesMensual = p.saldo_capital * tasaDiaria * 30
       let fechaInteres = addDays(p.fecha_toma, 30)
@@ -68,6 +65,7 @@ export function simularDeuda(
         if (row) row.out_interes += -interesMensual
         fechaInteres = addDays(fechaInteres, 30)
       }
+      // Devolución de capital al vencimiento
       if (p.fecha_vencimiento) {
         const row = getRow(p.fecha_vencimiento)
         if (row) row.out_dev_capital += -p.saldo_capital
@@ -83,7 +81,7 @@ export function simularDeuda(
     }
   }
 
-  // --- Recalcular net_flow y balance ---
+  // Recalcular net_flow y balance con deuda inyectada
   let balance = 0
   for (const row of flujo) {
     row.net_flow = recalcNetFlow(row)
@@ -91,48 +89,7 @@ export function simularDeuda(
     row.cash_balance = balance
   }
 
-  // --- Step 3: Simulación día a día ---
-  const descubiertosSimulados: { desde: string; hasta: string; monto: number }[] = []
-  const sugerenciasBullet: { desde: string; monto: number; dias: number }[] = []
-
-  for (let i = 0; i < flujo.length; i++) {
-    const row = flujo[i]
-    if (row.cash_balance < config.saldo_minimo) {
-      let diasDeficit = 0
-      for (let j = i; j < flujo.length && j < i + 30; j++) {
-        if (flujo[j].cash_balance < config.saldo_minimo) diasDeficit++
-        else break
-      }
-
-      const montoNecesario = config.saldo_minimo - row.cash_balance
-
-      if (diasDeficit <= 7) {
-        row.in_asistencia += montoNecesario
-        let bal = i > 0 ? flujo[i - 1].cash_balance : 0
-        for (let j = i; j < flujo.length; j++) {
-          flujo[j].net_flow = recalcNetFlow(flujo[j])
-          bal += flujo[j].net_flow
-          flujo[j].cash_balance = bal
-        }
-
-        let fechaHasta = row.cash_date
-        for (let j = i + 1; j < flujo.length && j <= i + 7; j++) {
-          if (flujo[j].cash_balance > config.saldo_minimo) {
-            fechaHasta = flujo[j].cash_date
-            break
-          }
-        }
-
-        descubiertosSimulados.push({ desde: row.cash_date, hasta: fechaHasta, monto: montoNecesario })
-      } else {
-        const plazoSugerido = Math.ceil(diasDeficit / 30) * 30
-        sugerenciasBullet.push({ desde: row.cash_date, monto: montoNecesario, dias: plazoSugerido })
-        break
-      }
-    }
-  }
-
-  // --- Step 4: Detectar días de estrés ---
+  // Detectar días de estrés (saldo bajo mínimo)
   const diasEstres: string[] = []
   for (const row of flujo) {
     if (row.cash_balance < config.saldo_minimo) {
@@ -141,34 +98,7 @@ export function simularDeuda(
     }
   }
 
-  // --- Step 5: Generar alertas ---
-  for (const desc of descubiertosSimulados) {
-    const dias = daysBetween(desc.desde, desc.hasta) || 1
-    const costoDiario = desc.monto * (config.tasa_descubierto / 365)
-    alertas.push({
-      tipo: 'descubierto',
-      monto: desc.monto,
-      fecha_desde: desc.desde,
-      fecha_hasta: desc.hasta,
-      dias,
-      costo_diario: Math.round(costoDiario),
-      tasa: config.tasa_descubierto,
-    })
-  }
-
-  for (const sug of sugerenciasBullet) {
-    const interesMensual = sug.monto * (config.tasa_bullet / 365) * 30
-    alertas.push({
-      tipo: 'sugerencia_bullet',
-      monto: sug.monto,
-      fecha_desde: sug.desde,
-      dias: sug.dias,
-      plazo_sugerido: sug.dias,
-      tasa: config.tasa_bullet,
-      interes_mensual: Math.round(interesMensual),
-    })
-  }
-
+  // Alerta de límite de línea
   const deudaVigente = prestamos
     .filter(p => p.estado === 'activo')
     .reduce((sum, p) => sum + p.saldo_capital, 0)

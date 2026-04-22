@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
-import { setDeudaConfig } from '@/lib/actions/deuda'
+import { setDeudaConfig, crearPrestamo } from '@/lib/actions/deuda'
 import type { DeudaPrestamo, DeudaMovimiento, DeudaConfig } from '@/lib/types'
 
 interface DeudaTabProps {
@@ -18,6 +18,12 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
   const [showConfig, setShowConfig] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showNuevo, setShowNuevo] = useState(false)
+  const [nuevoLoading, setNuevoLoading] = useState(false)
+  const [nuevoMonto, setNuevoMonto] = useState('')
+  const [nuevoTasa, setNuevoTasa] = useState(String(config.tasa_bullet * 100))
+  const [nuevoPlazo, setNuevoPlazo] = useState('30')
+  const [nuevoFecha, setNuevoFecha] = useState(new Date().toISOString().slice(0, 10))
 
   // Config form state
   const [tasaBullet, setTasaBullet] = useState(String(config.tasa_bullet * 100))
@@ -40,6 +46,23 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
       saldo_minimo: Number(saldoMinimo),
     })
     setSaving(false)
+    router.refresh()
+  }
+
+  async function handleCrearPrestamo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nuevoMonto || !nuevoTasa || !nuevoPlazo) return
+    setNuevoLoading(true)
+    await crearPrestamo({
+      tipo: 'bullet',
+      monto_capital: Number(nuevoMonto),
+      tasa_anual: Number(nuevoTasa) / 100,
+      fecha_toma: nuevoFecha,
+      plazo_dias: Number(nuevoPlazo),
+    })
+    setNuevoLoading(false)
+    setShowNuevo(false)
+    setNuevoMonto('')
     router.refresh()
   }
 
@@ -82,8 +105,14 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
 
       {/* Tabla de préstamos */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">Préstamos</h3>
+          <button
+            onClick={() => { setNuevoTasa(String(config.tasa_bullet * 100)); setShowNuevo(true) }}
+            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            + Cargar préstamo
+          </button>
         </div>
         {prestamos.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">No hay préstamos registrados</div>
@@ -232,6 +261,49 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
           </div>
         )}
       </div>
+
+      {/* Modal cargar préstamo */}
+      {showNuevo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <form onSubmit={handleCrearPrestamo} className="bg-white rounded-lg shadow-xl border border-gray-200 p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Nuevo préstamo Bullet</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Monto capital ($)</label>
+                <input type="number" value={nuevoMonto} onChange={(e) => setNuevoMonto(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="50000000" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tasa TNA (%)</label>
+                <input type="number" step="0.1" value={nuevoTasa} onChange={(e) => setNuevoTasa(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Plazo (días)</label>
+                <select value={nuevoPlazo} onChange={(e) => setNuevoPlazo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  {[30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360].map(d => (
+                    <option key={d} value={d}>{d} días</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Fecha de toma</label>
+                <input type="date" value={nuevoFecha} onChange={(e) => setNuevoFecha(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              {nuevoMonto && nuevoTasa && (
+                <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
+                  <p>Interés mensual estimado: <strong className="text-red-600">{formatearMoneda(Number(nuevoMonto) * (Number(nuevoTasa) / 100 / 365) * 30)}</strong></p>
+                  <p>Vencimiento capital: <strong>{(() => { const d = new Date(nuevoFecha); d.setDate(d.getDate() + Number(nuevoPlazo)); return d.toLocaleDateString('es-AR') })()}</strong></p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button type="button" onClick={() => setShowNuevo(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">Cancelar</button>
+              <button type="submit" disabled={nuevoLoading} className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {nuevoLoading ? 'Creando...' : 'Crear préstamo'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
