@@ -31,7 +31,7 @@ const defaultParams: SimuladorParams = {
   mora_media_dias: 15,
   mora_desvio_dias: 7,
   fondos_propios: true,
-  costo_oportunidad_tna: 45,
+  costo_oportunidad_tna: 0,
 }
 
 const fmtPct = (v: number) => (v * 100).toFixed(2) + '%'
@@ -185,12 +185,6 @@ export default function SimuladorTab({ productos }: Props) {
               <input type="checkbox" checked={params.fondos_propios} onChange={e => updateParam('fondos_propios', e.target.checked)} className="w-4 h-4 accent-blue-600" />
               <label className="text-gray-600 text-xs">Fondos propios</label>
             </div>
-            {params.fondos_propios && (
-              <div>
-                <label className="block text-gray-500 mb-1">Costo oportunidad TNA (%)</label>
-                <input type="number" step="0.1" value={params.costo_oportunidad_tna} onChange={e => updateParam('costo_oportunidad_tna', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
-              </div>
-            )}
             {modo === 'est' && (
               <>
                 <div>
@@ -234,19 +228,6 @@ export default function SimuladorTab({ productos }: Props) {
 
         {/* Indicadores */}
         <div className="space-y-3">
-          {params.fondos_propios && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-[10px] text-gray-500 mb-1">TIR Anual</p>
-              <p className={`text-2xl font-bold ${ind.tir_anual >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.tir_anual)}</p>
-              {resultado.tipo === 'est' && resultado.est && (
-                <p className="text-[10px] text-gray-400">P10: {fmtPct(resultado.est.p10.tir_anual)} | P90: {fmtPct(resultado.est.p90.tir_anual)}</p>
-              )}
-            </div>
-          )}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">VAN</p>
-            <p className={`text-xl font-bold ${ind.van >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatearMoneda(Math.round(ind.van))}</p>
-          </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_requerido))}</p>

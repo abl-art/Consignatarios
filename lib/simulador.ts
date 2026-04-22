@@ -34,14 +34,11 @@ export interface FlujoFila {
 }
 
 export interface Indicadores {
-  tir_mensual: number
-  tir_anual: number
-  van: number
   capital_requerido: number     // pico negativo del acumulado
   capital_promedio: number      // promedio ponderado del saldo negativo
   ct_deuda_ratio: number        // capital requerido / order amount
   payback: number               // mes en que acumulado > 0, 0 si nunca
-  rent_anual_capital: number    // (resultado / capital promedio) * (12 / meses)
+  rent_anual_capital: number    // (resultado / capital promedio) * (12 / meses invertidos)
   rent_sobre_order: number      // resultado / (OA * ops) — sin anualizar
   margen_neto_op: number        // resultado / total operaciones
   fondos_propios: boolean
@@ -58,9 +55,8 @@ export interface ResultadoEstocastico {
   p10: Indicadores
   p90: Indicadores
   distribuciones: {
-    tir: number[]
-    van: number[]
     capital_requerido: number[]
+    rent_anual_capital: number[]
   }
 }
 
@@ -272,12 +268,6 @@ function simularFlujo(
   // Rentabilidad anual sobre capital = (resultado / capital promedio) * (12 / meses invertidos)
   const rentAnualCapital = capitalPromedio > 0 ? (resultado / capitalPromedio) * (12 / mesesInvertidos) : 0
 
-  // TIR: solo tiene sentido con fondos propios
-  const tirMensual = params.fondos_propios ? calcTIR(trimmedSubtotal) : 0
-  // VAN: con fondos propios descuenta al costo de oportunidad, con terceros al costo de financiación
-  const tasaDescuentoVAN = params.fondos_propios
-    ? (params.costo_oportunidad_tna || 0) / 100 / 12
-    : costo_financiacion_tna / 100 / 12
 
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
   const volumenTotal = order_amount * totalOps
@@ -285,9 +275,6 @@ function simularFlujo(
   const ctDeudaRatio = order_amount > 0 ? capitalRequerido / order_amount : 0
 
   const indicadores: Indicadores = {
-    tir_mensual: tirMensual,
-    tir_anual: params.fondos_propios ? Math.pow(1 + tirMensual, 12) - 1 : 0,
-    van: calcVAN(trimmedSubtotal, tasaDescuentoVAN),
     capital_requerido: capitalRequerido,
     capital_promedio: capitalPromedio,
     ct_deuda_ratio: ctDeudaRatio,
@@ -333,9 +320,8 @@ export function simularEstocastico(params: SimuladorParams, n = 500): ResultadoE
     p10: resultados[idx10].indicadores,
     p90: resultados[idx90].indicadores,
     distribuciones: {
-      tir: resultados.map(r => r.indicadores.tir_anual),
-      van: resultados.map(r => r.indicadores.van),
       capital_requerido: resultados.map(r => r.indicadores.capital_requerido),
+      rent_anual_capital: resultados.map(r => r.indicadores.rent_anual_capital),
     },
   }
 }
