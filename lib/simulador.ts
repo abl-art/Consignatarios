@@ -188,13 +188,19 @@ function simularFlujo(
     // Costos operativos en mes de inicio
     costoOperativo[mesInicio] += -(ops * order_amount * costosOp)
 
-    // Impuestos: todos en mes 1 (se factura al momento de la operación)
-    // Créditos y débitos sobre order_amount
-    impCreditosFila[mesInicio] += -(ops * order_amount * impCred)
-    impDebitosFila[mesInicio] += -(ops * order_amount * impDeb)
+    // IIBB en mes 1: comisión * iibb% (comisión = order_amount * tasa_descuento)
+    const comision = order_amount * descuento
+    iibbFila[mesInicio] += -(ops * comision * iibb)
+  }
 
-    // IIBB sobre order_amount
-    iibbFila[mesInicio] += -(ops * order_amount * iibb)
+  // Imp créditos sobre ingresos y débitos sobre egresos de cada mes
+  for (let m = 0; m < totalMeses; m++) {
+    if (cobroCuota[m] > 0) {
+      impCreditosFila[m] += -(cobroCuota[m] * impCred)
+    }
+    if (liquidacionComercio[m] < 0) {
+      impDebitosFila[m] += -(Math.abs(liquidacionComercio[m]) * impDeb)
+    }
   }
 
   // Calcular subtotal y acumulado, luego costo de financiación sobre saldo negativo
