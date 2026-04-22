@@ -293,7 +293,7 @@ export default function SimuladorTab({ productos }: Props) {
               <tr>
                 <th className="text-left px-2 py-1.5 font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[120px]">Concepto</th>
                 {Array.from({ length: sim.meses }, (_, i) => (
-                  <th key={i} className="text-right px-1.5 py-1.5 font-semibold text-gray-500 min-w-[60px]">Mes {i + 1}</th>
+                  <th key={i} className="text-right px-1.5 py-1.5 font-semibold text-gray-500 min-w-[60px]">Mes {i}</th>
                 ))}
               </tr>
             </thead>

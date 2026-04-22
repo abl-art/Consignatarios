@@ -177,9 +177,9 @@ function simularFlujo(
       }
     }
 
-    // Splits de liquidación
+    // Splits de liquidación (plazo en días desde día 0)
     for (const split of splitsPorMes) {
-      const mesLiq = mesInicio + split.mes - 1
+      const mesLiq = mesInicio + split.mes
       if (mesLiq < totalMeses) {
         liquidacionComercio[mesLiq] += -(ops * split.monto)
       }
