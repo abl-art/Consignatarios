@@ -371,8 +371,9 @@ export function simularEstocastico(params: SimuladorParams, n = 500): ResultadoE
 // ---------------------------------------------------------------------------
 
 export function generarNombreProducto(params: SimuladorParams): string {
+  const modalidad = params.modalidad === 'propia' ? 'Vta Propia' : params.modalidad === 'consignatarios' ? 'Consignatarios' : 'Vta Terceros'
   const splitsStr = params.splits.map(s => `${s.porcentaje}%`).join('/')
   const plazosStr = params.splits.map(s => `${s.plazo_dias}`).join('/')
   const dp = params.down_payment_pct > 0 ? ` - DP ${params.down_payment_pct}%` : ''
-  return `${params.cuotas} cuotas - Liq ${splitsStr} a ${plazosStr}d${dp}`
+  return `${modalidad} - ${params.cuotas} cuotas - Liq ${splitsStr} a ${plazosStr}d${dp}`
 }
