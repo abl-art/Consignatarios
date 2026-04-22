@@ -12,6 +12,7 @@ import DPDTab from './DPDTab'
 import VintageTab from './VintageTab'
 import DeudaTab from './DeudaTab'
 import DeudaAlerts from './DeudaAlerts'
+import DeudaBalanceChart from './DeudaBalanceChart'
 
 export default async function FinanzasPage({
   searchParams,
@@ -112,6 +113,7 @@ export default async function FinanzasPage({
 
       {/* Cash balance chart */}
       <CashBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} />
+      <DeudaBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} prestamos={prestamos} />
 
       {/* Action buttons and filter */}
       <div className="flex flex-wrap gap-3 items-end mb-6">

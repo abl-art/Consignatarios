@@ -125,7 +125,9 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Tasa TNA</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha toma</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Vencimiento</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Saldo</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Saldo Cap.</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Interés</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
               </tr>
             </thead>
@@ -148,15 +150,31 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
                     <td className="px-4 py-3 text-gray-600">{new Date(p.fecha_toma).toLocaleDateString('es-AR')}</td>
                     <td className="px-4 py-3 text-gray-600">{p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString('es-AR') : '—'}</td>
                     <td className="px-4 py-3 text-right font-medium text-red-600">{formatearMoneda(p.saldo_capital)}</td>
+                    {(() => {
+                      const diasTranscurridos = Math.max(0, Math.round((Date.now() - new Date(p.fecha_toma).getTime()) / (1000 * 60 * 60 * 24)))
+                      const diasPlazo = p.plazo_dias ?? diasTranscurridos
+                      const interesTotal = p.saldo_capital * (p.tasa_anual / 365) * Math.min(diasTranscurridos, diasPlazo)
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-right text-orange-600">{formatearMoneda(Math.round(interesTotal))}</td>
+                          <td className="px-4 py-3 text-right font-bold text-red-700">{formatearMoneda(Math.round(p.saldo_capital + interesTotal))}</td>
+                        </>
+                      )
+                    })()}
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${p.estado === 'activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {p.estado}
-                      </span>
+                      {(() => {
+                        const hoy = new Date().toISOString().slice(0, 10)
+                        const vencido = p.fecha_vencimiento && hoy >= p.fecha_vencimiento
+                        if (p.estado === 'cancelado' || (vencido && p.estado === 'activo')) {
+                          return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Devuelto</span>
+                        }
+                        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">Activo</span>
+                      })()}
                     </td>
                   </tr>
                   {expandedId === p.id && (
                     <tr key={`${p.id}-detail`}>
-                      <td colSpan={7} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                      <td colSpan={9} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                         <p className="text-xs font-semibold text-gray-500 mb-2">Movimientos</p>
                         {(() => {
                           const movs = movimientos.filter(m => m.prestamo_id === p.id)
