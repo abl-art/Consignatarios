@@ -39,10 +39,11 @@ export interface Indicadores {
   van: number
   capital_requerido: number     // pico negativo del acumulado
   capital_promedio: number      // promedio ponderado del saldo negativo
+  ct_deuda_ratio: number        // capital requerido / order amount
   payback: number               // mes en que acumulado > 0, 0 si nunca
   rent_anual_capital: number    // (resultado / capital promedio) * (12 / meses)
-  rent_sobre_order: number      // resultado / (order_amount * total ops)
-  margen_neto_op: number        // resultado / total operaciones (= rent_sobre_order en $)
+  rent_anual_order: number      // (resultado / (OA * ops)) * (12 / meses)
+  margen_neto_op: number        // resultado / total operaciones
   fondos_propios: boolean
 }
 
@@ -187,19 +188,13 @@ function simularFlujo(
     // Costos operativos en mes de inicio
     costoOperativo[mesInicio] += -(ops * order_amount * costosOp)
 
-    // IIBB en mes de inicio
-    const ventaNeta = order_amount * (1 - descuento)
-    iibbFila[mesInicio] += -(ops * ventaNeta * iibb)
-  }
+    // Impuestos: todos en mes 1 (se factura al momento de la operación)
+    // Créditos y débitos sobre order_amount
+    impCreditosFila[mesInicio] += -(ops * order_amount * impCred)
+    impDebitosFila[mesInicio] += -(ops * order_amount * impDeb)
 
-  // Imp créditos sobre cobros, imp débitos sobre liquidaciones
-  for (let m = 0; m < totalMeses; m++) {
-    if (cobroCuota[m] > 0) {
-      impCreditosFila[m] = -(cobroCuota[m] * impCred)
-    }
-    if (liquidacionComercio[m] < 0) {
-      impDebitosFila[m] = liquidacionComercio[m] * impDeb // ya es negativo * positivo = negativo
-    }
+    // IIBB sobre order_amount
+    iibbFila[mesInicio] += -(ops * order_amount * iibb)
   }
 
   // Calcular subtotal y acumulado, luego costo de financiación sobre saldo negativo
@@ -270,9 +265,10 @@ function simularFlujo(
     ? (params.costo_oportunidad_tna || 0) / 100 / 12
     : costo_financiacion_tna / 100 / 12
 
-  // Margen neto por op = resultado / total ops = rent sobre order amount
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
-  const rentSobreOrder = totalOps > 0 ? resultado / (order_amount * totalOps) : 0
+  const volumenTotal = order_amount * totalOps
+  const rentAnualOrder = volumenTotal > 0 ? (resultado / volumenTotal) * (12 / meses) : 0
+  const ctDeudaRatio = order_amount > 0 ? capitalRequerido / order_amount : 0
 
   const indicadores: Indicadores = {
     tir_mensual: tirMensual,
@@ -280,9 +276,10 @@ function simularFlujo(
     van: calcVAN(trimmedSubtotal, tasaDescuentoVAN),
     capital_requerido: capitalRequerido,
     capital_promedio: capitalPromedio,
+    ct_deuda_ratio: ctDeudaRatio,
     payback,
     rent_anual_capital: rentAnualCapital,
-    rent_sobre_order: rentSobreOrder,
+    rent_anual_order: rentAnualOrder,
     margen_neto_op: margenNetoOp,
     fondos_propios: params.fondos_propios,
   }

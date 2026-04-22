@@ -253,8 +253,16 @@ export default function SimuladorTab({ productos }: Props) {
             <p className="text-[10px] text-gray-400 mt-1">Promedio: {formatearMoneda(Math.round(ind.capital_promedio))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'CT' : 'Deuda'} / OA</p>
+            <p className="text-xl font-bold text-gray-900">{(ind.ct_deuda_ratio * 100).toFixed(1)}%</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Rent. anual s/capital</p>
             <p className={`text-2xl font-bold ${ind.rent_anual_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_anual_capital)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-[10px] text-gray-500 mb-1">Rent. anual s/OA</p>
+            <p className={`text-xl font-bold ${ind.rent_anual_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_anual_order)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Payback</p>
@@ -263,7 +271,6 @@ export default function SimuladorTab({ productos }: Props) {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Margen neto / op</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.margen_neto_op))}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Rent. s/OA: {fmtPct(ind.rent_sobre_order)}</p>
           </div>
           <button
             onClick={handleGuardar}
