@@ -23,6 +23,7 @@ export interface SimuladorParams {
   mora_media_dias: number         // días (ej: 15)
   mora_desvio_dias: number        // días (ej: 7)
   fondos_propios: boolean         // true = capital propio, false = financiado con deuda
+  costo_oportunidad_tna: number   // % TNA - solo se usa con fondos propios para VAN
 }
 
 export interface FlujoFila {
@@ -211,10 +212,10 @@ function simularFlujo(
       costoOperativo[m] + impCreditosFila[m] + impDebitosFila[m] + iibbFila[m] + incobrabilidadFila[m]
   }
 
-  // Costo de financiación sobre acumulado negativo
+  // Costo de financiación sobre acumulado negativo (solo con fondos de terceros)
   let acum = 0
   for (let m = 0; m < totalMeses; m++) {
-    if (acum < 0) {
+    if (!params.fondos_propios && acum < 0) {
       costoFinanciacion[m] = acum * costoFinMensual // negativo * positivo = negativo
     }
     subtotal[m] += costoFinanciacion[m]
@@ -262,9 +263,12 @@ function simularFlujo(
   // Rentabilidad anual sobre capital = (resultado / capital promedio) * (12 / meses)
   const rentAnualCapital = capitalPromedio > 0 ? (resultado / capitalPromedio) * (12 / meses) : 0
 
-  // TIR: solo tiene sentido con fondos propios (costo de oportunidad)
+  // TIR: solo tiene sentido con fondos propios
   const tirMensual = params.fondos_propios ? calcTIR(trimmedSubtotal) : 0
-  const tasaMensual = costo_financiacion_tna / 100 / 12
+  // VAN: con fondos propios descuenta al costo de oportunidad, con terceros al costo de financiación
+  const tasaDescuentoVAN = params.fondos_propios
+    ? (params.costo_oportunidad_tna || 0) / 100 / 12
+    : costo_financiacion_tna / 100 / 12
 
   // Margen neto por op = resultado / total ops = rent sobre order amount
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
@@ -273,7 +277,7 @@ function simularFlujo(
   const indicadores: Indicadores = {
     tir_mensual: tirMensual,
     tir_anual: params.fondos_propios ? Math.pow(1 + tirMensual, 12) - 1 : 0,
-    van: calcVAN(trimmedSubtotal, tasaMensual),
+    van: calcVAN(trimmedSubtotal, tasaDescuentoVAN),
     capital_requerido: capitalRequerido,
     capital_promedio: capitalPromedio,
     payback,

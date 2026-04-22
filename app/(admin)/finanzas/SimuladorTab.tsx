@@ -31,6 +31,7 @@ const defaultParams: SimuladorParams = {
   mora_media_dias: 15,
   mora_desvio_dias: 7,
   fondos_propios: true,
+  costo_oportunidad_tna: 45,
 }
 
 const fmtPct = (v: number) => (v * 100).toFixed(2) + '%'
@@ -180,10 +181,16 @@ export default function SimuladorTab({ productos }: Props) {
               <label className="block text-gray-500 mb-1">Incob. media (%)</label>
               <input type="number" step="0.1" value={params.incobrabilidad_media} onChange={e => updateParam('incobrabilidad_media', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
             </div>
-            <div className="flex items-center gap-2 col-span-2">
+            <div className="flex items-center gap-2">
               <input type="checkbox" checked={params.fondos_propios} onChange={e => updateParam('fondos_propios', e.target.checked)} className="w-4 h-4 accent-blue-600" />
-              <label className="text-gray-600 text-xs">Fondos propios (si no, se financia con deuda)</label>
+              <label className="text-gray-600 text-xs">Fondos propios</label>
             </div>
+            {params.fondos_propios && (
+              <div>
+                <label className="block text-gray-500 mb-1">Costo oportunidad TNA (%)</label>
+                <input type="number" step="0.1" value={params.costo_oportunidad_tna} onChange={e => updateParam('costo_oportunidad_tna', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
+              </div>
+            )}
             {modo === 'est' && (
               <>
                 <div>
