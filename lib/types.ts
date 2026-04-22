@@ -147,3 +147,51 @@ export interface Diferencia {
   monto_deuda: number
   created_at: string
 }
+
+// Deuda
+export type TipoPrestamo = 'bullet' | 'descubierto'
+export type EstadoPrestamo = 'activo' | 'cancelado'
+export type TipoMovimientoDeuda = 'toma' | 'devolucion' | 'interes'
+
+export interface DeudaPrestamo {
+  id: string
+  tipo: TipoPrestamo
+  monto_capital: number
+  tasa_anual: number
+  fecha_toma: string
+  plazo_dias: number | null
+  fecha_vencimiento: string | null
+  saldo_capital: number
+  estado: EstadoPrestamo
+  created_at: string
+}
+
+export interface DeudaMovimiento {
+  id: string
+  prestamo_id: string
+  tipo: TipoMovimientoDeuda
+  monto: number
+  fecha: string
+  created_at: string
+}
+
+export interface DeudaConfig {
+  tasa_bullet: number
+  tasa_descubierto: number
+  limite: number
+  saldo_minimo: number
+}
+
+export interface DeudaAlerta {
+  tipo: 'descubierto' | 'sugerencia_bullet' | 'limite' | 'estres'
+  monto?: number
+  fecha_desde?: string
+  fecha_hasta?: string
+  dias?: number
+  costo_diario?: number
+  plazo_sugerido?: number
+  tasa?: number
+  interes_mensual?: number
+  uso_porcentaje?: number
+  dias_estres?: number
+}

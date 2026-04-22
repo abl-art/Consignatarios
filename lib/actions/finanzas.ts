@@ -25,8 +25,10 @@ interface FlujoDiario {
   out_interes: number
   out_otros: number
   out_vta3ero: number
+  out_dev_capital: number
   net_flow: number
   cash_balance: number
+  estres?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +171,7 @@ function emptyRow(cash_date: string): FlujoDiario {
     out_interes: 0,
     out_otros: 0,
     out_vta3ero: 0,
+    out_dev_capital: 0,
     net_flow: 0,
     cash_balance: 0,
   }
@@ -459,7 +462,8 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
       row.out_envios +
       row.out_interes +
       row.out_otros +
-      row.out_vta3ero
+      row.out_vta3ero +
+      row.out_dev_capital
     balance += row.net_flow
     row.cash_balance = balance
   }

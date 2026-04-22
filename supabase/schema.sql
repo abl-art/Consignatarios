@@ -217,6 +217,34 @@ create table sync_log (
 );
 
 -- ============================================================
+-- DEUDA: PRESTAMOS
+-- ============================================================
+create table deuda_prestamos (
+  id uuid primary key default uuid_generate_v4(),
+  tipo text not null check (tipo in ('bullet', 'descubierto')),
+  monto_capital numeric not null,
+  tasa_anual numeric not null,
+  fecha_toma date not null,
+  plazo_dias integer,
+  fecha_vencimiento date,
+  saldo_capital numeric not null,
+  estado text not null default 'activo' check (estado in ('activo', 'cancelado')),
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================
+-- DEUDA: MOVIMIENTOS
+-- ============================================================
+create table deuda_movimientos (
+  id uuid primary key default uuid_generate_v4(),
+  prestamo_id uuid not null references deuda_prestamos(id) on delete cascade,
+  tipo text not null check (tipo in ('toma', 'devolucion', 'interes')),
+  monto numeric not null,
+  fecha date not null,
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================
 -- RLS
 -- ============================================================
 alter table config enable row level security;
@@ -229,6 +257,8 @@ alter table ventas enable row level security;
 alter table auditorias enable row level security;
 alter table auditoria_items enable row level security;
 alter table diferencias enable row level security;
+alter table deuda_prestamos enable row level security;
+alter table deuda_movimientos enable row level security;
 alter table flujo_asistencias enable row level security;
 alter table flujo_egresos enable row level security;
 alter table sync_log enable row level security;
@@ -271,6 +301,12 @@ create policy "admin_all" on flujo_egresos for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 create policy "admin_all" on sync_log for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on deuda_prestamos for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on deuda_movimientos for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 -- Consignatario: solo sus propios registros

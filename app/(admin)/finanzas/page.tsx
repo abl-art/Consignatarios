@@ -1,5 +1,7 @@
 import { formatearMoneda } from '@/lib/utils'
 import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis } from '@/lib/actions/finanzas'
+import { simularDeuda } from '@/lib/simular-deuda'
+import { fetchPrestamos, fetchMovimientos, getDeudaConfig, fetchInteresesPagadosMes } from '@/lib/actions/deuda'
 import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
@@ -8,6 +10,8 @@ import CashBalanceChart from './CashBalanceChart'
 import IndicadoresTab from './IndicadoresTab'
 import DPDTab from './DPDTab'
 import VintageTab from './VintageTab'
+import DeudaTab from './DeudaTab'
+import DeudaAlerts from './DeudaAlerts'
 
 export default async function FinanzasPage({
   searchParams,
@@ -18,7 +22,7 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujo, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData] = await Promise.all([
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -28,7 +32,14 @@ export default async function FinanzasPage({
     fetchPDIndicadores(),
     fetchDPDIndicadores(),
     fetchVintageAnalysis(),
+    fetchPrestamos(),
+    fetchMovimientos(),
+    getDeudaConfig(),
+    fetchInteresesPagadosMes(),
   ])
+
+  // Simular deuda sobre el flujo base
+  const { flujo: allFlujo, alertas: deudaAlertas, diasEstres } = simularDeuda(allFlujoBase, prestamos, deudaConfig)
 
   // Filter by selected month (show selected month + 6 months forward)
   const mesStart = mesSeleccionado + '-01'
@@ -146,13 +157,14 @@ export default async function FinanzasPage({
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Inter.</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Otros</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-red-600">Vta3</th>
+                  <th className="text-right px-1.5 py-2 font-semibold text-red-600">Dev.Cap</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-gray-700">Neto</th>
                   <th className="text-right px-1.5 py-2 font-semibold text-gray-700">Saldo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {flujo.map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr key={i} className={`hover:bg-gray-50 ${row.estres ? 'bg-red-50' : ''}`}>
                     <td className="px-1.5 py-1 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
                     <td className="px-1.5 py-1 text-right text-green-700">{row.in_adelantado !== 0 ? formatearMoneda(row.in_adelantado) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-green-700">{row.in_en_termino !== 0 ? formatearMoneda(row.in_en_termino) : ''}</td>
@@ -168,6 +180,7 @@ export default async function FinanzasPage({
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_interes !== 0 ? formatearMoneda(row.out_interes) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_otros !== 0 ? formatearMoneda(row.out_otros) : ''}</td>
                     <td className="px-1.5 py-1 text-right text-red-700">{row.out_vta3ero !== 0 ? formatearMoneda(row.out_vta3ero) : ''}</td>
+                    <td className="px-1.5 py-1 text-right text-red-700">{row.out_dev_capital !== 0 ? formatearMoneda(row.out_dev_capital) : ''}</td>
                     <td className={`px-1.5 py-1 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatearMoneda(row.net_flow)}</td>
                     <td className={`px-1.5 py-1 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatearMoneda(row.cash_balance)}</td>
                   </tr>
@@ -216,10 +229,13 @@ export default async function FinanzasPage({
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
       <p className="text-sm text-gray-500 mb-6">Flujo de fondos y control de caja</p>
 
+      <DeudaAlerts alertas={deudaAlertas} />
+
       <FinanzasTabs
         tabs={[
-          { id: 'flujo', label: 'Flujo de fondos', content: flujoTab },
+          { id: 'flujo', label: diasEstres.length > 0 ? `Flujo de fondos (${diasEstres.length} estrés)` : 'Flujo de fondos', content: flujoTab },
           { id: 'egresos', label: 'Egresos', content: egresosTab },
+          { id: 'deuda', label: 'Deuda', content: <DeudaTab prestamos={prestamos} movimientos={todosMovimientos} config={deudaConfig} interesesMes={interesesMes} /> },
           { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
           { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
