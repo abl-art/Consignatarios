@@ -252,9 +252,13 @@ function simularFlujo(
   const trimmedAcumulado = trim(acumulado)
   const capitalRequerido = Math.abs(Math.min(...trimmedAcumulado, 0))
   const resultado = acumulado[meses - 1]
+
+  // Payback: primer mes donde el acumulado pasa de negativo a positivo
   let payback = 0
+  let tuvoNegativo = false
   for (let m = 0; m < meses; m++) {
-    if (acumulado[m] > 0) { payback = m + 1; break }
+    if (trimmedAcumulado[m] < 0) tuvoNegativo = true
+    if (tuvoNegativo && trimmedAcumulado[m] > 0) { payback = m + 1; break }
   }
 
   // Capital promedio ponderado por los meses que hay plata invertida (saldo negativo)
