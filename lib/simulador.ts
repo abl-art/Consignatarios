@@ -129,9 +129,9 @@ function simularFlujo(
   const impDeb = imp_debitos_pct / 100
   const iibb = iibb_pct / 100
 
-  // Cuota 1 = down payment (% del order_amount)
-  // Cuotas 2 a N = resto dividido en (cuotas - 1)
-  const cuota1 = order_amount * dp
+  // Cuota 1 = down payment. Si DP > 0, cuota 1 = DP y el resto se divide en (cuotas-1)
+  // Si DP = 0, todas las cuotas son iguales (order_amount / cuotas)
+  const cuota1 = dp > 0 ? order_amount * dp : order_amount / cuotas
   const montoFinanciado = order_amount - cuota1
   const cuotasRestantes = cuotas - 1
   const montoCuotaResto = cuotasRestantes > 0 ? montoFinanciado / cuotasRestantes : 0
