@@ -22,8 +22,9 @@ export interface SimuladorParams {
   incobrabilidad_desvio: number   // % (ej: 1.5)
   mora_media_dias: number         // días (ej: 15)
   mora_desvio_dias: number        // días (ej: 7)
-  venta_propia: boolean           // true = venta propia, false = financiamos a tercero
-  costo_oportunidad_tna: number   // % TNA - reservado para uso futuro
+  modalidad: 'terceros' | 'propia' | 'consignatarios'
+  flete: number                   // $ valor plano, solo venta propia
+  comision_consignatario_pct: number // % sobre OA, solo consignatarios
 }
 
 export interface FlujoFila {
@@ -149,6 +150,8 @@ function simularFlujo(
   const cobroCuota = new Array(totalMeses).fill(0)
   const liquidacionComercio = new Array(totalMeses).fill(0)
   const costoOperativo = new Array(totalMeses).fill(0)
+  const fleteFila = new Array(totalMeses).fill(0)
+  const comisionConsigFila = new Array(totalMeses).fill(0)
   const impCreditosFila = new Array(totalMeses).fill(0)
   const impDebitosFila = new Array(totalMeses).fill(0)
   const iibbFila = new Array(totalMeses).fill(0)
@@ -164,7 +167,6 @@ function simularFlujo(
     cobroCuota[mesInicio] += ops * cuota1
 
     // Cuotas 2 a N: cobro nominal completo, incobrabilidad distribuida
-    // Incobrabilidad total = order_amount * %, repartida en partes iguales de cuota 2 en adelante
     const incobrabilidadTotal = order_amount * incobrabilidad
     const incobrabilidadPorCuota = cuotasRestantes > 0 ? incobrabilidadTotal / cuotasRestantes : 0
     for (let c = 2; c <= cuotas; c++) {
@@ -176,21 +178,32 @@ function simularFlujo(
       }
     }
 
-    // Splits de liquidación (solo si no es venta propia)
-    if (!params.venta_propia) {
-      for (const split of splitsPorMes) {
-        const mesLiq = mesInicio + split.mes
-        if (mesLiq < totalMeses) {
-          liquidacionComercio[mesLiq] += -(ops * split.monto)
-        }
+    // Liquidación al comercio / pago proveedor (según splits)
+    for (const split of splitsPorMes) {
+      const mesLiq = mesInicio + split.mes
+      if (mesLiq < totalMeses) {
+        liquidacionComercio[mesLiq] += -(ops * split.monto)
       }
     }
 
     // Costos operativos en mes de inicio
     costoOperativo[mesInicio] += -(ops * order_amount * costosOp)
 
-    // IIBB: venta propia = sobre order_amount, tercero = sobre comisión
-    if (params.venta_propia) {
+    // Flete (solo venta propia, valor plano por operación)
+    if (params.modalidad === 'propia') {
+      fleteFila[mesInicio] += -(ops * params.flete)
+    }
+
+    // Comisión consignatario (% OA, se paga a 30 días = mes 1)
+    if (params.modalidad === 'consignatarios') {
+      const mesComision = mesInicio + 1
+      if (mesComision < totalMeses) {
+        comisionConsigFila[mesComision] += -(ops * order_amount * (params.comision_consignatario_pct / 100))
+      }
+    }
+
+    // IIBB: venta propia = sobre order_amount, terceros/consignatarios = sobre comisión
+    if (params.modalidad === 'propia') {
       iibbFila[mesInicio] += -(ops * order_amount * iibb)
     } else {
       const comision = order_amount * descuento
@@ -215,7 +228,8 @@ function simularFlujo(
   // Primera pasada: subtotal sin financiación
   for (let m = 0; m < totalMeses; m++) {
     subtotal[m] = cobroCuota[m] + liquidacionComercio[m] +
-      costoOperativo[m] + impCreditosFila[m] + impDebitosFila[m] + iibbFila[m] + incobrabilidadFila[m]
+      costoOperativo[m] + fleteFila[m] + comisionConsigFila[m] +
+      impCreditosFila[m] + impDebitosFila[m] + iibbFila[m] + incobrabilidadFila[m]
   }
 
   // Costo de financiación (saldo negativo) e ingreso por colocación (saldo positivo)
@@ -223,7 +237,7 @@ function simularFlujo(
   const ingresoColocacion = new Array(totalMeses).fill(0)
   let acum = 0
   for (let m = 0; m < totalMeses; m++) {
-    if (!params.venta_propia && acum < 0) {
+    if (acum < 0) {
       costoFinanciacion[m] = acum * costoFinMensual // negativo * positivo = negativo
     }
     if (acum > 0) {
@@ -245,8 +259,16 @@ function simularFlujo(
 
   const filas: FlujoFila[] = [
     { concepto: 'Cobro cuotas', valores: trim(cobroCuota) },
-    { concepto: 'Liquidación comercio', valores: trim(liquidacionComercio) },
+    { concepto: params.modalidad === 'propia' ? 'Pago proveedor' : 'Liquidación comercio', valores: trim(liquidacionComercio) },
     { concepto: 'Costo operativo', valores: trim(costoOperativo) },
+  ]
+  if (params.modalidad === 'propia') {
+    filas.push({ concepto: 'Flete', valores: trim(fleteFila) })
+  }
+  if (params.modalidad === 'consignatarios') {
+    filas.push({ concepto: 'Comisión consignatario', valores: trim(comisionConsigFila) })
+  }
+  filas.push(
     { concepto: 'Imp. créditos', valores: trim(impCreditosFila) },
     { concepto: 'Imp. débitos', valores: trim(impDebitosFila) },
     { concepto: 'IIBB', valores: trim(iibbFila) },
@@ -255,7 +277,7 @@ function simularFlujo(
     { concepto: 'Ingreso colocación*', valores: trim(ingresoColocacion) },
     { concepto: 'Subtotal', valores: trim(subtotal), esSubtotal: true },
     { concepto: 'Acumulado', valores: trim(acumulado), esAcumulado: true },
-  ]
+  )
 
   // Indicadores
   const totalOps = operaciones_por_mes.reduce((s, n) => s + n, 0)
@@ -294,7 +316,7 @@ function simularFlujo(
     rent_anual_capital: rentAnualCapital,
     rent_sobre_order: rentSobreOrder,
     margen_neto_op: margenNetoOp,
-    fondos_propios: params.venta_propia,
+    fondos_propios: params.modalidad === 'propia',
   }
 
   return { filas, indicadores, meses }

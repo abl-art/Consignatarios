@@ -30,8 +30,9 @@ const defaultParams: SimuladorParams = {
   incobrabilidad_desvio: 1.5,
   mora_media_dias: 15,
   mora_desvio_dias: 7,
-  venta_propia: false,
-  costo_oportunidad_tna: 0,
+  modalidad: 'terceros' as const,
+  flete: 0,
+  comision_consignatario_pct: 10,
 }
 
 const fmtPct = (v: number) => (v * 100).toFixed(2) + '%'
@@ -181,10 +182,26 @@ export default function SimuladorTab({ productos }: Props) {
               <label className="block text-gray-500 mb-1">Incob. media (%)</label>
               <input type="number" step="0.1" value={params.incobrabilidad_media} onChange={e => updateParam('incobrabilidad_media', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={params.venta_propia} onChange={e => updateParam('venta_propia', e.target.checked)} className="w-4 h-4 accent-blue-600" />
-              <label className="text-gray-600 text-xs">Venta propia</label>
+            <div className="flex items-center gap-4 col-span-2">
+              {(['terceros', 'propia', 'consignatarios'] as const).map(m => (
+                <label key={m} className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                  <input type="radio" name="modalidad" checked={params.modalidad === m} onChange={() => updateParam('modalidad', m)} className="w-3.5 h-3.5 accent-blue-600" />
+                  {m === 'terceros' ? 'Vta de Terceros' : m === 'propia' ? 'Venta Propia' : 'Consignatarios'}
+                </label>
+              ))}
             </div>
+            {params.modalidad === 'propia' && (
+              <div>
+                <label className="block text-gray-500 mb-1">Flete ($)</label>
+                <input type="number" value={params.flete} onChange={e => updateParam('flete', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
+              </div>
+            )}
+            {params.modalidad === 'consignatarios' && (
+              <div>
+                <label className="block text-gray-500 mb-1">Comisión consig. (%)</label>
+                <input type="number" step="0.1" value={params.comision_consignatario_pct} onChange={e => updateParam('comision_consignatario_pct', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
+              </div>
+            )}
             {modo === 'est' && (
               <>
                 <div>
@@ -229,12 +246,12 @@ export default function SimuladorTab({ productos }: Props) {
         {/* Indicadores */}
         <div className="space-y-3">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">{params.venta_propia ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
+            <p className="text-[10px] text-gray-500 mb-1">{params.modalidad === 'propia' ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_requerido))}</p>
             <p className="text-[10px] text-gray-400 mt-1">Promedio: {formatearMoneda(Math.round(ind.capital_promedio))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">{params.venta_propia ? 'CT' : 'Deuda'} / OA</p>
+            <p className="text-[10px] text-gray-500 mb-1">{params.modalidad === 'propia' ? 'CT' : 'Deuda'} / OA</p>
             <p className="text-xl font-bold text-gray-900">{(ind.ct_deuda_ratio * 100).toFixed(1)}%</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
