@@ -13,6 +13,9 @@ import VintageTab from './VintageTab'
 import DeudaTab from './DeudaTab'
 import DeudaAlerts from './DeudaAlerts'
 import DeudaBalanceChart from './DeudaBalanceChart'
+import SimuladorTab from './SimuladorTab'
+import ListaPreciosTab from './ListaPreciosTab'
+import { fetchProductos } from '@/lib/actions/productos'
 
 export default async function FinanzasPage({
   searchParams,
@@ -23,7 +26,7 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes] = await Promise.all([
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -37,6 +40,7 @@ export default async function FinanzasPage({
     fetchMovimientos(),
     getDeudaConfig(),
     fetchInteresesPagadosMes(),
+    fetchProductos(),
   ])
 
   // Simular deuda sobre el flujo base
@@ -254,6 +258,8 @@ export default async function FinanzasPage({
           { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
           { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
+          { id: 'simulador', label: 'Productos y Simulación', content: <SimuladorTab productos={productosFinancieros} /> },
+          { id: 'precios', label: 'Lista de Precios', content: <ListaPreciosTab productos={productosFinancieros} /> },
         ]}
       />
     </div>

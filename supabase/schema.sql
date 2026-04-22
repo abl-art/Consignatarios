@@ -245,6 +245,18 @@ create table deuda_movimientos (
 );
 
 -- ============================================================
+-- PRODUCTOS FINANCIEROS (simulador)
+-- ============================================================
+create table productos_financieros (
+  id uuid primary key default uuid_generate_v4(),
+  nombre text not null,
+  parametros jsonb not null,
+  indicadores jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- ============================================================
 -- RLS
 -- ============================================================
 alter table config enable row level security;
@@ -259,6 +271,7 @@ alter table auditoria_items enable row level security;
 alter table diferencias enable row level security;
 alter table deuda_prestamos enable row level security;
 alter table deuda_movimientos enable row level security;
+alter table productos_financieros enable row level security;
 alter table flujo_asistencias enable row level security;
 alter table flujo_egresos enable row level security;
 alter table sync_log enable row level security;
@@ -307,6 +320,9 @@ create policy "admin_all" on deuda_prestamos for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 create policy "admin_all" on deuda_movimientos for all
+  using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
+
+create policy "admin_all" on productos_financieros for all
   using (auth.jwt() ->> 'user_metadata'::text like '%"rol":"admin"%');
 
 -- Consignatario: solo sus propios registros
