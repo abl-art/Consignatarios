@@ -50,14 +50,28 @@ export function simularDeuda(
   const map = new Map<string, FlujoDiario>()
   for (const row of flujo) map.set(row.cash_date, row)
 
-  const getRow = (date: string): FlujoDiario | undefined => map.get(date)
+  function getOrCreateRow(date: string): FlujoDiario {
+    let row = map.get(date)
+    if (!row) {
+      row = {
+        cash_date: date,
+        in_adelantado: 0, in_en_termino: 0, in_atrasado: 0, in_pendiente: 0,
+        in_vencida: 0, in_asistencia: 0, in_proyectado: 0,
+        out_celulares: 0, out_licencias: 0, out_descartables: 0,
+        out_sueldos: 0, out_envios: 0, out_interes: 0, out_otros: 0,
+        out_vta3ero: 0, out_dev_capital: 0, net_flow: 0, cash_balance: 0,
+      }
+      flujo.push(row)
+      map.set(date, row)
+    }
+    return row
+  }
   const alertas: DeudaAlerta[] = []
 
   // Inyectar tomas e egresos de préstamos activos en el flujo
   for (const p of prestamos.filter(p => p.estado === 'activo')) {
     // Ingreso del capital en fecha de toma
-    const rowToma = getRow(p.fecha_toma)
-    if (rowToma) rowToma.in_asistencia += p.monto_capital
+    getOrCreateRow(p.fecha_toma).in_asistencia += p.monto_capital
 
     if (p.tipo === 'bullet') {
       // Interés mensual: cada 30 días desde la toma
@@ -65,14 +79,12 @@ export function simularDeuda(
       const interesMensual = p.saldo_capital * tasaDiaria * 30
       let fechaInteres = addDays(p.fecha_toma, 30)
       while (fechaInteres <= flujo[flujo.length - 1].cash_date) {
-        const row = getRow(fechaInteres)
-        if (row) row.out_interes += -interesMensual
+        getOrCreateRow(fechaInteres).out_interes += -interesMensual
         fechaInteres = addDays(fechaInteres, 30)
       }
       // Devolución de capital al vencimiento
       if (p.fecha_vencimiento) {
-        const row = getRow(p.fecha_vencimiento)
-        if (row) row.out_dev_capital += -p.saldo_capital
+        getOrCreateRow(p.fecha_vencimiento).out_dev_capital += -p.saldo_capital
       }
     }
     if (p.tipo === 'descubierto') {
@@ -84,6 +96,9 @@ export function simularDeuda(
       }
     }
   }
+
+  // Ordenar por fecha (pudo haberse agregado filas nuevas)
+  flujo.sort((a, b) => a.cash_date.localeCompare(b.cash_date))
 
   // Recalcular net_flow y balance con deuda inyectada
   let balance = 0
