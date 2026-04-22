@@ -272,7 +272,8 @@ function simularFlujo(
   const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
   const volumenTotal = order_amount * totalOps
   const rentSobreOrder = volumenTotal > 0 ? resultado / volumenTotal : 0
-  const ctDeudaRatio = order_amount > 0 ? capitalRequerido / order_amount : 0
+  const volumenTotal = order_amount * totalOps
+  const ctDeudaRatio = volumenTotal > 0 ? capitalRequerido / volumenTotal : 0
 
   const indicadores: Indicadores = {
     capital_requerido: capitalRequerido,
@@ -303,7 +304,7 @@ export function simularEstocastico(params: SimuladorParams, n = 500): ResultadoE
   }
 
   // Ordenar por TIR para percentiles
-  resultados.sort((a, b) => a.indicadores.tir_mensual - b.indicadores.tir_mensual)
+  resultados.sort((a, b) => a.indicadores.rent_anual_capital - b.indicadores.rent_anual_capital)
   const idx10 = Math.floor(n * 0.1)
   const idx50 = Math.floor(n * 0.5)
   const idx90 = Math.floor(n * 0.9)
