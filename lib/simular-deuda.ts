@@ -108,10 +108,11 @@ export function simularDeuda(
     row.cash_balance = balance
   }
 
-  // Detectar días de estrés (saldo bajo mínimo)
+  // Detectar días de estrés (saldo peor que -100M)
+  const STRESS_THRESHOLD = -100_000_000
   const diasEstres: string[] = []
   for (const row of flujo) {
-    if (row.cash_balance < config.saldo_minimo) {
+    if (row.cash_balance < STRESS_THRESHOLD) {
       row.estres = true
       diasEstres.push(row.cash_date)
     }

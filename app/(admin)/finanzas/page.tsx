@@ -174,8 +174,11 @@ export default async function FinanzasPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {flujo.map((row, i) => (
-                  <tr key={i} className={`hover:bg-gray-50 ${row.estres ? 'bg-red-50' : ''}`}>
+                {flujo.map((row, i) => {
+                  const hoy = new Date().toISOString().slice(0, 10)
+                  const esHoy = row.cash_date === hoy
+                  return (
+                  <tr key={i} className={`hover:bg-gray-50 ${esHoy ? 'bg-yellow-100' : ''}`}>
                     <td className="px-0.5 py-0.5 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
                     <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_adelantado)}</td>
                     <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_en_termino)}</td>
@@ -195,7 +198,8 @@ export default async function FinanzasPage({
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.net_flow)}</td>
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.cash_balance)}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
