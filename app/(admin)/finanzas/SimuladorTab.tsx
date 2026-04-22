@@ -300,6 +300,7 @@ export default function SimuladorTab({ productos }: Props) {
             </tbody>
           </table>
         </div>
+        <p className="px-5 py-2 text-[9px] text-gray-400">* Ingreso por colocación: tasa de financiación - 7pp, aplicada sobre saldo positivo acumulado.</p>
       </div>
 
       {/* Productos guardados */}

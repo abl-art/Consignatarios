@@ -212,13 +212,18 @@ function simularFlujo(
       costoOperativo[m] + impCreditosFila[m] + impDebitosFila[m] + iibbFila[m] + incobrabilidadFila[m]
   }
 
-  // Costo de financiación sobre acumulado negativo (solo con fondos de terceros)
+  // Costo de financiación (saldo negativo) e ingreso por colocación (saldo positivo)
+  const tasaColocacionMensual = Math.max(0, (costo_financiacion_tna - 7) / 100 / 12)
+  const ingresoColocacion = new Array(totalMeses).fill(0)
   let acum = 0
   for (let m = 0; m < totalMeses; m++) {
     if (!params.fondos_propios && acum < 0) {
       costoFinanciacion[m] = acum * costoFinMensual // negativo * positivo = negativo
     }
-    subtotal[m] += costoFinanciacion[m]
+    if (acum > 0) {
+      ingresoColocacion[m] = acum * tasaColocacionMensual // positivo * positivo = positivo
+    }
+    subtotal[m] += costoFinanciacion[m] + ingresoColocacion[m]
     acum += subtotal[m]
     acumulado[m] = acum
   }
@@ -241,6 +246,7 @@ function simularFlujo(
     { concepto: 'IIBB', valores: trim(iibbFila) },
     { concepto: 'Incobrabilidad', valores: trim(incobrabilidadFila) },
     { concepto: 'Costo financiación', valores: trim(costoFinanciacion) },
+    { concepto: 'Ingreso colocación*', valores: trim(ingresoColocacion) },
     { concepto: 'Subtotal', valores: trim(subtotal), esSubtotal: true },
     { concepto: 'Acumulado', valores: trim(acumulado), esAcumulado: true },
   ]
