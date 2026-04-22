@@ -57,7 +57,7 @@ export interface ResultadoEstocastico {
   distribuciones: {
     tir: number[]
     van: number[]
-    max_endeudamiento: number[]
+    capital_requerido: number[]
   }
 }
 
@@ -307,7 +307,7 @@ export function simularEstocastico(params: SimuladorParams, n = 500): ResultadoE
     distribuciones: {
       tir: resultados.map(r => r.indicadores.tir_anual),
       van: resultados.map(r => r.indicadores.van),
-      max_endeudamiento: resultados.map(r => r.indicadores.max_endeudamiento),
+      capital_requerido: resultados.map(r => r.indicadores.capital_requerido),
     },
   }
 }
