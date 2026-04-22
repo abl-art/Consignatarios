@@ -48,6 +48,16 @@
 - **Acción**: upgrade a Vercel Pro ($20/mes) y el cron se activa automáticamente
 - Mientras tanto: sync manual desde `/sync`
 
+### Curva de incobrabilidad histórica por cuota
+- Cuando haya datos reales de varios meses operando, reemplazar incobrabilidad proporcional por curva real por número de cuota
+- Usar datos de PD/DPD que ya tenemos en Finanzas
+- Aplicar al simulador financiero para mayor precisión
+
+### Monte Carlo completo
+- Simulación de riesgo de portfolio con correlaciones entre variables
+- Requiere volumen de datos históricos significativo
+- Útil para modelar escenarios extremos y stress testing
+
 ## Prioridad Media
 
 ### Endpoint de GOcelular
