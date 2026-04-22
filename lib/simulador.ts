@@ -167,17 +167,18 @@ function simularFlujo(
     // Cuota 1 (= down payment) en mes de inicio, siempre se cobra, sin incobrabilidad
     cobroCuota[mesInicio] += ops * cuota1
 
-    // Cuotas 2 a N: cobro nominal completo
+    // Cuotas 2 a N: cobro nominal completo, incobrabilidad distribuida
+    // Incobrabilidad total = order_amount * %, repartida en partes iguales de cuota 2 en adelante
+    const incobrabilidadTotal = order_amount * incobrabilidad
+    const incobrabilidadPorCuota = cuotasRestantes > 0 ? incobrabilidadTotal / cuotasRestantes : 0
     for (let c = 2; c <= cuotas; c++) {
       const mesDelay = Math.ceil(moraDias / 30)
       const mesCobro = mesInicio + (c - 1) + mesDelay
       if (mesCobro < totalMeses) {
         cobroCuota[mesCobro] += ops * montoCuotaResto
+        incobrabilidadFila[mesCobro] += -(ops * incobrabilidadPorCuota)
       }
     }
-
-    // Incobrabilidad sobre order_amount, una sola vez en mes de la operación
-    incobrabilidadFila[mesInicio] += -(ops * order_amount * incobrabilidad)
 
     // Splits de liquidación (plazo en días desde día 0)
     for (const split of splitsPorMes) {
