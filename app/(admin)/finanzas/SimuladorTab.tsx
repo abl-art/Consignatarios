@@ -30,6 +30,7 @@ const defaultParams: SimuladorParams = {
   incobrabilidad_desvio: 1.5,
   mora_media_dias: 15,
   mora_desvio_dias: 7,
+  fondos_propios: true,
 }
 
 const fmtPct = (v: number) => (v * 100).toFixed(2) + '%'
@@ -179,6 +180,10 @@ export default function SimuladorTab({ productos }: Props) {
               <label className="block text-gray-500 mb-1">Incob. media (%)</label>
               <input type="number" step="0.1" value={params.incobrabilidad_media} onChange={e => updateParam('incobrabilidad_media', Number(e.target.value))} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" />
             </div>
+            <div className="flex items-center gap-2 col-span-2">
+              <input type="checkbox" checked={params.fondos_propios} onChange={e => updateParam('fondos_propios', e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              <label className="text-gray-600 text-xs">Fondos propios (si no, se financia con deuda)</label>
+            </div>
             {modo === 'est' && (
               <>
                 <div>
@@ -222,32 +227,34 @@ export default function SimuladorTab({ productos }: Props) {
 
         {/* Indicadores */}
         <div className="space-y-3">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">TIR Anual</p>
-            <p className={`text-2xl font-bold ${ind.tir_anual >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.tir_anual)}</p>
-            {resultado.tipo === 'est' && resultado.est && (
-              <p className="text-[10px] text-gray-400">P10: {fmtPct(resultado.est.p10.tir_anual)} | P90: {fmtPct(resultado.est.p90.tir_anual)}</p>
-            )}
-          </div>
+          {params.fondos_propios && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-[10px] text-gray-500 mb-1">TIR Anual</p>
+              <p className={`text-2xl font-bold ${ind.tir_anual >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.tir_anual)}</p>
+              {resultado.tipo === 'est' && resultado.est && (
+                <p className="text-[10px] text-gray-400">P10: {fmtPct(resultado.est.p10.tir_anual)} | P90: {fmtPct(resultado.est.p90.tir_anual)}</p>
+              )}
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">VAN</p>
             <p className={`text-xl font-bold ${ind.van >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatearMoneda(Math.round(ind.van))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Capital invertido</p>
-            <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_invertido))}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Máx. endeudamiento</p>
-            <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.max_endeudamiento))}</p>
+            <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
+            <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_requerido))}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Payback</p>
             <p className="text-xl font-bold text-gray-900">{ind.payback > 0 ? `Mes ${ind.payback}` : 'No recupera'}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Rentabilidad s/cap. invertido</p>
-            <p className={`text-xl font-bold ${ind.rentabilidad_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rentabilidad_capital)}</p>
+            <p className="text-[10px] text-gray-500 mb-1">Rent. s/capital</p>
+            <p className={`text-xl font-bold ${ind.rent_sobre_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_sobre_capital)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-[10px] text-gray-500 mb-1">Rent. s/order amount</p>
+            <p className={`text-xl font-bold ${ind.rent_sobre_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_sobre_order)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Margen neto/op</p>
@@ -322,9 +329,9 @@ export default function SimuladorTab({ productos }: Props) {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left px-4 py-2 font-medium text-gray-600">Nombre</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600">TIR</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600">VAN</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600">Máx. End.</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. s/cap</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. s/OA</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Cap. req.</th>
                     <th className="text-center px-4 py-2 font-medium text-gray-600">Acciones</th>
                   </tr>
                 </thead>
@@ -334,9 +341,9 @@ export default function SimuladorTab({ productos }: Props) {
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-2 text-gray-900 font-medium">{p.nombre}</td>
-                        <td className={`px-4 py-2 text-right ${pInd.tir_anual >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.tir_anual)}</td>
-                        <td className={`px-4 py-2 text-right ${pInd.van >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatearMoneda(Math.round(pInd.van))}</td>
-                        <td className="px-4 py-2 text-right">{formatearMoneda(Math.round(pInd.max_endeudamiento))}</td>
+                        <td className={`px-4 py-2 text-right ${pInd.rent_sobre_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_sobre_capital)}</td>
+                        <td className={`px-4 py-2 text-right ${pInd.rent_sobre_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_sobre_order)}</td>
+                        <td className="px-4 py-2 text-right">{formatearMoneda(Math.round(pInd.capital_requerido))}</td>
                         <td className="px-4 py-2 text-center flex gap-2 justify-center">
                           <button onClick={() => cargarProducto(p)} className="px-2 py-1 text-[10px] bg-blue-100 text-blue-700 rounded hover:bg-blue-200">Cargar</button>
                           <button onClick={async () => { await eliminarProducto(p.id); router.refresh() }} className="px-2 py-1 text-[10px] bg-red-100 text-red-700 rounded hover:bg-red-200">Eliminar</button>

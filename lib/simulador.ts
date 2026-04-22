@@ -22,6 +22,7 @@ export interface SimuladorParams {
   incobrabilidad_desvio: number   // % (ej: 1.5)
   mora_media_dias: number         // días (ej: 15)
   mora_desvio_dias: number        // días (ej: 7)
+  fondos_propios: boolean         // true = capital propio, false = financiado con deuda
 }
 
 export interface FlujoFila {
@@ -35,11 +36,12 @@ export interface Indicadores {
   tir_mensual: number
   tir_anual: number
   van: number
-  max_endeudamiento: number
-  capital_invertido: number // suma de flujos negativos
-  payback: number // mes en que acumulado > 0, 0 si nunca
-  rentabilidad_capital: number // resultado / capital invertido
-  margen_neto_op: number // resultado / total operaciones
+  capital_requerido: number     // pico negativo del acumulado
+  payback: number               // mes en que acumulado > 0, 0 si nunca
+  rent_sobre_capital: number    // resultado / capital requerido
+  rent_sobre_order: number      // resultado / (order_amount * total ops)
+  margen_neto_op: number        // resultado / total operaciones
+  fondos_propios: boolean
 }
 
 export interface ResultadoSimulacion {
@@ -244,26 +246,28 @@ function simularFlujo(
   // Indicadores
   const totalOps = operaciones_por_mes.reduce((s, n) => s + n, 0)
   const trimmedSubtotal = trim(subtotal)
-  const capitalInvertido = Math.abs(trimmedSubtotal.filter(v => v < 0).reduce((s, v) => s + v, 0))
-  const maxEndeudamiento = Math.abs(Math.min(...trim(acumulado), 0))
+  const capitalRequerido = Math.abs(Math.min(...trim(acumulado), 0))
   const resultado = acumulado[meses - 1]
   let payback = 0
   for (let m = 0; m < meses; m++) {
     if (acumulado[m] > 0) { payback = m + 1; break }
   }
 
-  const tirMensual = calcTIR(trimmedSubtotal)
+  // TIR: solo tiene sentido con fondos propios (costo de oportunidad)
+  // Con fondos de terceros el costo ya está en el flujo como egreso
+  const tirMensual = params.fondos_propios ? calcTIR(trimmedSubtotal) : 0
   const tasaMensual = costo_financiacion_tna / 100 / 12
 
   const indicadores: Indicadores = {
     tir_mensual: tirMensual,
-    tir_anual: Math.pow(1 + tirMensual, 12) - 1,
+    tir_anual: params.fondos_propios ? Math.pow(1 + tirMensual, 12) - 1 : 0,
     van: calcVAN(trimmedSubtotal, tasaMensual),
-    max_endeudamiento: maxEndeudamiento,
-    capital_invertido: capitalInvertido,
+    capital_requerido: capitalRequerido,
     payback,
-    rentabilidad_capital: capitalInvertido > 0 ? resultado / capitalInvertido : 0,
+    rent_sobre_capital: capitalRequerido > 0 ? resultado / capitalRequerido : 0,
+    rent_sobre_order: totalOps > 0 ? resultado / (order_amount * totalOps) : 0,
     margen_neto_op: totalOps > 0 ? resultado / totalOps : 0,
+    fondos_propios: params.fondos_propios,
   }
 
   return { filas, indicadores, meses }
