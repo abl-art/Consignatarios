@@ -53,8 +53,12 @@ export function simularDeuda(
   const getRow = (date: string): FlujoDiario | undefined => map.get(date)
   const alertas: DeudaAlerta[] = []
 
-  // Inyectar egresos de préstamos activos en el flujo
+  // Inyectar tomas e egresos de préstamos activos en el flujo
   for (const p of prestamos.filter(p => p.estado === 'activo')) {
+    // Ingreso del capital en fecha de toma
+    const rowToma = getRow(p.fecha_toma)
+    if (rowToma) rowToma.in_asistencia += p.monto_capital
+
     if (p.tipo === 'bullet') {
       // Interés mensual: cada 30 días desde la toma
       const tasaDiaria = p.tasa_anual / 365
