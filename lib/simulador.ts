@@ -37,10 +37,11 @@ export interface Indicadores {
   tir_anual: number
   van: number
   capital_requerido: number     // pico negativo del acumulado
+  capital_promedio: number      // promedio ponderado del saldo negativo
   payback: number               // mes en que acumulado > 0, 0 si nunca
-  rent_sobre_capital: number    // resultado / capital requerido
+  rent_anual_capital: number    // (resultado / capital promedio) * (12 / meses)
   rent_sobre_order: number      // resultado / (order_amount * total ops)
-  margen_neto_op: number        // resultado / total operaciones
+  margen_neto_op: number        // resultado / total operaciones (= rent_sobre_order en $)
   fondos_propios: boolean
 }
 
@@ -246,27 +247,39 @@ function simularFlujo(
   // Indicadores
   const totalOps = operaciones_por_mes.reduce((s, n) => s + n, 0)
   const trimmedSubtotal = trim(subtotal)
-  const capitalRequerido = Math.abs(Math.min(...trim(acumulado), 0))
+  const trimmedAcumulado = trim(acumulado)
+  const capitalRequerido = Math.abs(Math.min(...trimmedAcumulado, 0))
   const resultado = acumulado[meses - 1]
   let payback = 0
   for (let m = 0; m < meses; m++) {
     if (acumulado[m] > 0) { payback = m + 1; break }
   }
 
+  // Capital promedio ponderado por tiempo (suma de saldos negativos / total meses)
+  const sumaNegativos = trimmedAcumulado.reduce((s, v) => s + (v < 0 ? Math.abs(v) : 0), 0)
+  const capitalPromedio = meses > 0 ? sumaNegativos / meses : 0
+
+  // Rentabilidad anual sobre capital = (resultado / capital promedio) * (12 / meses)
+  const rentAnualCapital = capitalPromedio > 0 ? (resultado / capitalPromedio) * (12 / meses) : 0
+
   // TIR: solo tiene sentido con fondos propios (costo de oportunidad)
-  // Con fondos de terceros el costo ya está en el flujo como egreso
   const tirMensual = params.fondos_propios ? calcTIR(trimmedSubtotal) : 0
   const tasaMensual = costo_financiacion_tna / 100 / 12
+
+  // Margen neto por op = resultado / total ops = rent sobre order amount
+  const margenNetoOp = totalOps > 0 ? resultado / totalOps : 0
+  const rentSobreOrder = totalOps > 0 ? resultado / (order_amount * totalOps) : 0
 
   const indicadores: Indicadores = {
     tir_mensual: tirMensual,
     tir_anual: params.fondos_propios ? Math.pow(1 + tirMensual, 12) - 1 : 0,
     van: calcVAN(trimmedSubtotal, tasaMensual),
     capital_requerido: capitalRequerido,
+    capital_promedio: capitalPromedio,
     payback,
-    rent_sobre_capital: capitalRequerido > 0 ? resultado / capitalRequerido : 0,
-    rent_sobre_order: totalOps > 0 ? resultado / (order_amount * totalOps) : 0,
-    margen_neto_op: totalOps > 0 ? resultado / totalOps : 0,
+    rent_anual_capital: rentAnualCapital,
+    rent_sobre_order: rentSobreOrder,
+    margen_neto_op: margenNetoOp,
     fondos_propios: params.fondos_propios,
   }
 

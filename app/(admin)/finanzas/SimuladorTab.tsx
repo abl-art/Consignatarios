@@ -243,22 +243,20 @@ export default function SimuladorTab({ productos }: Props) {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">{params.fondos_propios ? 'Capital requerido' : 'Máx. endeudamiento'}</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.capital_requerido))}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Promedio: {formatearMoneda(Math.round(ind.capital_promedio))}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-[10px] text-gray-500 mb-1">Rent. anual s/capital</p>
+            <p className={`text-2xl font-bold ${ind.rent_anual_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_anual_capital)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-[10px] text-gray-500 mb-1">Payback</p>
             <p className="text-xl font-bold text-gray-900">{ind.payback > 0 ? `Mes ${ind.payback}` : 'No recupera'}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Rent. s/capital</p>
-            <p className={`text-xl font-bold ${ind.rent_sobre_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_sobre_capital)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Rent. s/order amount</p>
-            <p className={`text-xl font-bold ${ind.rent_sobre_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(ind.rent_sobre_order)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-[10px] text-gray-500 mb-1">Margen neto/op</p>
+            <p className="text-[10px] text-gray-500 mb-1">Margen neto / op</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(Math.round(ind.margen_neto_op))}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Rent. s/OA: {fmtPct(ind.rent_sobre_order)}</p>
           </div>
           <button
             onClick={handleGuardar}
@@ -329,8 +327,8 @@ export default function SimuladorTab({ productos }: Props) {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left px-4 py-2 font-medium text-gray-600">Nombre</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. s/cap</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. s/OA</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. anual</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Margen/op</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-600">Cap. req.</th>
                     <th className="text-center px-4 py-2 font-medium text-gray-600">Acciones</th>
                   </tr>
@@ -341,8 +339,8 @@ export default function SimuladorTab({ productos }: Props) {
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-2 text-gray-900 font-medium">{p.nombre}</td>
-                        <td className={`px-4 py-2 text-right ${pInd.rent_sobre_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_sobre_capital)}</td>
-                        <td className={`px-4 py-2 text-right ${pInd.rent_sobre_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_sobre_order)}</td>
+                        <td className={`px-4 py-2 text-right ${pInd.rent_anual_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_anual_capital)}</td>
+                        <td className="px-4 py-2 text-right">{formatearMoneda(Math.round(pInd.margen_neto_op))}</td>
                         <td className="px-4 py-2 text-right">{formatearMoneda(Math.round(pInd.capital_requerido))}</td>
                         <td className="px-4 py-2 text-center flex gap-2 justify-center">
                           <button onClick={() => cargarProducto(p)} className="px-2 py-1 text-[10px] bg-blue-100 text-blue-700 rounded hover:bg-blue-200">Cargar</button>
