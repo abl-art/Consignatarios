@@ -11,7 +11,7 @@ interface VentaHistorica {
   monto: number
 }
 
-const CLIENT_IDS_PROPIOS = ['1', '2026134', '2461631']
+const CLIENT_IDS_PROPIOS = ['2026134', '2461631']
 
 interface StorePrefix {
   nombre: string
