@@ -24,19 +24,24 @@ export default async function TercerosPage() {
     return true
   })
 
-  // Agrupar por merchant (extraer prefijo antes del primer " - " o usar store_name completo)
-  const porMerchant: Record<string, { tiendas: typeof terceros; totalVentas: number; totalMonto: number }> = {}
+  // Agrupar por merchant (primera palabra del store_name) y deduplicar tiendas por espacios
+  const porMerchant: Record<string, { tiendas: Record<string, { store_name: string; ventas: number; monto: number }>; totalVentas: number; totalMonto: number }> = {}
   for (const t of terceros) {
-    const parts = t.store_name.split(' - ')
-    const merchant = parts[0].trim() || t.store_name
-    if (!porMerchant[merchant]) porMerchant[merchant] = { tiendas: [], totalVentas: 0, totalMonto: 0 }
-    porMerchant[merchant].tiendas.push(t)
+    const merchant = t.store_name.split(/[\s-]/)[0].trim().toUpperCase()
+    if (!porMerchant[merchant]) porMerchant[merchant] = { tiendas: {}, totalVentas: 0, totalMonto: 0 }
+    // Normalizar nombre de tienda (quitar espacios extra) para deduplicar
+    const tiendaKey = t.store_name.replace(/\s+/g, ' ').trim()
+    if (!porMerchant[merchant].tiendas[tiendaKey]) {
+      porMerchant[merchant].tiendas[tiendaKey] = { store_name: tiendaKey, ventas: 0, monto: 0 }
+    }
+    porMerchant[merchant].tiendas[tiendaKey].ventas += t.ventas
+    porMerchant[merchant].tiendas[tiendaKey].monto += t.monto
     porMerchant[merchant].totalVentas += t.ventas
     porMerchant[merchant].totalMonto += t.monto
   }
 
   const merchantArray = Object.entries(porMerchant)
-    .map(([nombre, data]) => ({ nombre, ...data }))
+    .map(([nombre, data]) => ({ nombre, tiendas: Object.values(data.tiendas), totalVentas: data.totalVentas, totalMonto: data.totalMonto }))
     .sort((a, b) => b.totalVentas - a.totalVentas)
 
   const totalVentas = terceros.reduce((s, t) => s + t.ventas, 0)
