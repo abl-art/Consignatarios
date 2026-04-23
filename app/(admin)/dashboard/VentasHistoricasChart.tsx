@@ -6,9 +6,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface VentaHistorica {
   fecha: string // YYYY-MM-DD
   store_name: string
+  client_id: string
   ventas: number
   monto: number
 }
+
+const CLIENT_IDS_PROPIOS = ['1', '2026134', '2461631']
 
 interface StorePrefix {
   nombre: string
@@ -24,9 +27,9 @@ type Granularidad = 'mensual' | 'diario'
 type Canal = 'total' | 'gocelular' | 'consignatarios' | 'terceros'
 type Metrica = 'pesos' | 'cantidad'
 
-function classifyCanal(storeName: string, prefixes: StorePrefix[]): Canal {
+function classifyCanal(storeName: string, clientId: string, prefixes: StorePrefix[]): Canal {
+  if (CLIENT_IDS_PROPIOS.includes(clientId)) return 'gocelular'
   const lower = storeName.toLowerCase()
-  if (lower.startsWith('ecommerce')) return 'gocelular'
   if (prefixes.some((p) => lower.startsWith(p.prefix.toLowerCase()))) return 'consignatarios'
   return 'terceros'
 }
@@ -71,7 +74,7 @@ export default function VentasHistoricasChart({ data, prefixes }: Props) {
     // Classify and filter by canal
     const filtered = data.filter((row) => {
       if (canal === 'total') return true
-      return classifyCanal(row.store_name, prefixes) === canal
+      return classifyCanal(row.store_name, row.client_id, prefixes) === canal
     })
 
     // Group

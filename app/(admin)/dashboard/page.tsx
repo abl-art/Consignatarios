@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
@@ -139,10 +139,11 @@ async function VentasDelDia() {
   }
 
   const clasificadas: VentaClasificada[] = ventasHoy.map((v) => {
-    const lower = v.store_name.toLowerCase()
-    if (lower.startsWith('ecommerce')) {
+    // Client IDs propios son siempre venta propia
+    if (CLIENT_IDS_PROPIOS.includes(v.client_id)) {
       return { ...v, canal: 'gocelular' }
     }
+    const lower = v.store_name.toLowerCase()
     const match = prefixes.find((p) => lower.startsWith(p.prefix))
     if (match) {
       return { ...v, canal: 'consignatarios', consignatarioNombre: match.nombre }

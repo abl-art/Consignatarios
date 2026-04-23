@@ -3,9 +3,13 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchVentasTerceros } from '@/lib/gocelular'
+import { fetchVentasTerceros, CLIENT_IDS_PROPIOS } from '@/lib/gocelular'
 
-export default async function TercerosPage() {
+export default async function TercerosPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string; merchant?: string }
+}) {
   const supabase = createClient()
   const [ventas, { data: consigs }] = await Promise.all([
     fetchVentasTerceros(),
@@ -16,20 +20,33 @@ export default async function TercerosPage() {
     .filter((c: { store_prefix: string | null }) => c.store_prefix)
     .map((c: { store_prefix: string | null }) => c.store_prefix!.toLowerCase())
 
-  // Filtrar solo terceros: no ecommerce, no consignatarios
+  // Filtrar solo terceros: no client_id propio, no consignatarios
   const terceros = ventas.filter(v => {
+    if (CLIENT_IDS_PROPIOS.includes(v.client_id)) return false
     const lower = v.store_name.toLowerCase()
     if (lower.startsWith('ecommerce')) return false
     if (prefixes.some(p => lower.startsWith(p))) return false
     return true
   })
 
-  // Agrupar por merchant (primera palabra del store_name) y deduplicar tiendas por espacios
+  // Extraer meses y merchants disponibles
+  const mesesDisponibles = [...new Set(terceros.map(t => t.fecha))].sort().reverse()
+  const getMerchantName = (storeName: string) => storeName.split(/[\s-]/)[0].trim().toUpperCase()
+  const merchantsDisponibles = [...new Set(terceros.map(t => getMerchantName(t.store_name)))].sort()
+
+  const mesSeleccionado = searchParams.mes || ''
+  const merchantSeleccionado = searchParams.merchant || ''
+
+  // Aplicar filtros
+  let filtrados = terceros
+  if (mesSeleccionado) filtrados = filtrados.filter(t => t.fecha === mesSeleccionado)
+  if (merchantSeleccionado) filtrados = filtrados.filter(t => getMerchantName(t.store_name) === merchantSeleccionado)
+
+  // Agrupar por merchant y deduplicar tiendas
   const porMerchant: Record<string, { tiendas: Record<string, { store_name: string; ventas: number; monto: number }>; totalVentas: number; totalMonto: number }> = {}
-  for (const t of terceros) {
-    const merchant = t.store_name.split(/[\s-]/)[0].trim().toUpperCase()
+  for (const t of filtrados) {
+    const merchant = getMerchantName(t.store_name)
     if (!porMerchant[merchant]) porMerchant[merchant] = { tiendas: {}, totalVentas: 0, totalMonto: 0 }
-    // Normalizar nombre de tienda (quitar espacios extra) para deduplicar
     const tiendaKey = t.store_name.replace(/\s+/g, ' ').trim()
     if (!porMerchant[merchant].tiendas[tiendaKey]) {
       porMerchant[merchant].tiendas[tiendaKey] = { store_name: tiendaKey, ventas: 0, monto: 0 }
@@ -44,8 +61,8 @@ export default async function TercerosPage() {
     .map(([nombre, data]) => ({ nombre, tiendas: Object.values(data.tiendas), totalVentas: data.totalVentas, totalMonto: data.totalMonto }))
     .sort((a, b) => b.totalVentas - a.totalVentas)
 
-  const totalVentas = terceros.reduce((s, t) => s + t.ventas, 0)
-  const totalMonto = terceros.reduce((s, t) => s + t.monto, 0)
+  const totalVentas = filtrados.reduce((s, t) => s + t.ventas, 0)
+  const totalMonto = filtrados.reduce((s, t) => s + t.monto, 0)
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -58,7 +75,29 @@ export default async function TercerosPage() {
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Ventas de Terceros</h1>
       </div>
-      <p className="text-sm text-gray-500 mb-6">Desde abril 2026 · {totalVentas} ventas · {formatearMoneda(totalMonto)}</p>
+
+      {/* Filtros */}
+      <form method="GET" className="flex flex-wrap gap-3 items-end mb-6">
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1">Mes</label>
+          <select name="mes" defaultValue={mesSeleccionado} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="">Todos</option>
+            {mesesDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1">Merchant</label>
+          <select name="merchant" defaultValue={merchantSeleccionado} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="">Todos</option>
+            {merchantsDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <button type="submit" className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+          Filtrar
+        </button>
+      </form>
+
+      <p className="text-sm text-gray-500 mb-6">{totalVentas} ventas · {formatearMoneda(totalMonto)}{mesSeleccionado ? ` · ${mesSeleccionado}` : ''}{merchantSeleccionado ? ` · ${merchantSeleccionado}` : ''}</p>
 
       {/* Resumen por merchant */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -78,7 +117,13 @@ export default async function TercerosPage() {
         ))}
       </div>
 
-      {/* Detalle por tienda de cada merchant */}
+      {merchantArray.length === 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+          Sin ventas de terceros para este filtro.
+        </div>
+      )}
+
+      {/* Detalle por tienda */}
       <div className="space-y-4">
         {merchantArray.map(m => (
           <div key={m.nombre} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
