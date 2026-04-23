@@ -45,8 +45,13 @@ export function clasificarAntiguedad(dias: number | null): {
 // Normaliza nombres de producto para matching flexible
 function normalizarNombreProducto(nombre: string): string {
   let n = nombre.toLowerCase().trim()
+  // Quitar prefijo "celular"
   n = n.replace(/\bcelular\b/g, '')
+  // Quitar duplicación de marca
   n = n.replace(/^(motorola|samsung|xiaomi|apple|honor|nubia)\s+\1/i, '$1')
+  // Normalizar storage: "4/64 GB" -> "4/64gb", "128 gb" -> "128gb"
+  n = n.replace(/(\d)\s+gb/gi, '$1gb')
+  // Normalizar espacios
   n = n.replace(/\s+/g, ' ').trim()
   return n
 }
