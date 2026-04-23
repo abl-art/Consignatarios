@@ -25,3 +25,17 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Mobile responsive: reduce padding on small screens */
+@media (max-width: 767px) {
+  main > div {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  main table {
+    font-size: 11px;
+  }
+  main .grid {
+    grid-template-columns: 1fr !important;
+  }
+}

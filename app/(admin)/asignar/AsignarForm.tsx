@@ -209,36 +209,25 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
         </select>
       </div>
 
-      {/* IMEI Search — prominent input */}
-      <div className="bg-white border-2 border-magenta-200 rounded-xl p-6">
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Agregar IMEI
-        </label>
-        <p className="text-xs text-gray-500 mb-3">
-          Escribe, pega o escaneá un IMEI con la cámara
-        </p>
-        <div className="flex gap-3">
+      {/* IMEI Search */}
+      <div className="bg-white border-2 border-magenta-200 rounded-xl p-4">
+        <div className="flex gap-2">
           <input
             ref={imeiInputRef}
             type="text"
             value={imeiInput}
             onChange={(e) => setImeiInput(e.target.value)}
             onKeyDown={handleImeiKeyDown}
-            placeholder="Ingresa un IMEI..."
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg font-mono focus:outline-none focus:ring-2 focus:ring-magenta-500 focus:border-magenta-500"
+            placeholder="IMEI..."
+            className="flex-1 min-w-0 px-3 py-3 border border-gray-300 rounded-lg text-base font-mono focus:outline-none focus:ring-2 focus:ring-magenta-500"
             autoComplete="off"
+            inputMode="numeric"
           />
-          <button
-            type="button"
-            onClick={handleImeiSubmit}
-            className="px-6 py-3 bg-magenta-600 text-white font-medium rounded-lg hover:bg-magenta-700 transition-colors"
-          >
-            Agregar
+          <button type="button" onClick={handleImeiSubmit} className="px-4 py-3 bg-magenta-600 text-white font-medium rounded-lg hover:bg-magenta-700 shrink-0">
+            +
           </button>
         </div>
-        <div className="mt-3">
-          <CamaraIMEI onScan={handleScanImei} />
-        </div>
+        <CamaraIMEI onScan={handleScanImei} />
         {imeiFeedback && (
           <div
             className={`mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
