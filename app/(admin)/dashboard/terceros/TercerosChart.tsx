@@ -178,7 +178,7 @@ export default function TercerosChart({ data }: Props) {
               <Legend wrapperStyle={{ fontSize: 10 }} />
               {chartData.seriesNames.map((serie, i) => (
                 <Line key={serie} type="monotone" dataKey={serie} stroke={COLORES[i % COLORES.length]} strokeWidth={2} dot={{ r: 3, fill: COLORES[i % COLORES.length] }} activeDot={{ r: 5 }}
-                  label={{ position: 'top', fontSize: 9, fill: COLORES[i % COLORES.length], formatter: (v: number) => v > 0 ? formatLabel(v) : '' }} />
+                  label={{ position: 'top', fontSize: 9, fill: COLORES[i % COLORES.length], formatter: (v: unknown) => Number(v) > 0 ? formatLabel(Number(v)) : '' }} />
               ))}
             </LineChart>
           </ResponsiveContainer>
