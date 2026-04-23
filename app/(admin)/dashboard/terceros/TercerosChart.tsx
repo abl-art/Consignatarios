@@ -83,16 +83,20 @@ export default function TercerosChart({ data }: Props) {
       seriesNames = [...new Set(filtrados.map(d => getMerchant(d.store_name)))].sort()
     }
 
-    // Agrupar por fecha
-    const fechas = [...new Set(filtrados.map(d => d.fecha))].sort()
-    const result = fechas.map(fecha => {
-      const row: Record<string, number | string> = { fecha: formatDate(fecha) }
+    // Agrupar por día o por mes según periodo
+    const agruparPorMes = periodo === 'mes' || periodo === 'todo'
+    const getKey = (fecha: string) => agruparPorMes ? fecha.slice(0, 7) : fecha
+    const formatKey = (key: string) => agruparPorMes ? key : formatDate(key)
+
+    const keys = [...new Set(filtrados.map(d => getKey(d.fecha)))].sort()
+    const result = keys.map(key => {
+      const row: Record<string, number | string> = { fecha: formatKey(key) }
       for (const serie of seriesNames) {
         const items = filtrados.filter(d => {
-          const key = merchantFiltro ? getTienda(d.store_name) : getMerchant(d.store_name)
-          return d.fecha === fecha && key === serie
+          const serieKey = merchantFiltro ? getTienda(d.store_name) : getMerchant(d.store_name)
+          return getKey(d.fecha) === key && serieKey === serie
         })
-        row[serie] = items.reduce((s, d) => s + (metrica === 'pesos' ? d.monto : d.ventas), 0)
+        row[serie] = Math.round(items.reduce((s, d) => s + (metrica === 'pesos' ? d.monto : d.ventas), 0))
       }
       return row
     })
@@ -173,7 +177,8 @@ export default function TercerosChart({ data }: Props) {
               />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               {chartData.seriesNames.map((serie, i) => (
-                <Line key={serie} type="monotone" dataKey={serie} stroke={COLORES[i % COLORES.length]} strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                <Line key={serie} type="monotone" dataKey={serie} stroke={COLORES[i % COLORES.length]} strokeWidth={2} dot={{ r: 3, fill: COLORES[i % COLORES.length] }} activeDot={{ r: 5 }}
+                  label={{ position: 'top', fontSize: 9, fill: COLORES[i % COLORES.length], formatter: (v: number) => v > 0 ? formatLabel(v) : '' }} />
               ))}
             </LineChart>
           </ResponsiveContainer>
