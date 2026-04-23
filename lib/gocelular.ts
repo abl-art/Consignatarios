@@ -381,14 +381,14 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
 export interface VentaTercero {
   store_name: string
   client_id: string
-  fecha: string
+  fecha: string // YYYY-MM-DD
   ventas: number
   monto: number
 }
 
 /**
- * Ventas de todas las tiendas, todas las fechas.
- * El filtrado por "terceros" y por mes se hace en el consumidor.
+ * Ventas de todas las tiendas, agrupadas por día y store.
+ * El filtrado por "terceros" se hace en el consumidor.
  */
 export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
   const url = process.env.GOCELULAR_DB_URL
@@ -397,22 +397,22 @@ export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
   const client = new Client({ connectionString: url })
   await client.connect()
   try {
-    const res = await client.query<{ store_name: string; client_id: string; mes: string; ventas: string; monto: string }>(
+    const res = await client.query<{ store_name: string; client_id: string; fecha: Date; ventas: string; monto: string }>(
       `SELECT o.store_name,
               o.client_id::text,
-              to_char(o.order_created_at, 'YYYY-MM') AS mes,
+              o.order_created_at::date AS fecha,
               COUNT(*)::text AS ventas,
               COALESCE(SUM(CASE WHEN o.total_order_amount > 5000000 THEN o.total_order_amount / 100.0 ELSE o.total_order_amount END), 0)::text AS monto
        FROM gocuotas_orders o
        WHERE o.order_delivered_at IS NOT NULL
          AND o.order_discarded_at IS NULL
-       GROUP BY o.store_name, o.client_id, mes
-       ORDER BY mes DESC, ventas DESC`
+       GROUP BY o.store_name, o.client_id, fecha
+       ORDER BY fecha DESC`
     )
     return res.rows.map(r => ({
       store_name: r.store_name,
       client_id: r.client_id,
-      fecha: r.mes,
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
       ventas: Number(r.ventas),
       monto: Number(r.monto),
     }))

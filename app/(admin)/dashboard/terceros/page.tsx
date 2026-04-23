@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchVentasTerceros, CLIENT_IDS_PROPIOS } from '@/lib/gocelular'
+import TercerosChart from './TercerosChart'
 
 export default async function TercerosPage({
   searchParams,
@@ -30,7 +31,7 @@ export default async function TercerosPage({
   })
 
   // Extraer meses y merchants disponibles
-  const mesesDisponibles = [...new Set(terceros.map(t => t.fecha))].sort().reverse()
+  const mesesDisponibles = [...new Set(terceros.map(t => t.fecha.slice(0, 7)))].sort().reverse()
   const getMerchantName = (storeName: string) => storeName.split(/[\s-]/)[0].trim().toUpperCase()
   const merchantsDisponibles = [...new Set(terceros.map(t => getMerchantName(t.store_name)))].sort()
 
@@ -39,7 +40,7 @@ export default async function TercerosPage({
 
   // Aplicar filtros
   let filtrados = terceros
-  if (mesSeleccionado) filtrados = filtrados.filter(t => t.fecha === mesSeleccionado)
+  if (mesSeleccionado) filtrados = filtrados.filter(t => t.fecha.startsWith(mesSeleccionado))
   if (merchantSeleccionado) filtrados = filtrados.filter(t => getMerchantName(t.store_name) === merchantSeleccionado)
 
   // Agrupar por merchant y deduplicar tiendas
@@ -76,7 +77,10 @@ export default async function TercerosPage({
         <h1 className="text-2xl font-bold text-gray-900">Ventas de Terceros</h1>
       </div>
 
-      {/* Filtros */}
+      {/* Gráfico dinámico */}
+      <TercerosChart data={terceros.map(t => ({ store_name: t.store_name, fecha: t.fecha, ventas: t.ventas, monto: t.monto }))} />
+
+      {/* Filtros tabla */}
       <form method="GET" className="flex flex-wrap gap-3 items-end mb-6">
         <div>
           <label className="text-xs font-medium text-gray-600 block mb-1">Mes</label>
