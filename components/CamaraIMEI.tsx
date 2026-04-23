@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 
 interface Props {
   onScan: (imei: string) => void
@@ -12,6 +12,7 @@ export default function CamaraIMEI({ onScan }: Props) {
   const [error, setError] = useState('')
   const [ultimo, setUltimo] = useState('')
   const [conteo, setConteo] = useState(0)
+  const [debug, setDebug] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const containerId = useRef('cam-' + Math.random().toString(36).slice(2))
   const ultimoRef = useRef('')
@@ -19,6 +20,7 @@ export default function CamaraIMEI({ onScan }: Props) {
   const detener = useCallback(async () => {
     if (scannerRef.current) {
       try { await scannerRef.current.stop() } catch {}
+      try { scannerRef.current.clear() } catch {}
       scannerRef.current = null
     }
     setActiva(false)
@@ -28,16 +30,33 @@ export default function CamaraIMEI({ onScan }: Props) {
 
   async function iniciar() {
     setError('')
+    setDebug('Iniciando cámara...')
+
     try {
-      const scanner = new Html5Qrcode(containerId.current)
+      // Formatos de código de barras comunes para IMEI
+      const scanner = new Html5Qrcode(containerId.current, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE,
+        ],
+        verbose: false,
+      })
       scannerRef.current = scanner
+
+      setDebug('Solicitando permisos...')
 
       await scanner.start(
         { facingMode: 'environment' },
         {
-          fps: 15,
-          qrbox: { width: 280, height: 80 },
-          aspectRatio: 1.777,
+          fps: 10,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const w = Math.min(viewfinderWidth * 0.85, 300)
+            const h = Math.min(viewfinderHeight * 0.3, 80)
+            return { width: Math.round(w), height: Math.round(h) }
+          },
         },
         (decoded) => {
           const digits = decoded.replace(/\D/g, '')
@@ -46,15 +65,19 @@ export default function CamaraIMEI({ onScan }: Props) {
             ultimoRef.current = imei
             setUltimo(imei)
             setConteo(c => c + 1)
+            setDebug('')
             onScan(imei)
           }
         },
-        () => {} // ignore per-frame errors
+        () => {} // per-frame scan miss — normal
       )
 
       setActiva(true)
-    } catch {
-      setError('No se pudo acceder a la cámara. Verificá los permisos del navegador.')
+      setDebug('Cámara activa. Apuntá al código de barras.')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError('Error de cámara: ' + msg)
+      setDebug('')
     }
   }
 
@@ -75,11 +98,13 @@ export default function CamaraIMEI({ onScan }: Props) {
       </button>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {debug && <p className="text-xs text-blue-600">{debug}</p>}
 
+      {/* El div SIEMPRE está en el DOM, se muestra/oculta con CSS */}
       <div
         id={containerId.current}
-        className={activa ? 'rounded-lg overflow-hidden border border-gray-300' : 'hidden'}
-        style={{ maxHeight: '220px' }}
+        style={{ display: activa ? 'block' : 'none', width: '100%', minHeight: activa ? '200px' : '0' }}
+        className="rounded-lg overflow-hidden border border-gray-300"
       />
 
       {conteo > 0 && (
