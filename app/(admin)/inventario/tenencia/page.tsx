@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { diasDesde, clasificarAntiguedad, formatearMoneda } from '@/lib/utils'
-import { getPreciosNewsan } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import type { Consignatario } from '@/lib/types'
 
 type DispositivoRow = {
@@ -17,7 +17,8 @@ interface GrupoModelo {
   sumaDias: number
   promedioDias: number | null
   valorCosto: number
-  valorVenta: number
+  precioUnit: number
+  valorTotal: number
 }
 
 interface GrupoConsignatario {
@@ -25,7 +26,7 @@ interface GrupoConsignatario {
   nombre: string
   total: number
   valorCosto: number
-  valorVenta: number
+  valorTotal: number
   modelos: GrupoModelo[]
 }
 
@@ -42,7 +43,7 @@ export default async function TenenciaPage() {
       .select('id, nombre')
       .order('nombre')
       .returns<Pick<Consignatario, 'id' | 'nombre'>[]>(),
-    getPreciosNewsan(),
+    getMejorPrecio(),
   ])
   const rows = ((dispositivos ?? []) as unknown as DispositivoRow[])
 
@@ -54,14 +55,14 @@ export default async function TenenciaPage() {
     if (!map[d.consignatario_id]) map[d.consignatario_id] = {}
     const bucket = map[d.consignatario_id]
     if (!bucket[key]) {
-      bucket[key] = { marca: d.modelos.marca, modelo: d.modelos.modelo, cantidad: 0, sumaDias: 0, promedioDias: null, valorCosto: 0, valorVenta: 0 }
+      const nombreNorm = `${d.modelos.marca} ${d.modelos.modelo}`.toLowerCase().trim()
+      const precioUnit = preciosNewsan[nombreNorm] ?? 0
+      bucket[key] = { marca: d.modelos.marca, modelo: d.modelos.modelo, cantidad: 0, sumaDias: 0, promedioDias: null, valorCosto: 0, precioUnit, valorTotal: 0 }
     }
     const costo = d.modelos.precio_costo ?? 0
     bucket[key].cantidad++
-    const nombreNorm = `${d.modelos.marca} ${d.modelos.modelo}`.toLowerCase().trim()
-    const precioNewsan = preciosNewsan[nombreNorm] ?? 0
     bucket[key].valorCosto += costo
-    bucket[key].valorVenta += precioNewsan
+    bucket[key].valorTotal = bucket[key].cantidad * bucket[key].precioUnit
     const dias = diasDesde(d.fecha_asignacion)
     if (dias !== null) bucket[key].sumaDias += dias
   }
@@ -74,15 +75,15 @@ export default async function TenenciaPage() {
         .sort((a, b) => b.cantidad - a.cantidad)
       const total = modelos.reduce((s, m) => s + m.cantidad, 0)
       const valorCosto = modelos.reduce((s, m) => s + m.valorCosto, 0)
-      const valorVenta = modelos.reduce((s, m) => s + m.valorVenta, 0)
-      return { id: c.id, nombre: c.nombre, total, valorCosto, valorVenta, modelos }
+      const valorTotal = modelos.reduce((s, m) => s + m.valorTotal, 0)
+      return { id: c.id, nombre: c.nombre, total, valorCosto, valorTotal, modelos }
     })
     .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total)
 
   const totalGeneral = consigArray.reduce((s, c) => s + c.total, 0)
   const totalCostoGeneral = consigArray.reduce((s, c) => s + c.valorCosto, 0)
-  const totalVentaGeneral = consigArray.reduce((s, c) => s + c.valorVenta, 0)
+  const totalVentaGeneral = consigArray.reduce((s, c) => s + c.valorTotal, 0)
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -103,7 +104,7 @@ export default async function TenenciaPage() {
           <p className="font-bold text-gray-900">{formatearMoneda(totalCostoGeneral)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">Valor venta</p>
+          <p className="text-xs text-gray-500">Valor stock</p>
           <p className="font-bold text-green-700">{formatearMoneda(totalVentaGeneral)}</p>
         </div>
       </div>
@@ -124,8 +125,8 @@ export default async function TenenciaPage() {
                     <p className="text-sm font-semibold text-gray-700">{formatearMoneda(c.valorCosto)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-400">Venta</p>
-                    <p className="text-sm font-semibold text-green-700">{formatearMoneda(c.valorVenta)}</p>
+                    <p className="text-xs text-gray-400">Valor</p>
+                    <p className="text-sm font-semibold text-green-700">{formatearMoneda(c.valorTotal)}</p>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-bold text-magenta-700">{c.total}</span>
@@ -138,8 +139,10 @@ export default async function TenenciaPage() {
                   <tr className="border-b border-gray-100">
                     <th className="text-left px-6 py-2 font-medium text-gray-600">Marca</th>
                     <th className="text-left px-6 py-2 font-medium text-gray-600">Modelo</th>
-                    <th className="text-right px-6 py-2 font-medium text-gray-600">Cantidad</th>
-                    <th className="text-right px-6 py-2 font-medium text-gray-600">Antigüedad prom.</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Cant.</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Precio unit.</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Total</th>
+                    <th className="text-right px-6 py-2 font-medium text-gray-600">Antig. prom.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -150,6 +153,8 @@ export default async function TenenciaPage() {
                         <td className="px-6 py-2 font-medium text-gray-900">{m.marca}</td>
                         <td className="px-6 py-2 text-gray-700">{m.modelo}</td>
                         <td className="px-6 py-2 text-right font-bold text-gray-900">{m.cantidad}</td>
+                        <td className="px-6 py-2 text-right text-gray-600">{m.precioUnit > 0 ? formatearMoneda(m.precioUnit) : '—'}</td>
+                        <td className="px-6 py-2 text-right font-medium text-green-700">{m.valorTotal > 0 ? formatearMoneda(m.valorTotal) : '—'}</td>
                         <td className="px-6 py-2 text-right">
                           {m.promedioDias !== null ? (
                             <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${clase.textColor} ${clase.bgColor}`}>

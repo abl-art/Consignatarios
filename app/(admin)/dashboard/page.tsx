@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
-import { getPreciosNewsan } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
@@ -20,7 +20,7 @@ export default async function DashboardPage() {
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     fetchStockPropio(),
     fetchStockPropioDetalle(),
-    getPreciosNewsan(),
+    getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
   ])
 

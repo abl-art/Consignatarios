@@ -1,7 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getPreciosNewsan } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import { RemitoAsignacionPDF } from '@/lib/pdf/remito-asignacion'
 
 type AsignacionItemRow = {
@@ -31,7 +31,7 @@ export async function GET(
   }
 
   // Load NEWSAN prices for valuation
-  const preciosNewsan = await getPreciosNewsan()
+  const preciosNewsan = await getMejorPrecio()
 
   // Load consignatario
   const { data: consignatario } = await supabase

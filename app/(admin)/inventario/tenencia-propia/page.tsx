@@ -1,5 +1,5 @@
 import { Client } from 'pg'
-import { getPreciosNewsan } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import { formatearMoneda } from '@/lib/utils'
 
 interface ModeloRow {
@@ -11,6 +11,7 @@ interface ModeloRow {
   disponibles: number
   pendientes: number
   real: number
+  precio_unit: number
   valor: number
 }
 
@@ -106,6 +107,7 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
         disponibles,
         pendientes,
         real,
+        precio_unit: precioNewsan,
         valor: real * precioNewsan,
       }
     })
@@ -119,7 +121,7 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
 }
 
 export default async function TenenciaPropiaPage() {
-  const preciosNewsan = await getPreciosNewsan()
+  const preciosNewsan = await getMejorPrecio()
   const { rows, error } = await loadStockPropio(preciosNewsan)
 
   const totalDisponibles = rows.reduce((s, r) => s + r.disponibles, 0)
@@ -169,7 +171,7 @@ export default async function TenenciaPropiaPage() {
               <p className={`font-bold ${totalReal < 0 ? 'text-red-700' : 'text-magenta-700'}`}>{totalReal}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Valor stock (NEWSAN)</p>
+              <p className="text-xs text-gray-500">Valor stock</p>
               <p className="font-bold text-green-700">{formatearMoneda(totalValor)}</p>
             </div>
           </div>
@@ -188,6 +190,7 @@ export default async function TenenciaPropiaPage() {
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Disponibles</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Pend. asignar</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Disp. real</th>
+                    <th className="text-right px-6 py-3 font-medium text-gray-600">Precio unit.</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Valor</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Mínimo</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-600">Alerta</th>
@@ -204,6 +207,9 @@ export default async function TenenciaPropiaPage() {
                         <td className="px-6 py-3 text-right text-amber-700">{r.pendientes}</td>
                         <td className={`px-6 py-3 text-right font-bold ${r.real < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                           {r.real}
+                        </td>
+                        <td className="px-6 py-3 text-right text-gray-600">
+                          {r.precio_unit > 0 ? formatearMoneda(r.precio_unit) : '—'}
                         </td>
                         <td className="px-6 py-3 text-right text-green-700 font-medium">
                           {r.valor > 0 ? formatearMoneda(r.valor) : '—'}

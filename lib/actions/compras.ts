@@ -262,32 +262,38 @@ export async function eliminarPedido(pedidoId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Precios NEWSAN SA (para valorización de stock)
+// Mejor precio disponible por producto (menor precio entre todos los proveedores)
 // ---------------------------------------------------------------------------
 
-export async function getPreciosNewsan(): Promise<Record<string, number>> {
+export async function getMejorPrecio(): Promise<Record<string, number>> {
   const supabase = createAdminClient()
-  const NEWSAN_ID = '7f1dc677-9e89-4131-a4e9-06ca4458c884'
   const { data: precios } = await supabase
     .from('compras_precios')
     .select('producto_id, precio')
-    .eq('proveedor_id', NEWSAN_ID)
   if (!precios) return {}
 
-  const prodIds = precios.map(p => p.producto_id)
+  // Agrupar por producto, quedarse con el menor precio
+  const mejorPorProducto: Record<string, number> = {}
+  for (const p of precios) {
+    const precio = Number(p.precio)
+    if (!mejorPorProducto[p.producto_id] || precio < mejorPorProducto[p.producto_id]) {
+      mejorPorProducto[p.producto_id] = precio
+    }
+  }
+
+  const prodIds = Object.keys(mejorPorProducto)
+  if (prodIds.length === 0) return {}
+
   const { data: prods } = await supabase
     .from('compras_productos')
     .select('id, nombre')
     .in('id', prodIds)
   if (!prods) return {}
 
-  const prodMap: Record<string, string> = {}
-  prods.forEach((p: {id: string; nombre: string}) => { prodMap[p.id] = p.nombre.toLowerCase().trim() })
-
   const result: Record<string, number> = {}
-  precios.forEach((p: {producto_id: string; precio: number}) => {
-    const nombre = prodMap[p.producto_id]
-    if (nombre) result[nombre] = Number(p.precio)
-  })
+  for (const prod of prods) {
+    const nombre = prod.nombre.toLowerCase().trim()
+    result[nombre] = mejorPorProducto[prod.id]
+  }
   return result
 }
