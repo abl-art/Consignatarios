@@ -167,7 +167,7 @@ export default function TercerosChart({ data }: Props) {
               <XAxis dataKey="fecha" stroke="#6b7280" fontSize={10} interval="preserveStartEnd" />
               <YAxis stroke="#6b7280" fontSize={10} tickFormatter={formatLabel} />
               <Tooltip
-                formatter={(value: number, name: string) => [metrica === 'pesos' ? `$${fmt.format(value)}` : value, name]}
+                formatter={(value) => [metrica === 'pesos' ? `$${fmt.format(Number(value))}` : value, '']}
                 labelStyle={{ color: '#374151' }}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11 }}
               />
