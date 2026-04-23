@@ -100,10 +100,6 @@ export default async function TenenciaPage() {
           <p className="font-bold text-magenta-700">{totalGeneral}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">Valor costo</p>
-          <p className="font-bold text-gray-900">{formatearMoneda(totalCostoGeneral)}</p>
-        </div>
-        <div>
           <p className="text-xs text-gray-500">Valor stock</p>
           <p className="font-bold text-green-700">{formatearMoneda(totalVentaGeneral)}</p>
         </div>
@@ -120,10 +116,6 @@ export default async function TenenciaPage() {
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
                 <h2 className="font-bold text-gray-900">{c.nombre}</h2>
                 <div className="flex items-center gap-5">
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400">Costo</p>
-                    <p className="text-sm font-semibold text-gray-700">{formatearMoneda(c.valorCosto)}</p>
-                  </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-400">Valor</p>
                     <p className="text-sm font-semibold text-green-700">{formatearMoneda(c.valorTotal)}</p>
