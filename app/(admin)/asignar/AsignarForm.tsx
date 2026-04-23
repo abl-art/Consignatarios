@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { formatearMoneda } from '@/lib/utils'
 import { prepararAsignacion } from '@/lib/actions/asignar'
+import EscanerIMEI from '@/components/EscanerIMEI'
 
 interface AsignarFormProps {
   consignatarios: Consignatario[]
@@ -79,6 +80,20 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
       handleImeiSubmit()
     }
   }, [handleImeiSubmit])
+
+  const handleScanImei = useCallback((imei: string) => {
+    const device = imeiMap.get(imei)
+    if (device) {
+      if (!selected.has(device.id)) {
+        setSelected(prev => { const next = new Set(prev); next.add(device.id); return next })
+        setImeiFeedback({ type: 'success', message: `IMEI ${imei} escaneado y agregado` })
+      } else {
+        setImeiFeedback({ type: 'success', message: `IMEI ${imei} ya estaba seleccionado` })
+      }
+    } else {
+      setImeiFeedback({ type: 'error', message: `IMEI ${imei} no encontrado en stock` })
+    }
+  }, [imeiMap, selected])
 
   const dispositivosFiltrados = useMemo(() => {
     if (!filtroModelo.trim()) return dispositivos
@@ -199,7 +214,7 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
           Agregar IMEI
         </label>
         <p className="text-xs text-gray-500 mb-3">
-          Escribe o pega un IMEI y presiona Enter para agregarlo a la seleccion
+          Escribe, pega o escaneá un IMEI con la cámara
         </p>
         <div className="flex gap-3">
           <input
@@ -219,6 +234,9 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
           >
             Agregar
           </button>
+        </div>
+        <div className="mt-3">
+          <EscanerIMEI onScan={handleScanImei} />
         </div>
         {imeiFeedback && (
           <div
