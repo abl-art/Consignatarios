@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
-import { getMejorPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   // Valorización tenencia propia
   let valorPropio = 0
   stockDetalle.forEach(s => {
-    const precio = preciosNewsan[s.model_name.toLowerCase().trim()]
+    const precio = buscarPrecio(preciosNewsan, s.model_name)
     if (precio) valorPropio += s.qty * precio
   })
 
@@ -36,8 +36,7 @@ export default async function DashboardPage() {
   for (const row of dispConsig ?? []) {
     const m = row.modelos as unknown as { marca: string; modelo: string } | null
     if (!m) continue
-    const nombreNorm = `${m.marca} ${m.modelo}`.toLowerCase().trim()
-    const precio = preciosNewsan[nombreNorm]
+    const precio = buscarPrecio(preciosNewsan, `${m.marca} ${m.modelo}`)
     if (precio) valorConsig += precio
   }
   const prefixes = (consigs ?? [])

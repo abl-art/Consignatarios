@@ -1,5 +1,5 @@
 import { Client } from 'pg'
-import { getMejorPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
 import { formatearMoneda } from '@/lib/utils'
 
 interface ModeloRow {
@@ -97,7 +97,7 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
       const disponibles = disponiblesMap.get(m.model_code) ?? 0
       const pendientes = pendPorModelo[m.model_code] ?? 0
       const real = disponibles - pendientes
-      const precioNewsan = preciosNewsan[m.name.toLowerCase().trim()] ?? 0
+      const precioNewsan = buscarPrecio(preciosNewsan, m.name)
       return {
         brand: m.brand,
         name: m.name,

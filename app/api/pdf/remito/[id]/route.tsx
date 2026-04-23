@@ -1,7 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getMejorPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
 import { RemitoAsignacionPDF } from '@/lib/pdf/remito-asignacion'
 
 type AsignacionItemRow = {
@@ -52,13 +52,12 @@ export async function GET(
     const precioCosto = modelo?.precio_costo ?? 0
     const marca = modelo?.marca ?? ''
     const modeloNombre = modelo?.modelo ?? ''
-    const nombreNorm = `${marca} ${modeloNombre}`.toLowerCase().trim()
     return {
       imei: dispositivo?.imei ?? '',
       marca,
       modelo: modeloNombre,
       precioCosto,
-      precioVenta: preciosNewsan[nombreNorm] ?? precioCosto,
+      precioVenta: buscarPrecio(preciosNewsan, `${marca} ${modeloNombre}`) || precioCosto,
     }
   })
 

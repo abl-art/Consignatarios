@@ -265,6 +265,20 @@ export async function eliminarPedido(pedidoId: string) {
 // Mejor precio disponible por producto (menor precio entre todos los proveedores)
 // ---------------------------------------------------------------------------
 
+// Normaliza nombres de producto para matching flexible
+// "Motorola Motorola Moto G06 64gb" -> "motorola moto g06 64gb"
+// "Samsung Celular Samsung Galaxy A07 4/64 GB" -> "samsung galaxy a07 4/64 gb"
+function normalizarNombreProducto(nombre: string): string {
+  let n = nombre.toLowerCase().trim()
+  // Quitar prefijo "celular"
+  n = n.replace(/\bcelular\b/g, '')
+  // Quitar duplicación de marca al inicio
+  n = n.replace(/^(motorola|samsung|xiaomi|apple|honor|nubia)\s+\1/i, '$1')
+  // Normalizar espacios
+  n = n.replace(/\s+/g, ' ').trim()
+  return n
+}
+
 export async function getMejorPrecio(): Promise<Record<string, number>> {
   const supabase = createAdminClient()
   const { data: precios } = await supabase
@@ -292,8 +306,19 @@ export async function getMejorPrecio(): Promise<Record<string, number>> {
 
   const result: Record<string, number> = {}
   for (const prod of prods) {
-    const nombre = prod.nombre.toLowerCase().trim()
+    const nombre = normalizarNombreProducto(prod.nombre)
     result[nombre] = mejorPorProducto[prod.id]
   }
   return result
+}
+
+// Busca el precio de un modelo usando matching normalizado
+export function buscarPrecio(precios: Record<string, number>, nombreModelo: string): number {
+  const norm = normalizarNombreProducto(nombreModelo)
+  if (precios[norm]) return precios[norm]
+  // Fallback: buscar si algún key del mapa está contenido en el nombre o viceversa
+  for (const [key, precio] of Object.entries(precios)) {
+    if (norm.includes(key) || key.includes(norm)) return precio
+  }
+  return 0
 }

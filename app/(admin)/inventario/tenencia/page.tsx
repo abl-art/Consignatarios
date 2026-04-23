@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { diasDesde, clasificarAntiguedad, formatearMoneda } from '@/lib/utils'
-import { getMejorPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
 import type { Consignatario } from '@/lib/types'
 
 type DispositivoRow = {
@@ -55,8 +55,8 @@ export default async function TenenciaPage() {
     if (!map[d.consignatario_id]) map[d.consignatario_id] = {}
     const bucket = map[d.consignatario_id]
     if (!bucket[key]) {
-      const nombreNorm = `${d.modelos.marca} ${d.modelos.modelo}`.toLowerCase().trim()
-      const precioUnit = preciosNewsan[nombreNorm] ?? 0
+      const nombreModelo = `${d.modelos.marca} ${d.modelos.modelo}`
+      const precioUnit = buscarPrecio(preciosNewsan, nombreModelo)
       bucket[key] = { marca: d.modelos.marca, modelo: d.modelos.modelo, cantidad: 0, sumaDias: 0, promedioDias: null, valorCosto: 0, precioUnit, valorTotal: 0 }
     }
     const costo = d.modelos.precio_costo ?? 0
