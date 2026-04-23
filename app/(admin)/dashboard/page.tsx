@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, type VentaDiaria } from '@/lib/gocelular'
