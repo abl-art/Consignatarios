@@ -3,17 +3,16 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
-import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
+import { formatearMoneda } from '@/lib/utils'
 import { prepararAsignacion } from '@/lib/actions/asignar'
 
 interface AsignarFormProps {
   consignatarios: Consignatario[]
   dispositivos: DispositivoConModelo[]
-  multiplicador: number
   compromisoMap: Record<string, number>
 }
 
-export default function AsignarForm({ consignatarios, dispositivos, multiplicador, compromisoMap }: AsignarFormProps) {
+export default function AsignarForm({ consignatarios, dispositivos, compromisoMap }: AsignarFormProps) {
   const router = useRouter()
 
   const [consignatarioId, setConsignatarioId] = useState('')
@@ -126,10 +125,7 @@ export default function AsignarForm({ consignatarios, dispositivos, multiplicado
     [selectedDispositivos]
   )
 
-  const totalValorVenta = useMemo(
-    () => selectedDispositivos.reduce((acc, d) => acc + calcularPrecioVenta(d.modelos.precio_costo, multiplicador), 0),
-    [selectedDispositivos, multiplicador]
-  )
+  const totalValorVenta = totalValorCosto
 
   const selectedConsig = consignatarios.find((c) => c.id === consignatarioId)
   const garantia = selectedConsig?.garantia ?? 0

@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
+import { getPreciosNewsan } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
@@ -11,14 +12,34 @@ import ForecastChart from './ForecastChart'
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio] = await Promise.all([
+  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
     getForecastEvents(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     fetchStockPropio(),
+    fetchStockPropioDetalle(),
+    getPreciosNewsan(),
+    supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
   ])
+
+  // Valorización tenencia propia
+  let valorPropio = 0
+  stockDetalle.forEach(s => {
+    const precio = preciosNewsan[s.model_name.toLowerCase().trim()]
+    if (precio) valorPropio += s.qty * precio
+  })
+
+  // Valorización consignatarios
+  let valorConsig = 0
+  for (const row of dispConsig ?? []) {
+    const m = row.modelos as unknown as { marca: string; modelo: string } | null
+    if (!m) continue
+    const nombreNorm = `${m.marca} ${m.modelo}`.toLowerCase().trim()
+    const precio = preciosNewsan[nombreNorm]
+    if (precio) valorConsig += precio
+  }
   const prefixes = (consigs ?? [])
     .filter((c: { store_prefix: string | null }) => c.store_prefix)
     .map((c: { nombre: string; store_prefix: string | null }) => ({
@@ -59,14 +80,17 @@ export default async function DashboardPage() {
             <div>
               <p className="text-xs text-gray-500 mb-1">Tenencia propia</p>
               <p className="text-xl font-bold text-blue-700">{stockPropio}</p>
+              <p className="text-xs text-blue-600 mt-0.5">{formatearMoneda(valorPropio)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">En consignatarios</p>
               <p className="text-xl font-bold text-amber-700">{stockConsignatarios ?? 0}</p>
+              <p className="text-xs text-amber-600 mt-0.5">{formatearMoneda(valorConsig)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">Total</p>
               <p className="text-xl font-bold text-gray-900">{(stockPropio) + (stockConsignatarios ?? 0)}</p>
+              <p className="text-xs text-green-700 font-medium mt-0.5">{formatearMoneda(valorPropio + valorConsig)}</p>
             </div>
           </div>
         </div>

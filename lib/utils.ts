@@ -11,10 +11,6 @@ export function formatearMoneda(monto: number): string {
   }).format(monto)
 }
 
-export function calcularPrecioVenta(precioCosto: number, multiplicador: number): number {
-  return precioCosto * multiplicador
-}
-
 /**
  * Días entre una fecha (YYYY-MM-DD) y hoy.
  * Devuelve null si fecha es null/inválida.

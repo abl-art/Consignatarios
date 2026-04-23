@@ -1,7 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { calcularPrecioVenta } from '@/lib/utils'
+import { getPreciosNewsan } from '@/lib/actions/compras'
 import { RemitoAsignacionPDF } from '@/lib/pdf/remito-asignacion'
 
 type AsignacionItemRow = {
@@ -30,13 +30,8 @@ export async function GET(
     return NextResponse.json({ error: 'Asignacion no encontrada' }, { status: 404 })
   }
 
-  // Load config (multiplicador)
-  const { data: config } = await supabase
-    .from('config')
-    .select('*')
-    .single()
-
-  const multiplicador = config?.multiplicador ?? 1
+  // Load NEWSAN prices for valuation
+  const preciosNewsan = await getPreciosNewsan()
 
   // Load consignatario
   const { data: consignatario } = await supabase
@@ -55,12 +50,15 @@ export async function GET(
     const dispositivo = row.dispositivos
     const modelo = dispositivo?.modelos
     const precioCosto = modelo?.precio_costo ?? 0
+    const marca = modelo?.marca ?? ''
+    const modeloNombre = modelo?.modelo ?? ''
+    const nombreNorm = `${marca} ${modeloNombre}`.toLowerCase().trim()
     return {
       imei: dispositivo?.imei ?? '',
-      marca: modelo?.marca ?? '',
-      modelo: modelo?.modelo ?? '',
+      marca,
+      modelo: modeloNombre,
       precioCosto,
-      precioVenta: calcularPrecioVenta(precioCosto, multiplicador),
+      precioVenta: preciosNewsan[nombreNorm] ?? precioCosto,
     }
   })
 

@@ -1,16 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import ModeloRow from './ModeloRow'
-import type { Modelo, Config } from '@/lib/types'
-
-async function actualizarMultiplicador(formData: FormData) {
-  'use server'
-  const supabase = createClient()
-  const multiplicador = parseFloat(formData.get('multiplicador') as string)
-  if (isNaN(multiplicador) || multiplicador <= 0) return
-  await supabase.from('config').update({ multiplicador, updated_at: new Date().toISOString() }).neq('id', '')
-  revalidatePath('/modelos')
-}
+import type { Modelo } from '@/lib/types'
 
 async function crearModelo(formData: FormData) {
   'use server'
@@ -25,44 +16,11 @@ async function crearModelo(formData: FormData) {
 
 export default async function ModelosPage() {
   const supabase = createClient()
-  const [{ data: config }, { data: modelos }] = await Promise.all([
-    supabase.from('config').select('*').single<Config>(),
-    supabase.from('modelos').select('*').order('marca').returns<Modelo[]>(),
-  ])
-
-  const multiplicador = config?.multiplicador ?? 1.8
+  const { data: modelos } = await supabase.from('modelos').select('*').order('marca').returns<Modelo[]>()
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Modelos y precios</h1>
-
-      {/* Multiplicador global */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-          Multiplicador global de precio
-        </h2>
-        <form action={actualizarMultiplicador} className="flex items-end gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              Multiplicador actual: <strong>{multiplicador}</strong>
-            </label>
-            <input
-              name="multiplicador"
-              type="number"
-              step="0.01"
-              min="0.01"
-              defaultValue={multiplicador}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700"
-          >
-            Actualizar
-          </button>
-        </form>
-      </div>
 
       {/* Agregar modelo */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
@@ -108,17 +66,16 @@ export default async function ModelosPage() {
               <th className="text-left px-6 py-3 font-medium text-gray-600">Marca</th>
               <th className="text-left px-6 py-3 font-medium text-gray-600">Modelo</th>
               <th className="text-right px-6 py-3 font-medium text-gray-600">Precio costo</th>
-              <th className="text-right px-6 py-3 font-medium text-gray-600">Precio venta</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {modelos?.map((m) => (
-              <ModeloRow key={m.id} modelo={m} multiplicador={multiplicador} />
+              <ModeloRow key={m.id} modelo={m} />
             ))}
             {(!modelos || modelos.length === 0) && (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
                   No hay modelos cargados
                 </td>
               </tr>

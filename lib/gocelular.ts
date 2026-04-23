@@ -273,6 +273,25 @@ export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
   }
 }
 
+export async function fetchStockPropioDetalle(): Promise<{model_name: string; qty: number}[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{model_name: string; qty: string}>(
+      `SELECT COALESCE(dm.name, ii.model_code) AS model_name, COUNT(*)::text AS qty
+       FROM inventory_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       WHERE ii.status = 'available'
+       GROUP BY model_name`
+    )
+    return res.rows.map(r => ({ model_name: r.model_name, qty: Number(r.qty) }))
+  } finally {
+    await client.end()
+  }
+}
+
 export async function fetchStockPropio(): Promise<number> {
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return 0

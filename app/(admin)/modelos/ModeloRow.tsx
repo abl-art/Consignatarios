@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
+import { formatearMoneda } from '@/lib/utils'
 import { editarModelo, eliminarModelo } from '@/lib/actions/modelos'
 import type { Modelo } from '@/lib/types'
 
-export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; multiplicador: number }) {
+export default function ModeloRow({ modelo }: { modelo: Modelo }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   // Local copy so we can update the displayed values optimistically after save
@@ -94,9 +94,6 @@ export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; m
             className="w-32 px-2 py-1 border border-gray-300 rounded text-sm text-right"
           />
         </td>
-        <td className="px-6 py-3 text-right text-gray-500 text-xs">
-          {formatearMoneda(calcularPrecioVenta(parseFloat(form.precio_costo) || 0, multiplicador))}
-        </td>
         <td className="px-6 py-3 text-right">
           <div className="flex gap-2 justify-end items-center">
             {error && <span className="text-xs text-red-600">{error}</span>}
@@ -119,9 +116,6 @@ export default function ModeloRow({ modelo, multiplicador }: { modelo: Modelo; m
       <td className="px-6 py-3 text-gray-900">{current.marca}</td>
       <td className="px-6 py-3 text-gray-900">{current.modelo}</td>
       <td className="px-6 py-3 text-right text-gray-700">{formatearMoneda(current.precio_costo)}</td>
-      <td className="px-6 py-3 text-right font-medium text-gray-900">
-        {formatearMoneda(calcularPrecioVenta(current.precio_costo, multiplicador))}
-      </td>
       <td className="px-6 py-3 text-right">
         <div className="flex gap-3 justify-end">
           <button onClick={() => setEditing(true)}

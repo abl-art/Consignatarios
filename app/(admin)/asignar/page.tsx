@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import type { Consignatario, DispositivoConModelo, Config } from '@/lib/types'
+import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { fetchInventarioDisponible } from '@/lib/gocelular'
 import { getBorradores } from '@/lib/actions/asignar'
 import AsignarForm from './AsignarForm'
@@ -11,7 +11,6 @@ export default async function AsignarPage() {
   const [
     { data: consignatarios },
     inventarioGo,
-    { data: config },
     { data: asignados },
     { data: diferencias },
     borradores,
@@ -22,11 +21,6 @@ export default async function AsignarPage() {
       .order('nombre')
       .returns<Consignatario[]>(),
     fetchInventarioDisponible(),
-    supabase
-      .from('config')
-      .select('*')
-      .limit(1)
-      .single<Config>(),
     supabase
       .from('dispositivos')
       .select('consignatario_id, modelos(precio_costo)')
@@ -55,8 +49,6 @@ export default async function AsignarPage() {
       created_at: new Date().toISOString(),
     },
   }))
-
-  const multiplicador = config?.multiplicador ?? 1.8
 
   // Build compromisoMap: sum precio_costo from assigned devices + monto_deuda from pending diferencias
   const compromisoMap: Record<string, number> = {}
@@ -94,7 +86,6 @@ export default async function AsignarPage() {
       <AsignarForm
         consignatarios={consignatarios ?? []}
         dispositivos={dispositivos}
-        multiplicador={multiplicador}
         compromisoMap={compromisoMap}
       />
     </div>

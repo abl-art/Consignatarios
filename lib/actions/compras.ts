@@ -260,3 +260,34 @@ export async function eliminarPedido(pedidoId: string) {
   revalidatePath('/compras')
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// Precios NEWSAN SA (para valorización de stock)
+// ---------------------------------------------------------------------------
+
+export async function getPreciosNewsan(): Promise<Record<string, number>> {
+  const supabase = createAdminClient()
+  const NEWSAN_ID = '7f1dc677-9e89-4131-a4e9-06ca4458c884'
+  const { data: precios } = await supabase
+    .from('compras_precios')
+    .select('producto_id, precio')
+    .eq('proveedor_id', NEWSAN_ID)
+  if (!precios) return {}
+
+  const prodIds = precios.map(p => p.producto_id)
+  const { data: prods } = await supabase
+    .from('compras_productos')
+    .select('id, nombre')
+    .in('id', prodIds)
+  if (!prods) return {}
+
+  const prodMap: Record<string, string> = {}
+  prods.forEach((p: {id: string; nombre: string}) => { prodMap[p.id] = p.nombre.toLowerCase().trim() })
+
+  const result: Record<string, number> = {}
+  precios.forEach((p: {producto_id: string; precio: number}) => {
+    const nombre = prodMap[p.producto_id]
+    if (nombre) result[nombre] = Number(p.precio)
+  })
+  return result
+}

@@ -1,4 +1,6 @@
 import { Client } from 'pg'
+import { getPreciosNewsan } from '@/lib/actions/compras'
+import { formatearMoneda } from '@/lib/utils'
 
 interface ModeloRow {
   brand: string
@@ -9,9 +11,10 @@ interface ModeloRow {
   disponibles: number
   pendientes: number
   real: number
+  valor: number
 }
 
-async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | null }> {
+async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{ rows: ModeloRow[]; error: string | null }> {
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return { rows: [], error: 'GOCELULAR_DB_URL no configurada' }
 
@@ -92,6 +95,8 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
     const rows: ModeloRow[] = modelosRes.rows.map((m) => {
       const disponibles = disponiblesMap.get(m.model_code) ?? 0
       const pendientes = pendPorModelo[m.model_code] ?? 0
+      const real = disponibles - pendientes
+      const precioNewsan = preciosNewsan[m.name.toLowerCase().trim()] ?? 0
       return {
         brand: m.brand,
         name: m.name,
@@ -100,7 +105,8 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
         min_stock_alert: m.min_stock_alert,
         disponibles,
         pendientes,
-        real: disponibles - pendientes,
+        real,
+        valor: real * precioNewsan,
       }
     })
 
@@ -113,11 +119,13 @@ async function loadStockPropio(): Promise<{ rows: ModeloRow[]; error: string | n
 }
 
 export default async function TenenciaPropiaPage() {
-  const { rows, error } = await loadStockPropio()
+  const preciosNewsan = await getPreciosNewsan()
+  const { rows, error } = await loadStockPropio(preciosNewsan)
 
   const totalDisponibles = rows.reduce((s, r) => s + r.disponibles, 0)
   const totalPendientes = rows.reduce((s, r) => s + r.pendientes, 0)
   const totalReal = rows.reduce((s, r) => s + r.real, 0)
+  const totalValor = rows.reduce((s, r) => s + r.valor, 0)
 
   function rowClasses(r: ModeloRow): { bg: string; label: string | null } {
     if (r.min_stock_alert !== null && r.real < r.min_stock_alert) {
@@ -160,6 +168,10 @@ export default async function TenenciaPropiaPage() {
               <p className="text-xs text-gray-500">Disponibilidad real</p>
               <p className={`font-bold ${totalReal < 0 ? 'text-red-700' : 'text-magenta-700'}`}>{totalReal}</p>
             </div>
+            <div>
+              <p className="text-xs text-gray-500">Valor stock (NEWSAN)</p>
+              <p className="font-bold text-green-700">{formatearMoneda(totalValor)}</p>
+            </div>
           </div>
 
           {rows.length === 0 ? (
@@ -176,6 +188,7 @@ export default async function TenenciaPropiaPage() {
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Disponibles</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Pend. asignar</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Disp. real</th>
+                    <th className="text-right px-6 py-3 font-medium text-gray-600">Valor</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Mínimo</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-600">Alerta</th>
                   </tr>
@@ -191,6 +204,9 @@ export default async function TenenciaPropiaPage() {
                         <td className="px-6 py-3 text-right text-amber-700">{r.pendientes}</td>
                         <td className={`px-6 py-3 text-right font-bold ${r.real < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                           {r.real}
+                        </td>
+                        <td className="px-6 py-3 text-right text-green-700 font-medium">
+                          {r.valor > 0 ? formatearMoneda(r.valor) : '—'}
                         </td>
                         <td className="px-6 py-3 text-right text-gray-500">{r.min_stock_alert ?? '—'}</td>
                         <td className="px-6 py-3">

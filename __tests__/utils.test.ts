@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validarIMEI, formatearMoneda, calcularPrecioVenta, primerDiaHabil } from '@/lib/utils'
+import { validarIMEI, formatearMoneda, primerDiaHabil } from '@/lib/utils'
 
 describe('validarIMEI', () => {
   it('acepta IMEI de 15 dígitos numéricos', () => {
@@ -30,16 +30,6 @@ describe('formatearMoneda', () => {
 
   it('formatea cero', () => {
     expect(formatearMoneda(0)).toMatch(/0/)
-  })
-})
-
-describe('calcularPrecioVenta', () => {
-  it('multiplica precio_costo por multiplicador', () => {
-    expect(calcularPrecioVenta(100, 1.8)).toBe(180)
-  })
-
-  it('maneja multiplicador 1', () => {
-    expect(calcularPrecioVenta(200, 1)).toBe(200)
   })
 })
 

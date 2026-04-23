@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { diasDesde, clasificarAntiguedad, formatearMoneda, calcularPrecioVenta } from '@/lib/utils'
-import type { Consignatario, Config } from '@/lib/types'
+import { diasDesde, clasificarAntiguedad, formatearMoneda } from '@/lib/utils'
+import { getPreciosNewsan } from '@/lib/actions/compras'
+import type { Consignatario } from '@/lib/types'
 
 type DispositivoRow = {
   id: string
@@ -31,7 +32,7 @@ interface GrupoConsignatario {
 export default async function TenenciaPage() {
   const supabase = createClient()
 
-  const [{ data: dispositivos }, { data: consignatarios }, { data: config }] = await Promise.all([
+  const [{ data: dispositivos }, { data: consignatarios }, preciosNewsan] = await Promise.all([
     supabase
       .from('dispositivos')
       .select('id, fecha_asignacion, consignatario_id, modelos(marca, modelo, precio_costo)')
@@ -41,10 +42,8 @@ export default async function TenenciaPage() {
       .select('id, nombre')
       .order('nombre')
       .returns<Pick<Consignatario, 'id' | 'nombre'>[]>(),
-    supabase.from('config').select('*').single<Config>(),
+    getPreciosNewsan(),
   ])
-
-  const multiplicador = config?.multiplicador ?? 1.8
   const rows = ((dispositivos ?? []) as unknown as DispositivoRow[])
 
   // Agrupar por consignatario -> modelo
@@ -59,8 +58,10 @@ export default async function TenenciaPage() {
     }
     const costo = d.modelos.precio_costo ?? 0
     bucket[key].cantidad++
+    const nombreNorm = `${d.modelos.marca} ${d.modelos.modelo}`.toLowerCase().trim()
+    const precioNewsan = preciosNewsan[nombreNorm] ?? 0
     bucket[key].valorCosto += costo
-    bucket[key].valorVenta += calcularPrecioVenta(costo, multiplicador)
+    bucket[key].valorVenta += precioNewsan
     const dias = diasDesde(d.fecha_asignacion)
     if (dias !== null) bucket[key].sumaDias += dias
   }
