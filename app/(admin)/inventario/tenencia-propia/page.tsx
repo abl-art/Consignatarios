@@ -1,6 +1,6 @@
 import { Client } from 'pg'
-import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
-import { formatearMoneda } from '@/lib/utils'
+import { getMejorPrecio } from '@/lib/actions/compras'
+import { formatearMoneda, buscarPrecio } from '@/lib/utils'
 
 interface ModeloRow {
   brand: string

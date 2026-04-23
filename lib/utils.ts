@@ -42,6 +42,24 @@ export function clasificarAntiguedad(dias: number | null): {
   return { label: 'lenta', textColor: 'text-red-700', bgColor: 'bg-red-50' }
 }
 
+// Normaliza nombres de producto para matching flexible
+function normalizarNombreProducto(nombre: string): string {
+  let n = nombre.toLowerCase().trim()
+  n = n.replace(/\bcelular\b/g, '')
+  n = n.replace(/^(motorola|samsung|xiaomi|apple|honor|nubia)\s+\1/i, '$1')
+  n = n.replace(/\s+/g, ' ').trim()
+  return n
+}
+
+export function buscarPrecio(precios: Record<string, number>, nombreModelo: string): number {
+  const norm = normalizarNombreProducto(nombreModelo)
+  if (precios[norm]) return precios[norm]
+  for (const [key, precio] of Object.entries(precios)) {
+    if (norm.includes(key) || key.includes(norm)) return precio
+  }
+  return 0
+}
+
 export function primerDiaHabil(year: number, month: number): Date {
   const date = new Date(year, month, 1)
   // 0 = domingo, 6 = sábado

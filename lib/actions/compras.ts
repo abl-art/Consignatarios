@@ -312,13 +312,3 @@ export async function getMejorPrecio(): Promise<Record<string, number>> {
   return result
 }
 
-// Busca el precio de un modelo usando matching normalizado
-export function buscarPrecio(precios: Record<string, number>, nombreModelo: string): number {
-  const norm = normalizarNombreProducto(nombreModelo)
-  if (precios[norm]) return precios[norm]
-  // Fallback: buscar si algún key del mapa está contenido en el nombre o viceversa
-  for (const [key, precio] of Object.entries(precios)) {
-    if (norm.includes(key) || key.includes(norm)) return precio
-  }
-  return 0
-}

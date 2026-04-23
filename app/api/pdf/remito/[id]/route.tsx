@@ -1,7 +1,8 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
+import { buscarPrecio } from '@/lib/utils'
 import { RemitoAsignacionPDF } from '@/lib/pdf/remito-asignacion'
 
 type AsignacionItemRow = {

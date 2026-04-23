@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { diasDesde, clasificarAntiguedad, formatearMoneda } from '@/lib/utils'
-import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
+import { diasDesde, clasificarAntiguedad, formatearMoneda, buscarPrecio } from '@/lib/utils'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import type { Consignatario } from '@/lib/types'
 
 type DispositivoRow = {

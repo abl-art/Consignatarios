@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
-import { formatearMoneda } from '@/lib/utils'
+import { formatearMoneda, buscarPrecio } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
-import { getMejorPrecio, buscarPrecio } from '@/lib/actions/compras'
+import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
