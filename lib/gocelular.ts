@@ -369,3 +369,41 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
     await client.end()
   }
 }
+
+export interface VentaTercero {
+  store_name: string
+  ventas: number
+  monto: number
+}
+
+/**
+ * Ventas de todas las tiendas desde abril 2026.
+ * El filtrado por "terceros" se hace en el consumidor comparando con store_prefix de consignatarios.
+ */
+export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ store_name: string; ventas: string; monto: string }>(
+      `SELECT o.store_name,
+              COUNT(*)::text AS ventas,
+              COALESCE(SUM(CASE WHEN o.total_order_amount > 5000000 THEN o.total_order_amount / 100.0 ELSE o.total_order_amount END), 0)::text AS monto
+       FROM gocuotas_orders o
+       WHERE o.order_delivered_at IS NOT NULL
+         AND o.order_discarded_at IS NULL
+         AND o.order_created_at >= '2026-04-01'
+       GROUP BY o.store_name
+       ORDER BY ventas DESC`
+    )
+    return res.rows.map(r => ({
+      store_name: r.store_name,
+      ventas: Number(r.ventas),
+      monto: Number(r.monto),
+    }))
+  } finally {
+    await client.end()
+  }
+}

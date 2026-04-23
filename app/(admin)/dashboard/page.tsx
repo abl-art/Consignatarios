@@ -174,8 +174,10 @@ async function VentasDelDia() {
           const canalVentas = items.reduce((s, v) => s + v.ventas, 0)
           const canalMonto = items.reduce((s, v) => s + v.monto, 0)
 
+          const Wrapper = canal.key === 'terceros' ? 'a' : 'div'
+          const extraProps = canal.key === 'terceros' ? { href: '/dashboard/terceros' } : {}
           return (
-            <div key={canal.key} className={`rounded-xl border ${canal.borderColor} ${canal.color} p-4`}>
+            <Wrapper key={canal.key} {...extraProps} className={`rounded-xl border ${canal.borderColor} ${canal.color} p-4 ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-sm font-bold ${canal.iconColor}`}>{canal.label}</h3>
                 <div className="text-right">
@@ -188,7 +190,10 @@ async function VentasDelDia() {
               {items.length === 0 && (
                 <p className="text-xs text-gray-400 mt-2">Sin ventas hoy</p>
               )}
-            </div>
+              {canal.key === 'terceros' && canalVentas > 0 && (
+                <p className="text-[10px] text-gray-400 mt-2">Click para ver detalle por merchant</p>
+              )}
+            </Wrapper>
           )
         })}
       </div>
