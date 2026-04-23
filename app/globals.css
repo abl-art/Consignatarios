@@ -26,11 +26,15 @@ body {
   }
 }
 
-/* Mobile responsive: reduce padding on small screens */
+/* Mobile responsive */
 @media (max-width: 767px) {
+  main {
+    padding-bottom: 4.5rem !important; /* space for bottom tab bar */
+  }
   main > div {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
+    padding-top: 1rem !important;
   }
   main table {
     font-size: 11px;
@@ -38,4 +42,8 @@ body {
   main .grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
