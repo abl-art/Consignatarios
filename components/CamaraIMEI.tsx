@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 
 interface Props {
   onScan: (imei: string) => void
@@ -11,17 +12,14 @@ export default function CamaraIMEI({ onScan }: Props) {
   const [error, setError] = useState('')
   const [ultimo, setUltimo] = useState('')
   const [conteo, setConteo] = useState(0)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const scanningRef = useRef(false)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const containerId = useRef('cam-' + Math.random().toString(36).slice(2))
   const ultimoRef = useRef('')
 
-  const detener = useCallback(() => {
-    scanningRef.current = false
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
+  const detener = useCallback(async () => {
+    if (scannerRef.current) {
+      try { await scannerRef.current.stop() } catch {}
+      scannerRef.current = null
     }
     setActiva(false)
   }, [])
@@ -31,54 +29,32 @@ export default function CamaraIMEI({ onScan }: Props) {
   async function iniciar() {
     setError('')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-      setActiva(true)
-      scanningRef.current = true
-      escanearLoop()
-    } catch {
-      setError('No se pudo acceder a la cámara.')
-    }
-  }
+      const scanner = new Html5Qrcode(containerId.current)
+      scannerRef.current = scanner
 
-  function escanearLoop() {
-    if (!scanningRef.current) return
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas || video.readyState < 2) {
-      requestAnimationFrame(escanearLoop)
-      return
-    }
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    ctx.drawImage(video, 0, 0)
-
-    if ('BarcodeDetector' in window) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detector = new (window as any).BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'itf'] })
-      detector.detect(canvas).then((barcodes: { rawValue: string }[]) => {
-        for (const barcode of barcodes) {
-          const digits = barcode.rawValue.replace(/\D/g, '')
-          if (digits.length === 15 && digits !== ultimoRef.current) {
-            ultimoRef.current = digits
-            setUltimo(digits)
+      await scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 15,
+          qrbox: { width: 280, height: 80 },
+          aspectRatio: 1.777,
+        },
+        (decoded) => {
+          const digits = decoded.replace(/\D/g, '')
+          if (digits.length >= 14 && digits.length <= 16 && digits !== ultimoRef.current) {
+            const imei = digits.slice(0, 15)
+            ultimoRef.current = imei
+            setUltimo(imei)
             setConteo(c => c + 1)
-            onScan(digits)
+            onScan(imei)
           }
-        }
-      }).catch(() => {})
-    }
+        },
+        () => {} // ignore per-frame errors
+      )
 
-    if (scanningRef.current) {
-      setTimeout(() => requestAnimationFrame(escanearLoop), 200)
+      setActiva(true)
+    } catch {
+      setError('No se pudo acceder a la cámara. Verificá los permisos del navegador.')
     }
   }
 
@@ -100,16 +76,11 @@ export default function CamaraIMEI({ onScan }: Props) {
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {activa && (
-        <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-black">
-          <video ref={videoRef} className="w-full" style={{ maxHeight: '200px', objectFit: 'cover' }} playsInline muted />
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-4/5 h-12 border-2 border-magenta-400 rounded opacity-60" />
-          </div>
-        </div>
-      )}
-
-      <canvas ref={canvasRef} className="hidden" />
+      <div
+        id={containerId.current}
+        className={activa ? 'rounded-lg overflow-hidden border border-gray-300' : 'hidden'}
+        style={{ maxHeight: '220px' }}
+      />
 
       {conteo > 0 && (
         <p className="text-xs text-green-700">
