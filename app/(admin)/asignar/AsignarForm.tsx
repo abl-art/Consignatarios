@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import { formatearMoneda } from '@/lib/utils'
 import { prepararAsignacion } from '@/lib/actions/asignar'
-import EscanerIMEI from '@/components/EscanerIMEI'
+import dynamic from 'next/dynamic'
+const CamaraIMEI = dynamic(() => import('@/components/CamaraIMEI'), { ssr: false })
 
 interface AsignarFormProps {
   consignatarios: Consignatario[]
@@ -236,7 +237,7 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
           </button>
         </div>
         <div className="mt-3">
-          <EscanerIMEI onScan={handleScanImei} />
+          <CamaraIMEI onScan={handleScanImei} />
         </div>
         {imeiFeedback && (
           <div

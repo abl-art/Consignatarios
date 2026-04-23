@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import NavIcon, { type IconName } from '@/components/NavIcon'
 import NavGroup from '@/components/NavGroup'
+import MobileMenu from '@/components/MobileMenu'
 
 interface NavItem {
   href: string
@@ -61,8 +62,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
+      {/* Sidebar - hidden on mobile, visible on md+ */}
+      <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
         <div className="p-5 border-b border-gray-200">
           <img src="/logo.png" alt="GOcelular" className="h-8" />
           <span className="text-xs text-gray-400 block">Panel Admin</span>
@@ -113,8 +114,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
+      {/* Mobile menu */}
+      <MobileMenu items={navItems.map(item => ({
+        href: item.href,
+        label: item.label,
+        external: item.external,
+        children: item.children?.map(c => ({ href: c.href, label: c.label })),
+      }))} />
+
       {/* Contenido */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto min-w-0">
         {children}
       </main>
     </div>
