@@ -8,7 +8,7 @@ export interface VentaDiaria {
 }
 
 // Client IDs que son venta propia de GOcelular
-export const CLIENT_IDS_PROPIOS = ['1', '2026134', '2461631']
+export const CLIENT_IDS_PROPIOS = ['2026134', '2461631']
 
 /**
  * Ventas de hoy agrupadas por store_name (para el dashboard admin).
