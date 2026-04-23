@@ -342,6 +342,8 @@ export default function SimuladorTab({ productos }: Props) {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left px-4 py-2 font-medium text-gray-600">Nombre</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Tasa</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600">Incob.</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-600">Deuda/OA</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. anual</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-600">Rent. s/OA</th>
@@ -351,9 +353,12 @@ export default function SimuladorTab({ productos }: Props) {
                 <tbody>
                   {filtrados.map(p => {
                     const pInd = p.indicadores as unknown as Indicadores
+                    const pParams = p.parametros as unknown as SimuladorParams
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-2 text-gray-900 font-medium">{p.nombre}</td>
+                        <td className="px-4 py-2 text-right">{pParams.tasa_descuento_comercio}%</td>
+                        <td className="px-4 py-2 text-right">{pParams.incobrabilidad_media}%</td>
                         <td className="px-4 py-2 text-right">{((pInd.ct_deuda_ratio ?? 0) * 100).toFixed(1)}%</td>
                         <td className={`px-4 py-2 text-right ${pInd.rent_anual_capital >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_anual_capital)}</td>
                         <td className={`px-4 py-2 text-right ${pInd.rent_sobre_order >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtPct(pInd.rent_sobre_order)}</td>
