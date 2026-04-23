@@ -65,32 +65,6 @@ export interface ResultadoEstocastico {
 // Utilidades financieras
 // ---------------------------------------------------------------------------
 
-export function calcTIR(flujos: number[], guess = 0.1, maxIter = 200, tol = 0.0001): number {
-  let tir = guess
-  for (let i = 0; i < maxIter; i++) {
-    let van = 0
-    let dvan = 0
-    for (let t = 0; t < flujos.length; t++) {
-      const factor = Math.pow(1 + tir, t)
-      van += flujos[t] / factor
-      if (t > 0) dvan -= t * flujos[t] / Math.pow(1 + tir, t + 1)
-    }
-    if (Math.abs(van) < tol) break
-    if (dvan === 0) break
-    tir -= van / dvan
-    if (!isFinite(tir)) return 0
-  }
-  return isFinite(tir) ? tir : 0
-}
-
-export function calcVAN(flujos: number[], tasa: number): number {
-  let van = 0
-  for (let t = 0; t < flujos.length; t++) {
-    van += flujos[t] / Math.pow(1 + tasa, t)
-  }
-  return van
-}
-
 // Distribución normal con Box-Muller
 function randNormal(media: number, desvio: number): number {
   const u1 = Math.random()

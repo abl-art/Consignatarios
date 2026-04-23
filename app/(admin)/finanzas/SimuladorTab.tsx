@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatearMoneda } from '@/lib/utils'
 import { guardarProducto, eliminarProducto } from '@/lib/actions/productos'
 import type { ProductoFinanciero } from '@/lib/actions/productos'
 import {
