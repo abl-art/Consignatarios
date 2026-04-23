@@ -470,7 +470,7 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
          AND i.installment_discarded_at IS NULL
          AND o.order_discarded_at IS NULL
        GROUP BY d.imei, d.brand, d.model, o.user_name, o.user_dni, o.store_name
-       HAVING MAX(EXTRACT(DAY FROM NOW() - i.installment_due_at)) > 3
+       HAVING MAX(EXTRACT(DAY FROM NOW() - i.installment_due_at)) >= 3
        ORDER BY max_dias_atraso DESC`
     )
     return res.rows.map(r => ({
