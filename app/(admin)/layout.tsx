@@ -50,6 +50,7 @@ const navItems: NavItem[] = [
   // /modelos page kept for admin access but hidden from nav - managed via Compras now
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
+  { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -420,3 +420,72 @@ export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
     await client.end()
   }
 }
+
+export interface KnoxGuardDevice {
+  imei: string
+  brand: string
+  model: string
+  user_name: string
+  user_dni: string
+  store_name: string
+  cuotas_vencidas: number
+  monto_adeudado: number
+  max_dias_atraso: number
+  debe_bloquear: boolean
+}
+
+/**
+ * Dispositivos sin Trustonic con cuotas vencidas no cobradas y >3 días de atraso.
+ */
+export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      imei: string
+      brand: string
+      model: string
+      user_name: string
+      user_dni: string
+      store_name: string
+      cuotas_vencidas: string
+      monto_adeudado: string
+      max_dias_atraso: string
+    }>(
+      `SELECT d.imei, d.brand, d.model,
+              o.user_name, o.user_dni::text,
+              o.store_name,
+              COUNT(i.installment_id)::text AS cuotas_vencidas,
+              COALESCE(SUM(i.installment_amount), 0)::text AS monto_adeudado,
+              MAX(EXTRACT(DAY FROM NOW() - i.installment_due_at))::text AS max_dias_atraso
+       FROM devices d
+       JOIN gocuotas_orders o ON o.order_id = d.order_id
+       JOIN gocuotas_installments i ON i.order_id::text = o.order_id
+       WHERE (d.trustonic_excluded = true OR d.trustonic_status::text = 'NOT_ENROLLED')
+         AND i.installment_due_at < NOW()
+         AND i.installment_collected_at IS NULL
+         AND i.installment_discarded_at IS NULL
+         AND o.order_discarded_at IS NULL
+       GROUP BY d.imei, d.brand, d.model, o.user_name, o.user_dni, o.store_name
+       HAVING MAX(EXTRACT(DAY FROM NOW() - i.installment_due_at)) > 3
+       ORDER BY max_dias_atraso DESC`
+    )
+    return res.rows.map(r => ({
+      imei: r.imei,
+      brand: r.brand,
+      model: r.model,
+      user_name: r.user_name || '—',
+      user_dni: r.user_dni || '—',
+      store_name: r.store_name || '—',
+      cuotas_vencidas: Number(r.cuotas_vencidas),
+      monto_adeudado: Number(r.monto_adeudado),
+      max_dias_atraso: Math.round(Number(r.max_dias_atraso)),
+      debe_bloquear: true,
+    }))
+  } finally {
+    await client.end()
+  }
+}
