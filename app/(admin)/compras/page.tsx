@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getProveedores, getProductos, getPedidos } from '@/lib/actions/compras'
+import PlazoEntrega from './PlazoEntrega'
 
 export default async function ComprasPage() {
   const [proveedores, productos, pedidos] = await Promise.all([
@@ -9,6 +10,25 @@ export default async function ComprasPage() {
   ])
 
   const enTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt).length
+
+  // Calcular plazos de entrega por proveedor y categoría
+  const prodCatMap: Record<string, string> = {}
+  productos.forEach((p: { nombre: string; categoria: string }) => { prodCatMap[p.nombre.toLowerCase()] = p.categoria })
+
+  interface PlazoData {
+    proveedor: string
+    categoria: string
+    dias: number
+  }
+  const plazos: PlazoData[] = []
+  for (const p of pedidos) {
+    if (!p.confirmadoAt || !p.entregadoAt) continue
+    const dias = Math.round((new Date(p.entregadoAt).getTime() - new Date(p.confirmadoAt).getTime()) / (1000 * 60 * 60 * 24))
+    // Determinar categoría del pedido por su primer item
+    const primerItem = p.items?.[0]
+    const cat = primerItem ? (prodCatMap[primerItem.productoNombre?.toLowerCase()] || 'Celulares') : 'Celulares'
+    plazos.push({ proveedor: p.proveedorNombre, categoria: cat, dias })
+  }
 
   const cards = [
     {
@@ -76,6 +96,9 @@ export default async function ComprasPage() {
           )
         })}
       </div>
+
+      {/* Plazo promedio de entrega */}
+      {plazos.length > 0 && <PlazoEntrega data={plazos} />}
     </div>
   )
 }
