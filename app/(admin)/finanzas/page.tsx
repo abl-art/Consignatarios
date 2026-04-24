@@ -78,7 +78,7 @@ export default async function FinanzasPage({
     <div>
       {/* Cuotas vencidas stats - individual cards */}
       <p className="text-xs text-gray-400 mb-2">Cuotas vencidas: {cuotasStats.total.toLocaleString('es-AR')}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-0.5">Adelantado</p>
           <div className="flex items-baseline gap-2">
@@ -112,6 +112,15 @@ export default async function FinanzasPage({
           </div>
           <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_mora)}</p>
           <p className="text-xs text-gray-500 mt-1">PPP Mora: <span className="font-bold text-red-700">{cuotasStats.ppp_mora} días</span></p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Contracargos (cuota 1)</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-xl font-bold text-red-700">{cuotasStats.pct_contracargos.toFixed(1)}%</p>
+            <p className="text-xs text-gray-400">{cuotasStats.contracargos.toLocaleString('es-AR')} cuotas</p>
+          </div>
+          <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
+          <p className="text-xs text-red-500 mt-1">Incobrable</p>
         </div>
       </div>
 
