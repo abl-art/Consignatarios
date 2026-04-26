@@ -69,16 +69,17 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
     // Match inteligente: extraer marca + número de modelo + storage de cada nombre.
     // Ej: "Motorola Moto G06 4/128GB" → "motorola-g06-128"
     //     "Motorola Moto G06 128GB"   → "motorola-g06-128" → MATCH
+    //     "Motorola Moto G56 5G 256/8GB" → "motorola-g56-256"
     const matchKey = (name: string): string => {
       const lower = name.toLowerCase()
       const brand = lower.includes('samsung') ? 'samsung'
         : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola' : 'other'
       const modelMatch = lower.match(/[ga]\d{2,3}/i)
       const model = modelMatch ? modelMatch[0].toLowerCase() : ''
-      // Buscar el storage más grande (ej: "4/128GB" → 128, "8/256GB 5G" → 256)
-      const storageMatches = [...lower.matchAll(/(\d+)\s*gb/gi)]
-      const storages = storageMatches.map((m) => Number(m[1])).filter((n) => n >= 32)
-      const storage = storages.length > 0 ? Math.max(...storages).toString() : ''
+      // Extraer todos los números que podrían ser storage (>= 32)
+      // Captura: "128GB", "4/128GB", "256/8GB", "256GB"
+      const allNumbers = [...lower.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 32 && n <= 1024)
+      const storage = allNumbers.length > 0 ? Math.max(...allNumbers).toString() : ''
       return `${brand}-${model}-${storage}`
     }
 
