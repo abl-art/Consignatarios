@@ -9,8 +9,11 @@ async function getData() {
     sb.from('flujo_config').select('value').eq('key', 'app_todos').single(),
     sb.from('flujo_config').select('value').eq('key', 'app_notas').single(),
   ])
+  const todosRaw = todosRow?.value ? JSON.parse(todosRow.value) : {}
+  // Compatibilidad: si es array viejo, convertir a WeekData vacío
+  const todos = Array.isArray(todosRaw) ? {} : todosRaw
   return {
-    todos: todosRow?.value ? JSON.parse(todosRow.value) : [],
+    todos,
     notas: notasRow?.value ?? '',
   }
 }

@@ -9,16 +9,58 @@ interface Todo {
   done: boolean
 }
 
+type WeekData = Record<string, Todo[]> // key = 'YYYY-MM-DD', value = todos de ese día
+
 interface Props {
-  initialTodos: Todo[]
+  initialTodos: WeekData
   initialNotas: string
 }
+
+// ─── Utilidades de fecha ────────────────────────────────────────────────────
+
+function getLunes(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function getSemana(offset: number): { lunes: Date; dias: { fecha: string; label: string; esHoy: boolean }[] } {
+  const hoy = new Date()
+  const lunes = getLunes(hoy)
+  lunes.setDate(lunes.getDate() + offset * 7)
+  const dias = []
+  const hoyStr = hoy.toISOString().slice(0, 10)
+  const nombres = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(lunes)
+    d.setDate(lunes.getDate() + i)
+    const fecha = d.toISOString().slice(0, 10)
+    dias.push({
+      fecha,
+      label: `${nombres[i]} ${d.getDate()}/${d.getMonth() + 1}`,
+      esHoy: fecha === hoyStr,
+    })
+  }
+  return { lunes, dias }
+}
+
+function formatSemana(lunes: Date): string {
+  const viernes = new Date(lunes)
+  viernes.setDate(lunes.getDate() + 4)
+  const fmtD = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`
+  return `Semana ${fmtD(lunes)} al ${fmtD(viernes)}`
+}
+
+// ─── Componente principal ───────────────────────────────────────────────────
 
 export default function NotasClient({ initialTodos, initialNotas }: Props) {
   const [tab, setTab] = useState<'todo' | 'notas'>('todo')
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Notas y Pendientes</h1>
       <p className="text-sm text-gray-500 mb-6">Tu espacio de trabajo personal</p>
 
@@ -31,102 +73,155 @@ export default function NotasClient({ initialTodos, initialNotas }: Props) {
         </button>
       </div>
 
-      {tab === 'todo' && <TodoTab initialTodos={initialTodos} />}
+      {tab === 'todo' && <TodoTab initialData={initialTodos} />}
       {tab === 'notas' && <NotasTab initialNotas={initialNotas} />}
     </div>
   )
 }
 
-// ─── ToDo Tab ───────────────────────────────────────────────────────────────
+// ─── ToDo Tab (vista semanal) ───────────────────────────────────────────────
 
-function TodoTab({ initialTodos }: { initialTodos: Todo[] }) {
-  const [todos, setTodos] = useState<Todo[]>(initialTodos)
-  const [input, setInput] = useState('')
+function TodoTab({ initialData }: { initialData: WeekData }) {
+  const [data, setData] = useState<WeekData>(initialData)
+  const [weekOffset, setWeekOffset] = useState(0)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const persist = useCallback((updated: Todo[]) => {
+  const { lunes, dias } = getSemana(weekOffset)
+
+  const persist = useCallback((updated: WeekData) => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    saveTimeout.current = setTimeout(() => { guardarTodos(updated) }, 500)
+    saveTimeout.current = setTimeout(() => { guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[]) }, 500)
   }, [])
 
-  function addTodo() {
-    if (!input.trim()) return
-    const updated = [...todos, { id: Date.now().toString(), text: input.trim(), done: false }]
-    setTodos(updated)
-    setInput('')
+  function getTodos(fecha: string): Todo[] {
+    return data[fecha] || []
+  }
+
+  function updateTodos(fecha: string, todos: Todo[]) {
+    const updated = { ...data, [fecha]: todos }
+    setData(updated)
     persist(updated)
   }
 
-  function toggleTodo(id: string) {
-    const updated = todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
-    setTodos(updated)
-    persist(updated)
+  function addTodo(fecha: string, text: string) {
+    if (!text.trim()) return
+    const todos = getTodos(fecha)
+    updateTodos(fecha, [...todos, { id: Date.now().toString(), text: text.trim(), done: false }])
   }
 
-  function deleteTodo(id: string) {
-    const updated = todos.filter(t => t.id !== id)
-    setTodos(updated)
-    persist(updated)
+  function toggleTodo(fecha: string, id: string) {
+    const todos = getTodos(fecha).map(t => t.id === id ? { ...t, done: !t.done } : t)
+    updateTodos(fecha, todos)
   }
 
-  const pendientes = todos.filter(t => !t.done)
-  const completados = todos.filter(t => t.done)
+  function deleteTodo(fecha: string, id: string) {
+    updateTodos(fecha, getTodos(fecha).filter(t => t.id !== id))
+  }
+
+  function updateText(fecha: string, id: string, text: string) {
+    const todos = getTodos(fecha).map(t => t.id === id ? { ...t, text } : t)
+    updateTodos(fecha, todos)
+  }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Input */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') addTodo() }}
-            placeholder="Agregar pendiente..."
-            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-magenta-500"
-          />
-          <button onClick={addTodo} className="px-4 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700 shrink-0">
-            +
-          </button>
+    <div>
+      {/* Navegación de semana */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setWeekOffset(w => w - 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+          ← Anterior
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-900">{formatSemana(lunes)}</p>
+          {weekOffset !== 0 && (
+            <button onClick={() => setWeekOffset(0)} className="text-xs text-magenta-600 hover:underline">
+              Ir a esta semana
+            </button>
+          )}
         </div>
+        <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+          Siguiente →
+        </button>
       </div>
 
-      {/* Pendientes */}
-      {pendientes.length === 0 && completados.length === 0 && (
-        <p className="p-8 text-center text-gray-400 text-sm">Sin pendientes. Agregá uno arriba.</p>
-      )}
+      {/* Días de la semana */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        {dias.map(dia => (
+          <DiaColumn
+            key={dia.fecha}
+            fecha={dia.fecha}
+            label={dia.label}
+            esHoy={dia.esHoy}
+            todos={getTodos(dia.fecha)}
+            onAdd={(text) => addTodo(dia.fecha, text)}
+            onToggle={(id) => toggleTodo(dia.fecha, id)}
+            onDelete={(id) => deleteTodo(dia.fecha, id)}
+            onUpdateText={(id, text) => updateText(dia.fecha, id, text)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
-      <div className="divide-y divide-gray-100">
-        {pendientes.map(t => (
-          <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
-            <input type="checkbox" checked={false} onChange={() => toggleTodo(t.id)} className="w-4 h-4 accent-magenta-600 shrink-0" />
-            <span className="flex-1 text-sm text-gray-800">{t.text}</span>
-            <button onClick={() => deleteTodo(t.id)} className="text-gray-300 hover:text-red-500 shrink-0">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+function DiaColumn({
+  label, esHoy, todos, onAdd, onToggle, onDelete, onUpdateText,
+}: {
+  fecha: string
+  label: string
+  esHoy: boolean
+  todos: Todo[]
+  onAdd: (text: string) => void
+  onToggle: (id: string) => void
+  onDelete: (id: string) => void
+  onUpdateText: (id: string, text: string) => void
+}) {
+  const [input, setInput] = useState('')
+
+  return (
+    <div className={`bg-white rounded-xl border overflow-hidden ${esHoy ? 'border-magenta-300 ring-2 ring-magenta-100' : 'border-gray-200'}`}>
+      <div className={`px-3 py-2 text-xs font-semibold ${esHoy ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-50 text-gray-600'}`}>
+        {label}
+      </div>
+
+      <div className="p-2 space-y-1 min-h-[120px]">
+        {todos.map(t => (
+          <div key={t.id} className="flex items-start gap-1.5 group">
+            <input
+              type="checkbox"
+              checked={t.done}
+              onChange={() => onToggle(t.id)}
+              className="w-3.5 h-3.5 mt-1 accent-magenta-600 shrink-0"
+            />
+            <input
+              type="text"
+              value={t.text}
+              onChange={e => onUpdateText(t.id, e.target.value)}
+              className={`flex-1 min-w-0 text-xs bg-transparent border-none outline-none p-0 ${t.done ? 'line-through text-gray-400' : 'text-gray-800'}`}
+            />
+            <button
+              onClick={() => onDelete(t.id)}
+              className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         ))}
-      </div>
 
-      {/* Completados */}
-      {completados.length > 0 && (
-        <>
-          <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-400 font-medium">Completados ({completados.length})</p>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {completados.map(t => (
-              <div key={t.id} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 opacity-60">
-                <input type="checkbox" checked={true} onChange={() => toggleTodo(t.id)} className="w-4 h-4 accent-magenta-600 shrink-0" />
-                <span className="flex-1 text-sm text-gray-500 line-through">{t.text}</span>
-                <button onClick={() => deleteTodo(t.id)} className="text-gray-300 hover:text-red-500 shrink-0">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+        {/* Input para agregar nuevo */}
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && input.trim()) {
+              onAdd(input)
+              setInput('')
+            }
+          }}
+          placeholder="+ tarea..."
+          className="w-full text-xs text-gray-400 bg-transparent border-none outline-none p-0 placeholder:text-gray-300"
+        />
+      </div>
     </div>
   )
 }
@@ -134,23 +229,18 @@ function TodoTab({ initialTodos }: { initialTodos: Todo[] }) {
 // ─── Notas Tab ──────────────────────────────────────────────────────────────
 
 function evaluarFormula(texto: string): string {
-  // Detecta líneas que empiezan con = o + y evalúa la expresión
   return texto.split('\n').map(linea => {
     const trimmed = linea.trim()
     if ((trimmed.startsWith('=') || trimmed.startsWith('+')) && trimmed.length > 1) {
       const expr = trimmed.slice(1).trim()
-      // Solo permitir números, operadores y paréntesis
       if (/^[\d\s+\-*/().,%]+$/.test(expr)) {
         try {
-          // Reemplazar % por /100
           const safe = expr.replace(/%/g, '/100')
           const result = new Function(`return (${safe})`)()
           if (typeof result === 'number' && isFinite(result)) {
             return `${trimmed} → ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(result)}`
           }
-        } catch {
-          // No es una fórmula válida, dejar como está
-        }
+        } catch { /* no es fórmula válida */ }
       }
     }
     return linea
@@ -165,10 +255,8 @@ function NotasTab({ initialNotas }: { initialNotas: string }) {
 
   function handleChange(value: string) {
     setTexto(value)
-    // Evaluar fórmulas para preview
     const evaluado = evaluarFormula(value)
     setPreview(evaluado !== value ? evaluado : '')
-    // Auto-save
     if (saveTimeout.current) clearTimeout(saveTimeout.current)
     saveTimeout.current = setTimeout(async () => {
       setGuardando(true)
@@ -181,7 +269,7 @@ function NotasTab({ initialNotas }: { initialNotas: string }) {
     <div className="space-y-3">
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-xs text-gray-400">Escribí libremente. Usá <code className="bg-gray-100 px-1 rounded">=</code> o <code className="bg-gray-100 px-1 rounded">+</code> al inicio de una línea para calcular.</p>
+          <p className="text-xs text-gray-400">Usá <code className="bg-gray-100 px-1 rounded">=</code> o <code className="bg-gray-100 px-1 rounded">+</code> al inicio de una línea para calcular.</p>
           <span className={`text-[10px] ${guardando ? 'text-yellow-600' : 'text-green-600'}`}>
             {guardando ? 'Guardando...' : 'Guardado'}
           </span>
@@ -189,13 +277,12 @@ function NotasTab({ initialNotas }: { initialNotas: string }) {
         <textarea
           value={texto}
           onChange={e => handleChange(e.target.value)}
-          placeholder="Escribí tus notas acá...&#10;&#10;Ejemplos de fórmulas:&#10;= 150000 * 0.15&#10;+ 50000 + 30000 - 10000&#10;= (100000 * 12) / 1.21"
+          placeholder={"Escribí tus notas acá...\n\nEjemplos de fórmulas:\n= 150000 * 0.15\n+ 50000 + 30000 - 10000\n= (100000 * 12) / 1.21"}
           className="w-full min-h-[400px] p-4 text-sm font-mono text-gray-800 resize-y focus:outline-none"
           spellCheck={false}
         />
       </div>
 
-      {/* Preview de fórmulas */}
       {preview && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <p className="text-xs font-medium text-blue-700 mb-2">Resultados</p>
