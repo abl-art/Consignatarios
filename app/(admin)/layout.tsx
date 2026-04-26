@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
   { href: 'https://docs.google.com/document/d/1349pQbzP2-7k77Oe_rS_6h1dA-36la7ZLdZOWmoyKt4/edit?tab=t.0', label: 'Procesos', icon: 'reportes', external: true },
-  { href: '/notas', label: 'Notas y Pendientes', icon: 'reportes' },
+  { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
 ]
 
