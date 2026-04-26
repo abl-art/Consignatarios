@@ -7,6 +7,7 @@ interface Todo {
   id: string
   text: string
   done: boolean
+  prioridad?: 'normal' | 'negrita' | 'urgente' // urgente = rojo + negrita, negrita = solo negrita
 }
 
 type WeekData = Record<string, Todo[]> // key = 'YYYY-MM-DD', value = todos de ese día
@@ -123,6 +124,16 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
     updateTodos(fecha, todos)
   }
 
+  function ciclarPrioridad(fecha: string, id: string) {
+    const todos = getTodos(fecha).map(t => {
+      if (t.id !== id) return t
+      const current = t.prioridad || 'normal'
+      const next = current === 'normal' ? 'negrita' : current === 'negrita' ? 'urgente' : 'normal'
+      return { ...t, prioridad: next }
+    })
+    updateTodos(fecha, todos)
+  }
+
   return (
     <div>
       {/* Navegación de semana */}
@@ -166,6 +177,7 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
               onToggle={(id) => toggleTodo(dia.fecha, id)}
               onDelete={(id) => deleteTodo(dia.fecha, id)}
               onUpdateText={(id, text) => updateText(dia.fecha, id, text)}
+              onCiclarPrioridad={(id) => ciclarPrioridad(dia.fecha, id)}
             />
           ))}
         </div>
@@ -175,7 +187,7 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
 }
 
 function DiaColumn({
-  esHoy, todos, onAdd, onToggle, onDelete, onUpdateText,
+  esHoy, todos, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad,
 }: {
   fecha: string
   label: string
@@ -185,35 +197,53 @@ function DiaColumn({
   onToggle: (id: string) => void
   onDelete: (id: string) => void
   onUpdateText: (id: string, text: string) => void
+  onCiclarPrioridad: (id: string) => void
 }) {
   const [input, setInput] = useState('')
 
   return (
     <div className={`border-r last:border-r-0 border-gray-200 p-2 ${esHoy ? 'bg-magenta-50/30' : ''}`}>
       <div className="space-y-1">
-        {todos.map(t => (
-          <div key={t.id} className="flex items-start gap-1.5 group">
-            <input
-              type="checkbox"
-              checked={t.done}
-              onChange={() => onToggle(t.id)}
-              className="w-3.5 h-3.5 mt-0.5 accent-magenta-600 shrink-0"
-            />
-            <textarea
-              value={t.text}
-              onChange={e => onUpdateText(t.id, e.target.value)}
-              rows={1}
-              onInput={e => { const el = e.target as HTMLTextAreaElement; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }}
-              className={`flex-1 min-w-0 text-xs bg-transparent border-none outline-none p-0 resize-none overflow-hidden ${t.done ? 'line-through text-gray-400' : 'text-gray-800'}`}
-            />
-            <button
-              onClick={() => onDelete(t.id)}
-              className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        ))}
+        {todos.map(t => {
+          const prio = t.prioridad || 'normal'
+          const textClass = t.done
+            ? 'line-through text-gray-400'
+            : prio === 'urgente'
+            ? 'text-red-600 font-bold'
+            : prio === 'negrita'
+            ? 'text-gray-900 font-bold'
+            : 'text-gray-800'
+          return (
+            <div key={t.id} className="flex items-start gap-1.5 group">
+              <input
+                type="checkbox"
+                checked={t.done}
+                onChange={() => onToggle(t.id)}
+                className="w-3.5 h-3.5 mt-0.5 accent-magenta-600 shrink-0"
+              />
+              <textarea
+                value={t.text}
+                onChange={e => onUpdateText(t.id, e.target.value)}
+                rows={1}
+                onInput={e => { const el = e.target as HTMLTextAreaElement; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }}
+                className={`flex-1 min-w-0 text-xs bg-transparent border-none outline-none p-0 resize-none overflow-hidden ${textClass}`}
+              />
+              <button
+                onClick={() => onCiclarPrioridad(t.id)}
+                title={prio === 'normal' ? 'Marcar importante' : prio === 'negrita' ? 'Marcar urgente' : 'Quitar prioridad'}
+                className={`shrink-0 mt-0.5 w-3 h-3 rounded-full border transition-colors ${
+                  prio === 'urgente' ? 'bg-red-500 border-red-500' : prio === 'negrita' ? 'bg-gray-700 border-gray-700' : 'bg-transparent border-gray-300 opacity-0 group-hover:opacity-100'
+                }`}
+              />
+              <button
+                onClick={() => onDelete(t.id)}
+                className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       <input
