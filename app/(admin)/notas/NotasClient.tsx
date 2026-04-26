@@ -128,7 +128,7 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
     const todos = getTodos(fecha).map(t => {
       if (t.id !== id) return t
       const current = t.prioridad || 'normal'
-      const next = current === 'normal' ? 'negrita' : current === 'negrita' ? 'urgente' : 'normal'
+      const next: Todo['prioridad'] = current === 'normal' ? 'negrita' : current === 'negrita' ? 'urgente' : 'normal'
       return { ...t, prioridad: next }
     })
     updateTodos(fecha, todos)
