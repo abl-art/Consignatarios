@@ -60,9 +60,9 @@ export default function NotasClient({ initialTodos, initialNotas }: Props) {
   const [tab, setTab] = useState<'todo' | 'notas'>('todo')
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Notas y Pendientes</h1>
-      <p className="text-sm text-gray-500 mb-6">Tu espacio de trabajo personal</p>
+      <p className="text-sm text-gray-500 mb-4">Tu espacio de trabajo personal</p>
 
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         <button onClick={() => setTab('todo')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === 'todo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
@@ -143,28 +143,39 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
         </button>
       </div>
 
-      {/* Días de la semana */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-        {dias.map(dia => (
-          <DiaColumn
-            key={dia.fecha}
-            fecha={dia.fecha}
-            label={dia.label}
-            esHoy={dia.esHoy}
-            todos={getTodos(dia.fecha)}
-            onAdd={(text) => addTodo(dia.fecha, text)}
-            onToggle={(id) => toggleTodo(dia.fecha, id)}
-            onDelete={(id) => deleteTodo(dia.fecha, id)}
-            onUpdateText={(id, text) => updateText(dia.fecha, id, text)}
-          />
-        ))}
+      {/* Calendario semanal */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
+        {/* Headers */}
+        <div className="grid grid-cols-5 border-b border-gray-200">
+          {dias.map(dia => (
+            <div key={dia.fecha} className={`px-3 py-2 text-xs font-semibold text-center border-r last:border-r-0 border-gray-200 ${dia.esHoy ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-50 text-gray-600'}`}>
+              {dia.label}
+            </div>
+          ))}
+        </div>
+        {/* Cuerpo */}
+        <div className="grid grid-cols-5 flex-1">
+          {dias.map(dia => (
+            <DiaColumn
+              key={dia.fecha}
+              fecha={dia.fecha}
+              label={dia.label}
+              esHoy={dia.esHoy}
+              todos={getTodos(dia.fecha)}
+              onAdd={(text) => addTodo(dia.fecha, text)}
+              onToggle={(id) => toggleTodo(dia.fecha, id)}
+              onDelete={(id) => deleteTodo(dia.fecha, id)}
+              onUpdateText={(id, text) => updateText(dia.fecha, id, text)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
 function DiaColumn({
-  label, esHoy, todos, onAdd, onToggle, onDelete, onUpdateText,
+  esHoy, todos, onAdd, onToggle, onDelete, onUpdateText,
 }: {
   fecha: string
   label: string
@@ -178,50 +189,46 @@ function DiaColumn({
   const [input, setInput] = useState('')
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden ${esHoy ? 'border-magenta-300 ring-2 ring-magenta-100' : 'border-gray-200'}`}>
-      <div className={`px-3 py-2 text-xs font-semibold ${esHoy ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-50 text-gray-600'}`}>
-        {label}
-      </div>
-
-      <div className="p-2 space-y-1 min-h-[120px]">
+    <div className={`border-r last:border-r-0 border-gray-200 p-2 ${esHoy ? 'bg-magenta-50/30' : ''}`}>
+      <div className="space-y-1">
         {todos.map(t => (
           <div key={t.id} className="flex items-start gap-1.5 group">
             <input
               type="checkbox"
               checked={t.done}
               onChange={() => onToggle(t.id)}
-              className="w-3.5 h-3.5 mt-1 accent-magenta-600 shrink-0"
+              className="w-3.5 h-3.5 mt-0.5 accent-magenta-600 shrink-0"
             />
-            <input
-              type="text"
+            <textarea
               value={t.text}
               onChange={e => onUpdateText(t.id, e.target.value)}
-              className={`flex-1 min-w-0 text-xs bg-transparent border-none outline-none p-0 ${t.done ? 'line-through text-gray-400' : 'text-gray-800'}`}
+              rows={1}
+              onInput={e => { const el = e.target as HTMLTextAreaElement; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }}
+              className={`flex-1 min-w-0 text-xs bg-transparent border-none outline-none p-0 resize-none overflow-hidden ${t.done ? 'line-through text-gray-400' : 'text-gray-800'}`}
             />
             <button
               onClick={() => onDelete(t.id)}
-              className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"
+              className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         ))}
-
-        {/* Input para agregar nuevo */}
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && input.trim()) {
-              onAdd(input)
-              setInput('')
-            }
-          }}
-          placeholder="+ tarea..."
-          className="w-full text-xs text-gray-400 bg-transparent border-none outline-none p-0 placeholder:text-gray-300"
-        />
       </div>
+
+      <input
+        type="text"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && input.trim()) {
+            onAdd(input)
+            setInput('')
+          }
+        }}
+        placeholder="+ tarea..."
+        className="w-full text-xs text-gray-400 bg-transparent border-none outline-none p-0 mt-2 placeholder:text-gray-300"
+      />
     </div>
   )
 }
