@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getProveedores, getProductos, getPedidos } from '@/lib/actions/compras'
 import PlazoEntrega from './PlazoEntrega'
+import ComprasAnalisis from './ComprasAnalisis'
 
 export default async function ComprasPage() {
   const [proveedores, productos, pedidos] = await Promise.all([
@@ -99,6 +100,9 @@ export default async function ComprasPage() {
 
       {/* Plazo promedio de entrega */}
       {plazos.length > 0 && <PlazoEntrega data={plazos} />}
+
+      {/* Análisis de compras */}
+      <ComprasAnalisis pedidos={pedidos} />
     </div>
   )
 }
