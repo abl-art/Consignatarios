@@ -23,7 +23,7 @@ interface Props {
 }
 
 type Vista = 'proveedor' | 'producto'
-type Periodo = 'semana' | 'mes' | 'todo'
+type Periodo = '7d' | 'semana' | 'mes' | 'custom' | 'todo'
 type Metrica = 'unidades' | 'pesos'
 
 const COLORES = ['#E91E7B', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4', '#F97316']
@@ -50,6 +50,8 @@ export default function ComprasAnalisis({ pedidos }: Props) {
   const [metrica, setMetrica] = useState<Metrica>('unidades')
   const [filtroProveedor, setFiltroProveedor] = useState('')
   const [filtroProducto, setFiltroProducto] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   // Solo pedidos entregados
   const entregados = useMemo(() => pedidos.filter(p => p.entregadoAt), [pedidos])
@@ -66,18 +68,30 @@ export default function ComprasAnalisis({ pedidos }: Props) {
     const hoy = new Date()
     return entregados.filter(p => {
       const fecha = p.confirmadoAt ? new Date(p.confirmadoAt) : parseFecha(p.fecha)
-      if (periodo === 'semana') {
+      if (periodo === '7d') {
         const hace7 = new Date(hoy)
         hace7.setDate(hace7.getDate() - 7)
         return fecha >= hace7
       }
+      if (periodo === 'semana') {
+        const day = hoy.getDay()
+        const lunes = new Date(hoy)
+        lunes.setDate(hoy.getDate() - (day === 0 ? 6 : day - 1))
+        lunes.setHours(0, 0, 0, 0)
+        return fecha >= lunes
+      }
       if (periodo === 'mes') {
         return fecha.getMonth() === hoy.getMonth() && fecha.getFullYear() === hoy.getFullYear()
+      }
+      if (periodo === 'custom') {
+        if (fechaDesde && fecha < new Date(fechaDesde + 'T00:00:00')) return false
+        if (fechaHasta && fecha > new Date(fechaHasta + 'T23:59:59')) return false
+        return true
       }
       return true
     }).filter(p => !filtroProveedor || p.proveedorNombre === filtroProveedor)
       .filter(p => !filtroProducto || p.items.some(i => i.productoNombre === filtroProducto))
-  }, [entregados, periodo, filtroProveedor, filtroProducto])
+  }, [entregados, periodo, filtroProveedor, filtroProducto, fechaDesde, fechaHasta])
 
   // Datos para el gráfico
   const chartData = useMemo(() => {
@@ -122,13 +136,20 @@ export default function ComprasAnalisis({ pedidos }: Props) {
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="flex gap-1">
-          {(['mes', 'semana', 'todo'] as const).map(p => (
-            <button key={p} onClick={() => setPeriodo(p)}
-              className={`px-3 py-1 text-xs font-medium rounded-full ${periodo === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {p === 'mes' ? 'Este mes' : p === 'semana' ? 'Esta semana' : 'Todo'}
+          {([['7d', 'Últ. 7 días'], ['semana', 'Esta semana'], ['mes', 'Este mes'], ['custom', 'Fechas'], ['todo', 'Todo']] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setPeriodo(key as Periodo)}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${periodo === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {label}
             </button>
           ))}
         </div>
+        {periodo === 'custom' && (
+          <div className="flex gap-2 items-center">
+            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className="px-2 py-1 text-xs border border-gray-300 rounded-lg" />
+            <span className="text-xs text-gray-400">a</span>
+            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className="px-2 py-1 text-xs border border-gray-300 rounded-lg" />
+          </div>
+        )}
         <div className="flex gap-1">
           {(['proveedor', 'producto'] as const).map(v => (
             <button key={v} onClick={() => setVista(v)}
