@@ -14,7 +14,12 @@ async function getData() {
   const todosRaw = todosRow?.value ? JSON.parse(todosRow.value) : {}
   const todos = Array.isArray(todosRaw) ? {} : todosRaw
   const guardadas = guardadasRow?.value ? JSON.parse(guardadasRow.value) : []
-  const notasEventos = notasEvRow?.value ? JSON.parse(notasEvRow.value) : {}
+  const notasEvRaw = notasEvRow?.value ? JSON.parse(notasEvRow.value) : {}
+  // Compatibilidad: si los valores son strings (formato viejo), convertir a objeto
+  const notasEventos: Record<string, { texto?: string; color?: string; done?: boolean }> = {}
+  for (const [k, v] of Object.entries(notasEvRaw)) {
+    notasEventos[k] = typeof v === 'string' ? { texto: v } : (v as { texto?: string; color?: string; done?: boolean })
+  }
   return { todos, notas: notasRow?.value ?? '', guardadas, notasEventos }
 }
 

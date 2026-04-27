@@ -36,8 +36,8 @@ export async function fetchNotasGuardadas(): Promise<{ id: string; titulo: strin
   return JSON.parse(data.value)
 }
 
-// Notas privadas de eventos (key = event_id, value = texto)
-export async function guardarNotasEventos(notas: Record<string, string>) {
+// Notas y metadata de eventos (key = event_id, value = {texto, color, done})
+export async function guardarNotasEventos(notas: Record<string, { texto?: string; color?: string; done?: boolean }>) {
   const sb = createAdminClient()
   await sb.from('flujo_config').upsert({
     key: 'app_notas_eventos',
@@ -46,7 +46,7 @@ export async function guardarNotasEventos(notas: Record<string, string>) {
   })
 }
 
-export async function fetchNotasEventos(): Promise<Record<string, string>> {
+export async function fetchNotasEventos(): Promise<Record<string, { texto?: string; color?: string; done?: boolean }>> {
   const sb = createAdminClient()
   const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_notas_eventos').single()
   if (!data?.value) return {}

@@ -23,7 +23,7 @@ interface Props {
   initialTodos: WeekData
   initialNotas: string
   initialGuardadas: NotaGuardada[]
-  initialNotasEventos: Record<string, string>
+  initialNotasEventos: Record<string, { texto?: string; color?: string; done?: boolean }>
 }
 
 // ─── Utilidades de fecha ────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   const [googleOk, setGoogleOk] = useState<boolean | null>(null)
   const [showCrear, setShowCrear] = useState<string | null>(null)
   const [eventoAbierto, setEventoAbierto] = useState<CalEvent | null>(null)
-  const [notasEventos, setNotasEventos] = useState<Record<string, string>>(initialNotasEventos)
+  const [notasEventos, setNotasEventos] = useState<Record<string, { texto?: string; color?: string; done?: boolean }>>(initialNotasEventos)
   const notasEvTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { lunes, dias } = getSemana(weekOffset)
@@ -137,8 +137,9 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   function toggleTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, done: !t.done } : t)) }
   function deleteTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).filter(t => t.id !== id)) }
   function updateText(fecha: string, id: string, text: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, text } : t)) }
-  function updateNotaEvento(eventId: string, texto: string) {
-    const updated = { ...notasEventos, [eventId]: texto }
+  function updateEventoMeta(eventId: string, partial: Partial<{ texto: string; color: string; done: boolean }>) {
+    const current = notasEventos[eventId] || {}
+    const updated = { ...notasEventos, [eventId]: { ...current, ...partial } }
     setNotasEventos(updated)
     if (notasEvTimeout.current) clearTimeout(notasEvTimeout.current)
     notasEvTimeout.current = setTimeout(() => { guardarNotasEventos(updated) }, 800)
@@ -182,6 +183,13 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
             <DiaColumn key={dia.fecha} fecha={dia.fecha} label={dia.label} esHoy={dia.esHoy} todos={getTodos(dia.fecha)}
               eventos={eventos[dia.fecha] || []} googleOk={googleOk === true} notasEventos={notasEventos}
               onCrearEvento={() => setShowCrear(dia.fecha)} onClickEvento={ev => setEventoAbierto(ev)}
+              onToggleEventoDone={id => updateEventoMeta(id, { done: !(notasEventos[id]?.done) })}
+              onCiclarColorEvento={id => {
+                const colores = ['blue', 'green', 'purple'] as const
+                const current = notasEventos[id]?.color || 'blue'
+                const idx = colores.indexOf(current as typeof colores[number])
+                updateEventoMeta(id, { color: colores[(idx + 1) % colores.length] })
+              }}
               onAdd={t => addTodo(dia.fecha, t)} onToggle={id => toggleTodo(dia.fecha, id)} onDelete={id => deleteTodo(dia.fecha, id)}
               onUpdateText={(id, t) => updateText(dia.fecha, id, t)} onCiclarPrioridad={id => ciclarPrioridad(dia.fecha, id)} />
           ))}
@@ -195,8 +203,8 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
       {eventoAbierto && (
         <EventoPanel
           evento={eventoAbierto}
-          nota={notasEventos[eventoAbierto.id] || ''}
-          onNotaChange={texto => updateNotaEvento(eventoAbierto.id, texto)}
+          nota={(notasEventos[eventoAbierto.id]?.texto) || ''}
+          onNotaChange={texto => updateEventoMeta(eventoAbierto.id, { texto })}
           onClose={() => setEventoAbierto(null)}
         />
       )}
@@ -255,10 +263,19 @@ function CrearEventoModal({ fecha, onClose }: { fecha: string; onClose: () => vo
   )
 }
 
-function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad, onCrearEvento, onClickEvento }: {
-  fecha: string; label: string; esHoy: boolean; todos: Todo[]; eventos: CalEvent[]; googleOk: boolean; notasEventos: Record<string, string>
+const COLOR_MAP: Record<string, { bg: string; text: string; hover: string; check: string }> = {
+  blue: { bg: 'bg-blue-50', text: 'text-blue-700', hover: 'hover:bg-blue-100', check: 'accent-blue-600' },
+  green: { bg: 'bg-emerald-50', text: 'text-emerald-700', hover: 'hover:bg-emerald-100', check: 'accent-emerald-600' },
+  purple: { bg: 'bg-violet-50', text: 'text-violet-700', hover: 'hover:bg-violet-100', check: 'accent-violet-600' },
+}
+
+function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad, onCrearEvento, onClickEvento, onToggleEventoDone, onCiclarColorEvento }: {
+  fecha: string; label: string; esHoy: boolean; todos: Todo[]; eventos: CalEvent[]; googleOk: boolean
+  notasEventos: Record<string, { texto?: string; color?: string; done?: boolean }>
   onAdd: (t: string) => void; onToggle: (id: string) => void; onDelete: (id: string) => void
-  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void; onCrearEvento: () => void; onClickEvento: (ev: CalEvent) => void
+  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void
+  onCrearEvento: () => void; onClickEvento: (ev: CalEvent) => void
+  onToggleEventoDone: (id: string) => void; onCiclarColorEvento: (id: string) => void
 }) {
   const [input, setInput] = useState('')
 
@@ -273,14 +290,27 @@ function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onTog
       {eventos.length > 0 && (
         <div className="mb-2 space-y-1">
           {eventos.map(ev => {
-            const tieneNotas = !!(notasEventos[ev.id])
+            const meta = notasEventos[ev.id] || {}
+            const tieneNotas = !!(meta.texto)
+            const done = !!(meta.done)
+            const color = COLOR_MAP[meta.color || 'blue'] || COLOR_MAP.blue
             return (
-              <button key={ev.id} onClick={() => onClickEvento(ev)}
-                className="w-full flex items-start gap-1 px-1 py-0.5 bg-blue-50 rounded text-[10px] text-blue-700 hover:bg-blue-100 text-left transition-colors">
-                <span className="font-semibold shrink-0">{fmtHora(ev.horaInicio)}</span>
-                <span className="flex-1 truncate">{ev.titulo}</span>
-                {tieneNotas && <span className="shrink-0" title="Tiene notas">📝</span>}
-              </button>
+              <div key={ev.id} className={`flex items-start gap-1 px-1 py-0.5 ${color.bg} rounded text-[10px] ${done ? 'opacity-50' : ''}`}>
+                <input type="checkbox" checked={done} onChange={() => onToggleEventoDone(ev.id)}
+                  className={`w-3 h-3 mt-0.5 shrink-0 ${color.check}`} />
+                <button onClick={() => onClickEvento(ev)}
+                  className={`flex-1 flex items-start gap-1 ${color.text} ${color.hover} rounded text-left transition-colors min-w-0 ${done ? 'line-through' : ''}`}>
+                  <span className="font-semibold shrink-0">{fmtHora(ev.horaInicio)}</span>
+                  <span className="flex-1 truncate">{ev.titulo}</span>
+                  {tieneNotas && <span className="shrink-0">📝</span>}
+                </button>
+                <button onClick={() => onCiclarColorEvento(ev.id)} title="Cambiar color"
+                  className={`w-2.5 h-2.5 rounded-full shrink-0 mt-0.5 border ${
+                    (meta.color || 'blue') === 'blue' ? 'bg-blue-500 border-blue-500' :
+                    (meta.color) === 'green' ? 'bg-emerald-500 border-emerald-500' :
+                    'bg-violet-500 border-violet-500'
+                  }`} />
+              </div>
             )
           })}
         </div>
