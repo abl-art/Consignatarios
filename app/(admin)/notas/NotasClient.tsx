@@ -193,33 +193,12 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
 
       {/* Panel notas del evento */}
       {eventoAbierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEventoAbierto(null)}>
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{eventoAbierto.titulo}</h3>
-                <p className="text-xs text-gray-500">
-                  {(() => {
-                    const fh = (iso: string) => { try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
-                    return `${fh(eventoAbierto.horaInicio)} - ${fh(eventoAbierto.horaFin)}`
-                  })()}
-                  {eventoAbierto.asistentes.length > 0 && ` · ${eventoAbierto.asistentes.join(', ')}`}
-                </p>
-              </div>
-              <button onClick={() => setEventoAbierto(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <textarea
-              value={notasEventos[eventoAbierto.id] || ''}
-              onChange={e => updateNotaEvento(eventoAbierto.id, e.target.value)}
-              placeholder="Anotaciones para esta reunión... preparación, agenda, puntos a tratar..."
-              className="w-full min-h-[250px] p-3 border border-gray-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
-              spellCheck={false}
-            />
-            <p className="text-[10px] text-gray-400 mt-2">Estas notas son privadas y se guardan automáticamente.</p>
-          </div>
-        </div>
+        <EventoPanel
+          evento={eventoAbierto}
+          nota={notasEventos[eventoAbierto.id] || ''}
+          onNotaChange={texto => updateNotaEvento(eventoAbierto.id, texto)}
+          onClose={() => setEventoAbierto(null)}
+        />
       )}
     </div>
   )
@@ -335,6 +314,109 @@ function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onTog
           + evento
         </button>
       )}
+    </div>
+  )
+}
+
+// ─── Panel de evento (notas + edición horario/invitados) ────────────────────
+
+function EventoPanel({ evento, nota, onNotaChange, onClose }: {
+  evento: CalEvent; nota: string; onNotaChange: (t: string) => void; onClose: () => void
+}) {
+  const fh = (iso: string) => {
+    if (!iso || iso.length <= 10) return ''
+    try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }).slice(0, 5) } catch { return '' }
+  }
+  const getFecha = (iso: string) => {
+    if (!iso || iso.length <= 10) return iso || ''
+    try { return new Date(iso).toISOString().slice(0, 10) } catch { return '' }
+  }
+
+  const [horaInicio, setHoraInicio] = useState(fh(evento.horaInicio))
+  const [horaFin, setHoraFin] = useState(fh(evento.horaFin))
+  const [nuevoEmail, setNuevoEmail] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [msgOk, setMsgOk] = useState('')
+  const fecha = getFecha(evento.horaInicio)
+
+  async function guardarCambios() {
+    setGuardando(true)
+    setMsgOk('')
+    const res = await fetch('/api/calendar', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventId: evento.id,
+        horaInicio, horaFin, fecha,
+        email: nuevoEmail || undefined,
+      }),
+    })
+    if (res.ok) {
+      setMsgOk('Actualizado')
+      setNuevoEmail('')
+      setTimeout(() => setMsgOk(''), 2000)
+    }
+    setGuardando(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">{evento.titulo}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Horario editable */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs text-gray-500">Hora inicio</label>
+            <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Hora fin</label>
+            <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+        </div>
+
+        {/* Invitados actuales */}
+        {evento.asistentes.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs text-gray-500 mb-1">Invitados</p>
+            <div className="flex flex-wrap gap-1">
+              {evento.asistentes.map(a => (
+                <span key={a} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">{a}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Agregar invitado */}
+        <div className="mb-3">
+          <input type="email" value={nuevoEmail} onChange={e => setNuevoEmail(e.target.value)} placeholder="Agregar invitado (email)..."
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+        </div>
+
+        <button onClick={guardarCambios} disabled={guardando}
+          className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 mb-4">
+          {msgOk || (guardando ? 'Guardando...' : 'Guardar cambios en Calendar')}
+        </button>
+
+        {/* Notas privadas */}
+        <div className="border-t border-gray-200 pt-3">
+          <p className="text-xs font-medium text-gray-600 mb-2">Mis notas (privadas)</p>
+          <textarea
+            value={nota}
+            onChange={e => onNotaChange(e.target.value)}
+            placeholder="Preparación, agenda, puntos a tratar..."
+            className="w-full min-h-[180px] p-3 border border-gray-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+            spellCheck={false}
+          />
+          <p className="text-[10px] text-gray-400 mt-1">Se guardan automáticamente. No se comparten con los invitados.</p>
+        </div>
+      </div>
     </div>
   )
 }

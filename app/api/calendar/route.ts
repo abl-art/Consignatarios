@@ -100,3 +100,48 @@ export async function POST(request: Request) {
   const created = await res.json()
   return NextResponse.json({ ok: true, id: created.id })
 }
+
+// PATCH: modificar evento existente
+export async function PATCH(request: Request) {
+  const accessToken = await getAccessToken()
+  if (!accessToken) {
+    return NextResponse.json({ error: 'not_connected' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const { eventId, horaInicio, horaFin, fecha, email } = body
+
+  const patch: Record<string, unknown> = {}
+  if (horaInicio && fecha) {
+    patch.start = { dateTime: `${fecha}T${horaInicio}:00-03:00`, timeZone: 'America/Argentina/Buenos_Aires' }
+  }
+  if (horaFin && fecha) {
+    patch.end = { dateTime: `${fecha}T${horaFin}:00-03:00`, timeZone: 'America/Argentina/Buenos_Aires' }
+  }
+  if (email !== undefined) {
+    // Agregar invitado (no reemplazar los existentes)
+    const getRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (getRes.ok) {
+      const existing = await getRes.json()
+      const attendees = existing.attendees || []
+      if (email && !attendees.some((a: { email: string }) => a.email === email)) {
+        attendees.push({ email })
+      }
+      patch.attendees = attendees
+    }
+  }
+
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+
+  if (!res.ok) {
+    return NextResponse.json({ error: 'update_failed', detail: await res.text() }, { status: res.status })
+  }
+
+  return NextResponse.json({ ok: true })
+}
