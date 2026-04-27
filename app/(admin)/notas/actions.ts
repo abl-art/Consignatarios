@@ -19,3 +19,19 @@ export async function guardarNotas(texto: string) {
     updated_at: new Date().toISOString(),
   })
 }
+
+export async function guardarNotasGuardadas(notas: { id: string; titulo: string; texto: string; updatedAt: string }[]) {
+  const sb = createAdminClient()
+  await sb.from('flujo_config').upsert({
+    key: 'app_notas_guardadas',
+    value: JSON.stringify(notas),
+    updated_at: new Date().toISOString(),
+  })
+}
+
+export async function fetchNotasGuardadas(): Promise<{ id: string; titulo: string; texto: string; updatedAt: string }[]> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_notas_guardadas').single()
+  if (!data?.value) return []
+  return JSON.parse(data.value)
+}
