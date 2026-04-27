@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { guardarTodos, guardarNotas, guardarNotasGuardadas } from './actions'
+import { guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos } from './actions'
 
 interface Todo {
   id: string
@@ -23,6 +23,7 @@ interface Props {
   initialTodos: WeekData
   initialNotas: string
   initialGuardadas: NotaGuardada[]
+  initialNotasEventos: Record<string, string>
 }
 
 // ─── Utilidades de fecha ────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ function formatSemana(lunes: Date): string {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export default function NotasClient({ initialTodos, initialNotas, initialGuardadas }: Props) {
+export default function NotasClient({ initialTodos, initialNotas, initialGuardadas, initialNotasEventos }: Props) {
   const [tab, setTab] = useState<'todo' | 'notas' | 'guardadas'>('todo')
 
   return (
@@ -77,7 +78,7 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
         ))}
       </div>
 
-      {tab === 'todo' && <TodoTab initialData={initialTodos} />}
+      {tab === 'todo' && <TodoTab initialData={initialTodos} initialNotasEventos={initialNotasEventos} />}
       {tab === 'notas' && <NotasTab initialNotas={initialNotas} initialGuardadas={initialGuardadas} />}
       {tab === 'guardadas' && <GuardadasTab initialGuardadas={initialGuardadas} />}
     </div>
@@ -94,12 +95,15 @@ interface CalEvent {
   asistentes: string[]
 }
 
-function TodoTab({ initialData }: { initialData: WeekData }) {
+function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; initialNotasEventos: Record<string, string> }) {
   const [data, setData] = useState<WeekData>(initialData)
   const [weekOffset, setWeekOffset] = useState(0)
   const [eventos, setEventos] = useState<Record<string, CalEvent[]>>({})
   const [googleOk, setGoogleOk] = useState<boolean | null>(null)
-  const [showCrear, setShowCrear] = useState<string | null>(null) // fecha del día donde crear evento
+  const [showCrear, setShowCrear] = useState<string | null>(null)
+  const [eventoAbierto, setEventoAbierto] = useState<CalEvent | null>(null)
+  const [notasEventos, setNotasEventos] = useState<Record<string, string>>(initialNotasEventos)
+  const notasEvTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { lunes, dias } = getSemana(weekOffset)
 
@@ -133,6 +137,13 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
   function toggleTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, done: !t.done } : t)) }
   function deleteTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).filter(t => t.id !== id)) }
   function updateText(fecha: string, id: string, text: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, text } : t)) }
+  function updateNotaEvento(eventId: string, texto: string) {
+    const updated = { ...notasEventos, [eventId]: texto }
+    setNotasEventos(updated)
+    if (notasEvTimeout.current) clearTimeout(notasEvTimeout.current)
+    notasEvTimeout.current = setTimeout(() => { guardarNotasEventos(updated) }, 800)
+  }
+
   function ciclarPrioridad(fecha: string, id: string) {
     updateTodos(fecha, getTodos(fecha).map(t => {
       if (t.id !== id) return t
@@ -169,7 +180,8 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
         <div className="grid grid-cols-5 flex-1">
           {dias.map(dia => (
             <DiaColumn key={dia.fecha} fecha={dia.fecha} label={dia.label} esHoy={dia.esHoy} todos={getTodos(dia.fecha)}
-              eventos={eventos[dia.fecha] || []} googleOk={googleOk === true} onCrearEvento={() => setShowCrear(dia.fecha)}
+              eventos={eventos[dia.fecha] || []} googleOk={googleOk === true} notasEventos={notasEventos}
+              onCrearEvento={() => setShowCrear(dia.fecha)} onClickEvento={ev => setEventoAbierto(ev)}
               onAdd={t => addTodo(dia.fecha, t)} onToggle={id => toggleTodo(dia.fecha, id)} onDelete={id => deleteTodo(dia.fecha, id)}
               onUpdateText={(id, t) => updateText(dia.fecha, id, t)} onCiclarPrioridad={id => ciclarPrioridad(dia.fecha, id)} />
           ))}
@@ -178,6 +190,37 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
 
       {/* Modal crear evento */}
       {showCrear && <CrearEventoModal fecha={showCrear} onClose={() => setShowCrear(null)} />}
+
+      {/* Panel notas del evento */}
+      {eventoAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEventoAbierto(null)}>
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{eventoAbierto.titulo}</h3>
+                <p className="text-xs text-gray-500">
+                  {(() => {
+                    const fh = (iso: string) => { try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
+                    return `${fh(eventoAbierto.horaInicio)} - ${fh(eventoAbierto.horaFin)}`
+                  })()}
+                  {eventoAbierto.asistentes.length > 0 && ` · ${eventoAbierto.asistentes.join(', ')}`}
+                </p>
+              </div>
+              <button onClick={() => setEventoAbierto(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <textarea
+              value={notasEventos[eventoAbierto.id] || ''}
+              onChange={e => updateNotaEvento(eventoAbierto.id, e.target.value)}
+              placeholder="Anotaciones para esta reunión... preparación, agenda, puntos a tratar..."
+              className="w-full min-h-[250px] p-3 border border-gray-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+              spellCheck={false}
+            />
+            <p className="text-[10px] text-gray-400 mt-2">Estas notas son privadas y se guardan automáticamente.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -233,10 +276,10 @@ function CrearEventoModal({ fecha, onClose }: { fecha: string; onClose: () => vo
   )
 }
 
-function DiaColumn({ esHoy, todos, eventos, googleOk, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad, onCrearEvento }: {
-  fecha: string; label: string; esHoy: boolean; todos: Todo[]; eventos: CalEvent[]; googleOk: boolean
+function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad, onCrearEvento, onClickEvento }: {
+  fecha: string; label: string; esHoy: boolean; todos: Todo[]; eventos: CalEvent[]; googleOk: boolean; notasEventos: Record<string, string>
   onAdd: (t: string) => void; onToggle: (id: string) => void; onDelete: (id: string) => void
-  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void; onCrearEvento: () => void
+  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void; onCrearEvento: () => void; onClickEvento: (ev: CalEvent) => void
 }) {
   const [input, setInput] = useState('')
 
@@ -250,12 +293,17 @@ function DiaColumn({ esHoy, todos, eventos, googleOk, onAdd, onToggle, onDelete,
       {/* Eventos de Google Calendar */}
       {eventos.length > 0 && (
         <div className="mb-2 space-y-1">
-          {eventos.map(ev => (
-            <div key={ev.id} className="flex items-start gap-1 px-1 py-0.5 bg-blue-50 rounded text-[10px] text-blue-700">
-              <span className="font-semibold shrink-0">{fmtHora(ev.horaInicio)}</span>
-              <span className="truncate">{ev.titulo}</span>
-            </div>
-          ))}
+          {eventos.map(ev => {
+            const tieneNotas = !!(notasEventos[ev.id])
+            return (
+              <button key={ev.id} onClick={() => onClickEvento(ev)}
+                className="w-full flex items-start gap-1 px-1 py-0.5 bg-blue-50 rounded text-[10px] text-blue-700 hover:bg-blue-100 text-left transition-colors">
+                <span className="font-semibold shrink-0">{fmtHora(ev.horaInicio)}</span>
+                <span className="flex-1 truncate">{ev.titulo}</span>
+                {tieneNotas && <span className="shrink-0" title="Tiene notas">📝</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
