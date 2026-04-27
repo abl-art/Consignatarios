@@ -13,6 +13,7 @@ interface PedidoItem {
 interface Pedido {
   proveedorNombre: string
   fecha: string
+  estado: string
   confirmadoAt?: string
   entregadoAt?: string
   items: PedidoItem[]
