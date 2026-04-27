@@ -125,7 +125,7 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
               </div>
 
               {/* Tabla de conteo colapsable */}
-              <ConteoColapsable auditoria={a} editando={editando === a.id} onSaved={() => { setEditando(null); router.refresh() }} />}
+              <ConteoColapsable auditoria={a} editando={editando === a.id} onSaved={() => { setEditando(null); router.refresh() }} />
 
               {/* Firmas */}
               {a.estado === 'firmada' && (
