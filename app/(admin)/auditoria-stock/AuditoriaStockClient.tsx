@@ -124,10 +124,8 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
                 </div>
               </div>
 
-              {/* Tabla de conteo editable */}
-              {(editando === a.id || a.estado !== 'pendiente') && (
-                <ConteoTable auditoria={a} editable={editando === a.id} onSaved={() => { setEditando(null); router.refresh() }} />
-              )}
+              {/* Tabla de conteo colapsable */}
+              <ConteoColapsable auditoria={a} editando={editando === a.id} onSaved={() => { setEditando(null); router.refresh() }} />}
 
               {/* Firmas */}
               {a.estado === 'firmada' && (
@@ -150,6 +148,39 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Conteo colapsable ──────────────────────────────────────────────────────
+
+function ConteoColapsable({ auditoria, editando, onSaved }: { auditoria: AuditoriaStockPropio; editando: boolean; onSaved: () => void }) {
+  const [abierto, setAbierto] = useState(editando)
+
+  // Abrir automáticamente cuando se entra en modo edición
+  if (editando && !abierto) setAbierto(true)
+
+  return (
+    <div className="border-t border-gray-200">
+      <button onClick={() => setAbierto(!abierto)}
+        className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          <span className="text-sm font-medium text-gray-700">Detalle por modelo ({auditoria.detalle.length})</span>
+        </div>
+        {(auditoria.estado === 'en_conteo' || auditoria.estado === 'firmada') && (
+          <a href={`/api/pdf/auditoria-stock/${auditoria.id}`} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+            Descargar PDF
+          </a>
+        )}
+      </button>
+      {abierto && (
+        <ConteoTable auditoria={auditoria} editable={editando} onSaved={onSaved} />
       )}
     </div>
   )

@@ -29,6 +29,7 @@ const navItems: NavItem[] = [
       { href: '/inventario/parlantes', label: 'Parlantes', icon: 'inventario' },
       { href: '/inventario/auriculares', label: 'Auriculares', icon: 'inventario' },
       { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', icon: 'inventario' },
+      { href: '/auditoria-stock', label: 'Auditoría Stock', icon: 'auditorias' },
     ],
   },
   {
@@ -53,7 +54,6 @@ const navItems: NavItem[] = [
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
   { href: 'https://docs.google.com/document/d/1349pQbzP2-7k77Oe_rS_6h1dA-36la7ZLdZOWmoyKt4/edit?tab=t.0', label: 'Procesos', icon: 'documento', external: true },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
-  { href: '/auditoria-stock', label: 'Auditoría Stock', icon: 'inventario' },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
 ]
 
