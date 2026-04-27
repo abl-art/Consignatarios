@@ -95,7 +95,7 @@ interface CalEvent {
   asistentes: string[]
 }
 
-function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; initialNotasEventos: Record<string, string> }) {
+function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; initialNotasEventos: Record<string, { texto?: string; color?: string; done?: boolean }> }) {
   const [data, setData] = useState<WeekData>(initialData)
   const [weekOffset, setWeekOffset] = useState(0)
   const [eventos, setEventos] = useState<Record<string, CalEvent[]>>({})
