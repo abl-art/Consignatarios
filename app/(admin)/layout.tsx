@@ -18,7 +18,7 @@ const navItems: NavItem[] = [
   { href: 'https://gocelular.gocuotas.com/tienda', label: 'Tienda Online', icon: 'tienda', external: true },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
-  { href: '/compras', label: 'Compras', icon: 'tienda' },
+  { href: '/compras', label: 'Compras', icon: 'fabrica' },
   {
     href: '/inventario',
     label: 'Inventario',
@@ -51,7 +51,7 @@ const navItems: NavItem[] = [
   // /modelos page kept for admin access but hidden from nav - managed via Compras now
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
-  { href: 'https://docs.google.com/document/d/1349pQbzP2-7k77Oe_rS_6h1dA-36la7ZLdZOWmoyKt4/edit?tab=t.0', label: 'Procesos', icon: 'reportes', external: true },
+  { href: 'https://docs.google.com/document/d/1349pQbzP2-7k77Oe_rS_6h1dA-36la7ZLdZOWmoyKt4/edit?tab=t.0', label: 'Procesos', icon: 'documento', external: true },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
 ]

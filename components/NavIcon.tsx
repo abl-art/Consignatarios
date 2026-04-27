@@ -23,6 +23,8 @@ export type IconName =
   | 'finanzas'
   | 'tienda'
   | 'reloj'
+  | 'fabrica'
+  | 'documento'
 
 /**
  * Iconos de sidebar. Usa strokes de 1.8px para buena legibilidad a 16px.
@@ -189,6 +191,22 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
         <svg {...common}>
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
+        </svg>
+      )
+    case 'fabrica':
+      return (
+        <svg {...common}>
+          <path d="M2 20h20M4 20V10l4 2V6l4 2V4l4 4v12" />
+          <path d="M6 20v-4h3v4M13 20v-4h3v4" />
+          <path d="M18 8h2a1 1 0 011 1v11" />
+        </svg>
+      )
+    case 'documento':
+      return (
+        <svg {...common}>
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M16 13H8M16 17H8M10 9H8" />
         </svg>
       )
     default:
