@@ -53,8 +53,8 @@ export default function ComprasAnalisis({ pedidos }: Props) {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
 
-  // Solo pedidos entregados
-  const entregados = useMemo(() => pedidos.filter(p => p.entregadoAt), [pedidos])
+  // Pedidos enviados (confirmados, independiente de si se recibieron)
+  const entregados = useMemo(() => pedidos.filter(p => p.estado === 'enviado'), [pedidos])
 
   const proveedores = useMemo(() => [...new Set(entregados.map(p => p.proveedorNombre))].sort(), [entregados])
   const productos = useMemo(() => {
