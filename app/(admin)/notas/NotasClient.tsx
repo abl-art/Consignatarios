@@ -132,11 +132,28 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   }, [])
 
   function getTodos(fecha: string): Todo[] { return data[fecha] || [] }
-  function updateTodos(fecha: string, todos: Todo[]) { const u = { ...data, [fecha]: todos }; setData(u); persist(u) }
-  function addTodo(fecha: string, text: string) { if (!text.trim()) return; updateTodos(fecha, [...getTodos(fecha), { id: Date.now().toString(), text: text.trim(), done: false }]) }
-  function toggleTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, done: !t.done } : t)) }
-  function deleteTodo(fecha: string, id: string) { updateTodos(fecha, getTodos(fecha).filter(t => t.id !== id)) }
-  function updateText(fecha: string, id: string, text: string) { updateTodos(fecha, getTodos(fecha).map(t => t.id === id ? { ...t, text } : t)) }
+
+  function updateTodos(fecha: string, updater: (prev: Todo[]) => Todo[]) {
+    setData(prev => {
+      const updated = { ...prev, [fecha]: updater(prev[fecha] || []) }
+      persist(updated)
+      return updated
+    })
+  }
+
+  function addTodo(fecha: string, text: string) {
+    if (!text.trim()) return
+    updateTodos(fecha, prev => [...prev, { id: Date.now().toString(), text: text.trim(), done: false }])
+  }
+  function toggleTodo(fecha: string, id: string) {
+    updateTodos(fecha, prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
+  }
+  function deleteTodo(fecha: string, id: string) {
+    updateTodos(fecha, prev => prev.filter(t => t.id !== id))
+  }
+  function updateText(fecha: string, id: string, text: string) {
+    updateTodos(fecha, prev => prev.map(t => t.id === id ? { ...t, text } : t))
+  }
   function updateEventoMeta(eventId: string, partial: Partial<{ texto: string; color: string; done: boolean }>) {
     const current = notasEventos[eventId] || {}
     const updated = { ...notasEventos, [eventId]: { ...current, ...partial } }
@@ -146,7 +163,7 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   }
 
   function ciclarPrioridad(fecha: string, id: string) {
-    updateTodos(fecha, getTodos(fecha).map(t => {
+    updateTodos(fecha, prev => prev.map(t => {
       if (t.id !== id) return t
       const c = t.prioridad || 'normal'
       const next: Todo['prioridad'] = c === 'normal' ? 'negrita' : c === 'negrita' ? 'urgente' : 'normal'
