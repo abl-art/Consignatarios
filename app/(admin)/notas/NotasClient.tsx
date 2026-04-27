@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { guardarTodos, guardarNotas, guardarNotasGuardadas } from './actions'
 
 interface Todo {
@@ -86,11 +86,41 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
 
 // ─── ToDo Tab (vista semanal) ───────────────────────────────────────────────
 
+interface CalEvent {
+  id: string
+  titulo: string
+  horaInicio: string
+  horaFin: string
+  asistentes: string[]
+}
+
 function TodoTab({ initialData }: { initialData: WeekData }) {
   const [data, setData] = useState<WeekData>(initialData)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [eventos, setEventos] = useState<Record<string, CalEvent[]>>({})
+  const [googleOk, setGoogleOk] = useState<boolean | null>(null)
+  const [showCrear, setShowCrear] = useState<string | null>(null) // fecha del día donde crear evento
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { lunes, dias } = getSemana(weekOffset)
+
+  // Cargar eventos de Google Calendar para la semana visible
+  useEffect(() => {
+    async function cargar() {
+      const evMap: Record<string, CalEvent[]> = {}
+      for (const dia of dias) {
+        try {
+          const res = await fetch(`/api/calendar?fecha=${dia.fecha}`)
+          if (res.status === 401) { setGoogleOk(false); return }
+          const data = await res.json()
+          if (data.events) evMap[dia.fecha] = data.events
+          setGoogleOk(true)
+        } catch { /* skip */ }
+      }
+      setEventos(evMap)
+    }
+    cargar()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekOffset])
 
   const persist = useCallback((updated: WeekData) => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current)
@@ -120,7 +150,15 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
           <p className="text-sm font-semibold text-gray-900">{formatSemana(lunes)}</p>
           {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-xs text-magenta-600 hover:underline">Ir a esta semana</button>}
         </div>
-        <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Siguiente →</button>
+        <div className="flex items-center gap-2">
+          {googleOk === false && (
+            <a href="/api/auth/google" className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Conectar Google Calendar
+            </a>
+          )}
+          {googleOk && <span className="text-[10px] text-green-600">● Calendar</span>}
+          <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Siguiente →</button>
+        </div>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
         <div className="grid grid-cols-5 border-b border-gray-200">
@@ -131,23 +169,97 @@ function TodoTab({ initialData }: { initialData: WeekData }) {
         <div className="grid grid-cols-5 flex-1">
           {dias.map(dia => (
             <DiaColumn key={dia.fecha} fecha={dia.fecha} label={dia.label} esHoy={dia.esHoy} todos={getTodos(dia.fecha)}
+              eventos={eventos[dia.fecha] || []} googleOk={googleOk === true} onCrearEvento={() => setShowCrear(dia.fecha)}
               onAdd={t => addTodo(dia.fecha, t)} onToggle={id => toggleTodo(dia.fecha, id)} onDelete={id => deleteTodo(dia.fecha, id)}
               onUpdateText={(id, t) => updateText(dia.fecha, id, t)} onCiclarPrioridad={id => ciclarPrioridad(dia.fecha, id)} />
           ))}
+        </div>
+      </div>
+
+      {/* Modal crear evento */}
+      {showCrear && <CrearEventoModal fecha={showCrear} onClose={() => setShowCrear(null)} />}
+    </div>
+  )
+}
+
+function CrearEventoModal({ fecha, onClose }: { fecha: string; onClose: () => void }) {
+  const [titulo, setTitulo] = useState('')
+  const [horaInicio, setHoraInicio] = useState('09:00')
+  const [horaFin, setHoraFin] = useState('10:00')
+  const [email, setEmail] = useState('')
+  const [notas, setNotas] = useState('')
+  const [creando, setCreando] = useState(false)
+  const [ok, setOk] = useState(false)
+
+  async function crear() {
+    if (!titulo.trim()) return
+    setCreando(true)
+    const res = await fetch('/api/calendar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo, fecha, horaInicio, horaFin, email, notas }),
+    })
+    if (res.ok) { setOk(true); setTimeout(onClose, 1000) }
+    setCreando(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Nuevo evento — {new Date(fecha + 'T12:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+        <div className="space-y-3">
+          <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título del evento" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">Hora inicio</label>
+              <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Hora fin</label>
+              <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          </div>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email del invitado (opcional)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <textarea value={notas} onChange={e => setNotas(e.target.value)} placeholder="Notas de preparación para la reunión..." rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none" />
+        </div>
+        <div className="flex gap-3 justify-end mt-4">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+          <button onClick={crear} disabled={creando || !titulo.trim()} className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {ok ? '✓ Creado' : creando ? 'Creando...' : 'Crear evento'}
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-function DiaColumn({ esHoy, todos, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad }: {
-  fecha: string; label: string; esHoy: boolean; todos: Todo[]
+function DiaColumn({ esHoy, todos, eventos, googleOk, onAdd, onToggle, onDelete, onUpdateText, onCiclarPrioridad, onCrearEvento }: {
+  fecha: string; label: string; esHoy: boolean; todos: Todo[]; eventos: CalEvent[]; googleOk: boolean
   onAdd: (t: string) => void; onToggle: (id: string) => void; onDelete: (id: string) => void
-  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void
+  onUpdateText: (id: string, t: string) => void; onCiclarPrioridad: (id: string) => void; onCrearEvento: () => void
 }) {
   const [input, setInput] = useState('')
+
+  const fmtHora = (iso: string) => {
+    if (!iso || iso.length <= 10) return ''
+    try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+  }
+
   return (
     <div className={`border-r last:border-r-0 border-gray-200 p-2 ${esHoy ? 'bg-magenta-50/30' : ''}`}>
+      {/* Eventos de Google Calendar */}
+      {eventos.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {eventos.map(ev => (
+            <div key={ev.id} className="flex items-start gap-1 px-1 py-0.5 bg-blue-50 rounded text-[10px] text-blue-700">
+              <span className="font-semibold shrink-0">{fmtHora(ev.horaInicio)}</span>
+              <span className="truncate">{ev.titulo}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ToDos */}
       <div className="space-y-1">
         {todos.map(t => {
           const p = t.prioridad || 'normal'
@@ -170,6 +282,11 @@ function DiaColumn({ esHoy, todos, onAdd, onToggle, onDelete, onUpdateText, onCi
       <input type="text" value={input} onChange={e => setInput(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { onAdd(input); setInput('') } }}
         placeholder="+ tarea..." className="w-full text-xs text-gray-400 bg-transparent border-none outline-none p-0 mt-2 placeholder:text-gray-300" />
+      {googleOk && (
+        <button onClick={onCrearEvento} className="text-[10px] text-blue-500 hover:text-blue-700 mt-1">
+          + evento
+        </button>
+      )}
     </div>
   )
 }
