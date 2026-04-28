@@ -127,8 +127,8 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   }, [weekOffset])
 
   const persist = useCallback((updated: WeekData) => {
-    if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    saveTimeout.current = setTimeout(() => { guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[]) }, 500)
+    // Guardar inmediatamente, sin delay — no perder datos
+    guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[])
   }, [])
 
   function getTodos(fecha: string): Todo[] { return data[fecha] || [] }
@@ -158,8 +158,13 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
     const current = notasEventos[eventId] || {}
     const updated = { ...notasEventos, [eventId]: { ...current, ...partial } }
     setNotasEventos(updated)
-    if (notasEvTimeout.current) clearTimeout(notasEvTimeout.current)
-    notasEvTimeout.current = setTimeout(() => { guardarNotasEventos(updated) }, 800)
+    // Para texto largo: debounce. Para done/color: inmediato
+    if ('texto' in partial) {
+      if (notasEvTimeout.current) clearTimeout(notasEvTimeout.current)
+      notasEvTimeout.current = setTimeout(() => { guardarNotasEventos(updated) }, 500)
+    } else {
+      guardarNotasEventos(updated)
+    }
   }
 
   function ciclarPrioridad(fecha: string, id: string) {
@@ -353,9 +358,14 @@ function DiaColumn({ esHoy, todos, eventos, googleOk, notasEventos, onAdd, onTog
           )
         })}
       </div>
-      <input type="text" value={input} onChange={e => setInput(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { onAdd(input); setInput('') } }}
-        placeholder="+ tarea..." className="w-full text-xs text-gray-400 bg-transparent border-none outline-none p-0 mt-2 placeholder:text-gray-300" />
+      <div className="flex gap-1 mt-2">
+        <input type="text" value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { onAdd(input); setInput('') } }}
+          placeholder="+ tarea..." className="flex-1 min-w-0 text-xs text-gray-400 bg-transparent border-none outline-none p-0 placeholder:text-gray-300" />
+        {input.trim() && (
+          <button onClick={() => { onAdd(input); setInput('') }} className="text-xs text-magenta-600 font-bold shrink-0">+</button>
+        )}
+      </div>
       {googleOk && (
         <button onClick={onCrearEvento} className="text-[10px] text-blue-500 hover:text-blue-700 mt-1">
           + evento
@@ -457,6 +467,7 @@ function EventoPanel({ evento, nota, onNotaChange, onClose }: {
           <textarea
             value={nota}
             onChange={e => onNotaChange(e.target.value)}
+            onBlur={e => onNotaChange(e.target.value)}
             placeholder="Preparación, agenda, puntos a tratar..."
             className="w-full min-h-[180px] p-3 border border-gray-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
             spellCheck={false}
@@ -528,6 +539,12 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
     }, 1000)
   }
 
+  function handleBlur() {
+    // Guardar inmediatamente al perder foco (mobile: tap fuera del textarea)
+    if (saveTimeout.current) clearTimeout(saveTimeout.current)
+    guardarNotas(texto)
+  }
+
   function handleGuardarResultados() {
     const reemplazado = reemplazarFormulas(texto)
     setTexto(reemplazado)
@@ -567,7 +584,7 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
             </span>
           </div>
         </div>
-        <textarea value={texto} onChange={e => handleChange(e.target.value)}
+        <textarea value={texto} onChange={e => handleChange(e.target.value)} onBlur={handleBlur}
           placeholder={"Escribí tus notas acá...\n\nUsá = o + al inicio para calcular:\n= 150000 * 0.15\n+ 50000 + 30000 - 10000"}
           className="w-full min-h-[350px] p-4 text-sm font-mono text-gray-800 resize-y focus:outline-none" spellCheck={false} />
       </div>
@@ -668,7 +685,7 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
                 </button>
               </div>
             </div>
-            <textarea value={textoEdit} onChange={e => handleEditChange(e.target.value)}
+            <textarea value={textoEdit} onChange={e => handleEditChange(e.target.value)} onBlur={guardarEdicion}
               className="w-full min-h-[350px] p-4 text-sm font-mono text-gray-800 resize-y focus:outline-none" spellCheck={false} />
           </div>
           {previewEdit && (
