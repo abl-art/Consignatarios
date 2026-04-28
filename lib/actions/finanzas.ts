@@ -248,12 +248,44 @@ async function fetchIncomeFromGocelular(): Promise<
   }
 }
 
-async function fetchVta3eroFromGocelular(): Promise<
+// Client IDs de terceros (merchants que no son venta propia)
+const CLIENT_IDS_TERCEROS_GOCUOTAS = [5495277]
+
+async function fetchVta3eroFromGocuotas(): Promise<
   { cash_date: string; out_vta3ero: number }[]
 > {
-  // La tabla gocuotas_orders en esta réplica no tiene due_expense_at ni expense_amount_in_cents
-  // Vta3ero se puede cargar manualmente como egreso hasta que se agreguen esas columnas
-  return []
+  const host = process.env.PG_GOCUOTAS_HOST
+  const user = process.env.PG_GOCUOTAS_USER
+  const pass = process.env.PG_GOCUOTAS_PASS
+  const db = process.env.PG_GOCUOTAS_DB
+  if (!host || !user || !pass || !db) return []
+
+  const client = new Client({
+    host, port: 5432, user, password: pass, database: db,
+    ssl: { rejectUnauthorized: false },
+  })
+  await client.connect()
+  try {
+    const placeholders = CLIENT_IDS_TERCEROS_GOCUOTAS.map((_, i) => `$${i + 1}`).join(',')
+    const res = await client.query<{ cash_date: Date; out_vta3ero: string }>(
+      `SELECT due_expense_at::date AS cash_date,
+              SUM(expense_amount_in_cents) / 100.0 AS out_vta3ero
+       FROM orders
+       WHERE client_id IN (${placeholders})
+         AND due_expense_at IS NOT NULL
+         AND expense_amount_in_cents > 0
+         AND discarded_at IS NULL
+       GROUP BY 1
+       ORDER BY 1`,
+      CLIENT_IDS_TERCEROS_GOCUOTAS
+    )
+    return res.rows.map(r => ({
+      cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date),
+      out_vta3ero: -Number(r.out_vta3ero), // negativo porque es un egreso
+    }))
+  } finally {
+    await client.end()
+  }
 }
 
 async function fetchAsistenciasFromSupabase(): Promise<
@@ -394,7 +426,7 @@ function generateProjection(baseDiario: number, endDateStr: string): { cash_date
 export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
   const [income, vta3ero, asistencias, egresos, baseDiario] = await Promise.all([
     fetchIncomeFromGocelular(),
-    fetchVta3eroFromGocelular(),
+    fetchVta3eroFromGocuotas(),
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
     getProyeccionDiaria(),
