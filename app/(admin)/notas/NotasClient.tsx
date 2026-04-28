@@ -104,8 +104,21 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   const [eventoAbierto, setEventoAbierto] = useState<CalEvent | null>(null)
   const [notasEventos, setNotasEventos] = useState<Record<string, { texto?: string; color?: string; done?: boolean }>>(initialNotasEventos)
   const notasEvTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savingRef = useRef(false)
+  const pendingSaveRef = useRef<WeekData | null>(null)
+  const dataRef = useRef<WeekData>(initialData)
   const { lunes, dias } = getSemana(weekOffset)
+
+  // Guardar cuando el usuario sale de la página o cambia de tab (mobile)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'hidden' && dataRef.current) {
+        guardarTodos(dataRef.current as unknown as { id: string; text: string; done: boolean }[])
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
 
   // Cargar eventos de Google Calendar para la semana visible
   useEffect(() => {
@@ -115,8 +128,8 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
         try {
           const res = await fetch(`/api/calendar?fecha=${dia.fecha}`)
           if (res.status === 401) { setGoogleOk(false); return }
-          const data = await res.json()
-          if (data.events) evMap[dia.fecha] = data.events
+          const json = await res.json()
+          if (json.events) evMap[dia.fecha] = json.events
           setGoogleOk(true)
         } catch { /* skip */ }
       }
@@ -126,9 +139,24 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset])
 
-  const persist = useCallback((updated: WeekData) => {
-    // Guardar inmediatamente, sin delay — no perder datos
-    guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[])
+  // Save serializado: solo un save a la vez, si hay otro pendiente se ejecuta después
+  const persist = useCallback(async (updated: WeekData) => {
+    dataRef.current = updated
+    if (savingRef.current) {
+      pendingSaveRef.current = updated
+      return
+    }
+    savingRef.current = true
+    try {
+      await guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[])
+    } finally {
+      savingRef.current = false
+      if (pendingSaveRef.current) {
+        const next = pendingSaveRef.current
+        pendingSaveRef.current = null
+        persist(next)
+      }
+    }
   }, [])
 
   function getTodos(fecha: string): Todo[] { return data[fecha] || [] }
@@ -154,16 +182,36 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   function updateText(fecha: string, id: string, text: string) {
     updateTodos(fecha, prev => prev.map(t => t.id === id ? { ...t, text } : t))
   }
+  const savingEvRef = useRef(false)
+  const pendingEvSaveRef = useRef<Record<string, { texto?: string; color?: string; done?: boolean }> | null>(null)
+
+  async function persistEventos(updated: Record<string, { texto?: string; color?: string; done?: boolean }>) {
+    if (savingEvRef.current) {
+      pendingEvSaveRef.current = updated
+      return
+    }
+    savingEvRef.current = true
+    try {
+      await guardarNotasEventos(updated)
+    } finally {
+      savingEvRef.current = false
+      if (pendingEvSaveRef.current) {
+        const next = pendingEvSaveRef.current
+        pendingEvSaveRef.current = null
+        persistEventos(next)
+      }
+    }
+  }
+
   function updateEventoMeta(eventId: string, partial: Partial<{ texto: string; color: string; done: boolean }>) {
     const current = notasEventos[eventId] || {}
     const updated = { ...notasEventos, [eventId]: { ...current, ...partial } }
     setNotasEventos(updated)
-    // Para texto largo: debounce. Para done/color: inmediato
     if ('texto' in partial) {
       if (notasEvTimeout.current) clearTimeout(notasEvTimeout.current)
-      notasEvTimeout.current = setTimeout(() => { guardarNotasEventos(updated) }, 500)
+      notasEvTimeout.current = setTimeout(() => { persistEventos(updated) }, 500)
     } else {
-      guardarNotasEventos(updated)
+      persistEventos(updated)
     }
   }
 
