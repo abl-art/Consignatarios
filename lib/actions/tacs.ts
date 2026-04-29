@@ -25,7 +25,10 @@ export interface TacPendiente {
   origen: 'inventario' | 'terceros'
 }
 
-// Fetch TACs únicos del inventario de GOcelular
+// Marcas excluidas de Trustonic (no necesitan carga de TAC)
+const MARCAS_EXCLUIDAS = ['samsung', 'apple']
+
+// Fetch TACs únicos del inventario de GOcelular (excluyendo marcas que no usan Trustonic)
 async function fetchTacsInventario(): Promise<TacInventario[]> {
   const url = process.env.GOCELULAR_DB_URL
   if (!url) return []
@@ -41,9 +44,10 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
        FROM inventory_items ii
        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
        WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
+         AND SUBSTRING(ii.imei, 1, 8) != '00000000'
        ORDER BY marca, modelo`
     )
-    return res.rows
+    return res.rows.filter(r => !MARCAS_EXCLUIDAS.includes(r.marca.toLowerCase()))
   } finally {
     await client.end()
   }
@@ -110,10 +114,11 @@ export async function procesarArchivoTerceros(items: { imei: string; marca: stri
   const pendientes: TacPendiente[] = []
 
   for (const item of items) {
+    if (MARCAS_EXCLUIDAS.includes(item.marca.toLowerCase())) continue
     const imei = item.imei.replace(/\D/g, '')
     if (imei.length < 8) continue
     const tac = imei.substring(0, 8)
-    if (cargadosSet.has(tac) || tacsSeen.has(tac)) continue
+    if (tac === '00000000' || cargadosSet.has(tac) || tacsSeen.has(tac)) continue
     tacsSeen.add(tac)
     pendientes.push({ tac, marca: item.marca, modelo: item.modelo, origen: 'terceros' })
   }
