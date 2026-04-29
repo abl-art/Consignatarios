@@ -4,12 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import NavIcon, { type IconName } from '@/components/NavIcon'
 import NavGroup from '@/components/NavGroup'
 import MobileMenu from '@/components/MobileMenu'
+import { contarTacsPendientes } from '@/lib/actions/tacs'
 
 interface NavItem {
   href: string
   label: string
   icon: IconName
   external?: boolean
+  badge?: boolean
   children?: { href: string; label: string; icon: IconName }[]
 }
 
@@ -54,6 +56,7 @@ const navItems: NavItem[] = [
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
   { href: 'https://docs.google.com/document/d/1349pQbzP2-7k77Oe_rS_6h1dA-36la7ZLdZOWmoyKt4/edit?tab=t.0', label: 'Procesos', icon: 'documento', external: true },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
+  { href: '/gestion-tacs', label: 'Gestión TACs', icon: 'modelos', badge: true },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
 ]
 
@@ -62,6 +65,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user || user.user_metadata?.rol !== 'admin') redirect('/login')
+
+  let tacsPendientes = 0
+  try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -101,6 +107,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               >
                 <NavIcon name={item.icon} />
                 <span>{item.label}</span>
+                {item.badge && tacsPendientes > 0 && (
+                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full">{tacsPendientes}</span>
+                )}
               </Link>
             )
           )}
