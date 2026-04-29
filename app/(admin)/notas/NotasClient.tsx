@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos } from './actions'
+import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos, fetchNotasEventos } from './actions'
 
 interface Todo {
   id: string
@@ -115,6 +115,10 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
       const freshData = fresh as WeekData
       setData(freshData)
       dataRef.current = freshData
+    })
+    fetchNotasEventos().then(fresh => {
+      setNotasEventos(fresh)
+      evDataRef.current = fresh
     })
   }, [])
 

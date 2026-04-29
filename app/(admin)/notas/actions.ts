@@ -58,5 +58,11 @@ export async function fetchNotasEventos(): Promise<Record<string, { texto?: stri
   const sb = createAdminClient()
   const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_notas_eventos').single()
   if (!data?.value) return {}
-  return JSON.parse(data.value)
+  const raw = JSON.parse(data.value)
+  // Compatibilidad: strings viejos → objeto
+  const result: Record<string, { texto?: string; color?: string; done?: boolean }> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    result[k] = typeof v === 'string' ? { texto: v } : (v as { texto?: string; color?: string; done?: boolean })
+  }
+  return result
 }
