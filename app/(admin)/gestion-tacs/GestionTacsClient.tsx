@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { marcarTacsCargados, procesarArchivoTerceros, sincronizarTacsInventario, type TacCargado, type TacPendiente } from '@/lib/actions/tacs'
+import { marcarTacsCargados, procesarArchivoTerceros, type TacCargado, type TacPendiente } from '@/lib/actions/tacs'
 
 interface Props {
   cargados: TacCargado[]
@@ -15,8 +15,8 @@ export default function GestionTacsClient({ cargados, pendientesInv }: Props) {
   const [pendientesTerceros, setPendientesTerceros] = useState<TacPendiente[]>([])
   const [uploading, setUploading] = useState(false)
   const [marcando, setMarcando] = useState(false)
-  const [sincronizando, setSincronizando] = useState(false)
   const [showCargados, setShowCargados] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
   const [filtroMarca, setFiltroMarca] = useState('')
 
   const todosPendientes = [...pendientes, ...pendientesTerceros]
@@ -66,12 +66,15 @@ export default function GestionTacsClient({ cargados, pendientesInv }: Props) {
     router.refresh()
   }
 
-  async function handleSincronizar() {
-    setSincronizando(true)
-    await sincronizarTacsInventario()
-    setSincronizando(false)
-    router.refresh()
-  }
+  // Resultado de búsqueda de TAC
+  const busquedaResult = busqueda.length >= 4 ? (() => {
+    const q = busqueda.trim()
+    const enCargados = cargados.find(t => t.tac === q)
+    if (enCargados) return { found: true as const, tac: enCargados }
+    const enPendientes = todosPendientes.find(t => t.tac === q)
+    if (enPendientes) return { found: false as const, pendiente: true, tac: enPendientes }
+    return { found: false as const, pendiente: false, tac: null }
+  })() : null
 
   function descargarTemplate() {
     import('xlsx').then(XLSX => {
@@ -111,6 +114,30 @@ export default function GestionTacsClient({ cargados, pendientesInv }: Props) {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs text-gray-500 mb-1">Marcas</p>
           <p className="text-3xl font-bold text-gray-900">{marcas.length}</p>
+        </div>
+      </div>
+
+      {/* Buscador de TAC */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="flex gap-3 items-center">
+          <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder="Buscar TAC (8 dígitos)..." maxLength={8}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" />
+          {busquedaResult && (
+            busquedaResult.found ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">Cargado</span>
+                <span className="text-sm text-gray-700">{busquedaResult.tac.marca} — {busquedaResult.tac.modelo}</span>
+              </div>
+            ) : busquedaResult.pendiente ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded-full">Pendiente</span>
+                <span className="text-sm text-gray-700">{busquedaResult.tac!.marca} — {busquedaResult.tac!.modelo}</span>
+              </div>
+            ) : (
+              <span className="px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-500 rounded-full">No encontrado</span>
+            )
+          )}
         </div>
       </div>
 
@@ -165,34 +192,21 @@ export default function GestionTacsClient({ cargados, pendientesInv }: Props) {
         </div>
       )}
 
-      {/* Acciones */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Subir archivo terceros */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-900 mb-3">Archivo de terceros</h3>
-          <div className="flex gap-2 mb-3">
-            <button onClick={descargarTemplate} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-              Descargar template
-            </button>
-          </div>
-          <label className={`block w-full px-4 py-3 text-center text-sm border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-magenta-400 hover:bg-magenta-50 transition-colors ${uploading ? 'opacity-50' : ''}`}>
+      {/* Subir archivo terceros */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <h3 className="font-semibold text-gray-900 mb-3">Archivo de terceros</h3>
+        <div className="flex gap-3 items-center">
+          <button onClick={descargarTemplate} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 shrink-0">
+            Descargar template
+          </button>
+          <label className={`flex-1 block px-4 py-3 text-center text-sm border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-magenta-400 hover:bg-magenta-50 transition-colors ${uploading ? 'opacity-50' : ''}`}>
             {uploading ? 'Procesando...' : 'Subir archivo Excel'}
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} disabled={uploading} />
           </label>
-          {pendientesTerceros.length > 0 && (
-            <p className="text-xs text-purple-600 mt-2">{pendientesTerceros.length} TACs nuevos detectados del archivo</p>
-          )}
         </div>
-
-        {/* Sincronizar inventario */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-900 mb-3">Inventario propio</h3>
-          <p className="text-xs text-gray-500 mb-3">Sincronizar TACs del inventario de GOcelular con la base de TACs cargados.</p>
-          <button onClick={handleSincronizar} disabled={sincronizando}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-            {sincronizando ? 'Sincronizando...' : 'Sincronizar inventario'}
-          </button>
-        </div>
+        {pendientesTerceros.length > 0 && (
+          <p className="text-xs text-purple-600 mt-2">{pendientesTerceros.length} TACs nuevos detectados del archivo</p>
+        )}
       </div>
 
       {/* TACs cargados por marca */}
