@@ -2,6 +2,14 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export async function fetchTodos(): Promise<Record<string, unknown>> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_todos').single()
+  if (!data?.value) return {}
+  const raw = JSON.parse(data.value)
+  return Array.isArray(raw) ? {} : raw
+}
+
 export async function guardarTodos(todos: Record<string, unknown> | { id: string; text: string; done: boolean }[]) {
   const sb = createAdminClient()
   await sb.from('flujo_config').upsert({

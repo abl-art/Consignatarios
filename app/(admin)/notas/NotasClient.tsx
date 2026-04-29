@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos } from './actions'
+import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos } from './actions'
 
 interface Todo {
   id: string
@@ -109,6 +109,15 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
   const { lunes, dias } = getSemana(weekOffset)
 
+  // Al montar: siempre cargar datos frescos de la DB (no confiar en server component)
+  useEffect(() => {
+    fetchTodos().then(fresh => {
+      const freshData = fresh as WeekData
+      setData(freshData)
+      dataRef.current = freshData
+    })
+  }, [])
+
   // Cargar eventos de Google Calendar para la semana visible
   useEffect(() => {
     async function cargar() {
@@ -128,7 +137,7 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset])
 
-  // Save encadenado: cada save espera a que el anterior termine
+  // Save encadenado + siempre guarda la ÚLTIMA versión
   function persist(updated: WeekData) {
     dataRef.current = updated
     setSaveStatus('saving')
