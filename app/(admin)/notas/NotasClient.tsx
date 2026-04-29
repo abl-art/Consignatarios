@@ -103,22 +103,11 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   const [showCrear, setShowCrear] = useState<string | null>(null)
   const [eventoAbierto, setEventoAbierto] = useState<CalEvent | null>(null)
   const [notasEventos, setNotasEventos] = useState<Record<string, { texto?: string; color?: string; done?: boolean }>>(initialNotasEventos)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
   const notasEvTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const savingRef = useRef(false)
-  const pendingSaveRef = useRef<WeekData | null>(null)
   const dataRef = useRef<WeekData>(initialData)
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
   const { lunes, dias } = getSemana(weekOffset)
-
-  // Guardar cuando el usuario sale de la página o cambia de tab (mobile)
-  useEffect(() => {
-    const handler = () => {
-      if (document.visibilityState === 'hidden' && dataRef.current) {
-        guardarTodos(dataRef.current as unknown as { id: string; text: string; done: boolean }[])
-      }
-    }
-    document.addEventListener('visibilitychange', handler)
-    return () => document.removeEventListener('visibilitychange', handler)
-  }, [])
 
   // Cargar eventos de Google Calendar para la semana visible
   useEffect(() => {
@@ -139,25 +128,19 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset])
 
-  // Save serializado: solo un save a la vez, si hay otro pendiente se ejecuta después
-  const persist = useCallback(async (updated: WeekData) => {
+  // Save encadenado: cada save espera a que el anterior termine
+  function persist(updated: WeekData) {
     dataRef.current = updated
-    if (savingRef.current) {
-      pendingSaveRef.current = updated
-      return
-    }
-    savingRef.current = true
-    try {
-      await guardarTodos(updated as unknown as { id: string; text: string; done: boolean }[])
-    } finally {
-      savingRef.current = false
-      if (pendingSaveRef.current) {
-        const next = pendingSaveRef.current
-        pendingSaveRef.current = null
-        persist(next)
+    setSaveStatus('saving')
+    saveQueue.current = saveQueue.current.then(async () => {
+      try {
+        await guardarTodos(dataRef.current as unknown as { id: string; text: string; done: boolean }[])
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('error')
       }
-    }
-  }, [])
+    })
+  }
 
   function getTodos(fecha: string): Todo[] { return data[fecha] || [] }
 
@@ -182,25 +165,20 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   function updateText(fecha: string, id: string, text: string) {
     updateTodos(fecha, prev => prev.map(t => t.id === id ? { ...t, text } : t))
   }
-  const savingEvRef = useRef(false)
-  const pendingEvSaveRef = useRef<Record<string, { texto?: string; color?: string; done?: boolean }> | null>(null)
+  const evSaveQueue = useRef<Promise<void>>(Promise.resolve())
+  const evDataRef = useRef(initialNotasEventos)
 
-  async function persistEventos(updated: Record<string, { texto?: string; color?: string; done?: boolean }>) {
-    if (savingEvRef.current) {
-      pendingEvSaveRef.current = updated
-      return
-    }
-    savingEvRef.current = true
-    try {
-      await guardarNotasEventos(updated)
-    } finally {
-      savingEvRef.current = false
-      if (pendingEvSaveRef.current) {
-        const next = pendingEvSaveRef.current
-        pendingEvSaveRef.current = null
-        persistEventos(next)
+  function persistEventos(updated: Record<string, { texto?: string; color?: string; done?: boolean }>) {
+    evDataRef.current = updated
+    setSaveStatus('saving')
+    evSaveQueue.current = evSaveQueue.current.then(async () => {
+      try {
+        await guardarNotasEventos(evDataRef.current)
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('error')
       }
-    }
+    })
   }
 
   function updateEventoMeta(eventId: string, partial: Partial<{ texto: string; color: string; done: boolean }>) {
@@ -230,6 +208,9 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
         <button onClick={() => setWeekOffset(w => w - 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">← Anterior</button>
         <div className="text-center">
           <p className="text-sm font-semibold text-gray-900">{formatSemana(lunes)}</p>
+          <p className={`text-[10px] ${saveStatus === 'saving' ? 'text-yellow-600' : saveStatus === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+            {saveStatus === 'saving' ? '● Guardando...' : saveStatus === 'error' ? '● Error al guardar' : '● Guardado'}
+          </p>
           {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-xs text-magenta-600 hover:underline">Ir a esta semana</button>}
         </div>
         <div className="flex items-center gap-2">
