@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
@@ -12,7 +12,7 @@ import ForecastChart from './ForecastChart'
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }] = await Promise.all([
+  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
     getForecastEvents(),
@@ -22,6 +22,7 @@ export default async function DashboardPage() {
     fetchStockPropioDetalle(),
     getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
+    fetchTrustonicStats(),
   ])
 
   // Valorización tenencia propia
@@ -53,8 +54,8 @@ export default async function DashboardPage() {
 
       <VentasDelDia />
 
-      {/* Contracargos + Stock */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+      {/* Contracargos + Stock + Trustonic */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
         <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
           <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
           <div className="grid grid-cols-3 gap-4">
@@ -90,6 +91,24 @@ export default async function DashboardPage() {
               <p className="text-xs text-gray-500 mb-1">Total</p>
               <p className="text-xl font-bold text-gray-900">{(stockPropio) + (stockConsignatarios ?? 0)}</p>
               <p className="text-xs text-green-700 font-medium mt-0.5">{formatearMoneda(valorPropio + valorConsig)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Activos</p>
+              <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
+              <p className="text-xl font-bold text-red-700">{trustonic.bloqueados}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">% Bloqueados</p>
+              <p className={`text-xl font-bold ${trustonic.pctBloqueados > 5 ? 'text-red-700' : 'text-gray-900'}`}>{trustonic.pctBloqueados}%</p>
             </div>
           </div>
         </div>

@@ -421,6 +421,43 @@ export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
   }
 }
 
+export interface TrustonicStats {
+  bloqueados: number
+  activos: number
+  total: number
+  pctBloqueados: number
+}
+
+export async function fetchTrustonicStats(): Promise<TrustonicStats> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0 }
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ bloqueados: string; activos: string; total: string }>(
+      `SELECT
+        COUNT(*) FILTER (WHERE trustonic_status::text = 'locked')::text AS bloqueados,
+        COUNT(*) FILTER (WHERE trustonic_status::text = 'active')::text AS activos,
+        COUNT(*)::text AS total
+       FROM devices
+       WHERE is_test_device = false OR is_test_device IS NULL`
+    )
+    const r = res.rows[0]
+    const bloqueados = Number(r.bloqueados)
+    const activos = Number(r.activos)
+    const total = Number(r.total)
+    return {
+      bloqueados,
+      activos,
+      total,
+      pctBloqueados: activos > 0 ? Math.round((bloqueados / activos) * 10000) / 100 : 0,
+    }
+  } finally {
+    await client.end()
+  }
+}
+
 export interface KnoxGuardDevice {
   imei: string
   brand: string
