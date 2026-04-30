@@ -16,6 +16,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.2",
     "html5-qrcode": "^2.3.8",
+    "jszip": "^3.10.1",
     "next": "14.2.35",
     "papaparse": "^5.5.3",
     "pg": "^8.20.0",

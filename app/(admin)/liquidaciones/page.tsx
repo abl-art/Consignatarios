@@ -88,9 +88,15 @@ export default async function LiquidacionesPage({
         </div>
       </div>
 
-      {/* Generate button */}
-      <div className="mb-6">
+      {/* Generate button + Download ZIP */}
+      <div className="mb-6 flex gap-3">
         <GenerarButton />
+        {mesFiltro && (
+          <a href={`/api/facturas?mes=${mesFiltro}`}
+            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors">
+            Descargar facturas {mesFiltro}
+          </a>
+        )}
       </div>
 
       {/* Filter form */}
@@ -180,6 +186,9 @@ export default async function LiquidacionesPage({
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Estado
                 </th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Factura
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -215,6 +224,18 @@ export default async function LiquidacionesPage({
                     >
                       {liq.estado}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {(liq as unknown as { factura_url: string | null }).factura_url ? (
+                      <a href={(liq as unknown as { factura_url: string }).factura_url} target="_blank" rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-800" title="Descargar factura">
+                        <svg className="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </a>
+                    ) : (
+                      <span className="text-red-400" title="Sin factura">
+                        <svg className="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 justify-end">

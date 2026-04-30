@@ -96,6 +96,13 @@ export async function eliminarLiquidacion(id: string) {
 
 export async function actualizarEstadoLiquidacion(id: string, estado: EstadoLiquidacion) {
   const supabase = createClient()
+
+  // No permitir pagada sin factura
+  if (estado === 'pagada') {
+    const { data: liq } = await supabase.from('liquidaciones').select('factura_url').eq('id', id).single()
+    if (!liq?.factura_url) return { error: 'No se puede marcar como pagada sin factura adjunta' }
+  }
+
   const updates: { estado: EstadoLiquidacion; fecha_pago?: string } = { estado }
   if (estado === 'pagada') {
     updates.fecha_pago = new Date().toISOString().split('T')[0]
@@ -104,6 +111,36 @@ export async function actualizarEstadoLiquidacion(id: string, estado: EstadoLiqu
   if (error) return { error: error.message }
   revalidatePath('/liquidaciones')
   revalidatePath('/dashboard')
+  return { ok: true }
+}
+
+export async function subirFactura(liquidacionId: string, formData: FormData) {
+  const supabase = createClient()
+  const file = formData.get('file') as File
+  if (!file || !file.name.endsWith('.pdf')) return { error: 'Solo se aceptan archivos PDF' }
+
+  // Obtener la liquidación para el nombre del archivo
+  const { data: liq } = await supabase.from('liquidaciones').select('mes, consignatario_id').eq('id', liquidacionId).single()
+  if (!liq) return { error: 'Liquidación no encontrada' }
+
+  const fileName = `${liq.mes}_${liq.consignatario_id}.pdf`
+
+  const { error: uploadErr } = await supabase.storage
+    .from('facturas')
+    .upload(fileName, file, { upsert: true, contentType: 'application/pdf' })
+  if (uploadErr) return { error: uploadErr.message }
+
+  const { data: urlData } = supabase.storage.from('facturas').getPublicUrl(fileName)
+
+  // Guardar URL en la liquidación
+  const { error: updateErr } = await supabase
+    .from('liquidaciones')
+    .update({ factura_url: urlData.publicUrl })
+    .eq('id', liquidacionId)
+  if (updateErr) return { error: updateErr.message }
+
+  revalidatePath('/liquidaciones')
+  revalidatePath('/mis-liquidaciones')
   return { ok: true }
 }
 

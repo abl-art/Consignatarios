@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentConsignatario } from '@/lib/consignatario-helpers'
 import { formatearMoneda } from '@/lib/utils'
 import type { Liquidacion } from '@/lib/types'
+import SubirFactura from './SubirFactura'
 
 const ESTADO_COLORS: Record<string, string> = {
   retenida: 'bg-yellow-100 text-yellow-700',
@@ -57,6 +58,7 @@ export default async function MisLiquidacionesPage() {
                 <th className="text-right px-6 py-3 font-medium text-gray-600">Diferencias</th>
                 <th className="text-right px-6 py-3 font-medium text-gray-600">A pagar</th>
                 <th className="text-left px-6 py-3 font-medium text-gray-600">Estado</th>
+                <th className="text-left px-6 py-3 font-medium text-gray-600">Factura</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
@@ -71,6 +73,15 @@ export default async function MisLiquidacionesPage() {
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_COLORS[l.estado]}`}>
                       {l.estado}
                     </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    {l.estado === 'pendiente' || l.estado === 'pagada' ? (
+                      <SubirFactura liquidacionId={l.id} tieneFactura={!!(l as unknown as { factura_url: string | null }).factura_url} />
+                    ) : l.estado === 'retenida' ? (
+                      <span className="text-xs text-gray-400">Completá auto-auditoría</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-right">
                     <a href={`/api/pdf/liquidacion/${l.id}`} target="_blank" rel="noopener noreferrer"
