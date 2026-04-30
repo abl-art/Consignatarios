@@ -47,7 +47,7 @@ const navItems: NavItem[] = [
       { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
       { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
       { href: '/ventas', label: 'Ventas', icon: 'ventas' },
-      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones', badge: liqBorradores > 0 ? liqBorradores : undefined },
+      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
       { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
@@ -75,6 +75,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     liqBorradores = count ?? 0
   } catch { /* skip */ }
 
+  // Inyectar badge de borradores en Liquidaciones
+  const navItemsConBadge = navItems.map(item => {
+    if (!item.children) return item
+    return {
+      ...item,
+      children: item.children.map(child =>
+        child.href === '/liquidaciones' && liqBorradores > 0
+          ? { ...child, badge: liqBorradores }
+          : child
+      ),
+    }
+  })
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - hidden on mobile, visible on md+ */}
@@ -84,7 +97,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="text-xs text-gray-400 block">Panel Admin</span>
         </div>
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) =>
+          {navItemsConBadge.map((item) =>
             item.children ? (
               <NavGroup
                 key={item.href}
@@ -133,7 +146,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </aside>
 
       {/* Mobile menu */}
-      <MobileMenu items={navItems.map(item => ({
+      <MobileMenu items={navItemsConBadge.map(item => ({
         href: item.href,
         label: item.label,
         external: item.external,
