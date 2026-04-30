@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import NavIcon, { type IconName } from '@/components/NavIcon'
 
 const navItems: { href: string; label: string; icon: IconName }[] = [
+  { href: '/guia', label: 'Guía de uso', icon: 'documento' },
   { href: '/mi-dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/stock', label: 'Mi stock', icon: 'stock' },
   { href: '/mis-ventas', label: 'Mis ventas', icon: 'ventas' },
