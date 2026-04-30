@@ -12,7 +12,7 @@ interface NavItem {
   icon: IconName
   external?: boolean
   badge?: boolean
-  children?: { href: string; label: string; icon: IconName }[]
+  children?: { href: string; label: string; icon: IconName; badge?: number }[]
 }
 
 const navItems: NavItem[] = [
@@ -47,7 +47,7 @@ const navItems: NavItem[] = [
       { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
       { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
       { href: '/ventas', label: 'Ventas', icon: 'ventas' },
-      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
+      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones', badge: liqBorradores > 0 ? liqBorradores : undefined },
       { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
@@ -68,6 +68,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   let tacsPendientes = 0
   try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
+
+  let liqBorradores = 0
+  try {
+    const { count } = await supabase.from('liquidaciones').select('*', { count: 'exact', head: true }).eq('estado', 'borrador')
+    liqBorradores = count ?? 0
+  } catch { /* skip */ }
 
   return (
     <div className="flex min-h-screen bg-gray-50">

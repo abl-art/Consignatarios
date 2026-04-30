@@ -18,6 +18,7 @@ export default async function MisLiquidacionesPage() {
 
   const { data: liquidaciones } = await supabase.from('liquidaciones').select('*')
     .eq('consignatario_id', consignatario.id)
+    .neq('estado', 'borrador')
     .order('mes', { ascending: false }).returns<Liquidacion[]>()
 
   const now = new Date()

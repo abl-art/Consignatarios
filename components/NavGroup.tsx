@@ -9,6 +9,7 @@ interface NavChild {
   href: string
   label: string
   icon: IconName
+  badge?: number
 }
 
 export default function NavGroup({
@@ -64,6 +65,9 @@ export default function NavGroup({
             >
               <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
               <span>{child.label}</span>
+              {child.badge && child.badge > 0 && (
+                <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white rounded-full">{child.badge}</span>
+              )}
             </Link>
           ))}
         </div>
