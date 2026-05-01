@@ -68,7 +68,8 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
        ORDER BY model_name`
     )
 
-    // Pendientes de asignar
+    // Pendientes de asignar (solo ventas del mes de corte, no del mes siguiente)
+    const primerDiaMes = `${mesAnio}-01`
     const pendRes = await client.query<{ product_name: string; pendientes: string }>(
       `SELECT so.product_name, COUNT(*)::text AS pendientes
        FROM store_orders so
@@ -76,9 +77,12 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
        WHERE so.status = 'paid'
          AND so.cancelled_at IS NULL
          AND go.order_discarded_at IS NULL
+         AND go.created_at >= $1::date
+         AND go.created_at < ($2::date + interval '1 day')
          AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
          AND NOT EXISTS (SELECT 1 FROM inventory_items ii WHERE ii.assigned_to_order_id = go.order_id AND ii.status = 'assigned')
-       GROUP BY so.product_name`
+       GROUP BY so.product_name`,
+      [primerDiaMes, fechaCorte]
     )
 
     // Match pendientes a modelos usando el mismo matchKey
