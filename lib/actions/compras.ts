@@ -271,6 +271,7 @@ export interface InventarioCategoria {
   compras: number
   ventas: number
   disponible: number
+  stockCelulares: number
   precioUnitario: number
   valuacion: number
   proveedor: string
@@ -336,17 +337,26 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
     }
   }
 
-  // Obtener ventas desde GOcuotas
-  const ventasPorModelo = fechaMasAntigua ? await fetchVentasPorModeloDesde(fechaMasAntigua) : {}
+  // Obtener ventas desde GOcuotas y stock de celulares en paralelo
+  const [ventasPorModelo, stockCelulares] = await Promise.all([
+    fechaMasAntigua ? fetchVentasPorModeloDesde(fechaMasAntigua) : Promise.resolve({}),
+    fetchStockCelularesPorModelo(),
+  ])
 
-  // Matchear ventas con modelos de compras
+  // Matchear ventas y stock con modelos de compras
   const result: InventarioCategoria[] = []
   for (const g of grouped.values()) {
     const matchKey = modelMatchKey(g.modelo)
     let ventas = 0
     for (const [ventaModelo, qty] of Object.entries(ventasPorModelo)) {
       if (modelMatchKey(ventaModelo) === matchKey) {
-        ventas += qty
+        ventas += Number(qty)
+      }
+    }
+    let stock = 0
+    for (const [stockModelo, qty] of Object.entries(stockCelulares)) {
+      if (modelMatchKey(stockModelo) === matchKey) {
+        stock += Number(qty)
       }
     }
     const disponible = g.compras - ventas
@@ -355,6 +365,7 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
       compras: g.compras,
       ventas,
       disponible,
+      stockCelulares: stock,
       precioUnitario: g.precio,
       valuacion: disponible * g.precio,
       proveedor: g.proveedor,
@@ -387,6 +398,31 @@ async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, 
     const result: Record<string, number> = {}
     for (const r of res.rows) {
       result[r.modelo] = Number(r.ventas)
+    }
+    return result
+  } finally {
+    await client.end()
+  }
+}
+
+async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
+  const { Client } = await import('pg')
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return {}
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ modelo: string; qty: string }>(
+      `SELECT COALESCE(dm.name, ii.model_code) AS modelo, COUNT(*)::text AS qty
+       FROM inventory_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       WHERE ii.status = 'available'
+       GROUP BY 1`
+    )
+    const result: Record<string, number> = {}
+    for (const r of res.rows) {
+      result[r.modelo] = Number(r.qty)
     }
     return result
   } finally {
