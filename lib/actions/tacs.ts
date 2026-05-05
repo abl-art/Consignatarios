@@ -9,6 +9,7 @@ export interface TacCargado {
   marca: string
   modelo: string
   origen: string
+  estado: 'solicitado' | 'cargado'
   created_at: string
 }
 
@@ -85,18 +86,50 @@ export async function contarTacsPendientes(): Promise<number> {
   return pendientes.length
 }
 
-// Marcar TACs como cargados (moverlos a tacs_cargados)
-export async function marcarTacsCargados(tacs: { tac: string; marca: string; modelo: string; origen: string }[]) {
+// Guardar TACs como "Carga Solicitada" (estado = solicitado)
+export async function solicitarCargaTacs(tacs: { tac: string; marca: string; modelo: string; origen: string }[]) {
   if (tacs.length === 0) return { ok: true }
   const sb = createAdminClient()
 
-  // Upsert para no fallar si ya existe
   for (const t of tacs) {
     await sb.from('tacs_cargados').upsert({
       tac: t.tac,
       marca: t.marca,
       modelo: t.modelo,
       origen: t.origen,
+      estado: 'solicitado',
+    }, { onConflict: 'tac' })
+  }
+
+  revalidatePath('/gestion-tacs')
+  return { ok: true }
+}
+
+// Confirmar TACs como cargados en Trustonic (estado = cargado)
+export async function confirmarTacsCargados(tacs: string[]) {
+  if (tacs.length === 0) return { ok: true }
+  const sb = createAdminClient()
+
+  for (const tac of tacs) {
+    await sb.from('tacs_cargados').update({ estado: 'cargado' }).eq('tac', tac)
+  }
+
+  revalidatePath('/gestion-tacs')
+  return { ok: true }
+}
+
+// Legacy: marcar directo como cargados (para sincronización inventario)
+export async function marcarTacsCargados(tacs: { tac: string; marca: string; modelo: string; origen: string }[]) {
+  if (tacs.length === 0) return { ok: true }
+  const sb = createAdminClient()
+
+  for (const t of tacs) {
+    await sb.from('tacs_cargados').upsert({
+      tac: t.tac,
+      marca: t.marca,
+      modelo: t.modelo,
+      origen: t.origen,
+      estado: 'cargado',
     }, { onConflict: 'tac' })
   }
 
