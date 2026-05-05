@@ -28,6 +28,10 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas públicas
+  if (pathname.startsWith('/proveedor/')) {
+    return supabaseResponse
+  }
+
   if (pathname === '/login') {
     if (user) {
       const rol = user.user_metadata?.rol
