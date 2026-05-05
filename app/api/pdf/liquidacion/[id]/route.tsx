@@ -89,8 +89,20 @@ export async function GET(
     })),
   }))
 
-  // Compute total ventas monto from loaded ventas
+  // Recalculate totals from current ventas (the snapshot may be stale)
   const totalVentasMonto = ventas.reduce((s, v) => s + (v.precio_venta ?? 0), 0)
+  const totalComisionesReal = ventas.reduce((s, v) => s + (v.comision_monto ?? 0), 0)
+
+  // Update liquidacion if totals changed
+  if (Math.abs(totalComisionesReal - liq.total_comisiones) > 0.01) {
+    const nuevoMonto = Math.max(0, totalComisionesReal - liq.total_diferencias_descontadas)
+    await supabase.from('liquidaciones').update({
+      total_comisiones: totalComisionesReal,
+      monto_a_pagar: nuevoMonto,
+    }).eq('id', id)
+    liq.total_comisiones = totalComisionesReal
+    liq.monto_a_pagar = nuevoMonto
+  }
 
   // 7. Load diferencias for that consignatario in that month
   let diferenciasArr: { fecha: string; imei: string; marca: string; modelo: string; monto: number }[] = []
