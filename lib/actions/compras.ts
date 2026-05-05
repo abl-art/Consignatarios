@@ -482,7 +482,7 @@ async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
       const key = matchKey(r.product_name)
       const modelo = keyToModelo.get(key)
       if (modelo) {
-        disponibles[modelo] = Math.max(0, (disponibles[modelo] ?? 0) - Number(r.pendientes))
+        disponibles[modelo] = (disponibles[modelo] ?? 0) - Number(r.pendientes)
       }
     }
 
