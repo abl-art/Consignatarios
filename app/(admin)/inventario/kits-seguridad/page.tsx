@@ -54,11 +54,11 @@ export default async function KitsSeguridadPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-right px-4 py-3 font-medium text-green-700 bg-green-50">Disponible</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">Modelo</th>
                 <th className="text-right px-4 py-3 font-medium text-purple-700 bg-purple-50">Stock cel.</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Modelo</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Compras</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Ventas</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Kits disp.</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Precio unit.</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Valuación</th>
               </tr>
@@ -68,15 +68,15 @@ export default async function KitsSeguridadPage() {
                 const faltanKits = r.stockCelulares > r.disponible
                 return (
                   <tr key={r.modelo} className={`hover:bg-gray-50 ${r.disponible < 0 ? 'bg-red-50' : faltanKits ? 'bg-amber-50' : ''}`}>
-                    <td className={`px-4 py-3 text-right font-bold bg-green-50/50 ${r.disponible < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {r.disponible}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-gray-900">{r.modelo}</td>
                     <td className="px-4 py-3 text-right font-bold text-purple-700 bg-purple-50/50">
                       {r.stockCelulares}
                     </td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{r.modelo}</td>
                     <td className="px-4 py-3 text-right font-semibold text-blue-700">{r.compras}</td>
                     <td className="px-4 py-3 text-right text-amber-700">{r.ventas}</td>
+                    <td className={`px-4 py-3 text-right font-bold ${r.disponible < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                      {r.disponible}
+                    </td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatearMoneda(r.precioUnitario)}</td>
                     <td className="px-4 py-3 text-right text-green-700 font-medium">
                       {r.valuacion > 0 ? formatearMoneda(r.valuacion) : '—'}
@@ -87,11 +87,11 @@ export default async function KitsSeguridadPage() {
             </tbody>
             <tfoot className="bg-gray-50 border-t border-gray-200">
               <tr className="font-semibold">
-                <td className={`px-4 py-3 text-right bg-green-50/50 ${totalDisponible < 0 ? 'text-red-700' : 'text-green-700'}`}>{totalDisponible}</td>
-                <td className="px-5 py-3 text-gray-900">Total</td>
                 <td className="px-4 py-3 text-right text-purple-700 bg-purple-50/50">{totalStockCel}</td>
+                <td className="px-5 py-3 text-gray-900">Total</td>
                 <td className="px-4 py-3 text-right text-blue-700">{totalCompras}</td>
                 <td className="px-4 py-3 text-right text-amber-700">{totalVentas}</td>
+                <td className={`px-4 py-3 text-right ${totalDisponible < 0 ? 'text-red-700' : 'text-green-700'}`}>{totalDisponible}</td>
                 <td className="px-4 py-3"></td>
                 <td className="px-4 py-3 text-right text-green-700">{formatearMoneda(totalValuacion)}</td>
               </tr>
