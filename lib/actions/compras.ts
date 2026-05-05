@@ -413,80 +413,57 @@ async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
   const client = new Client({ connectionString: url })
   await client.connect()
   try {
-    // 1. Disponibles por modelo
-    const dispRes = await client.query<{ modelo: string; qty: string }>(
-      `SELECT COALESCE(dm.name, ii.model_code) AS modelo, COUNT(*)::text AS qty
-       FROM inventory_items ii
-       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
-       WHERE ii.status = 'available'
-       GROUP BY 1`
-    )
+    const [dispRes, pendRes] = await Promise.all([
+      // Disponibles por modelo
+      client.query<{ modelo: string; qty: string }>(
+        `SELECT COALESCE(dm.name, ii.model_code) AS modelo, COUNT(*)::text AS qty
+         FROM inventory_items ii
+         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+         WHERE ii.status = 'available'
+         GROUP BY 1`
+      ),
+      // Pendientes de asignar por product_name
+      client.query<{ modelo: string; pendientes: string }>(
+        `SELECT so.product_name AS modelo, COUNT(*)::text AS pendientes
+         FROM store_orders so
+         JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+         WHERE so.status = 'paid'
+           AND so.cancelled_at IS NULL
+           AND go.order_discarded_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
+           AND NOT EXISTS (SELECT 1 FROM inventory_items i2 WHERE i2.assigned_to_order_id = go.order_id AND i2.status = 'assigned')
+         GROUP BY 1`
+      ),
+    ])
 
-    // 2. Pendientes de asignar (órdenes pagadas sin device/inventory asignado)
-    const pendRes = await client.query<{ modelo: string; pendientes: string }>(
-      `SELECT COALESCE(dm.name, ii.model_code) AS modelo, COUNT(*)::text AS pendientes
-       FROM store_orders so
-       JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-       LEFT JOIN inventory_items ii ON ii.model_code = (
-         SELECT ii2.model_code FROM inventory_items ii2 WHERE ii2.status = 'available' LIMIT 1
-       )
-       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
-       WHERE so.status = 'paid'
-         AND so.cancelled_at IS NULL
-         AND go.order_discarded_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-         AND NOT EXISTS (SELECT 1 FROM inventory_items i2 WHERE i2.assigned_to_order_id = go.order_id AND i2.status = 'assigned')
-       GROUP BY 1`
-    )
+    // Agrupar por matchKey: disponibles - pendientes
+    const byKey = new Map<string, { name: string; qty: number }>()
 
-    // Build result: disponibles - pendientes matching by model name key
-    const disponibles: Record<string, number> = {}
     for (const r of dispRes.rows) {
-      disponibles[r.modelo] = Number(r.qty)
-    }
-
-    // Match pendientes to disponibles using product_name from store_orders
-    const pendRes2 = await client.query<{ product_name: string; pendientes: string }>(
-      `SELECT so.product_name, COUNT(*)::text AS pendientes
-       FROM store_orders so
-       JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-       WHERE so.status = 'paid'
-         AND so.cancelled_at IS NULL
-         AND go.order_discarded_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-         AND NOT EXISTS (SELECT 1 FROM inventory_items i2 WHERE i2.assigned_to_order_id = go.order_id AND i2.status = 'assigned')
-       GROUP BY 1`
-    )
-
-    // Use modelMatchKey to subtract pendientes from disponibles
-    const matchKey = (name: string): string => {
-      const lower = name.toLowerCase()
-      const brand = lower.includes('samsung') ? 'samsung'
-        : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola'
-        : lower.includes('xiaomi') ? 'xiaomi' : 'other'
-      const modelMatch = lower.match(/[ga]\d{2,3}/i)
-      const model = modelMatch ? modelMatch[0].toLowerCase() : ''
-      const allNumbers = [...lower.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 32 && n <= 1024)
-      const storage = allNumbers.length > 0 ? Math.max(...allNumbers).toString() : ''
-      return `${brand}-${model}-${storage}`
-    }
-
-    // Build key → modelo name map from disponibles
-    const keyToModelo = new Map<string, string>()
-    for (const modelo of Object.keys(disponibles)) {
-      keyToModelo.set(matchKey(modelo), modelo)
-    }
-
-    // Subtract pendientes
-    for (const r of pendRes2.rows) {
-      const key = matchKey(r.product_name)
-      const modelo = keyToModelo.get(key)
-      if (modelo) {
-        disponibles[modelo] = (disponibles[modelo] ?? 0) - Number(r.pendientes)
+      const key = modelMatchKey(r.modelo)
+      const existing = byKey.get(key)
+      if (existing) {
+        existing.qty += Number(r.qty)
+      } else {
+        byKey.set(key, { name: r.modelo, qty: Number(r.qty) })
       }
     }
 
-    return disponibles
+    for (const r of pendRes.rows) {
+      const key = modelMatchKey(r.modelo)
+      const existing = byKey.get(key)
+      if (existing) {
+        existing.qty -= Number(r.pendientes)
+      } else {
+        byKey.set(key, { name: r.modelo, qty: -Number(r.pendientes) })
+      }
+    }
+
+    const result: Record<string, number> = {}
+    for (const { name, qty } of byKey.values()) {
+      result[name] = qty
+    }
+    return result
   } finally {
     await client.end()
   }
