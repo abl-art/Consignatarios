@@ -508,14 +508,27 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     pedidosGuardados.forEach(p => { if (p.ingresoStockAt) map[p.id] = p.ingresoStockAt })
     return map
   })
-  const pedidosEnviados = pedidosGuardados.filter(p => p.estado === 'enviado')
+  const [filtroProvEnviados, setFiltroProvEnviados] = useState('')
+  const [filtroFechaEnviados, setFiltroFechaEnviados] = useState('')
+
+  const pedidosEnviadosTodos = pedidosGuardados.filter(p => p.estado === 'enviado')
+  const pedidosEnviados = pedidosEnviadosTodos.filter(p => {
+    if (filtroProvEnviados && p.proveedorId !== filtroProvEnviados) return false
+    if (filtroFechaEnviados) {
+      const entregadoAt = entregados[p.id] || p.entregadoAt
+      const fechaPedido = p.confirmadoAt ? p.confirmadoAt.slice(0, 10) : ''
+      const fechaEntrega = entregadoAt ? entregadoAt.slice(0, 10) : ''
+      if (fechaPedido !== filtroFechaEnviados && fechaEntrega !== filtroFechaEnviados) return false
+    }
+    return true
+  })
   const notasSinEnviar = notas.filter(n => n.estado !== 'enviado')
 
   const tabs = [
     { key: 'catalogo' as Tab, label: 'Catalogo' },
     { key: 'pedido' as Tab, label: `Mi Pedido (${cart.length})` },
     { key: 'notas' as Tab, label: `Notas de Pedido (${notasSinEnviar.length})` },
-    { key: 'confirmados' as Tab, label: `Enviados (${pedidosEnviados.length})` },
+    { key: 'confirmados' as Tab, label: `Enviados (${pedidosEnviadosTodos.length})` },
   ]
 
   return (
@@ -971,9 +984,38 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       {/* Confirmados tab */}
       {tab === 'confirmados' && (
         <div>
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <select
+              value={filtroProvEnviados}
+              onChange={e => setFiltroProvEnviados(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="">Todos los proveedores</option>
+              {[...new Set(pedidosEnviadosTodos.map(p => JSON.stringify({ id: p.proveedorId, nombre: p.proveedorNombre })))].map(json => {
+                const prov = JSON.parse(json)
+                return <option key={prov.id} value={prov.id}>{prov.nombre}</option>
+              })}
+            </select>
+            <input
+              type="date"
+              value={filtroFechaEnviados}
+              onChange={e => setFiltroFechaEnviados(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            />
+            {(filtroProvEnviados || filtroFechaEnviados) && (
+              <button
+                onClick={() => { setFiltroProvEnviados(''); setFiltroFechaEnviados('') }}
+                className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
           {pedidosEnviados.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-              <p className="text-gray-400 text-sm">No hay pedidos confirmados.</p>
+              <p className="text-gray-400 text-sm">{pedidosEnviadosTodos.length === 0 ? 'No hay pedidos enviados.' : 'No hay pedidos que coincidan con los filtros.'}</p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
