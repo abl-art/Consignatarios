@@ -560,6 +560,7 @@ export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
       FROM orders
       WHERE client_id IN (2026134, 2461631)
         AND discarded_at IS NULL
+        AND created_at >= '2026-01-01'
       GROUP BY 1
       ORDER BY 1`
     )
