@@ -50,6 +50,7 @@ interface NotaPedido {
   proveedor: Proveedor
   items: CartItem[]
   estado: 'borrador' | 'confirmado' | 'enviado'
+  categoria?: string
   fecha: string
 }
 
@@ -63,6 +64,7 @@ interface PedidoGuardado {
   proveedorEmail: string
   items: { productoId: string; productoNombre: string; productoCodigo: string; proveedorId: string; proveedorNombre: string; proveedorWhatsapp: string; proveedorEmail: string; precio: number; plazo: string; cantidad: number }[]
   estado: 'borrador' | 'confirmado' | 'enviado'
+  categoria?: string
   fecha: string
   enviadoPor?: string
   confirmadoAt?: string
@@ -305,6 +307,7 @@ export default function GestorClient({
       proveedor: items[0].proveedor,
       items,
       estado: 'borrador' as const,
+      categoria: filtroCategoria || 'Celulares',
       fecha,
     }))
 
@@ -322,6 +325,7 @@ export default function GestorClient({
           precio: i.precio, plazo: i.plazo, cantidad: i.cantidad,
         })),
         estado: 'borrador',
+        categoria: nota.categoria,
         fecha,
       })
     }

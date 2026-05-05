@@ -188,6 +188,7 @@ interface Pedido {
   proveedorEmail: string
   items: PedidoItem[]
   estado: 'borrador' | 'confirmado' | 'enviado'
+  categoria?: string
   fecha: string
   enviadoPor?: string
   confirmadoAt?: string
@@ -259,6 +260,56 @@ export async function eliminarPedido(pedidoId: string) {
   if (error) return { error: error.message }
   revalidatePath('/compras')
   return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Inventario por categoría (sumando items de pedidos recibidos)
+// ---------------------------------------------------------------------------
+
+export interface InventarioCategoria {
+  modelo: string
+  cantidad: number
+  precioUnitario: number
+  valuacion: number
+  proveedor: string
+  fechaRecepcion: string
+}
+
+export async function getInventarioByCategoria(categoria: string): Promise<InventarioCategoria[]> {
+  const pedidos = await getPedidos()
+
+  const items: InventarioCategoria[] = []
+  for (const p of pedidos) {
+    if (!p.entregadoAt) continue
+    if (p.categoria !== categoria) continue
+
+    for (const item of p.items) {
+      items.push({
+        modelo: item.productoNombre,
+        cantidad: item.cantidad,
+        precioUnitario: item.precio,
+        valuacion: item.precio * item.cantidad,
+        proveedor: p.proveedorNombre,
+        fechaRecepcion: p.entregadoAt,
+      })
+    }
+  }
+
+  // Agrupar por modelo
+  const grouped = new Map<string, InventarioCategoria>()
+  for (const item of items) {
+    const key = item.modelo
+    const existing = grouped.get(key)
+    if (existing) {
+      existing.cantidad += item.cantidad
+      existing.valuacion += item.valuacion
+      existing.precioUnitario = Math.round(existing.valuacion / existing.cantidad)
+    } else {
+      grouped.set(key, { ...item })
+    }
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => b.cantidad - a.cantidad)
 }
 
 // ---------------------------------------------------------------------------
