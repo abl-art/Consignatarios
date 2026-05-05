@@ -526,3 +526,50 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
     await client.end()
   }
 }
+
+export interface ConversionDiaria {
+  fecha: string // YYYY-MM-DD
+  total: number
+  delivered: number
+  pct: number
+}
+
+/**
+ * Porcentaje de conversión (delivered_at IS NOT NULL / total) por día
+ * desde la tabla `orders` de GOcuotas directamente.
+ */
+export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
+  const host = process.env.PG_GOCUOTAS_HOST
+  const user = process.env.PG_GOCUOTAS_USER
+  const pass = process.env.PG_GOCUOTAS_PASS
+  const db = process.env.PG_GOCUOTAS_DB
+  if (!host || !user || !pass || !db) return []
+
+  const client = new Client({
+    host, port: 5432, user, password: pass, database: db,
+    ssl: { rejectUnauthorized: false },
+  })
+  await client.connect()
+  try {
+    const res = await client.query<{ fecha: Date; total: string; delivered: string; pct: string }>(
+      `SELECT
+        created_at::date AS fecha,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) AS delivered,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) / NULLIF(COUNT(*), 0), 2) AS pct
+      FROM orders
+      WHERE client_id IN (2026134, 2461631)
+        AND discarded_at IS NULL
+      GROUP BY 1
+      ORDER BY 1`
+    )
+    return res.rows.map(r => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha).slice(0, 10),
+      total: Number(r.total),
+      delivered: Number(r.delivered),
+      pct: Number(r.pct),
+    }))
+  } finally {
+    await client.end()
+  }
+}

@@ -2,19 +2,21 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
 import { getForecastEvents } from '@/lib/actions/finanzas'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
+import ConversionChart from './ConversionChart'
 import ForecastEvents from './ForecastEvents'
 import ForecastChart from './ForecastChart'
 
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
     fetchContracargos(),
     fetchVentasHistoricas(),
+    fetchConversionGocuotas(),
     getForecastEvents(),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
@@ -117,6 +119,11 @@ export default async function DashboardPage() {
       {/* Ventas históricas */}
       <div className="mt-6">
         <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
+      </div>
+
+      {/* Conversión GOcuotas */}
+      <div className="mt-6">
+        <ConversionChart data={conversionData} />
       </div>
 
       {/* Forecast Events */}
