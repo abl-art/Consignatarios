@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { getInventarioByCategoria } from '@/lib/actions/compras'
+import { getInventarioByCategoria, getProductos } from '@/lib/actions/compras'
 import { formatearMoneda } from '@/lib/utils'
+import EntregaForm from './EntregaForm'
 
 const VALID_TOKEN = 'kits2026go'
 
@@ -15,7 +16,13 @@ export default async function ProveedorKitsPage({
     redirect('/login')
   }
 
-  const items = await getInventarioByCategoria('Kits de Seguridad')
+  const [items, allProductos] = await Promise.all([
+    getInventarioByCategoria('Kits de Seguridad'),
+    getProductos(),
+  ])
+  const celulares = (allProductos as { id: string; nombre: string; codigo: string; categoria: string }[])
+    .filter(p => p.categoria === 'Celulares')
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   const totalCompras = items.reduce((s, r) => s + r.compras, 0)
   const totalVentas = items.reduce((s, r) => s + r.ventas, 0)
@@ -111,10 +118,16 @@ export default async function ProveedorKitsPage({
           </div>
         )}
 
-        <p className="text-xs text-gray-400 mt-4">
+        <p className="text-xs text-gray-400 mt-4 mb-6">
           * &quot;Stock cel.&quot; = celulares disponibles en inventario. &quot;Diferencia&quot; = kits disponibles menos stock de celulares.
           Si la diferencia es negativa, faltan kits para cubrir el stock de celulares.
         </p>
+
+        {/* Formulario de entrega */}
+        <EntregaForm
+          token={searchParams.token!}
+          productos={celulares.map(p => ({ id: p.id, nombre: p.nombre, codigo: p.codigo }))}
+        />
       </div>
     </div>
   )
