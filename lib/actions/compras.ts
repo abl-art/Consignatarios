@@ -268,48 +268,130 @@ export async function eliminarPedido(pedidoId: string) {
 
 export interface InventarioCategoria {
   modelo: string
-  cantidad: number
+  compras: number
+  ventas: number
+  disponible: number
   precioUnitario: number
   valuacion: number
   proveedor: string
   fechaRecepcion: string
 }
 
+/** Extrae clave de matching: marca-modelo-storage. Ej: "motorola-g06-128" */
+function modelMatchKey(name: string): string {
+  const lower = name.toLowerCase()
+  const brand = lower.includes('samsung') ? 'samsung'
+    : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola'
+    : lower.includes('xiaomi') ? 'xiaomi' : 'other'
+  const modelMatch = lower.match(/[ga]\d{2,3}/i)
+  const model = modelMatch ? modelMatch[0].toLowerCase() : ''
+  const allNumbers = [...lower.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 32 && n <= 1024)
+  const storage = allNumbers.length > 0 ? Math.max(...allNumbers).toString() : ''
+  return `${brand}-${model}-${storage}`
+}
+
 export async function getInventarioByCategoria(categoria: string): Promise<InventarioCategoria[]> {
   const pedidos = await getPedidos()
 
-  const items: InventarioCategoria[] = []
+  const items: { modelo: string; cantidad: number; precio: number; proveedor: string; fechaRecepcion: string }[] = []
+  let fechaMasAntigua: string | null = null
+
   for (const p of pedidos) {
     if (!p.entregadoAt) continue
     if (p.categoria !== categoria) continue
+
+    if (!fechaMasAntigua || p.entregadoAt < fechaMasAntigua) {
+      fechaMasAntigua = p.entregadoAt
+    }
 
     for (const item of p.items) {
       items.push({
         modelo: item.productoNombre,
         cantidad: item.cantidad,
-        precioUnitario: item.precio,
-        valuacion: item.precio * item.cantidad,
+        precio: item.precio,
         proveedor: p.proveedorNombre,
         fechaRecepcion: p.entregadoAt,
       })
     }
   }
 
-  // Agrupar por modelo
-  const grouped = new Map<string, InventarioCategoria>()
+  // Agrupar compras por modelo
+  const grouped = new Map<string, { modelo: string; compras: number; precio: number; valuacion: number; proveedor: string; fechaRecepcion: string }>()
   for (const item of items) {
     const key = item.modelo
     const existing = grouped.get(key)
     if (existing) {
-      existing.cantidad += item.cantidad
-      existing.valuacion += item.valuacion
-      existing.precioUnitario = Math.round(existing.valuacion / existing.cantidad)
+      existing.compras += item.cantidad
+      existing.valuacion += item.precio * item.cantidad
+      existing.precio = Math.round(existing.valuacion / existing.compras)
     } else {
-      grouped.set(key, { ...item })
+      grouped.set(key, {
+        modelo: item.modelo,
+        compras: item.cantidad,
+        precio: item.precio,
+        valuacion: item.precio * item.cantidad,
+        proveedor: item.proveedor,
+        fechaRecepcion: item.fechaRecepcion,
+      })
     }
   }
 
-  return Array.from(grouped.values()).sort((a, b) => b.cantidad - a.cantidad)
+  // Obtener ventas desde GOcuotas
+  const ventasPorModelo = fechaMasAntigua ? await fetchVentasPorModeloDesde(fechaMasAntigua) : {}
+
+  // Matchear ventas con modelos de compras
+  const result: InventarioCategoria[] = []
+  for (const g of grouped.values()) {
+    const matchKey = modelMatchKey(g.modelo)
+    let ventas = 0
+    for (const [ventaModelo, qty] of Object.entries(ventasPorModelo)) {
+      if (modelMatchKey(ventaModelo) === matchKey) {
+        ventas += qty
+      }
+    }
+    const disponible = g.compras - ventas
+    result.push({
+      modelo: g.modelo,
+      compras: g.compras,
+      ventas,
+      disponible,
+      precioUnitario: g.precio,
+      valuacion: disponible * g.precio,
+      proveedor: g.proveedor,
+      fechaRecepcion: g.fechaRecepcion,
+    })
+  }
+
+  return result.sort((a, b) => b.compras - a.compras)
+}
+
+async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, number>> {
+  const { Client } = await import('pg')
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return {}
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ modelo: string; ventas: string }>(
+      `SELECT COALESCE(so.product_name, 'Desconocido') AS modelo, COUNT(*)::text AS ventas
+       FROM gocuotas_orders o
+       LEFT JOIN store_orders so ON so.id::text = o.store_order_id
+       WHERE o.order_delivered_at IS NOT NULL
+         AND o.order_discarded_at IS NULL
+         AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+         AND o.order_delivered_at >= $1::date
+       GROUP BY 1`,
+      [desde.slice(0, 10)]
+    )
+    const result: Record<string, number> = {}
+    for (const r of res.rows) {
+      result[r.modelo] = Number(r.ventas)
+    }
+    return result
+  } finally {
+    await client.end()
+  }
 }
 
 // ---------------------------------------------------------------------------
