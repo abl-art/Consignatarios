@@ -102,7 +102,9 @@ export default async function ComprasPage() {
       {plazos.length > 0 && <PlazoEntrega data={plazos} />}
 
       {/* Análisis de compras */}
-      <ComprasAnalisis pedidos={pedidos} />
+      <ComprasAnalisis pedidos={pedidos} productoCategorias={
+        (productos as { nombre: string; categoria: string }[]).reduce<Record<string, string>>((m, p) => { m[p.nombre] = p.categoria; return m }, {})
+      } />
     </div>
   )
 }

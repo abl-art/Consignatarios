@@ -21,6 +21,7 @@ interface Pedido {
 
 interface Props {
   pedidos: Pedido[]
+  productoCategorias: Record<string, string>
 }
 
 type Vista = 'proveedor' | 'producto'
@@ -45,12 +46,12 @@ function parseFecha(fecha: string): Date {
   return new Date(fecha)
 }
 
-export default function ComprasAnalisis({ pedidos }: Props) {
+export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) {
   const [vista, setVista] = useState<Vista>('proveedor')
   const [periodo, setPeriodo] = useState<Periodo>('mes')
   const [metrica, setMetrica] = useState<Metrica>('unidades')
   const [filtroProveedor, setFiltroProveedor] = useState('')
-  const [filtroProducto, setFiltroProducto] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
 
@@ -58,11 +59,18 @@ export default function ComprasAnalisis({ pedidos }: Props) {
   const entregados = useMemo(() => pedidos.filter(p => p.estado === 'enviado'), [pedidos])
 
   const proveedores = useMemo(() => [...new Set(entregados.map(p => p.proveedorNombre))].sort(), [entregados])
-  const productos = useMemo(() => {
+  const categorias = useMemo(() => {
     const set = new Set<string>()
-    entregados.forEach(p => p.items.forEach(i => set.add(i.productoNombre)))
+    entregados.forEach(p => p.items.forEach(i => {
+      const cat = productoCategorias[i.productoNombre] || (p as unknown as { categoria?: string }).categoria || 'Celulares'
+      set.add(cat)
+    }))
     return [...set].sort()
-  }, [entregados])
+  }, [entregados, productoCategorias])
+
+  function getCategoria(productoNombre: string, pedido: Pedido): string {
+    return productoCategorias[productoNombre] || (pedido as unknown as { categoria?: string }).categoria || 'Celulares'
+  }
 
   // Filtrar por periodo
   const filtrados = useMemo(() => {
@@ -91,39 +99,44 @@ export default function ComprasAnalisis({ pedidos }: Props) {
       }
       return true
     }).filter(p => !filtroProveedor || p.proveedorNombre === filtroProveedor)
-      .filter(p => !filtroProducto || p.items.some(i => i.productoNombre === filtroProducto))
-  }, [entregados, periodo, filtroProveedor, filtroProducto, fechaDesde, fechaHasta])
+      .filter(p => !filtroCategoria || p.items.some(i => getCategoria(i.productoNombre, p) === filtroCategoria))
+  }, [entregados, periodo, filtroProveedor, filtroCategoria, fechaDesde, fechaHasta])
 
   // Datos para el gráfico
   const chartData = useMemo(() => {
+    const itemMatchesCategoria = (i: PedidoItem, p: Pedido) => !filtroCategoria || getCategoria(i.productoNombre, p) === filtroCategoria
+
     if (vista === 'proveedor') {
       const map: Record<string, { unidades: number; pesos: number }> = {}
       filtrados.forEach(p => {
         if (!map[p.proveedorNombre]) map[p.proveedorNombre] = { unidades: 0, pesos: 0 }
         p.items.forEach(i => {
-          if (!filtroProducto || i.productoNombre === filtroProducto) {
+          if (itemMatchesCategoria(i, p)) {
             map[p.proveedorNombre].unidades += i.cantidad
             map[p.proveedorNombre].pesos += i.cantidad * i.precio
           }
         })
       })
       return Object.entries(map)
+        .filter(([, d]) => d.unidades > 0)
         .map(([nombre, d]) => ({ nombre, ...d }))
         .sort((a, b) => b[metrica === 'pesos' ? 'pesos' : 'unidades'] - a[metrica === 'pesos' ? 'pesos' : 'unidades'])
     } else {
       const map: Record<string, { unidades: number; pesos: number }> = {}
       filtrados.forEach(p => {
         p.items.forEach(i => {
-          if (!map[i.productoNombre]) map[i.productoNombre] = { unidades: 0, pesos: 0 }
-          map[i.productoNombre].unidades += i.cantidad
-          map[i.productoNombre].pesos += i.cantidad * i.precio
+          if (itemMatchesCategoria(i, p)) {
+            if (!map[i.productoNombre]) map[i.productoNombre] = { unidades: 0, pesos: 0 }
+            map[i.productoNombre].unidades += i.cantidad
+            map[i.productoNombre].pesos += i.cantidad * i.precio
+          }
         })
       })
       return Object.entries(map)
         .map(([nombre, d]) => ({ nombre, ...d }))
         .sort((a, b) => b[metrica === 'pesos' ? 'pesos' : 'unidades'] - a[metrica === 'pesos' ? 'pesos' : 'unidades'])
     }
-  }, [filtrados, vista, metrica, filtroProducto])
+  }, [filtrados, vista, metrica, filtroCategoria])
 
   // Totales
   const totalUnidades = chartData.reduce((s, d) => s + d.unidades, 0)
@@ -172,10 +185,10 @@ export default function ComprasAnalisis({ pedidos }: Props) {
           <option value="">Todos los proveedores</option>
           {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select value={filtroProducto} onChange={e => setFiltroProducto(e.target.value)}
+        <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
           className="px-3 py-1 text-xs border border-gray-300 rounded-lg">
-          <option value="">Todos los productos</option>
-          {productos.map(p => <option key={p} value={p}>{p}</option>)}
+          <option value="">Todas las categorías</option>
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
