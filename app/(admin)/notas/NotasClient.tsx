@@ -561,18 +561,41 @@ function reemplazarFormulas(texto: string): string {
   }).join('\n')
 }
 
+function FormatToolbar({ editorRef }: { editorRef: React.RefObject<HTMLDivElement | null> }) {
+  function exec(cmd: string) {
+    editorRef.current?.focus()
+    document.execCommand(cmd, false)
+  }
+  return (
+    <div className="flex gap-0.5">
+      <button type="button" onClick={() => exec('bold')} className="px-2 py-1 text-xs font-bold text-gray-600 rounded hover:bg-gray-100" title="Negrita (Ctrl+B)">N</button>
+      <button type="button" onClick={() => exec('italic')} className="px-2 py-1 text-xs italic text-gray-600 rounded hover:bg-gray-100" title="Cursiva (Ctrl+I)">I</button>
+      <button type="button" onClick={() => exec('underline')} className="px-2 py-1 text-xs underline text-gray-600 rounded hover:bg-gray-100" title="Subrayado (Ctrl+U)">S</button>
+    </div>
+  )
+}
+
 function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; initialGuardadas: NotaGuardada[] }) {
   const [titulo, setTitulo] = useState('')
-  const [texto, setTexto] = useState(initialNotas)
-  const [preview, setPreview] = useState('')
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [guardando, setGuardando] = useState(false)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
+  const initialized = useRef(false)
 
-  function handleChange(value: string) {
-    setTexto(value)
-    const evaluado = evaluarFormula(value)
-    setPreview(evaluado !== value ? evaluado : '')
+  useEffect(() => {
+    if (editorRef.current && !initialized.current) {
+      editorRef.current.innerHTML = initialNotas
+      initialized.current = true
+    }
+  }, [initialNotas])
+
+  function getContent(): string {
+    return editorRef.current?.innerHTML ?? ''
+  }
+
+  function handleInput() {
+    const value = getContent()
     if (saveTimeout.current) clearTimeout(saveTimeout.current)
     saveTimeout.current = setTimeout(async () => {
       setGuardando(true)
@@ -582,27 +605,19 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
   }
 
   function handleBlur() {
-    // Guardar inmediatamente al perder foco (mobile: tap fuera del textarea)
     if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    guardarNotas(texto)
-  }
-
-  function handleGuardarResultados() {
-    const reemplazado = reemplazarFormulas(texto)
-    setTexto(reemplazado)
-    setPreview('')
-    guardarNotas(reemplazado)
+    guardarNotas(getContent())
   }
 
   async function handleGuardarNota() {
     if (!titulo.trim()) return
+    const texto = getContent()
     const nueva: NotaGuardada = { id: Date.now().toString(), titulo: titulo.trim(), texto, updatedAt: new Date().toISOString() }
     const updated = [nueva, ...guardadas]
     setGuardadas(updated)
     await guardarNotasGuardadas(updated)
     setTitulo('')
-    setTexto('')
-    setPreview('')
+    if (editorRef.current) editorRef.current.innerHTML = ''
     guardarNotas('')
   }
 
@@ -613,11 +628,7 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
           <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título de la nota..."
             className="flex-1 text-sm font-semibold text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-300" />
           <div className="flex gap-2 shrink-0">
-            {preview && (
-              <button onClick={handleGuardarResultados} className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
-                Guardar resultados
-              </button>
-            )}
+            <FormatToolbar editorRef={editorRef} />
             <button onClick={handleGuardarNota} disabled={!titulo.trim()} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 disabled:opacity-40">
               Guardar nota
             </button>
@@ -626,17 +637,17 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
             </span>
           </div>
         </div>
-        <textarea value={texto} onChange={e => handleChange(e.target.value)} onBlur={handleBlur}
-          placeholder={"Escribí tus notas acá...\n\nUsá = o + al inicio para calcular:\n= 150000 * 0.15\n+ 50000 + 30000 - 10000"}
-          className="w-full min-h-[350px] p-4 text-sm font-mono text-gray-800 resize-y focus:outline-none" spellCheck={false} />
+        <div
+          ref={editorRef}
+          contentEditable
+          onInput={handleInput}
+          onBlur={handleBlur}
+          data-placeholder="Escribí tus notas acá... Usá los botones N/I/S o Ctrl+B, Ctrl+I, Ctrl+U para formatear."
+          className="w-full min-h-[350px] p-4 text-sm text-gray-800 focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-300"
+          suppressContentEditableWarning
+          spellCheck={false}
+        />
       </div>
-
-      {preview && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-xs font-medium text-blue-700 mb-2">Resultados</p>
-          <pre className="text-sm font-mono text-blue-900 whitespace-pre-wrap">{preview}</pre>
-        </div>
-      )}
     </div>
   )
 }
@@ -646,35 +657,19 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
 function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }) {
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [editando, setEditando] = useState<string | null>(null)
-  const [textoEdit, setTextoEdit] = useState('')
-  const [previewEdit, setPreviewEdit] = useState('')
-  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editRef = useRef<HTMLDivElement>(null)
 
   function abrirNota(nota: NotaGuardada) {
     setEditando(nota.id)
-    setTextoEdit(nota.texto)
-    setPreviewEdit('')
-  }
-
-  function handleEditChange(value: string) {
-    setTextoEdit(value)
-    const evaluado = evaluarFormula(value)
-    setPreviewEdit(evaluado !== value ? evaluado : '')
+    setTimeout(() => {
+      if (editRef.current) editRef.current.innerHTML = nota.texto
+    }, 0)
   }
 
   function guardarEdicion() {
-    const updated = guardadas.map(n => n.id === editando ? { ...n, texto: textoEdit, updatedAt: new Date().toISOString() } : n)
-    setGuardadas(updated)
-    guardarNotasGuardadas(updated)
-    if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    saveTimeout.current = setTimeout(() => {}, 0)
-  }
-
-  function guardarResultadosEdicion() {
-    const reemplazado = reemplazarFormulas(textoEdit)
-    setTextoEdit(reemplazado)
-    setPreviewEdit('')
-    const updated = guardadas.map(n => n.id === editando ? { ...n, texto: reemplazado, updatedAt: new Date().toISOString() } : n)
+    if (!editRef.current || !editando) return
+    const texto = editRef.current.innerHTML
+    const updated = guardadas.map(n => n.id === editando ? { ...n, texto, updatedAt: new Date().toISOString() } : n)
     setGuardadas(updated)
     guardarNotasGuardadas(updated)
   }
@@ -714,11 +709,7 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
             <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-900">{guardadas.find(n => n.id === editando)?.titulo}</p>
               <div className="flex gap-2">
-                {previewEdit && (
-                  <button onClick={guardarResultadosEdicion} className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
-                    Guardar resultados
-                  </button>
-                )}
+                <FormatToolbar editorRef={editRef} />
                 <button onClick={guardarEdicion} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700">
                   Guardar
                 </button>
@@ -727,15 +718,15 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
                 </button>
               </div>
             </div>
-            <textarea value={textoEdit} onChange={e => handleEditChange(e.target.value)} onBlur={guardarEdicion}
-              className="w-full min-h-[350px] p-4 text-sm font-mono text-gray-800 resize-y focus:outline-none" spellCheck={false} />
+            <div
+              ref={editRef}
+              contentEditable
+              onBlur={guardarEdicion}
+              className="w-full min-h-[350px] p-4 text-sm text-gray-800 focus:outline-none"
+              suppressContentEditableWarning
+              spellCheck={false}
+            />
           </div>
-          {previewEdit && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-xs font-medium text-blue-700 mb-2">Resultados</p>
-              <pre className="text-sm font-mono text-blue-900 whitespace-pre-wrap">{previewEdit}</pre>
-            </div>
-          )}
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
