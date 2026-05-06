@@ -579,6 +579,8 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
   const [titulo, setTitulo] = useState('')
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [guardando, setGuardando] = useState(false)
+  const [guardandoNota, setGuardandoNota] = useState(false)
+  const [msgExito, setMsgExito] = useState('')
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
@@ -610,7 +612,8 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
   }
 
   async function handleGuardarNota() {
-    if (!titulo.trim()) return
+    if (!titulo.trim() || guardandoNota) return
+    setGuardandoNota(true)
     const texto = getContent()
     const nueva: NotaGuardada = { id: Date.now().toString(), titulo: titulo.trim(), texto, updatedAt: new Date().toISOString() }
     const updated = [nueva, ...guardadas]
@@ -618,19 +621,29 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
     await guardarNotasGuardadas(updated)
     setTitulo('')
     if (editorRef.current) editorRef.current.innerHTML = ''
-    guardarNotas('')
+    await guardarNotas('')
+    setGuardandoNota(false)
+    setMsgExito(`"${nueva.titulo}" guardada`)
+    setTimeout(() => setMsgExito(''), 3000)
   }
 
   return (
     <div className="space-y-3">
+      {msgExito && (
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700 font-medium flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          {msgExito}
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-3">
           <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título de la nota..."
             className="flex-1 text-sm font-semibold text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-300" />
           <div className="flex gap-2 shrink-0">
             <FormatToolbar editorRef={editorRef} />
-            <button onClick={handleGuardarNota} disabled={!titulo.trim()} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 disabled:opacity-40">
-              Guardar nota
+            <button onClick={handleGuardarNota} disabled={!titulo.trim() || guardandoNota}
+              className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 disabled:opacity-40">
+              {guardandoNota ? 'Guardando...' : 'Guardar nota'}
             </button>
             <span className={`text-[10px] self-center ${guardando ? 'text-yellow-600' : 'text-green-600'}`}>
               {guardando ? '...' : '✓'}
@@ -657,10 +670,12 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
 function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }) {
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [editando, setEditando] = useState<string | null>(null)
+  const [guardadoOk, setGuardadoOk] = useState(false)
   const editRef = useRef<HTMLDivElement>(null)
 
   function abrirNota(nota: NotaGuardada) {
     setEditando(nota.id)
+    setGuardadoOk(false)
     setTimeout(() => {
       if (editRef.current) editRef.current.innerHTML = nota.texto
     }, 0)
@@ -672,6 +687,8 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
     const updated = guardadas.map(n => n.id === editando ? { ...n, texto, updatedAt: new Date().toISOString() } : n)
     setGuardadas(updated)
     guardarNotasGuardadas(updated)
+    setGuardadoOk(true)
+    setTimeout(() => setGuardadoOk(false), 2000)
   }
 
   function eliminarNota(id: string) {
@@ -708,11 +725,12 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-900">{guardadas.find(n => n.id === editando)?.titulo}</p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <FormatToolbar editorRef={editRef} />
                 <button onClick={guardarEdicion} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700">
                   Guardar
                 </button>
+                {guardadoOk && <span className="text-xs text-green-600 font-medium">Guardado</span>}
                 <button onClick={() => eliminarNota(editando)} className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
                   Eliminar
                 </button>
