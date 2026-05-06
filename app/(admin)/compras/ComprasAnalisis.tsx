@@ -48,7 +48,7 @@ function parseFecha(fecha: string): Date {
 
 export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) {
   const [vista, setVista] = useState<Vista>('proveedor')
-  const [periodo, setPeriodo] = useState<Periodo>('mes')
+  const [periodo, setPeriodo] = useState<Periodo>('todo')
   const [metrica, setMetrica] = useState<Metrica>('unidades')
   const [filtroProveedor, setFiltroProveedor] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
@@ -62,8 +62,7 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
   const categorias = useMemo(() => {
     const set = new Set<string>()
     entregados.forEach(p => p.items.forEach(i => {
-      const cat = productoCategorias[i.productoNombre] || (p as unknown as { categoria?: string }).categoria || 'Celulares'
-      set.add(cat)
+      set.add(getCategoria(i.productoNombre, p))
     }))
     return [...set].sort()
   }, [entregados, productoCategorias])
