@@ -69,7 +69,10 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
   }, [entregados, productoCategorias])
 
   function getCategoria(productoNombre: string, pedido: Pedido): string {
-    return productoCategorias[productoNombre] || (pedido as unknown as { categoria?: string }).categoria || 'Celulares'
+    // Priorizar categoría del pedido (ej: kits usan modelos de celulares pero el pedido es "Kits de Seguridad")
+    const pedidoCat = (pedido as unknown as { categoria?: string }).categoria
+    if (pedidoCat) return pedidoCat
+    return productoCategorias[productoNombre] || 'Celulares'
   }
 
   // Filtrar por periodo
@@ -103,10 +106,13 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
   }, [entregados, periodo, filtroProveedor, filtroCategoria, fechaDesde, fechaHasta])
 
   // Datos para el gráfico
+  // Cuando hay filtro de categoría, siempre mostrar por modelo
+  const vistaEfectiva = filtroCategoria ? 'producto' : vista
+
   const chartData = useMemo(() => {
     const itemMatchesCategoria = (i: PedidoItem, p: Pedido) => !filtroCategoria || getCategoria(i.productoNombre, p) === filtroCategoria
 
-    if (vista === 'proveedor') {
+    if (vistaEfectiva === 'proveedor') {
       const map: Record<string, { unidades: number; pesos: number }> = {}
       filtrados.forEach(p => {
         if (!map[p.proveedorNombre]) map[p.proveedorNombre] = { unidades: 0, pesos: 0 }
@@ -136,7 +142,7 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
         .map(([nombre, d]) => ({ nombre, ...d }))
         .sort((a, b) => b[metrica === 'pesos' ? 'pesos' : 'unidades'] - a[metrica === 'pesos' ? 'pesos' : 'unidades'])
     }
-  }, [filtrados, vista, metrica, filtroCategoria])
+  }, [filtrados, vistaEfectiva, metrica, filtroCategoria])
 
   // Totales
   const totalUnidades = chartData.reduce((s, d) => s + d.unidades, 0)
@@ -239,7 +245,7 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-2 font-medium text-gray-600">{vista === 'proveedor' ? 'Proveedor' : 'Producto'}</th>
+                <th className="text-left px-4 py-2 font-medium text-gray-600">{vistaEfectiva === 'proveedor' ? 'Proveedor' : 'Modelo'}</th>
                 <th className="text-right px-4 py-2 font-medium text-gray-600">Unidades</th>
                 <th className="text-right px-4 py-2 font-medium text-gray-600">Inversión</th>
                 <th className="text-right px-4 py-2 font-medium text-gray-600">% del total</th>
