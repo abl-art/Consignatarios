@@ -19,6 +19,10 @@ export default async function ProveedorPedidosPage({
   const allPedidos = await getPedidos()
   const pedidos = allPedidos
     .filter(p => p.estado === 'enviado')
+    .filter(p => {
+      const cat = (p as unknown as { categoria?: string }).categoria
+      return !cat || cat === 'Celulares'
+    })
     .map(p => ({
       id: p.id,
       proveedorNombre: p.proveedorNombre,
@@ -26,7 +30,7 @@ export default async function ProveedorPedidosPage({
       fecha: p.fecha,
       confirmadoAt: p.confirmadoAt,
       entregadoAt: p.entregadoAt,
-      categoria: (p as unknown as { categoria?: string }).categoria || 'Celulares',
+      ingresoStockAt: p.ingresoStockAt,
       items: p.items.map(i => ({
         productoNombre: i.productoNombre,
         cantidad: i.cantidad,

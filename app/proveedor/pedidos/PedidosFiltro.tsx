@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { formatearMoneda } from '@/lib/utils'
 
 interface PedidoItem {
@@ -16,7 +16,7 @@ interface Pedido {
   fecha: string
   confirmadoAt?: string
   entregadoAt?: string
-  categoria: string
+  ingresoStockAt?: string
   items: PedidoItem[]
 }
 
@@ -73,13 +73,13 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Proveedor</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Categoría</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha pedido</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Unidades</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Total c/IVA</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Entrega</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Demora</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Stock</th>
               </tr>
             </thead>
             <tbody>
@@ -98,16 +98,12 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
                 }
 
                 return (
-                  <tr key={p.id} onClick={() => setExpandido(prev => prev === p.id ? null : p.id)}
+                  <React.Fragment key={p.id}>
+                  <tr onClick={() => setExpandido(prev => prev === p.id ? null : p.id)}
                     className={`border-b border-gray-100 cursor-pointer transition-colors ${p.entregadoAt ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'}`}>
                     <td className="px-4 py-3 font-medium text-gray-900">
                       <span className="mr-1 text-gray-400">{expandido === p.id ? '▾' : '▸'}</span>
                       {p.proveedorNombre}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${p.categoria === 'Kits de Seguridad' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {p.categoria}
-                      </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{p.fecha}</td>
                     <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
@@ -130,45 +126,51 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center text-xs text-gray-500">{demora}</td>
-                  </tr>
-                )
-              })}
-              {expandido && (() => {
-                const p = filtrados.find(p => p.id === expandido)
-                if (!p) return null
-                const totalNeto = p.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
-                return (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
-                            <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
-                            <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
-                            <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {p.items.map((item, idx) => (
-                            <tr key={idx} className="border-b border-gray-100">
-                              <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
-                              <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
-                              <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
-                              <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
-                          <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
-                          <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalNeto * 1.21)}</td></tr>
-                        </tfoot>
-                      </table>
+                    <td className="px-4 py-3 text-center">
+                      {p.ingresoStockAt ? (
+                        <div className="flex flex-col items-center">
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          <span className="text-[10px] text-gray-400">{new Date(p.ingresoStockAt).toLocaleDateString('es-AR')}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
+                  {expandido === p.id && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+                              <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
+                              <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
+                              <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {p.items.map((item, idx) => (
+                              <tr key={idx} className="border-b border-gray-100">
+                                <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
+                                <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
+                                <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
+                                <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
+                            <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
+                            <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalNeto * 1.21)}</td></tr>
+                          </tfoot>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 )
-              })()}
+              })}
             </tbody>
           </table>
         </div>
