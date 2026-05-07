@@ -14,10 +14,10 @@ export default async function DashboardPage() {
   const supabase = createClient()
 
   const [contracargos, ventasHistoricas, conversionData, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
-    fetchContracargos(),
-    fetchVentasHistoricas(),
-    fetchConversionGocuotas(),
-    getForecastEvents(),
+    fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 })),
+    fetchVentasHistoricas().catch(() => []),
+    fetchConversionGocuotas().catch(() => []),
+    getForecastEvents().catch(() => ({})),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     fetchStockPropio(),
