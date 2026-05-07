@@ -676,14 +676,24 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
   function abrirNota(nota: NotaGuardada) {
     setEditando(nota.id)
     setGuardadoOk(false)
+    lastContent.current = nota.texto
     setTimeout(() => {
       if (editRef.current) editRef.current.innerHTML = nota.texto
     }, 0)
   }
 
+  // Track last saved content to avoid saving empty on unmount/blur
+  const lastContent = useRef('')
+
   function guardarEdicion() {
     if (!editRef.current || !editando) return
     const texto = editRef.current.innerHTML
+    // Don't save empty or whitespace-only content (protects against blur on unmount)
+    const stripped = texto.replace(/<br\s*\/?>/g, '').replace(/&nbsp;/g, '').trim()
+    if (!stripped) return
+    // Don't save if content hasn't changed
+    if (texto === lastContent.current) return
+    lastContent.current = texto
     const updated = guardadas.map(n => n.id === editando ? { ...n, texto, updatedAt: new Date().toISOString() } : n)
     setGuardadas(updated)
     guardarNotasGuardadas(updated)
