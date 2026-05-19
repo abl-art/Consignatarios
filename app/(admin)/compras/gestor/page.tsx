@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getProductos, getProveedores, getPrecios, getPedidos } from '@/lib/actions/compras'
 import { getForecastEvents, getComprasDias } from '@/lib/actions/finanzas'
 import GestorClient from './GestorClient'

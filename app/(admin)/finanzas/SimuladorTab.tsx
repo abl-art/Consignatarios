@@ -272,7 +272,7 @@ export default function SimuladorTab({ productos }: Props) {
       </div>
 
       {/* Tabla del flujo */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
           <h3 className="font-semibold text-gray-900 text-sm">Flujo de fondos</h3>
         </div>
@@ -312,7 +312,7 @@ export default function SimuladorTab({ productos }: Props) {
       </div>
 
       {/* Productos guardados */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <button
           onClick={() => setShowProductos(!showProductos)}
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"

@@ -86,11 +86,11 @@ export default async function TenenciaPage() {
   const totalVentaGeneral = consigArray.reduce((s, c) => s + c.valorTotal, 0)
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Tenencia por consignatario</h1>
       <p className="text-sm text-gray-500 mb-6">Equipos actualmente asignados, agrupados por consignatario y modelo</p>
 
-      <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-6 flex flex-wrap gap-6 text-sm">
+      <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3 md:gap-6 text-sm">
         <div>
           <p className="text-xs text-gray-500">Consignatarios</p>
           <p className="font-bold text-gray-900">{consigArray.length}</p>
@@ -112,7 +112,7 @@ export default async function TenenciaPage() {
       ) : (
         <div className="space-y-4">
           {consigArray.map((c) => (
-            <div key={c.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div key={c.id} className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
                 <h2 className="font-bold text-gray-900">{c.nombre}</h2>
                 <div className="flex items-center gap-5">

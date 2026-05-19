@@ -128,7 +128,7 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Gesti&oacute;n de TACs</h1>
       <p className="text-sm text-gray-500 mb-6">Control de TACs cargados en Trustonic para bloqueo de equipos</p>
 
@@ -169,7 +169,7 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
 
       {/* TACs pendientes */}
       {todosPendientes.length > 0 && (
-        <div className="bg-white rounded-xl border border-red-200 overflow-hidden mb-6">
+        <div className="bg-white rounded-xl border border-red-200 overflow-x-auto mb-6">
           <div className="px-5 py-4 border-b border-red-200 bg-red-50 flex items-center justify-between">
             <h3 className="font-semibold text-red-900">TACs pendientes ({todosPendientes.length})</h3>
             <div className="flex gap-2">
@@ -211,7 +211,7 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
 
       {/* TACs con carga solicitada */}
       {solicitados.length > 0 && (
-        <div className="bg-white rounded-xl border border-amber-200 overflow-hidden mb-6">
+        <div className="bg-white rounded-xl border border-amber-200 overflow-x-auto mb-6">
           <div className="px-5 py-4 border-b border-amber-200 bg-amber-50 flex items-center justify-between">
             <h3 className="font-semibold text-amber-900">Carga solicitada — esperando Trustonic ({solicitados.length})</h3>
             <div className="flex gap-2">
@@ -278,7 +278,7 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
       </div>
 
       {/* TACs cargados por marca */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <button onClick={() => setShowCargados(!showCargados)}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
           <h3 className="font-semibold text-gray-900">TACs cargados por marca ({cargados.length})</h3>

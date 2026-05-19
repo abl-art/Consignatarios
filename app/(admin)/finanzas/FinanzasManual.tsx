@@ -36,7 +36,7 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
   return (
     <div className="space-y-6">
       {/* Asistencias */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <button
           onClick={() => setShowAsistencias(!showAsistencias)}
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
@@ -93,7 +93,7 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
       </div>
 
       {/* Egresos */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <button
           onClick={() => setShowEgresos(!showEgresos)}
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"

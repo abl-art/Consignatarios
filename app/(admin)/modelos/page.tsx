@@ -19,7 +19,7 @@ export default async function ModelosPage() {
   const { data: modelos } = await supabase.from('modelos').select('*').order('marca').returns<Modelo[]>()
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Modelos y precios</h1>
 
       {/* Agregar modelo */}
@@ -59,7 +59,7 @@ export default async function ModelosPage() {
       </div>
 
       {/* Lista de modelos */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>

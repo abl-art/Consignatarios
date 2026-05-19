@@ -68,7 +68,7 @@ export default async function LiquidacionesPage({
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Liquidaciones</h1>
       <p className="text-sm text-gray-500 mb-8">Comisiones mensuales por consignatario</p>
 
@@ -164,7 +164,7 @@ export default async function LiquidacionesPage({
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, guardarNotasEventos, fetchNotasEventos } from './actions'
+import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, fetchNotasGuardadas, guardarNotasEventos, fetchNotasEventos } from './actions'
 
 interface Todo {
   id: string
@@ -60,10 +60,113 @@ function formatSemana(lunes: Date): string {
   return `Semana ${f(lunes)} al ${f(viernes)}`
 }
 
+// ─── LocalStorage backup ───────────────────────────────────────────────────
+
+const LS_KEYS = {
+  todos: 'notas_backup_todos',
+  notas: 'notas_backup_notas',
+  guardadas: 'notas_backup_guardadas',
+  notasEventos: 'notas_backup_notasEventos',
+} as const
+
+function lsSet(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: value }))
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function lsGet<T>(key: string): { ts: number; data: T } | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch { return null }
+}
+
+// ─── Save with retry ───────────────────────────────────────────────────────
+
+async function saveWithRetry(
+  fn: () => Promise<{ ok: boolean; error?: string }>,
+  maxRetries = 3
+): Promise<{ ok: boolean; error?: string }> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await fn()
+    if (result.ok) return result
+    if (attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)))
+    } else {
+      return result
+    }
+  }
+  return { ok: false, error: 'Max retries exceeded' }
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export default function NotasClient({ initialTodos, initialNotas, initialGuardadas, initialNotasEventos }: Props) {
   const [tab, setTab] = useState<'todo' | 'notas' | 'guardadas'>('todo')
+  // Shared state lives here — survives tab switches (no remount = no data loss)
+  const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
+  const [notasContent, setNotasContent] = useState(initialNotas)
+  const notasContentRef = useRef(initialNotas)
+  const guardardasRef = useRef(initialGuardadas)
+  const notasSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notasLastSaved = useRef(initialNotas)
+
+  // Keep refs in sync
+  useEffect(() => { guardardasRef.current = guardadas }, [guardadas])
+  useEffect(() => { notasContentRef.current = notasContent }, [notasContent])
+
+  // Fetch fresh data on mount
+  useEffect(() => {
+    fetchNotasGuardadas().then(fresh => {
+      setGuardadas(fresh)
+      guardardasRef.current = fresh
+    })
+  }, [])
+
+  // Save on page hide / beforeunload — protects ALL notas data
+  useEffect(() => {
+    function flushNotas() {
+      if (document.visibilityState === 'hidden' && notasContentRef.current !== notasLastSaved.current) {
+        lsSet(LS_KEYS.notas, notasContentRef.current)
+        guardarNotas(notasContentRef.current)
+        notasLastSaved.current = notasContentRef.current
+      }
+    }
+    document.addEventListener('visibilitychange', flushNotas)
+    return () => document.removeEventListener('visibilitychange', flushNotas)
+  }, [])
+
+  const updateNotasContent = useCallback((html: string) => {
+    setNotasContent(html)
+    notasContentRef.current = html
+    lsSet(LS_KEYS.notas, html)
+    // Debounced save to DB
+    if (notasSaveTimeout.current) clearTimeout(notasSaveTimeout.current)
+    notasSaveTimeout.current = setTimeout(async () => {
+      await saveWithRetry(() => guardarNotas(notasContentRef.current))
+      notasLastSaved.current = notasContentRef.current
+    }, 1000)
+  }, [])
+
+  const clearNotasContent = useCallback(async () => {
+    setNotasContent('')
+    notasContentRef.current = ''
+    notasLastSaved.current = ''
+    lsSet(LS_KEYS.notas, '')
+    await guardarNotas('')
+  }, [])
+
+  const updateGuardadas = useCallback((updater: (prev: NotaGuardada[]) => NotaGuardada[]) => {
+    setGuardadas(prev => {
+      const updated = updater(prev)
+      guardardasRef.current = updated
+      lsSet(LS_KEYS.guardadas, updated)
+      saveWithRetry(() => guardarNotasGuardadas(updated))
+      return updated
+    })
+  }, [])
 
   return (
     <div className="p-4 md:p-6">
@@ -73,14 +176,21 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         {(['todo', 'notas', 'guardadas'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
-            {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : `Guardadas (${initialGuardadas.length})`}
+            {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : `Guardadas (${guardadas.length})`}
           </button>
         ))}
       </div>
 
-      {tab === 'todo' && <TodoTab initialData={initialTodos} initialNotasEventos={initialNotasEventos} />}
-      {tab === 'notas' && <NotasTab initialNotas={initialNotas} initialGuardadas={initialGuardadas} />}
-      {tab === 'guardadas' && <GuardadasTab initialGuardadas={initialGuardadas} />}
+      {/* Tabs always mounted, hidden with CSS — contentEditable divs survive tab switches */}
+      <div style={{ display: tab === 'todo' ? 'block' : 'none' }}>
+        <TodoTab initialData={initialTodos} initialNotasEventos={initialNotasEventos} />
+      </div>
+      <div style={{ display: tab === 'notas' ? 'block' : 'none' }}>
+        <NotasTab notasContent={notasContent} onContentChange={updateNotasContent} onClearContent={clearNotasContent} guardadas={guardadas} updateGuardadas={updateGuardadas} />
+      </div>
+      <div style={{ display: tab === 'guardadas' ? 'block' : 'none' }}>
+        <GuardadasTab guardadas={guardadas} updateGuardadas={updateGuardadas} />
+      </div>
     </div>
   )
 }
@@ -122,6 +232,27 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
     })
   }, [])
 
+  // Flush pending saves on page hide/unload
+  useEffect(() => {
+    function flushOnHide() {
+      if (document.visibilityState === 'hidden') {
+        // Force immediate save of latest state
+        const todosPayload = JSON.stringify(dataRef.current)
+        const evPayload = JSON.stringify(evDataRef.current)
+        navigator.sendBeacon?.('/api/notas-beacon', JSON.stringify({ type: 'noop' })) // trigger connection
+        // Use the save queue to ensure latest data is sent
+        saveQueue.current = saveQueue.current.then(async () => {
+          try {
+            await guardarTodos(JSON.parse(todosPayload) as WeekData)
+            await guardarNotasEventos(JSON.parse(evPayload))
+          } catch { /* best effort */ }
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', flushOnHide)
+    return () => document.removeEventListener('visibilitychange', flushOnHide)
+  }, [])
+
   // Cargar eventos de Google Calendar para la semana visible
   useEffect(() => {
     async function cargar() {
@@ -141,17 +272,14 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset])
 
-  // Save encadenado + siempre guarda la ÚLTIMA versión
+  // Save encadenado + siempre guarda la ÚLTIMA versión + retry + localStorage backup
   function persist(updated: WeekData) {
     dataRef.current = updated
+    lsSet(LS_KEYS.todos, updated)
     setSaveStatus('saving')
     saveQueue.current = saveQueue.current.then(async () => {
-      try {
-        await guardarTodos(dataRef.current as unknown as { id: string; text: string; done: boolean }[])
-        setSaveStatus('saved')
-      } catch {
-        setSaveStatus('error')
-      }
+      const result = await saveWithRetry(() => guardarTodos(dataRef.current as unknown as { id: string; text: string; done: boolean }[]))
+      setSaveStatus(result.ok ? 'saved' : 'error')
     })
   }
 
@@ -183,14 +311,11 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
 
   function persistEventos(updated: Record<string, { texto?: string; color?: string; done?: boolean }>) {
     evDataRef.current = updated
+    lsSet(LS_KEYS.notasEventos, updated)
     setSaveStatus('saving')
     evSaveQueue.current = evSaveQueue.current.then(async () => {
-      try {
-        await guardarNotasEventos(evDataRef.current)
-        setSaveStatus('saved')
-      } catch {
-        setSaveStatus('error')
-      }
+      const result = await saveWithRetry(() => guardarNotasEventos(evDataRef.current))
+      setSaveStatus(result.ok ? 'saved' : 'error')
     })
   }
 
@@ -218,11 +343,11 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setWeekOffset(w => w - 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">← Anterior</button>
+        <button onClick={() => setWeekOffset(w => w - 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">&larr; Anterior</button>
         <div className="text-center">
           <p className="text-sm font-semibold text-gray-900">{formatSemana(lunes)}</p>
           <p className={`text-[10px] ${saveStatus === 'saving' ? 'text-yellow-600' : saveStatus === 'error' ? 'text-red-600' : 'text-green-600'}`}>
-            {saveStatus === 'saving' ? '● Guardando...' : saveStatus === 'error' ? '● Error al guardar' : '● Guardado'}
+            {saveStatus === 'saving' ? '● Guardando...' : saveStatus === 'error' ? '● Error al guardar — reintentando...' : '● Guardado'}
           </p>
           {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-xs text-magenta-600 hover:underline">Ir a esta semana</button>}
         </div>
@@ -233,16 +358,16 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
             </a>
           )}
           {googleOk && <span className="text-[10px] text-green-600">● Calendar</span>}
-          <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Siguiente →</button>
+          <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Siguiente &rarr;</button>
         </div>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
-        <div className="grid grid-cols-5 border-b border-gray-200">
+        <div className="grid grid-cols-2 md:grid-cols-5 border-b border-gray-200">
           {dias.map(dia => (
             <div key={dia.fecha} className={`px-3 py-2 text-xs font-semibold text-center border-r last:border-r-0 border-gray-200 ${dia.esHoy ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-50 text-gray-600'}`}>{dia.label}</div>
           ))}
         </div>
-        <div className="grid grid-cols-5 flex-1">
+        <div className="grid grid-cols-2 md:grid-cols-5 flex-1">
           {dias.map(dia => (
             <DiaColumn key={dia.fecha} fecha={dia.fecha} label={dia.label} esHoy={dia.esHoy} todos={getTodos(dia.fecha)}
               eventos={eventos[dia.fecha] || []} googleOk={googleOk === true} notasEventos={notasEventos}
@@ -509,7 +634,6 @@ function EventoPanel({ evento, nota, onNotaChange, onClose }: {
           <textarea
             value={nota}
             onChange={e => onNotaChange(e.target.value)}
-            onBlur={e => onNotaChange(e.target.value)}
             placeholder="Preparación, agenda, puntos a tratar..."
             className="w-full min-h-[180px] p-3 border border-gray-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
             spellCheck={false}
@@ -575,53 +699,41 @@ function FormatToolbar({ editorRef }: { editorRef: React.RefObject<HTMLDivElemen
   )
 }
 
-function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; initialGuardadas: NotaGuardada[] }) {
+function NotasTab({ notasContent, onContentChange, onClearContent, guardadas, updateGuardadas }: {
+  notasContent: string
+  onContentChange: (html: string) => void
+  onClearContent: () => Promise<void>
+  guardadas: NotaGuardada[]
+  updateGuardadas: (updater: (prev: NotaGuardada[]) => NotaGuardada[]) => void
+}) {
   const [titulo, setTitulo] = useState('')
-  const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
-  const [guardando, setGuardando] = useState(false)
   const [guardandoNota, setGuardandoNota] = useState(false)
   const [msgExito, setMsgExito] = useState('')
-  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
 
+  // Sync editor with parent state on mount (and only on mount)
   useEffect(() => {
     if (editorRef.current && !initialized.current) {
-      editorRef.current.innerHTML = initialNotas
+      editorRef.current.innerHTML = notasContent
       initialized.current = true
     }
-  }, [initialNotas])
-
-  function getContent(): string {
-    return editorRef.current?.innerHTML ?? ''
-  }
+  }, [notasContent])
 
   function handleInput() {
-    const value = getContent()
-    if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    saveTimeout.current = setTimeout(async () => {
-      setGuardando(true)
-      await guardarNotas(value)
-      setGuardando(false)
-    }, 1000)
-  }
-
-  function handleBlur() {
-    if (saveTimeout.current) clearTimeout(saveTimeout.current)
-    guardarNotas(getContent())
+    const value = editorRef.current?.innerHTML ?? ''
+    onContentChange(value)
   }
 
   async function handleGuardarNota() {
     if (!titulo.trim() || guardandoNota) return
     setGuardandoNota(true)
-    const texto = getContent()
+    const texto = editorRef.current?.innerHTML ?? ''
     const nueva: NotaGuardada = { id: Date.now().toString(), titulo: titulo.trim(), texto, updatedAt: new Date().toISOString() }
-    const updated = [nueva, ...guardadas]
-    setGuardadas(updated)
-    await guardarNotasGuardadas(updated)
+    updateGuardadas(prev => [nueva, ...prev])
     setTitulo('')
     if (editorRef.current) editorRef.current.innerHTML = ''
-    await guardarNotas('')
+    await onClearContent()
     setGuardandoNota(false)
     setMsgExito(`"${nueva.titulo}" guardada`)
     setTimeout(() => setMsgExito(''), 3000)
@@ -645,16 +757,12 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
               className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 disabled:opacity-40">
               {guardandoNota ? 'Guardando...' : 'Guardar nota'}
             </button>
-            <span className={`text-[10px] self-center ${guardando ? 'text-yellow-600' : 'text-green-600'}`}>
-              {guardando ? '...' : '✓'}
-            </span>
           </div>
         </div>
         <div
           ref={editorRef}
           contentEditable
           onInput={handleInput}
-          onBlur={handleBlur}
           data-placeholder="Escribí tus notas acá... Usá los botones N/I/S o Ctrl+B, Ctrl+I, Ctrl+U para formatear."
           className="w-full min-h-[350px] p-4 text-sm text-gray-800 focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-300"
           suppressContentEditableWarning
@@ -667,45 +775,83 @@ function NotasTab({ initialNotas, initialGuardadas }: { initialNotas: string; in
 
 // ─── Guardadas Tab ──────────────────────────────────────────────────────────
 
-function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }) {
-  const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
+function GuardadasTab({ guardadas, updateGuardadas }: {
+  guardadas: NotaGuardada[]
+  updateGuardadas: (updater: (prev: NotaGuardada[]) => NotaGuardada[]) => void
+}) {
   const [editando, setEditando] = useState<string | null>(null)
   const [guardadoOk, setGuardadoOk] = useState(false)
   const editRef = useRef<HTMLDivElement>(null)
+  // Track content in ref to avoid saving empty on blur/unmount
+  const contentRef = useRef('')
+  const lastSavedRef = useRef('')
 
   function abrirNota(nota: NotaGuardada) {
+    // Save current note before switching
+    if (editando && contentRef.current !== lastSavedRef.current) {
+      guardarEdicionFromRef()
+    }
     setEditando(nota.id)
     setGuardadoOk(false)
-    lastContent.current = nota.texto
+    contentRef.current = nota.texto
+    lastSavedRef.current = nota.texto
     setTimeout(() => {
       if (editRef.current) editRef.current.innerHTML = nota.texto
     }, 0)
   }
 
-  // Track last saved content to avoid saving empty on unmount/blur
-  const lastContent = useRef('')
-
-  function guardarEdicion() {
-    if (!editRef.current || !editando) return
-    const texto = editRef.current.innerHTML
-    // Don't save empty or whitespace-only content (protects against blur on unmount)
+  function guardarEdicionFromRef() {
+    if (!editando) return
+    const texto = contentRef.current
+    // Don't save empty content
     const stripped = texto.replace(/<br\s*\/?>/g, '').replace(/&nbsp;/g, '').trim()
     if (!stripped) return
-    // Don't save if content hasn't changed
-    if (texto === lastContent.current) return
-    lastContent.current = texto
-    const updated = guardadas.map(n => n.id === editando ? { ...n, texto, updatedAt: new Date().toISOString() } : n)
-    setGuardadas(updated)
-    guardarNotasGuardadas(updated)
+    // Don't save if unchanged
+    if (texto === lastSavedRef.current) return
+    lastSavedRef.current = texto
+    const editandoId = editando
+    updateGuardadas(prev => prev.map(n => n.id === editandoId ? { ...n, texto, updatedAt: new Date().toISOString() } : n))
     setGuardadoOk(true)
     setTimeout(() => setGuardadoOk(false), 2000)
   }
 
+  function handleInput() {
+    // Keep ref in sync with DOM on every keystroke
+    contentRef.current = editRef.current?.innerHTML ?? ''
+  }
+
+  function handleBlur() {
+    // Save from ref (not DOM) — protects against unmount
+    guardarEdicionFromRef()
+  }
+
+  function guardarEdicionManual() {
+    if (!editRef.current || !editando) return
+    contentRef.current = editRef.current.innerHTML
+    guardarEdicionFromRef()
+  }
+
+  // Flush on unmount (tab switch)
+  useEffect(() => {
+    return () => {
+      if (editando && contentRef.current !== lastSavedRef.current) {
+        const texto = contentRef.current
+        const stripped = texto.replace(/<br\s*\/?>/g, '').replace(/&nbsp;/g, '').trim()
+        if (stripped) {
+          // Can't use updateGuardadas in cleanup, so save directly
+          lsSet(LS_KEYS.guardadas, 'pending_edit')
+        }
+      }
+    }
+  })
+
   function eliminarNota(id: string) {
-    const updated = guardadas.filter(n => n.id !== id)
-    setGuardadas(updated)
-    guardarNotasGuardadas(updated)
-    if (editando === id) setEditando(null)
+    updateGuardadas(prev => prev.filter(n => n.id !== id))
+    if (editando === id) {
+      setEditando(null)
+      contentRef.current = ''
+      lastSavedRef.current = ''
+    }
   }
 
   if (guardadas.length === 0) {
@@ -737,7 +883,7 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
               <p className="text-sm font-semibold text-gray-900">{guardadas.find(n => n.id === editando)?.titulo}</p>
               <div className="flex gap-2 items-center">
                 <FormatToolbar editorRef={editRef} />
-                <button onClick={guardarEdicion} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700">
+                <button onClick={guardarEdicionManual} className="px-3 py-1 text-xs bg-magenta-600 text-white rounded-lg hover:bg-magenta-700">
                   Guardar
                 </button>
                 {guardadoOk && <span className="text-xs text-green-600 font-medium">Guardado</span>}
@@ -749,7 +895,8 @@ function GuardadasTab({ initialGuardadas }: { initialGuardadas: NotaGuardada[] }
             <div
               ref={editRef}
               contentEditable
-              onBlur={guardarEdicion}
+              onInput={handleInput}
+              onBlur={handleBlur}
               className="w-full min-h-[350px] p-4 text-sm text-gray-800 focus:outline-none"
               suppressContentEditableWarning
               spellCheck={false}

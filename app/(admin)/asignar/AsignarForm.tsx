@@ -256,7 +256,7 @@ export default function AsignarForm({ consignatarios, dispositivos, compromisoMa
         return (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Garantia</h3>
-            <div className="grid grid-cols-4 gap-3 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div>
                 <p className="text-xs text-gray-500">Garantia</p>
                 <p className="font-bold text-gray-900">{formatearMoneda(garantiaVal)}</p>

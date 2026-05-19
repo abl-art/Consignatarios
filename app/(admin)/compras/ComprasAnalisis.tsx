@@ -240,7 +240,7 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
 
       {/* Tabla detalle */}
       {chartData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto mt-4">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

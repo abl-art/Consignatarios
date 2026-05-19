@@ -10,7 +10,7 @@ export default async function KnoxGuardPage() {
   const totalCuotas = devices.reduce((s, d) => s + d.cuotas_vencidas, 0)
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Knox Guard</h1>
       <p className="text-sm text-gray-500 mb-6">Dispositivos sin Trustonic con cuotas vencidas (&gt;3 días de atraso). Desaparecen al regularizar el pago.</p>
 
@@ -39,7 +39,7 @@ export default async function KnoxGuardPage() {
           <p className="text-green-600 text-sm mt-1">Todos los dispositivos sin Trustonic están al día con sus pagos.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

@@ -81,9 +81,16 @@ export default function ModelosClient({
   // Filter proveedores: only show those that supply the selected category
   // When filtering by marca, also filter proveedores by marca
   const proveedoresFiltrados = proveedores.filter((prov) => {
-    const tipoProducto = prov.direccion || ''
-    // If proveedor has a tipo_producto set and it doesn't match, hide it
-    if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
+    // Soportar formato viejo (string) y nuevo (JSON array) de tipos de producto
+    let tipos: string[] = []
+    try {
+      const parsed = JSON.parse(prov.direccion || '[]')
+      tipos = Array.isArray(parsed) ? parsed : [prov.direccion].filter(Boolean)
+    } catch {
+      tipos = prov.direccion ? [prov.direccion] : []
+    }
+    // If proveedor has tipos set and none match the selected category, hide it
+    if (filtroCategoria && tipos.length > 0 && !tipos.includes(filtroCategoria)) return false
     // If filtering by marca, only show proveedores that carry that marca
     if (filtroMarca && filtroCategoria === 'Celulares') {
       const marcasProv = parseProvMarcas(prov.notas)
@@ -185,7 +192,7 @@ export default function ModelosClient({
   }
 
   return (
-    <div className="p-6 max-w-full mx-auto">
+    <div className="p-4 md:p-6 max-w-full mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Link

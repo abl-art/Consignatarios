@@ -78,7 +78,7 @@ export default async function FinanzasPage({
     <div>
       {/* Cuotas vencidas stats - individual cards */}
       <p className="text-xs text-gray-400 mb-2">Cuotas vencidas: {cuotasStats.total.toLocaleString('es-AR')}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-0.5">Adelantado</p>
           <div className="flex items-baseline gap-2">
@@ -161,7 +161,7 @@ export default async function FinanzasPage({
           <p className="text-gray-400 text-sm">Sin datos de flujo de fondos para este período.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-8">
           <div className="overflow-y-auto" style={{ maxHeight: '360px' }}>
             <table className="w-full table-fixed" style={{ fontSize: '10px' }}>
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
@@ -253,7 +253,7 @@ export default async function FinanzasPage({
   )
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
       <p className="text-sm text-gray-500 mb-6">Flujo de fondos y control de caja</p>
 

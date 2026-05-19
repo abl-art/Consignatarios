@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getProveedores } from '@/lib/actions/compras'
 import ProveedoresClient from './ProveedoresClient'
 

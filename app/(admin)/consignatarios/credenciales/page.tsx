@@ -21,7 +21,7 @@ export default async function CredencialesPage() {
   }))
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Credenciales</h1>
       <p className="text-sm text-gray-500 mb-6">Usuarios y contraseñas de consignatarios</p>
 

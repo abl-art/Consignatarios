@@ -186,8 +186,14 @@ export default function GestorClient({
 
   const proveedoresFiltrados = useMemo(() => {
     return proveedores.filter((prov) => {
-      const tipoProducto = prov.direccion || ''
-      if (filtroCategoria && tipoProducto && tipoProducto !== filtroCategoria) return false
+      let tipos: string[] = []
+      try {
+        const parsed = JSON.parse(prov.direccion || '[]')
+        tipos = Array.isArray(parsed) ? parsed : [prov.direccion].filter(Boolean)
+      } catch {
+        tipos = prov.direccion ? [prov.direccion] : []
+      }
+      if (filtroCategoria && tipos.length > 0 && !tipos.includes(filtroCategoria)) return false
       if (filtroMarca && (filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad')) {
         const marcasProv = parseProvMarcas(prov.notas)
         if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
@@ -510,6 +516,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   })
   const [filtroProvEnviados, setFiltroProvEnviados] = useState('')
   const [filtroFechaEnviados, setFiltroFechaEnviados] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState<'' | 'transito' | 'recibido' | 'ingresado'>('')
 
   const pedidosEnviadosTodos = pedidosGuardados.filter(p => p.estado === 'enviado')
   const pedidosEnviados = pedidosEnviadosTodos.filter(p => {
@@ -519,6 +526,13 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       const fechaPedido = p.confirmadoAt ? p.confirmadoAt.slice(0, 10) : ''
       const fechaEntrega = entregadoAt ? entregadoAt.slice(0, 10) : ''
       if (fechaPedido !== filtroFechaEnviados && fechaEntrega !== filtroFechaEnviados) return false
+    }
+    if (filtroEstado) {
+      const entregadoAt = entregados[p.id] || p.entregadoAt
+      const ingresoAt = ingresosStock[p.id] || p.ingresoStockAt
+      if (filtroEstado === 'transito' && entregadoAt) return false
+      if (filtroEstado === 'recibido' && (!entregadoAt || ingresoAt)) return false
+      if (filtroEstado === 'ingresado' && !ingresoAt) return false
     }
     return true
   })
@@ -532,7 +546,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   ]
 
   return (
-    <div className="p-6 max-w-full mx-auto">
+    <div className="p-4 md:p-6 max-w-full mx-auto">
       <div className="flex items-center gap-4 mb-6">
         <Link
           href="/compras"
@@ -823,7 +837,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
               {notasSinEnviar.map((nota) => {
                 const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                 return (
-                  <div key={nota.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div key={nota.id} className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
                     {/* Document header */}
                     <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                       <div>
@@ -997,15 +1011,25 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                 return <option key={prov.id} value={prov.id}>{prov.nombre}</option>
               })}
             </select>
+            <select
+              value={filtroEstado}
+              onChange={e => setFiltroEstado(e.target.value as typeof filtroEstado)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="">Todos los estados</option>
+              <option value="transito">En transito</option>
+              <option value="recibido">Recibido</option>
+              <option value="ingresado">Ingresado a stock</option>
+            </select>
             <input
               type="date"
               value={filtroFechaEnviados}
               onChange={e => setFiltroFechaEnviados(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             />
-            {(filtroProvEnviados || filtroFechaEnviados) && (
+            {(filtroProvEnviados || filtroFechaEnviados || filtroEstado) && (
               <button
-                onClick={() => { setFiltroProvEnviados(''); setFiltroFechaEnviados('') }}
+                onClick={() => { setFiltroProvEnviados(''); setFiltroFechaEnviados(''); setFiltroEstado('') }}
                 className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700"
               >
                 Limpiar filtros
@@ -1018,7 +1042,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
               <p className="text-gray-400 text-sm">{pedidosEnviadosTodos.length === 0 ? 'No hay pedidos enviados.' : 'No hay pedidos que coincidan con los filtros.'}</p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">

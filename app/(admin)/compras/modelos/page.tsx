@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getProductos, getProveedores, getPrecios } from '@/lib/actions/compras'
 import ModelosClient from './ModelosClient'
 

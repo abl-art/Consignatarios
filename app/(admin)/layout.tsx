@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { href: 'https://gocelular.gocuotas.com/tienda', label: 'Tienda Online', icon: 'tienda', external: true },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
+  { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
   { href: '/compras', label: 'Compras', icon: 'fabrica' },
   {
     href: '/inventario',

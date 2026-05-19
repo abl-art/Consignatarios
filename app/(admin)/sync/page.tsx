@@ -43,7 +43,7 @@ export default async function SyncPage() {
   const lastRun = logs[0] ?? null
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Sincronización con GOcelular</h1>
@@ -92,7 +92,7 @@ export default async function SyncPage() {
       </div>
 
       {/* Log table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-800">Historial de sincronizaciones</h2>
           <p className="text-xs text-gray-400 mt-0.5">Últimas 20 ejecuciones</p>

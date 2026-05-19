@@ -32,7 +32,7 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Auditoría de Stock Propio</h1>
       <p className="text-sm text-gray-500 mb-4">Conteo físico mensual para existencia final y control de inventario</p>
 

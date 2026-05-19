@@ -49,7 +49,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
   const [cuit, setCuit] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [email, setEmail] = useState('')
-  const [tipoProducto, setTipoProducto] = useState('')
+  const [tiposProducto, setTiposProducto] = useState<string[]>([])
   const [marcas, setMarcas] = useState<string[]>([])
   const [plazos, setPlazos] = useState('')
   const [observaciones, setObservaciones] = useState('')
@@ -57,7 +57,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
 
   function resetForm() {
     setNombre(''); setContacto(''); setCuit(''); setWhatsapp(''); setEmail('')
-    setTipoProducto(''); setMarcas([]); setPlazos(''); setObservaciones('')
+    setTiposProducto([]); setMarcas([]); setPlazos(''); setObservaciones('')
   }
 
   function startCreate() {
@@ -73,7 +73,13 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
     setCuit(p.cuit || '')
     setWhatsapp(p.whatsapp || '')
     setEmail(p.email || '')
-    setTipoProducto(p.direccion || '')
+    // Soportar formato viejo (string simple) y nuevo (JSON array)
+    try {
+      const parsed = JSON.parse(p.direccion || '[]')
+      setTiposProducto(Array.isArray(parsed) ? parsed : [p.direccion].filter(Boolean))
+    } catch {
+      setTiposProducto(p.direccion ? [p.direccion] : [])
+    }
     const parsed = parseNotas(p.notas)
     setMarcas(parsed.marcas)
     setPlazos(parsed.plazos)
@@ -87,6 +93,14 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
     resetForm()
   }
 
+  function toggleTipo(t: string) {
+    setTiposProducto(prev => {
+      const next = prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+      if (!next.includes('Celulares')) setMarcas([])
+      return next
+    })
+  }
+
   function toggleMarca(m: string) {
     setMarcas(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   }
@@ -97,7 +111,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
     setLoading(true)
     const data = {
       nombre, contacto, cuit, whatsapp, email,
-      direccion: tipoProducto,
+      direccion: JSON.stringify(tiposProducto),
       notas: buildNotas(marcas, plazos, observaciones),
     }
     if (editingId) {
@@ -119,7 +133,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Link href="/compras" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
@@ -158,16 +172,21 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
                 <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="email@ejemplo.com" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de producto</label>
-                <select value={tipoProducto} onChange={(e) => { setTipoProducto(e.target.value); if (e.target.value !== 'Celulares') setMarcas([]) }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value="">Seleccionar...</option>
-                  {TIPOS_PRODUCTO.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Tipos de producto</label>
+              <div className="flex flex-wrap gap-2">
+                {TIPOS_PRODUCTO.map(t => (
+                  <button key={t} type="button" onClick={() => toggleTipo(t)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${tiposProducto.includes(t) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-300'}`}>
+                    {t}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {tipoProducto === 'Celulares' && (
+            {tiposProducto.includes('Celulares') && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-2">Marcas</label>
                 <div className="flex flex-wrap gap-2">
@@ -211,13 +230,20 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
         <div className="space-y-3">
           {proveedores.map((p) => {
             const parsed = parseNotas(p.notas)
+            let tipos: string[] = []
+            try {
+              const arr = JSON.parse(p.direccion || '[]')
+              tipos = Array.isArray(arr) ? arr : [p.direccion].filter(Boolean)
+            } catch {
+              tipos = p.direccion ? [p.direccion] : []
+            }
             return (
               <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{p.nombre}</h3>
-                      {p.direccion && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{p.direccion}</span>}
+                      {tipos.map(t => <span key={t} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{t}</span>)}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-500">
                       {p.contacto && <span>Contacto: {p.contacto}</span>}

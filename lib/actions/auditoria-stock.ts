@@ -74,13 +74,11 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
       `SELECT so.product_name, COUNT(*)::text AS pendientes
        FROM store_orders so
        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-       WHERE so.status = 'paid'
-         AND so.cancelled_at IS NULL
+       WHERE go.order_status = 'approved'
          AND go.order_discarded_at IS NULL
          AND go.created_at >= $1::date
          AND go.created_at < ($2::date + interval '1 day')
          AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-         AND NOT EXISTS (SELECT 1 FROM inventory_items ii WHERE ii.assigned_to_order_id = go.order_id AND ii.status = 'assigned')
        GROUP BY so.product_name`,
       [primerDiaMes, fechaCorte]
     )

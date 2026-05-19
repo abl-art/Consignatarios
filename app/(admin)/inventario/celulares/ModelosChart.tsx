@@ -73,7 +73,8 @@ export default function ModelosChart({ data }: Props) {
 
     const groups = new Map<string, number>()
     for (const row of filtered) {
-      const model = row.modelo || 'Desconocido'
+      // Normalizar nombre: quitar sufijos como "+ Funda y Vidrio", "+ KIT de Seguridad GRATIS!", etc.
+      const model = (row.modelo || 'Desconocido').replace(/\s*\+\s*.*/i, '').trim()
       groups.set(model, (groups.get(model) ?? 0) + row.ventas)
     }
 

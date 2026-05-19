@@ -9,7 +9,7 @@ import TercerosChart from './TercerosChart'
 export default async function TercerosPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; merchant?: string }
+  searchParams: { mes?: string; merchant?: string; desde?: string; hasta?: string }
 }) {
   const supabase = createClient()
   const [ventas, { data: consigs }] = await Promise.all([
@@ -32,14 +32,22 @@ export default async function TercerosPage({
 
   // Extraer meses y merchants disponibles
   const mesesDisponibles = [...new Set(terceros.map(t => t.fecha.slice(0, 7)))].sort().reverse()
-  const getMerchantName = (storeName: string) => storeName.split(/[\s-]/)[0].trim().toUpperCase()
+  const MERCHANT_ALIASES: Record<string, string> = { RIIING: 'RIING', RIIIING: 'RIING', DIGGIT: 'RIING' }
+  const getMerchantName = (storeName: string) => {
+    const raw = storeName.split(/[\s-]/)[0].trim().toUpperCase()
+    return MERCHANT_ALIASES[raw] || raw
+  }
   const merchantsDisponibles = [...new Set(terceros.map(t => getMerchantName(t.store_name)))].sort()
 
   const mesSeleccionado = searchParams.mes || ''
   const merchantSeleccionado = searchParams.merchant || ''
+  const desdeSeleccionado = searchParams.desde || ''
+  const hastaSeleccionado = searchParams.hasta || ''
 
   // Aplicar filtros
   let filtrados = terceros
+  if (desdeSeleccionado) filtrados = filtrados.filter(t => t.fecha >= desdeSeleccionado)
+  if (hastaSeleccionado) filtrados = filtrados.filter(t => t.fecha <= hastaSeleccionado)
   if (mesSeleccionado) filtrados = filtrados.filter(t => t.fecha.startsWith(mesSeleccionado))
   if (merchantSeleccionado) filtrados = filtrados.filter(t => getMerchantName(t.store_name) === merchantSeleccionado)
 
@@ -66,7 +74,7 @@ export default async function TercerosPage({
   const totalMonto = filtrados.reduce((s, t) => s + t.monto, 0)
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
         <Link href="/dashboard" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,6 +90,14 @@ export default async function TercerosPage({
 
       {/* Filtros tabla */}
       <form method="GET" className="flex flex-wrap gap-3 items-end mb-6">
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1">Desde</label>
+          <input type="date" name="desde" defaultValue={desdeSeleccionado} className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1">Hasta</label>
+          <input type="date" name="hasta" defaultValue={hastaSeleccionado} className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        </div>
         <div>
           <label className="text-xs font-medium text-gray-600 block mb-1">Mes</label>
           <select name="mes" defaultValue={mesSeleccionado} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
@@ -99,9 +115,12 @@ export default async function TercerosPage({
         <button type="submit" className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
           Filtrar
         </button>
+        {(desdeSeleccionado || hastaSeleccionado || mesSeleccionado || merchantSeleccionado) && (
+          <a href="/dashboard/terceros" className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Limpiar</a>
+        )}
       </form>
 
-      <p className="text-sm text-gray-500 mb-6">{totalVentas} ventas · {formatearMoneda(totalMonto)}{mesSeleccionado ? ` · ${mesSeleccionado}` : ''}{merchantSeleccionado ? ` · ${merchantSeleccionado}` : ''}</p>
+      <p className="text-sm text-gray-500 mb-6">{totalVentas} ventas · {formatearMoneda(totalMonto)}{desdeSeleccionado ? ` · desde ${desdeSeleccionado}` : ''}{hastaSeleccionado ? ` · hasta ${hastaSeleccionado}` : ''}{mesSeleccionado ? ` · ${mesSeleccionado}` : ''}{merchantSeleccionado ? ` · ${merchantSeleccionado}` : ''}</p>
 
       {/* Resumen por merchant */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -130,7 +149,7 @@ export default async function TercerosPage({
       {/* Detalle por tienda */}
       <div className="space-y-4">
         {merchantArray.map(m => (
-          <div key={m.nombre} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div key={m.nombre} className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">{m.nombre}</h2>
               <div className="flex items-center gap-4">

@@ -104,7 +104,7 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
       </div>
 
       {/* Tabla de préstamos */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">Préstamos</h3>
           <button

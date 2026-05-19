@@ -15,9 +15,15 @@ interface ModeloRow {
   valor: number
 }
 
-async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{ rows: ModeloRow[]; error: string | null }> {
+interface UnmatchedRow {
+  product_name: string
+  pendientes: number
+  key: string
+}
+
+async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{ rows: ModeloRow[]; unmatched: UnmatchedRow[]; error: string | null }> {
   const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { rows: [], error: 'GOCELULAR_DB_URL no configurada' }
+  if (!url) return { rows: [], unmatched: [], error: 'GOCELULAR_DB_URL no configurada' }
 
   const client = new Client({ connectionString: url })
   try {
@@ -47,50 +53,66 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
        ORDER BY brand, name`
     )
 
-    // 3. Pendientes de asignar: store_orders pagadas que aún no tienen device ni
-    //    inventory_items vinculado. Agrupamos por product_name (nombre del producto
-    //    legible) y mapeamos a nuestros modelos del catálogo.
+    // 3. Pendientes de asignar: órdenes aprobadas en gocuotas_orders sin device asignado.
+    //    Usamos go.order_status y go.order_discarded_at como fuente de verdad
+    //    (no store_orders.cancelled_at que es un estado interno de la tienda).
     const pendientesRes = await client.query<{ product_name: string; pendientes: string }>(
       `SELECT so.product_name, COUNT(*)::text AS pendientes
        FROM store_orders so
        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-       WHERE so.status = 'paid'
-         AND so.cancelled_at IS NULL
+       WHERE go.order_status = 'approved'
          AND go.order_discarded_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-         AND NOT EXISTS (
-           SELECT 1 FROM inventory_items ii
-           WHERE ii.assigned_to_order_id = go.order_id AND ii.status = 'assigned'
-         )
        GROUP BY so.product_name
        ORDER BY pendientes DESC`
     )
 
-    // Match inteligente: extraer marca + número de modelo + storage de cada nombre.
-    // Ej: "Motorola Moto G06 4/128GB" → "motorola-g06-128"
-    //     "Motorola Moto G06 128GB"   → "motorola-g06-128" → MATCH
-    //     "Motorola Moto G56 5G 256/8GB" → "motorola-g56-256"
+    // Match inteligente: extraer marca + modelo + storage de cada nombre.
+    // Ej: "Motorola Moto G06 4/128GB"            → "motorola-g06-128"
+    //     "Samsung Galaxy A17 128GB"              → "samsung-a17-128"
+    //     "Xiaomi Redmi Note 14 Pro 256/8GB"      → "xiaomi-note14pro-256"
+    //     "Xiaomi Redmi 14C 256/4 GB"             → "xiaomi-14c-256"
     const matchKey = (name: string): string => {
       const lower = name.toLowerCase()
       const brand = lower.includes('samsung') ? 'samsung'
-        : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola' : 'other'
-      const modelMatch = lower.match(/[ga]\d{2,3}/i)
-      const model = modelMatch ? modelMatch[0].toLowerCase() : ''
-      // Extraer todos los números que podrían ser storage (>= 32)
-      // Captura: "128GB", "4/128GB", "256/8GB", "256GB"
+        : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola'
+        : (lower.includes('xiaomi') || lower.includes('redmi') || lower.includes('poco')) ? 'xiaomi'
+        : lower.includes('tcl') ? 'tcl'
+        : 'other'
+      // Intentar extraer modelo: G06, A17, Note 14 Pro, 14C, E14, etc.
+      let model = ''
+      const noteMatch = lower.match(/note\s*(\d+)\s*(pro\s*\+?|pro\s*max)?/i)
+      if (noteMatch) {
+        model = `note${noteMatch[1]}${(noteMatch[2] || '').replace(/\s+/g, '')}`
+      } else {
+        // e.g. G06, G56, A17, A06, E14
+        const letterNumMatch = lower.match(/[gaet]\d{2,3}/i)
+        if (letterNumMatch) {
+          model = letterNumMatch[0].toLowerCase()
+        } else {
+          // e.g. 14C, 128C
+          const cMatch = lower.match(/(\d{2,3}c)/i)
+          if (cMatch) model = cMatch[1].toLowerCase()
+        }
+      }
+      // Extraer storage: el número más alto entre 32 y 1024 (ignorar RAM que es bajo)
       const allNumbers = [...lower.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 32 && n <= 1024)
       const storage = allNumbers.length > 0 ? Math.max(...allNumbers).toString() : ''
       return `${brand}-${model}-${storage}`
     }
 
+    // Pre-compute catalog keys para matching
+    const catalogKeys = modelosRes.rows.map(m => ({ model_code: m.model_code, key: matchKey(m.name) }))
+
     const pendPorModelo: Record<string, number> = {}
+    const unmatched: UnmatchedRow[] = []
     for (const p of pendientesRes.rows) {
       const pKey = matchKey(p.product_name)
-      for (const m of modelosRes.rows) {
-        if (matchKey(m.name) === pKey) {
-          pendPorModelo[m.model_code] = (pendPorModelo[m.model_code] ?? 0) + Number(p.pendientes)
-          break
-        }
+      const match = catalogKeys.find(c => c.key === pKey)
+      if (match) {
+        pendPorModelo[match.model_code] = (pendPorModelo[match.model_code] ?? 0) + Number(p.pendientes)
+      } else {
+        unmatched.push({ product_name: p.product_name, pendientes: Number(p.pendientes), key: pKey })
       }
     }
 
@@ -113,9 +135,9 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
       }
     })
 
-    return { rows, error: null }
+    return { rows, unmatched, error: null }
   } catch (e: unknown) {
-    return { rows: [], error: e instanceof Error ? e.message : String(e) }
+    return { rows: [], unmatched: [], error: e instanceof Error ? e.message : String(e) }
   } finally {
     await client.end().catch(() => {})
   }
@@ -123,7 +145,7 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
 
 export default async function TenenciaPropiaPage() {
   const preciosNewsan = await getMejorPrecio()
-  const { rows, error } = await loadStockPropio(preciosNewsan)
+  const { rows, unmatched, error } = await loadStockPropio(preciosNewsan)
 
   const totalDisponibles = rows.reduce((s, r) => s + r.disponibles, 0)
   const totalPendientes = rows.reduce((s, r) => s + r.pendientes, 0)
@@ -139,7 +161,7 @@ export default async function TenenciaPropiaPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Tenencia propia — stock GOcelular</h1>
       <p className="text-sm text-gray-500 mb-6">
         Resumen por modelo del inventario propio de GOcelular, con órdenes pendientes de asignación.
@@ -154,7 +176,7 @@ export default async function TenenciaPropiaPage() {
 
       {!error && (
         <>
-          <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-6 flex flex-wrap gap-6 text-sm">
+          <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3 md:gap-6 text-sm">
             <div>
               <p className="text-xs text-gray-500">Modelos activos</p>
               <p className="font-bold text-gray-900">{rows.length}</p>
@@ -182,7 +204,7 @@ export default async function TenenciaPropiaPage() {
               Sin modelos activos en GOcelular.
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
@@ -228,6 +250,35 @@ export default async function TenenciaPropiaPage() {
                       </tr>
                     )
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {unmatched.length > 0 && (
+            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-amber-800 mb-2">
+                Pendientes sin match ({unmatched.reduce((s, u) => s + u.pendientes, 0)} órdenes no contabilizadas)
+              </h2>
+              <p className="text-xs text-amber-600 mb-3">
+                Estos product_name de store_orders no pudieron mapearse a ningún modelo del catálogo. Sus pendientes no se están sumando.
+              </p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-amber-200">
+                    <th className="text-left py-1 px-2 text-amber-700">product_name en store_orders</th>
+                    <th className="text-right py-1 px-2 text-amber-700">Pendientes</th>
+                    <th className="text-left py-1 px-2 text-amber-700">Clave generada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unmatched.map((u) => (
+                    <tr key={u.product_name} className="border-b border-amber-100">
+                      <td className="py-1 px-2 text-gray-800 font-mono">{u.product_name}</td>
+                      <td className="py-1 px-2 text-right font-semibold text-amber-800">{u.pendientes}</td>
+                      <td className="py-1 px-2 text-gray-500 font-mono">{u.key}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

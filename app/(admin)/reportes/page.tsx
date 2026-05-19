@@ -91,14 +91,14 @@ export default async function ReportesPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Reportes</h1>
         <p className="text-sm text-gray-500">Resumen de comisiones, stock y diferencias por consignatario</p>
       </div>
 
       {/* ── Section 1: Comisiones ─────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-800">Comisiones por consignatario y mes</h2>
           <p className="text-xs text-gray-400 mt-0.5">Suma de comision_monto agrupada por mes</p>
@@ -159,7 +159,7 @@ export default async function ReportesPage() {
       </div>
 
       {/* ── Section 2: Stock ─────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-800">Stock por consignatario</h2>
           <p className="text-xs text-gray-400 mt-0.5">Dispositivos asignados y vendidos por consignatario</p>
@@ -208,7 +208,7 @@ export default async function ReportesPage() {
       </div>
 
       {/* ── Section 3: Diferencias pendientes ────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-800">Diferencias pendientes por consignatario</h2>
           <p className="text-xs text-gray-400 mt-0.5">Faltantes y sobrantes sin resolver</p>

@@ -25,7 +25,7 @@ interface Props {
 
 type Granularidad = 'mensual' | 'diario'
 type Canal = 'total' | 'gocelular' | 'consignatarios' | 'terceros'
-type Metrica = 'pesos' | 'cantidad'
+type Metrica = 'pesos' | 'cantidad' | 'ticket'
 
 function classifyCanal(storeName: string, clientId: string, prefixes: StorePrefix[]): Canal {
   if (CLIENT_IDS_PROPIOS.includes(clientId)) return 'gocelular'
@@ -93,22 +93,25 @@ export default function VentasHistoricasChart({ data, prefixes }: Props) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, vals]) => ({
         label: granularidad === 'mensual' ? formatMonth(key) : formatDay(key),
-        valor: metrica === 'pesos' ? vals.monto : vals.ventas,
+        valor: metrica === 'pesos' ? vals.monto
+          : metrica === 'ticket' ? (vals.ventas > 0 ? Math.round(vals.monto / vals.ventas) : 0)
+          : vals.ventas,
       }))
   }, [data, prefixes, granularidad, canal, metrica])
 
   const formatYAxis = (n: number) => {
-    if (metrica === 'pesos') return `$${fmtNumber.format(n)}`
+    if (metrica === 'pesos' || metrica === 'ticket') return `$${fmtNumber.format(n)}`
     return fmtNumber.format(n)
   }
 
   const formatTooltipValue = (value: number) => {
     if (metrica === 'pesos') return [`$${fmtNumber.format(value)}`, 'Monto']
+    if (metrica === 'ticket') return [`$${fmtNumber.format(value)}`, 'Ticket promedio']
     return [fmtNumber.format(value), 'Cantidad']
   }
 
   const formatLabel = (value: number) => {
-    if (metrica === 'pesos') return `$${abbreviate(value)}`
+    if (metrica === 'pesos' || metrica === 'ticket') return `$${abbreviate(value)}`
     return abbreviate(value)
   }
 
@@ -136,6 +139,7 @@ export default function VentasHistoricasChart({ data, prefixes }: Props) {
         <div className="flex items-center gap-1">
           <Pill label="Pesos" active={metrica === 'pesos'} onClick={() => setMetrica('pesos')} />
           <Pill label="Cantidad" active={metrica === 'cantidad'} onClick={() => setMetrica('cantidad')} />
+          <Pill label="Ticket prom." active={metrica === 'ticket'} onClick={() => setMetrica('ticket')} />
         </div>
       </div>
 

@@ -41,7 +41,7 @@ export default async function DevolucionesPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Devoluciones</h1>
       <p className="text-sm text-gray-500 mb-6">Escanear o ingresar IMEI para devolver equipos al stock</p>
 

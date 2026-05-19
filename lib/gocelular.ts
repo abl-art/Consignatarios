@@ -313,11 +313,9 @@ export async function fetchStockPropio(): Promise<number> {
         SELECT COUNT(*)::text AS qty
         FROM store_orders so
         JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-        WHERE so.status = 'paid'
-          AND so.cancelled_at IS NULL
+        WHERE go.order_status = 'approved'
           AND go.order_discarded_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-          AND NOT EXISTS (SELECT 1 FROM inventory_items ii WHERE ii.assigned_to_order_id = go.order_id AND ii.status = 'assigned')
       `),
     ])
     const disponibles = Number(dispRes.rows[0].qty)
@@ -426,32 +424,54 @@ export interface TrustonicStats {
   activos: number
   total: number
   pctBloqueados: number
+  tasaActivacion: number
+  tiempoPromActivacionDias: number
 }
 
 export async function fetchTrustonicStats(): Promise<TrustonicStats> {
   const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0 }
+  if (!url) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0, tasaActivacion: 0, tiempoPromActivacionDias: 0 }
 
   const client = new Client({ connectionString: url })
   await client.connect()
   try {
-    const res = await client.query<{ bloqueados: string; activos: string; total: string }>(
-      `SELECT
-        COUNT(*) FILTER (WHERE trustonic_status::text = 'locked')::text AS bloqueados,
-        COUNT(*) FILTER (WHERE trustonic_status::text = 'active')::text AS activos,
-        COUNT(*)::text AS total
-       FROM devices
-       WHERE is_test_device = false OR is_test_device IS NULL`
+    const res = await client.query<{ bloqueados: string; activos: string; total: string; total_sin_idle: string; mediana_dias: string }>(
+      `WITH stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE trustonic_status::text = 'locked') AS bloqueados,
+          COUNT(*) FILTER (WHERE trustonic_status::text = 'active') AS activos,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE trustonic_status::text != 'idle') AS total_sin_idle
+        FROM devices
+        WHERE is_test_device = false OR is_test_device IS NULL
+      ),
+      dias AS (
+        SELECT EXTRACT(EPOCH FROM (last_action_date - created_at)) / 86400 AS d
+        FROM devices
+        WHERE (is_test_device = false OR is_test_device IS NULL)
+          AND trustonic_status::text IN ('active', 'locked')
+          AND last_action_date IS NOT NULL
+          AND last_action_date > created_at
+          AND EXTRACT(EPOCH FROM (last_action_date - created_at)) / 86400 <= 40
+      )
+      SELECT
+        s.bloqueados::text, s.activos::text, s.total::text, s.total_sin_idle::text,
+        COALESCE(ROUND((SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY d.d) FROM dias d)::numeric, 1), 0)::text AS mediana_dias
+      FROM stats s`
     )
     const r = res.rows[0]
     const bloqueados = Number(r.bloqueados)
     const activos = Number(r.activos)
+    const activados = activos + bloqueados
     const total = Number(r.total)
+    const totalSinIdle = Number(r.total_sin_idle)
     return {
       bloqueados,
       activos,
       total,
-      pctBloqueados: activos > 0 ? Math.round((bloqueados / activos) * 10000) / 100 : 0,
+      pctBloqueados: activados > 0 ? Math.round((bloqueados / activados) * 10000) / 100 : 0,
+      tasaActivacion: totalSinIdle > 0 ? Math.round((activados / totalSinIdle) * 1000) / 10 : 0,
+      tiempoPromActivacionDias: Number(r.mediana_dias),
     }
   } finally {
     await client.end()
@@ -570,6 +590,506 @@ export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
       delivered: Number(r.delivered),
       pct: Number(r.pct),
     }))
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Addon / Accesorios stock (store_products con is_addon = true)
+// ---------------------------------------------------------------------------
+
+export interface AddonStock {
+  id: string
+  displayName: string
+  stock: number
+  price: number // en pesos (centavos / 100)
+}
+
+export async function fetchAddonStock(): Promise<AddonStock[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const { Client } = await import('pg')
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ id: string; display_name: string; stock: string; price: string }>(
+      `SELECT id, display_name, COALESCE(stock, 0)::text AS stock, price
+       FROM store_products
+       WHERE is_addon = true
+         AND display_name NOT ILIKE '%E2E%'
+         AND status = 'active'
+       ORDER BY display_name`
+    )
+    return res.rows.map(r => ({
+      id: r.id,
+      displayName: r.display_name,
+      stock: Number(r.stock),
+      price: Number(r.price) / 100, // centavos → pesos
+    }))
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tasa de activación por mes de originación / merchant / tienda
+// ---------------------------------------------------------------------------
+
+export interface ActivacionRow {
+  mesOriginacion: string
+  storeName: string
+  clientId: string
+  asignados: number
+  activos: number
+  ready: number
+  bloqueados: number
+  devueltos: number
+  tasaActivacion: number
+  promDias: number
+}
+
+export async function fetchActivacionPorMes(): Promise<ActivacionRow[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      mes_originacion: string
+      store_name: string
+      client_id: string
+      asignados: string
+      activos: string
+      ready: string
+      bloqueados: string
+      devueltos: string
+      tasa_activacion: string
+      prom_dias: string
+    }>(
+      `SELECT
+        TO_CHAR(go.order_created_at, 'YYYY-MM') AS mes_originacion,
+        go.store_name,
+        go.client_id::text AS client_id,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text != 'idle')::text AS asignados,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'active')::text AS activos,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'ready_for_use')::text AS ready,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'locked')::text AS bloqueados,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'returned')::text AS devueltos,
+        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE d.trustonic_status::text IN ('active', 'locked')) /
+          NULLIF(COUNT(*) FILTER (WHERE d.trustonic_status::text != 'idle'), 0), 1), 0)::text AS tasa_activacion,
+        COALESCE(ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
+          ORDER BY CASE
+            WHEN d.trustonic_status::text IN ('active', 'locked')
+              AND d.last_action_date IS NOT NULL
+              AND d.last_action_date > d.created_at
+              AND EXTRACT(EPOCH FROM (d.last_action_date - d.created_at)) / 86400 <= 40
+            THEN EXTRACT(EPOCH FROM (d.last_action_date - d.created_at)) / 86400
+            ELSE NULL END
+        )::numeric, 1), 0)::text AS prom_dias
+      FROM devices d
+      JOIN gocuotas_orders go ON go.order_id = d.order_id
+      WHERE (d.is_test_device = false OR d.is_test_device IS NULL)
+        AND d.trustonic_status::text != 'idle'
+      GROUP BY mes_originacion, go.store_name, go.client_id
+      ORDER BY mes_originacion DESC, asignados DESC`
+    )
+    return res.rows.filter(r => r.mes_originacion !== null).map(r => ({
+      mesOriginacion: r.mes_originacion,
+      storeName: r.store_name,
+      clientId: r.client_id,
+      asignados: Number(r.asignados),
+      activos: Number(r.activos),
+      ready: Number(r.ready),
+      bloqueados: Number(r.bloqueados),
+      devueltos: Number(r.devueltos),
+      tasaActivacion: Number(r.tasa_activacion),
+      promDias: Number(r.prom_dias),
+    }))
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PD Hard cuota 2 por mes de originación / merchant / tienda
+// ---------------------------------------------------------------------------
+
+export interface PDHardRow {
+  mes: string
+  storeName: string
+  clientId: string
+  denHard: number
+  numHard: number
+  pdHard: number
+}
+
+export async function fetchPDHardCuota2(): Promise<PDHardRow[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      mes: string; store_name: string; client_id: string; den_hard: string; num_hard: string
+    }>(
+      `SELECT
+        to_char(o.order_delivered_at, 'YYYY-MM') AS mes,
+        o.store_name,
+        o.client_id::text AS client_id,
+        SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END)::text AS den_hard,
+        SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
+          AND (
+            (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
+            OR i.installment_collected_at::date > i.installment_due_at::date + 1
+          ) THEN i.installment_amount ELSE 0 END)::text AS num_hard
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND i.installment_number = 2
+      GROUP BY 1, 2, 3
+      ORDER BY 1 DESC`
+    )
+    return res.rows.filter(r => r.mes !== null).map(r => {
+      const den = Number(r.den_hard)
+      const num = Number(r.num_hard)
+      return {
+        mes: r.mes,
+        storeName: r.store_name,
+        clientId: r.client_id,
+        denHard: den,
+        numHard: num,
+        pdHard: den > 0 ? Math.round((num / den) * 1000) / 10 : 0,
+      }
+    })
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Alertas de fraude: sucursales sospechosas y cuota 1 alta
+// ---------------------------------------------------------------------------
+
+export interface AlertaSucursal {
+  storeName: string
+  clientId: string
+  ordenes: number
+  pdHard: number
+  asignados: number
+  activados: number
+  tasaActivacion: number
+}
+
+export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    // PD Hard cuota 2 por store (ordenes >20 dias)
+    const pdRes = await client.query<{
+      store_name: string; client_id: string; ordenes: string; den: string; num: string
+    }>(
+      `SELECT o.store_name, o.client_id::text AS client_id,
+        COUNT(DISTINCT o.order_id)::text AS ordenes,
+        SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END)::text AS den,
+        SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
+          AND ((i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL)
+            OR i.installment_collected_at::date > i.installment_due_at::date + 1)
+          THEN i.installment_amount ELSE 0 END)::text AS num
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND i.installment_number = 2
+        AND o.order_created_at < CURRENT_DATE - 20
+      GROUP BY 1, 2`
+    )
+
+    // Tasa activación por store (ordenes >20 dias)
+    const actRes = await client.query<{
+      store_name: string; client_id: string; asignados: string; activados: string
+    }>(
+      `SELECT go.store_name, go.client_id::text AS client_id,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text != 'idle')::text AS asignados,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text IN ('active', 'locked'))::text AS activados
+      FROM devices d
+      JOIN gocuotas_orders go ON go.order_id = d.order_id
+      WHERE (d.is_test_device = false OR d.is_test_device IS NULL)
+        AND d.trustonic_status::text != 'idle'
+        AND go.order_created_at < CURRENT_DATE - 20
+      GROUP BY 1, 2`
+    )
+
+    // Merge: join PD + activación por store
+    const actMap = new Map<string, { asignados: number; activados: number }>()
+    for (const r of actRes.rows) {
+      actMap.set(r.store_name, { asignados: Number(r.asignados), activados: Number(r.activados) })
+    }
+
+    const result: AlertaSucursal[] = []
+    for (const r of pdRes.rows) {
+      const den = Number(r.den)
+      const num = Number(r.num)
+      const pd = den > 0 ? Math.round((num / den) * 1000) / 10 : 0
+      const act = actMap.get(r.store_name)
+      const asignados = act?.asignados ?? 0
+      const activados = act?.activados ?? 0
+      const tasa = asignados > 0 ? Math.round((activados / asignados) * 1000) / 10 : 100
+
+      if (pd > 50 || tasa < 90) {
+        result.push({
+          storeName: r.store_name,
+          clientId: r.client_id,
+          ordenes: Number(r.ordenes),
+          pdHard: pd,
+          asignados,
+          activados,
+          tasaActivacion: tasa,
+        })
+      }
+    }
+
+    return result.sort((a, b) => b.pdHard - a.pdHard)
+  } finally {
+    await client.end()
+  }
+}
+
+export interface AlertaCuota1 {
+  orderId: string
+  storeName: string
+  clientId: string
+  fecha: string
+  totalOrden: number
+  cuota1: number
+  pctCuota1: number
+  bloqueado: boolean
+}
+
+export async function fetchAlertasCuota1(): Promise<AlertaCuota1[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{
+      order_id: string; store_name: string; client_id: string; fecha: string;
+      total_order_amount: string; installment_amount: string; pct: string; device_status: string | null
+    }>(
+      `SELECT o.order_id::text, o.store_name, o.client_id::text AS client_id,
+        o.order_created_at::date::text AS fecha,
+        o.total_order_amount::text,
+        i.installment_amount::text,
+        ROUND(100.0 * i.installment_amount / NULLIF(o.total_order_amount, 0), 1)::text AS pct,
+        d.trustonic_status::text AS device_status
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      LEFT JOIN devices d ON d.order_id = o.order_id::text
+      WHERE i.installment_number = 1
+        AND o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.total_order_amount > 0
+        AND i.installment_amount > o.total_order_amount * 0.5
+      ORDER BY pct DESC`
+    )
+    return res.rows.map(r => {
+      let total = Number(r.total_order_amount)
+      if (total > 5000000) total = total / 100
+      return {
+        orderId: r.order_id,
+        storeName: r.store_name,
+        clientId: r.client_id,
+        fecha: r.fecha,
+        totalOrden: total,
+        cuota1: Number(r.installment_amount),
+        pctCuota1: Number(r.pct),
+        bloqueado: r.device_status === 'locked',
+      }
+    })
+  } finally {
+    await client.end()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Alertas DNI: usuarios con 2+ órdenes y tiendas con usuarios multi-orden
+// ---------------------------------------------------------------------------
+
+export interface AlertaDNIDetalle {
+  orderId: string
+  storeName: string
+  clientId: string
+  fecha: string
+  monto: number
+  bloqueado: boolean
+}
+
+export interface AlertaDNI {
+  userDni: string
+  userName: string
+  ordenes: number
+  bloqueados: number
+  primera: string
+  ultima: string
+  cantTiendas: number
+  detalles: AlertaDNIDetalle[]
+}
+
+export async function fetchAlertasDNI(): Promise<AlertaDNI[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    // Usuarios con 2+ ordenes
+    const users = await client.query<{
+      user_dni: string; user_name: string; ordenes: string; primera: string; ultima: string; cant_tiendas: string
+    }>(
+      `SELECT o.user_dni::text AS user_dni, o.user_name,
+        COUNT(*)::text AS ordenes,
+        MIN(o.order_created_at::date)::text AS primera,
+        MAX(o.order_created_at::date)::text AS ultima,
+        COUNT(DISTINCT o.store_name)::text AS cant_tiendas
+      FROM gocuotas_orders o
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.user_dni IS NOT NULL
+      GROUP BY o.user_dni, o.user_name
+      HAVING COUNT(*) >= 2
+      ORDER BY COUNT(*) DESC`
+    )
+
+    // Detalle de ordenes de esos usuarios
+    const dnis = users.rows.map(r => r.user_dni)
+    if (dnis.length === 0) return []
+
+    const details = await client.query<{
+      user_dni: string; order_id: string; store_name: string; client_id: string; fecha: string; monto: string; device_status: string | null
+    }>(
+      `SELECT o.user_dni::text AS user_dni, o.order_id::text AS order_id,
+        o.store_name, o.client_id::text AS client_id,
+        o.order_created_at::date::text AS fecha,
+        o.total_order_amount::text AS monto,
+        d.trustonic_status::text AS device_status
+      FROM gocuotas_orders o
+      LEFT JOIN devices d ON d.order_id = o.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.user_dni = ANY($1::int[])
+      ORDER BY o.user_dni, o.order_created_at`,
+      [dnis.map(Number)]
+    )
+
+    const detailMap = new Map<string, AlertaDNIDetalle[]>()
+    for (const d of details.rows) {
+      let monto = Number(d.monto)
+      if (monto > 5000000) monto = monto / 100
+      const arr = detailMap.get(d.user_dni) ?? []
+      arr.push({ orderId: d.order_id, storeName: d.store_name, clientId: d.client_id, fecha: d.fecha, monto, bloqueado: d.device_status === 'locked' })
+      detailMap.set(d.user_dni, arr)
+    }
+
+    return users.rows.map(r => {
+      const det = detailMap.get(r.user_dni) ?? []
+      return {
+        userDni: r.user_dni,
+        userName: r.user_name || 'Sin nombre',
+        ordenes: Number(r.ordenes),
+        bloqueados: det.filter(d => d.bloqueado).length,
+        primera: r.primera,
+        ultima: r.ultima,
+        cantTiendas: Number(r.cant_tiendas),
+        detalles: det,
+      }
+    })
+  } finally {
+    await client.end()
+  }
+}
+
+export interface AlertaTiendaDNIUser {
+  userDni: string
+  userName: string
+  ordenes: number
+  bloqueados: number
+}
+
+export interface AlertaTiendaDNI {
+  storeName: string
+  clientId: string
+  usuariosMulti: number
+  ordenesDeMulti: number
+  bloqueadosTotal: number
+  usuarios: AlertaTiendaDNIUser[]
+}
+
+export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    // Solo terceros (excluir client_ids propios)
+    const res = await client.query<{
+      store_name: string; client_id: string; user_dni: string; user_name: string; ordenes: string; bloqueados: string
+    }>(
+      `WITH multi AS (
+        SELECT user_dni FROM gocuotas_orders
+        WHERE order_delivered_at IS NOT NULL AND order_discarded_at IS NULL AND user_dni IS NOT NULL
+          AND client_id::text NOT IN ('2026134', '2461631')
+        GROUP BY user_dni HAVING COUNT(*) >= 2
+      )
+      SELECT o.store_name, o.client_id::text AS client_id,
+        o.user_dni::text AS user_dni, o.user_name,
+        COUNT(*)::text AS ordenes,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'locked')::text AS bloqueados
+      FROM gocuotas_orders o
+      JOIN multi m ON o.user_dni = m.user_dni
+      LEFT JOIN devices d ON d.order_id = o.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL AND o.order_discarded_at IS NULL
+        AND o.client_id::text NOT IN ('2026134', '2461631')
+      GROUP BY o.store_name, o.client_id, o.user_dni, o.user_name
+      ORDER BY o.store_name, COUNT(*) DESC`
+    )
+
+    const map = new Map<string, AlertaTiendaDNI>()
+    for (const r of res.rows) {
+      const key = r.store_name
+      const existing = map.get(key)
+      const user: AlertaTiendaDNIUser = {
+        userDni: r.user_dni,
+        userName: r.user_name || 'Sin nombre',
+        ordenes: Number(r.ordenes),
+        bloqueados: Number(r.bloqueados),
+      }
+      if (existing) {
+        existing.usuarios.push(user)
+        existing.usuariosMulti = new Set(existing.usuarios.map(u => u.userDni)).size
+        existing.ordenesDeMulti += Number(r.ordenes)
+        existing.bloqueadosTotal += Number(r.bloqueados)
+      } else {
+        map.set(key, {
+          storeName: r.store_name,
+          clientId: r.client_id,
+          usuariosMulti: 1,
+          ordenesDeMulti: Number(r.ordenes),
+          bloqueadosTotal: Number(r.bloqueados),
+          usuarios: [user],
+        })
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.usuariosMulti - a.usuariosMulti)
   } finally {
     await client.end()
   }

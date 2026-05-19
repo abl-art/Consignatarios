@@ -8,7 +8,7 @@ export default async function ComprasPage() {
   ])
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Compras</h1>
       <p className="text-sm text-gray-500 mb-6">Recomendación de compras basada en forecast de ventas</p>
 

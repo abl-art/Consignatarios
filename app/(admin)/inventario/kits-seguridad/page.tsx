@@ -13,12 +13,12 @@ export default async function KitsSeguridadPage() {
   const totalStockCel = items.reduce((s, r) => s + r.stockCelulares, 0)
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Kits de Seguridad</h1>
       <p className="text-sm text-gray-500 mb-6">Inventario de kits recibidos vs ventas realizadas</p>
 
       {/* Resumen */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex flex-wrap gap-6 text-sm">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3 md:gap-6 text-sm">
         <div>
           <p className="text-xs text-gray-500">Modelos</p>
           <p className="font-bold text-gray-900">{items.length}</p>
@@ -50,7 +50,7 @@ export default async function KitsSeguridadPage() {
           Sin kits recibidos. Los pedidos de &quot;Kits de Seguridad&quot; marcados como recibidos aparecerán aquí.
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

@@ -26,7 +26,7 @@ export default async function AuditoriasFisicasPage() {
   }, {})
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Auditorías</h1>
         <Link
@@ -39,7 +39,7 @@ export default async function AuditoriasFisicasPage() {
 
       <AuditoriaTabs />
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         {!auditorias || auditorias.length === 0 ? (
           <div className="px-6 py-16 text-center text-gray-500">
             <p className="text-sm">No hay auditorías registradas.</p>

@@ -34,7 +34,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
   const compromiso = valorStock + totalDeuda
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{consignatario.nombre}</h1>
@@ -54,7 +54,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
       {/* Garantía */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h2 className="font-semibold text-gray-900 mb-3">Garantía</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500">Garantía total</p>
             <p className="text-xl font-bold text-gray-900">{formatearMoneda(consignatario.garantia)}</p>
@@ -74,7 +74,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
       </div>
 
       {/* Stock asignado */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Stock asignado ({dispositivos?.length ?? 0} equipos)</h2>
         </div>
@@ -97,7 +97,7 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
       </div>
 
       {/* Historial de asignaciones */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Historial de asignaciones</h2>
         </div>

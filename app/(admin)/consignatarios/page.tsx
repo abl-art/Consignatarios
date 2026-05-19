@@ -64,7 +64,7 @@ export default async function ConsignatariosPage() {
   }, {})
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Consignatarios</h1>
 
       {/* Formulario nuevo consignatario */}
@@ -137,7 +137,7 @@ export default async function ConsignatariosPage() {
       </div>
 
       {/* Lista */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>

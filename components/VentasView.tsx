@@ -35,7 +35,7 @@ export default function VentasView({ rows, hideConsignatarioLevel }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-5 flex flex-wrap gap-6">
+      <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-5 flex flex-wrap gap-3 md:gap-6">
         <div><p className="text-xs text-gray-500">Ventas</p><p className="text-xl font-bold">{rows.length}</p></div>
         <div><p className="text-xs text-gray-500">Bruto</p><p className="text-xl font-bold text-gray-900">{formatearMoneda(totalMonto)}</p></div>
         <div><p className="text-xs text-gray-500">Neto (s/IVA)</p><p className="text-xl font-bold text-gray-700">{formatearMoneda(totalNeto)}</p></div>
@@ -68,7 +68,7 @@ function ConsigGroup({ nombre, stores, count, monto, comision, hideLevel }: { no
     )
   }
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
       <button onClick={() => setOpen(!open)} className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 text-left">
         <div className="flex items-center gap-3">
           <span className="text-lg">{open ? '▾' : '▸'}</span>

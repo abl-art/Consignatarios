@@ -39,7 +39,6 @@ export default async function CelularesPage() {
 
   const combined = [
     ...ventasGocelular
-      .filter(v => v.store_name.toLowerCase().startsWith('ecommerce'))
       .map(v => ({ fecha: v.fecha, modelo: v.modelo, ventas: v.ventas, canal: 'gocelular' as const })),
     ...ventasConsigModelos,
   ]
@@ -55,7 +54,7 @@ export default async function CelularesPage() {
   ]
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Celulares</h1>
       <p className="text-sm text-gray-500 mb-6">Inventario de celulares</p>
 

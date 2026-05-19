@@ -278,14 +278,26 @@ export interface InventarioCategoria {
   fechaRecepcion: string
 }
 
-/** Extrae clave de matching: marca-modelo-storage. Ej: "motorola-g06-128" */
+/** Extrae clave de matching: marca-modelo-storage. Ej: "motorola-g06-128", "xiaomi-note14pro-256" */
 function modelMatchKey(name: string): string {
   const lower = name.toLowerCase()
   const brand = lower.includes('samsung') ? 'samsung'
     : (lower.includes('motorola') || lower.includes('moto')) ? 'motorola'
-    : lower.includes('xiaomi') ? 'xiaomi' : 'other'
-  const modelMatch = lower.match(/[ga]\d{2,3}/i)
-  const model = modelMatch ? modelMatch[0].toLowerCase() : ''
+    : (lower.includes('xiaomi') || lower.includes('redmi')) ? 'xiaomi'
+    : 'other'
+  let model = ''
+  const noteMatch = lower.match(/note\s*(\d+)\s*(pro)?/i)
+  if (noteMatch) {
+    model = `note${noteMatch[1]}${noteMatch[2] || ''}`
+  } else {
+    const letterNumMatch = lower.match(/[gaets]\d{2,3}/i)
+    if (letterNumMatch) {
+      model = letterNumMatch[0].toLowerCase()
+    } else {
+      const cMatch = lower.match(/(\d{2,3}c)/i)
+      if (cMatch) model = cMatch[1].toLowerCase()
+    }
+  }
   const allNumbers = [...lower.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 32 && n <= 1024)
   const storage = allNumbers.length > 0 ? Math.max(...allNumbers).toString() : ''
   return `${brand}-${model}-${storage}`
@@ -337,13 +349,36 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
     }
   }
 
-  // Obtener ventas desde GOcuotas y stock de celulares en paralelo
-  const [ventasPorModelo, stockCelulares] = await Promise.all([
+  // Obtener ventas, stock de celulares y catálogo activo en paralelo
+  const [ventasPorModelo, stockCelulares, catalogoActivo] = await Promise.all([
     fechaMasAntigua ? fetchVentasPorModeloDesde(fechaMasAntigua) : Promise.resolve({}),
     fetchStockCelularesPorModelo(),
+    fetchModelosActivos(),
   ])
 
-  // Matchear ventas y stock con modelos de compras
+  // Registrar qué matchKeys ya están en el mapa de compras
+  const keysConCompras = new Set<string>()
+  for (const g of grouped.values()) {
+    keysConCompras.add(modelMatchKey(g.modelo))
+  }
+
+  // Agregar modelos activos del catálogo que no tengan compras aún
+  for (const cat of catalogoActivo) {
+    const key = modelMatchKey(cat.name)
+    if (!keysConCompras.has(key)) {
+      keysConCompras.add(key)
+      grouped.set(cat.name, {
+        modelo: cat.name,
+        compras: 0,
+        precio: 0,
+        valuacion: 0,
+        proveedor: '',
+        fechaRecepcion: '',
+      })
+    }
+  }
+
+  // Matchear ventas y stock con modelos
   const result: InventarioCategoria[] = []
   for (const g of grouped.values()) {
     const matchKey = modelMatchKey(g.modelo)
@@ -374,6 +409,23 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
   }
 
   return result.sort((a, b) => b.compras - a.compras)
+}
+
+async function fetchModelosActivos(): Promise<{ name: string; model_code: string }[]> {
+  const { Client } = await import('pg')
+  const url = process.env.GOCELULAR_DB_URL
+  if (!url) return []
+
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    const res = await client.query<{ name: string; model_code: string }>(
+      `SELECT name, model_code FROM device_models WHERE active = true ORDER BY brand, name`
+    )
+    return res.rows
+  } finally {
+    await client.end()
+  }
 }
 
 async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, number>> {
@@ -427,11 +479,9 @@ async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
         `SELECT so.product_name AS modelo, COUNT(*)::text AS pendientes
          FROM store_orders so
          JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-         WHERE so.status = 'paid'
-           AND so.cancelled_at IS NULL
+         WHERE go.order_status = 'approved'
            AND go.order_discarded_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-           AND NOT EXISTS (SELECT 1 FROM inventory_items i2 WHERE i2.assigned_to_order_id = go.order_id AND i2.status = 'assigned')
          GROUP BY 1`
       ),
     ])

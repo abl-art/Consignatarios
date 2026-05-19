@@ -84,7 +84,7 @@ export default async function VentasPage({
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Ventas</h1>
       <p className="text-sm text-gray-500 mb-8">Desglose por consignatario y sucursal</p>
 

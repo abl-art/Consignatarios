@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 interface VentaTercero {
   store_name: string
@@ -19,13 +19,6 @@ type Metrica = 'cantidad' | 'pesos'
 
 const COLORES = ['#E91E7B', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4', '#F97316', '#6366F1', '#84CC16']
 const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
-
-const MERCHANT_ALIASES: Record<string, string> = { RIIING: 'RIING', RIIIING: 'RIING', DIGGIT: 'RIING' }
-
-function getMerchant(storeName: string): string {
-  const raw = storeName.split(/[\s-]/)[0].trim().toUpperCase()
-  return MERCHANT_ALIASES[raw] || raw
-}
 
 function formatLabel(value: number): string {
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
@@ -53,21 +46,14 @@ function getDateRange(periodo: Periodo): { desde: string; hasta: string } {
   return { desde: '2020-01-01', hasta }
 }
 
-export default function TercerosChart({ data }: Props) {
+export default function ShareTercerosChart({ data }: Props) {
   const [periodo, setPeriodo] = useState<Periodo>('todo')
   const [metrica, setMetrica] = useState<Metrica>('cantidad')
-  const [merchantFiltro, setMerchantFiltro] = useState<string>('')
   const [lineMetrica, setLineMetrica] = useState<Metrica>('cantidad')
 
-  const merchants = useMemo(() => [...new Set(data.map(d => getMerchant(d.store_name)))].sort(), [data])
-
-  // ─── Bar chart data (por sucursal) ──────────────────────────
   const barData = useMemo(() => {
     const { desde, hasta } = getDateRange(periodo)
-    let filtrados = data.filter(d => d.fecha >= desde && d.fecha <= hasta)
-    if (merchantFiltro) {
-      filtrados = filtrados.filter(d => getMerchant(d.store_name) === merchantFiltro)
-    }
+    const filtrados = data.filter(d => d.fecha >= desde && d.fecha <= hasta)
 
     const byStore = new Map<string, { ventas: number; monto: number }>()
     for (const d of filtrados) {
@@ -85,12 +71,11 @@ export default function TercerosChart({ data }: Props) {
       .map(([nombre, d]) => ({ nombre, ventas: d.ventas, monto: d.monto }))
     sorted.sort((a, b) => metrica === 'pesos' ? b.monto - a.monto : b.ventas - a.ventas)
     return sorted
-  }, [data, periodo, merchantFiltro, metrica])
+  }, [data, periodo, metrica])
 
   const totalVentas = barData.reduce((s, d) => s + d.ventas, 0)
   const totalMonto = barData.reduce((s, d) => s + d.monto, 0)
 
-  // ─── Line chart data (totales por mes) ──────────────────────
   const lineData = useMemo(() => {
     const byMonth = new Map<string, { ventas: number; monto: number }>()
     for (const d of data) {
@@ -120,16 +105,12 @@ export default function TercerosChart({ data }: Props) {
 
   return (
     <div className="space-y-6 mb-6">
-      {/* ─── Gráfico de barras por sucursal ─── */}
+      {/* Barras por sucursal */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-gray-700">
-              Ventas por sucursal {merchantFiltro ? `— ${merchantFiltro}` : ''}
-            </h3>
-            <p className="text-xs text-gray-400">
-              {totalVentas} ventas · ${fmt.format(totalMonto)}
-            </p>
+            <h3 className="text-sm font-semibold text-gray-700">Ventas por sucursal</h3>
+            <p className="text-xs text-gray-400">{totalVentas} ventas · ${fmt.format(totalMonto)}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <div className="flex gap-1">
@@ -151,20 +132,6 @@ export default function TercerosChart({ data }: Props) {
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Filtro merchant */}
-        <div className="flex flex-wrap gap-1 mb-4">
-          <button onClick={() => setMerchantFiltro('')}
-            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${!merchantFiltro ? 'bg-magenta-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            Todos
-          </button>
-          {merchants.map(m => (
-            <button key={m} onClick={() => setMerchantFiltro(m)}
-              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${merchantFiltro === m ? 'bg-magenta-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {m}
-            </button>
-          ))}
         </div>
 
         {barData.length === 0 ? (
@@ -192,12 +159,12 @@ export default function TercerosChart({ data }: Props) {
         )}
       </div>
 
-      {/* ─── Gráfico de líneas: ventas totales por mes ─── */}
+      {/* Líneas por mes */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Ventas totales por mes</h3>
-            <p className="text-xs text-gray-400">Evolucion mensual de terceros</p>
+            <p className="text-xs text-gray-400">Evolucion mensual</p>
           </div>
           <div className="flex gap-1">
             <button onClick={() => setLineMetrica('cantidad')}

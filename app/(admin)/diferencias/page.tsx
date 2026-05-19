@@ -72,7 +72,7 @@ export default async function DiferenciasPage({
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Diferencias</h1>
       <p className="text-sm text-gray-500 mb-8">Faltantes y sobrantes detectados en auditorías</p>
 
@@ -153,7 +153,7 @@ export default async function DiferenciasPage({
           <p className="text-gray-400 text-sm">No hay diferencias registradas con los filtros aplicados.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

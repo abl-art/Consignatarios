@@ -2,6 +2,23 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
+type SaveResult = { ok: true } | { ok: false; error: string }
+
+async function upsertConfig(key: string, value: string): Promise<SaveResult> {
+  try {
+    const sb = createAdminClient()
+    const { error } = await sb.from('flujo_config').upsert({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
 export async function fetchTodos(): Promise<Record<string, unknown>> {
   const sb = createAdminClient()
   const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_todos').single()
@@ -10,31 +27,16 @@ export async function fetchTodos(): Promise<Record<string, unknown>> {
   return Array.isArray(raw) ? {} : raw
 }
 
-export async function guardarTodos(todos: Record<string, unknown> | { id: string; text: string; done: boolean }[]) {
-  const sb = createAdminClient()
-  await sb.from('flujo_config').upsert({
-    key: 'app_todos',
-    value: JSON.stringify(todos),
-    updated_at: new Date().toISOString(),
-  })
+export async function guardarTodos(todos: Record<string, unknown> | { id: string; text: string; done: boolean }[]): Promise<SaveResult> {
+  return upsertConfig('app_todos', JSON.stringify(todos))
 }
 
-export async function guardarNotas(texto: string) {
-  const sb = createAdminClient()
-  await sb.from('flujo_config').upsert({
-    key: 'app_notas',
-    value: texto,
-    updated_at: new Date().toISOString(),
-  })
+export async function guardarNotas(texto: string): Promise<SaveResult> {
+  return upsertConfig('app_notas', texto)
 }
 
-export async function guardarNotasGuardadas(notas: { id: string; titulo: string; texto: string; updatedAt: string }[]) {
-  const sb = createAdminClient()
-  await sb.from('flujo_config').upsert({
-    key: 'app_notas_guardadas',
-    value: JSON.stringify(notas),
-    updated_at: new Date().toISOString(),
-  })
+export async function guardarNotasGuardadas(notas: { id: string; titulo: string; texto: string; updatedAt: string }[]): Promise<SaveResult> {
+  return upsertConfig('app_notas_guardadas', JSON.stringify(notas))
 }
 
 export async function fetchNotasGuardadas(): Promise<{ id: string; titulo: string; texto: string; updatedAt: string }[]> {
@@ -45,13 +47,8 @@ export async function fetchNotasGuardadas(): Promise<{ id: string; titulo: strin
 }
 
 // Notas y metadata de eventos (key = event_id, value = {texto, color, done})
-export async function guardarNotasEventos(notas: Record<string, { texto?: string; color?: string; done?: boolean }>) {
-  const sb = createAdminClient()
-  await sb.from('flujo_config').upsert({
-    key: 'app_notas_eventos',
-    value: JSON.stringify(notas),
-    updated_at: new Date().toISOString(),
-  })
+export async function guardarNotasEventos(notas: Record<string, { texto?: string; color?: string; done?: boolean }>): Promise<SaveResult> {
+  return upsertConfig('app_notas_eventos', JSON.stringify(notas))
 }
 
 export async function fetchNotasEventos(): Promise<Record<string, { texto?: string; color?: string; done?: boolean }>> {
