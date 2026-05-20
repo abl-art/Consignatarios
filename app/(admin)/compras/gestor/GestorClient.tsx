@@ -985,6 +985,19 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             Enviar
                           </button>
                         )}
+                        {(nota.estado === 'borrador' || nota.estado === 'confirmado') && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm('¿Eliminar esta nota de pedido?')) return
+                              await eliminarPedido(nota.id)
+                              setNotas(prev => prev.filter(n => n.id !== nota.id))
+                              router.refresh()
+                            }}
+                            className="px-4 py-2 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

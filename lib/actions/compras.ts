@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { SQL_IDS_TODOS } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 
 // ---------------------------------------------------------------------------
@@ -440,7 +441,7 @@ async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, 
        LEFT JOIN store_orders so ON so.id::text = o.store_order_id
        WHERE o.order_delivered_at IS NOT NULL
          AND o.order_discarded_at IS NULL
-         AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+         AND o.client_id::text IN (${SQL_IDS_TODOS})
          AND o.order_delivered_at >= $1::date
        GROUP BY 1`,
       [desde.slice(0, 10)]

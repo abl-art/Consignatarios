@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
+import { SQL_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 
 // ---------------------------------------------------------------------------
@@ -229,7 +230,7 @@ async function fetchIncomeFromGocelular(): Promise<
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+        AND o.client_id::text IN (${SQL_IDS_TODOS})
       GROUP BY 1
     `)
     return res.rows
@@ -247,8 +248,7 @@ async function fetchIncomeFromGocelular(): Promise<
   }
 }
 
-// Client IDs de terceros (merchants que no son venta propia)
-const CLIENT_IDS_TERCEROS_GOCUOTAS = [5495277]
+// Client IDs de terceros (importado desde lib/client-ids.ts)
 
 async function fetchVta3eroFromGocuotas(): Promise<
   { cash_date: string; out_vta3ero: number }[]
@@ -263,7 +263,7 @@ async function fetchVta3eroFromGocuotas(): Promise<
   if (!gocuotasPool) return []
   const client = await gocuotasPool.connect()
   try {
-    const placeholders = CLIENT_IDS_TERCEROS_GOCUOTAS.map((_, i) => `$${i + 1}`).join(',')
+    const placeholders = CLIENT_IDS_TERCEROS_NUM.map((_, i) => `$${i + 1}`).join(',')
     const res = await client.query<{ cash_date: Date; out_vta3ero: string }>(
       `SELECT due_expense_at::date AS cash_date,
               SUM(expense_amount_in_cents) / 100.0 AS out_vta3ero
@@ -274,7 +274,7 @@ async function fetchVta3eroFromGocuotas(): Promise<
          AND discarded_at IS NULL
        GROUP BY 1
        ORDER BY 1`,
-      CLIENT_IDS_TERCEROS_GOCUOTAS
+      CLIENT_IDS_TERCEROS_NUM
     )
     return res.rows.map(r => ({
       cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date),
@@ -577,7 +577,7 @@ export async function fetchCuotasStats(): Promise<{
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+        AND o.client_id::text IN (${SQL_IDS_TODOS})
         AND i.installment_due_at::date < CURRENT_DATE
     `)
 
@@ -783,7 +783,7 @@ export async function fetchDPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+      AND o.client_id::text IN (${SQL_IDS_TODOS})
     GROUP BY 1
     ORDER BY 1
   `
@@ -885,7 +885,7 @@ export async function fetchPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+      AND o.client_id::text IN (${SQL_IDS_TODOS})
     GROUP BY 1, 2
     ORDER BY 1, 2
   `
@@ -916,7 +916,7 @@ export async function fetchPDIndicadores(): Promise<{
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+          AND o.client_id::text IN (${SQL_IDS_TODOS})
         GROUP BY 1
         ORDER BY 1
       `),
@@ -1036,7 +1036,7 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+          AND o.client_id::text IN (${SQL_IDS_TODOS})
       ),
       classified AS (
         SELECT

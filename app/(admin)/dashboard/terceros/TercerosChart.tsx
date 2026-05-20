@@ -61,7 +61,7 @@ export default function TercerosChart({ data }: Props) {
 
   const merchants = useMemo(() => [...new Set(data.map(d => getMerchant(d.store_name)))].sort(), [data])
 
-  // ─── Bar chart data (por sucursal) ──────────────────────────
+  // ─── Bar chart data (por merchant) ──────────────────────────
   const barData = useMemo(() => {
     const { desde, hasta } = getDateRange(periodo)
     let filtrados = data.filter(d => d.fecha >= desde && d.fecha <= hasta)
@@ -69,19 +69,19 @@ export default function TercerosChart({ data }: Props) {
       filtrados = filtrados.filter(d => getMerchant(d.store_name) === merchantFiltro)
     }
 
-    const byStore = new Map<string, { ventas: number; monto: number }>()
+    const byMerchant = new Map<string, { ventas: number; monto: number }>()
     for (const d of filtrados) {
-      const key = d.store_name.replace(/\s+/g, ' ').trim()
-      const existing = byStore.get(key)
+      const key = getMerchant(d.store_name)
+      const existing = byMerchant.get(key)
       if (existing) {
         existing.ventas += d.ventas
         existing.monto += d.monto
       } else {
-        byStore.set(key, { ventas: d.ventas, monto: d.monto })
+        byMerchant.set(key, { ventas: d.ventas, monto: d.monto })
       }
     }
 
-    const sorted = [...byStore.entries()]
+    const sorted = [...byMerchant.entries()]
       .map(([nombre, d]) => ({ nombre, ventas: d.ventas, monto: d.monto }))
     sorted.sort((a, b) => metrica === 'pesos' ? b.monto - a.monto : b.ventas - a.ventas)
     return sorted
@@ -120,12 +120,12 @@ export default function TercerosChart({ data }: Props) {
 
   return (
     <div className="space-y-6 mb-6">
-      {/* ─── Gráfico de barras por sucursal ─── */}
+      {/* ─── Gráfico de barras por merchant ─── */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">
-              Ventas por sucursal {merchantFiltro ? `— ${merchantFiltro}` : ''}
+              Ventas por merchant {merchantFiltro ? `— ${merchantFiltro}` : ''}
             </h3>
             <p className="text-xs text-gray-400">
               {totalVentas} ventas · ${fmt.format(totalMonto)}

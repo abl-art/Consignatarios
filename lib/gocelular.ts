@@ -1,4 +1,7 @@
 import { getPool, getGocuotasPool } from './db-pool'
+import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS } from './client-ids'
+
+export { CLIENT_IDS_PROPIOS }
 
 export interface VentaDiaria {
   store_name: string
@@ -6,9 +9,6 @@ export interface VentaDiaria {
   ventas: number
   monto: number
 }
-
-// Client IDs que son venta propia de GOcelular
-export const CLIENT_IDS_PROPIOS = ['2026134', '2461631']
 
 /**
  * Ventas de hoy agrupadas por store_name (para el dashboard admin).
@@ -171,7 +171,7 @@ export async function fetchContracargos(): Promise<ContracargosData> {
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+        AND o.client_id::text IN (${SQL_IDS_TODOS})
     `)
     const r = res.rows[0]
     const contracargos = Number(r.monto_contracargos)
@@ -351,7 +351,7 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
       LEFT JOIN store_orders so ON so.id::text = o.store_order_id
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN ('1', '2026134', '2461631', '5495277')
+        AND o.client_id::text IN (${SQL_IDS_TODOS})
         AND o.order_created_at >= '2026-03-23'
       GROUP BY 1, 2, 3
       ORDER BY 1`
@@ -559,7 +559,7 @@ export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
         COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) AS delivered,
         ROUND(100.0 * COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) / NULLIF(COUNT(*), 0), 2) AS pct
       FROM orders
-      WHERE client_id IN (2026134, 2461631)
+      WHERE client_id::text IN (${SQL_IDS_PROPIOS})
         AND discarded_at IS NULL
         AND created_at >= '2026-01-01'
       GROUP BY 1
@@ -1019,7 +1019,7 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
       `WITH multi AS (
         SELECT user_dni FROM gocuotas_orders
         WHERE order_delivered_at IS NOT NULL AND order_discarded_at IS NULL AND user_dni IS NOT NULL
-          AND client_id::text NOT IN ('2026134', '2461631')
+          AND client_id::text NOT IN (${SQL_IDS_PROPIOS})
         GROUP BY user_dni HAVING COUNT(*) >= 2
       )
       SELECT o.store_name, o.client_id::text AS client_id,
@@ -1030,7 +1030,7 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
       JOIN multi m ON o.user_dni = m.user_dni
       LEFT JOIN devices d ON d.order_id = o.order_id::text
       WHERE o.order_delivered_at IS NOT NULL AND o.order_discarded_at IS NULL
-        AND o.client_id::text NOT IN ('2026134', '2461631')
+        AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
       GROUP BY o.store_name, o.client_id, o.user_dni, o.user_name
       ORDER BY o.store_name, COUNT(*) DESC`
     )
