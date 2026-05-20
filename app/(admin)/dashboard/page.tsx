@@ -3,21 +3,17 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
 import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
-import { getForecastEvents } from '@/lib/actions/finanzas'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ConversionChart from './ConversionChart'
-import ForecastEvents from './ForecastEvents'
-import ForecastChart from './ForecastChart'
 
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, conversionData, events, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
-    getForecastEvents().catch(() => ({})),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     fetchStockPropio(),
@@ -56,8 +52,8 @@ export default async function DashboardPage() {
 
       <VentasDelDia />
 
-      {/* Contracargos + Stock + Trustonic */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      {/* Contracargos + Stock */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
         <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
           <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -96,34 +92,33 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Activos</p>
-              <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
-              <p className="text-xl font-bold text-red-700">{trustonic.bloqueados}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">% Bloqueados</p>
-              <p className={`text-xl font-bold ${trustonic.pctBloqueados > 5 ? 'text-red-700' : 'text-gray-900'}`}>{trustonic.pctBloqueados}%</p>
-            </div>
+      {/* Trustonic - ancho completo */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Activos</p>
+            <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Tasa de activación</p>
-              <p className={`text-xl font-bold ${trustonic.tasaActivacion >= 90 ? 'text-green-700' : 'text-amber-700'}`}>{trustonic.tasaActivacion}%</p>
-              <p className="text-[10px] text-gray-400">activos / asignados (sin idle)</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Mediana activación</p>
-              <p className="text-xl font-bold text-gray-900">{trustonic.tiempoPromActivacionDias} días</p>
-              <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
-            </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
+            <p className="text-xl font-bold text-red-700">{trustonic.bloqueados}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">% Bloqueados</p>
+            <p className={`text-xl font-bold ${trustonic.pctBloqueados > 5 ? 'text-red-700' : 'text-gray-900'}`}>{trustonic.pctBloqueados}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Tasa de activación</p>
+            <p className={`text-xl font-bold ${trustonic.tasaActivacion >= 90 ? 'text-green-700' : 'text-amber-700'}`}>{trustonic.tasaActivacion}%</p>
+            <p className="text-[10px] text-gray-400">activos / asignados (sin idle)</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Mediana activación</p>
+            <p className="text-xl font-bold text-gray-900">{trustonic.tiempoPromActivacionDias} días</p>
+            <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
           </div>
         </div>
       </div>
@@ -136,16 +131,6 @@ export default async function DashboardPage() {
       {/* Conversión GOcuotas */}
       <div className="mt-6">
         <ConversionChart data={conversionData} />
-      </div>
-
-      {/* Forecast Events */}
-      <div className="mt-6">
-        <ForecastEvents events={events} />
-      </div>
-
-      {/* Forecast */}
-      <div className="mt-6">
-        <ForecastChart apiUrl="https://gocelular-forecast-production.up.railway.app" events={events} />
       </div>
     </div>
   )

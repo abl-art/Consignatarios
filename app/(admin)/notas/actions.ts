@@ -28,7 +28,18 @@ export async function fetchTodos(): Promise<Record<string, unknown>> {
 }
 
 export async function guardarTodos(todos: Record<string, unknown> | { id: string; text: string; done: boolean }[]): Promise<SaveResult> {
-  return upsertConfig('app_todos', JSON.stringify(todos))
+  // Merge con datos existentes para no sobrescribir semanas que este cliente no tiene cargadas
+  try {
+    const sb = createAdminClient()
+    const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_todos').single()
+    const existing = data?.value ? JSON.parse(data.value) : {}
+    const incoming = Array.isArray(todos) ? {} : todos
+    // Merge: incoming keys overwrite existing, pero existing keys no presentes en incoming se mantienen
+    const merged = { ...existing, ...incoming }
+    return upsertConfig('app_todos', JSON.stringify(merged))
+  } catch {
+    return upsertConfig('app_todos', JSON.stringify(todos))
+  }
 }
 
 export async function guardarNotas(texto: string): Promise<SaveResult> {
