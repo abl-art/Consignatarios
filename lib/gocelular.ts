@@ -1,4 +1,4 @@
-import { Client } from 'pg'
+import { getPool, getGocuotasPool } from './db-pool'
 
 export interface VentaDiaria {
   store_name: string
@@ -14,11 +14,10 @@ export const CLIENT_IDS_PROPIOS = ['2026134', '2461631']
  * Ventas de hoy agrupadas por store_name (para el dashboard admin).
  */
 export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ store_name: string; client_id: string; ventas: string; monto: string }>(
       `SELECT go.store_name, go.client_id::text, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
@@ -35,7 +34,7 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
       monto: Number(r.monto),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -44,11 +43,10 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
  * anulados en GOcelular (order_discarded_at IS NOT NULL).
  */
 export async function fetchAnuladas(orderIds: string[]): Promise<string[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url || orderIds.length === 0) return []
+  const pool = getPool()
+  if (!pool || orderIds.length === 0) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ order_id: string }>(
       `SELECT order_id FROM gocuotas_orders
@@ -57,7 +55,7 @@ export async function fetchAnuladas(orderIds: string[]): Promise<string[]> {
     )
     return res.rows.map((r) => r.order_id)
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -85,13 +83,12 @@ export async function fetchNewSales(params: {
   ourImeis: string[]
   alreadySyncedSaleIds: string[]
 }): Promise<GocelularSale[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) throw new Error('GOCELULAR_DB_URL no configurada')
+  const pool = getPool()
+  if (!pool) throw new Error('GOCELULAR_DB_URL no configurada')
 
   if (params.ourImeis.length === 0) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const exclude = params.alreadySyncedSaleIds.length > 0
       ? 'AND go.order_id != ALL($2)'
@@ -142,7 +139,7 @@ export async function fetchNewSales(params: {
     const res = await client.query<GocelularSale>(sql, values)
     return res.rows
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -154,11 +151,10 @@ export interface ContracargosData {
 }
 
 export async function fetchContracargos(): Promise<ContracargosData> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 }
+  const pool = getPool()
+  if (!pool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 }
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       monto_contracargos: string
@@ -187,7 +183,7 @@ export async function fetchContracargos(): Promise<ContracargosData> {
       cantidad: Number(r.cantidad),
     }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -204,11 +200,10 @@ export interface VentaHistorica {
  * Devuelve store_name crudo para que el consumidor clasifique por canal.
  */
 export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       fecha: Date
@@ -237,7 +232,7 @@ export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
       monto: Number(r.monto),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -250,11 +245,10 @@ export interface InventoryItem {
 }
 
 export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       imei: string
@@ -277,15 +271,14 @@ export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
       precio_costo: Number(r.precio_costo),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
 export async function fetchStockPropioDetalle(): Promise<{model_name: string; qty: number}[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const pool = getPool()
+  if (!pool) return []
+  const client = await pool.connect()
   try {
     const res = await client.query<{model_name: string; qty: string}>(
       `SELECT COALESCE(dm.name, ii.model_code) AS model_name, COUNT(*)::text AS qty
@@ -296,16 +289,15 @@ export async function fetchStockPropioDetalle(): Promise<{model_name: string; qt
     )
     return res.rows.map(r => ({ model_name: r.model_name, qty: Number(r.qty) }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
 export async function fetchStockPropio(): Promise<number> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return 0
+  const pool = getPool()
+  if (!pool) return 0
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const [dispRes, pendRes] = await Promise.all([
       client.query<{ qty: string }>(`SELECT COUNT(*)::text AS qty FROM inventory_items WHERE status = 'available'`),
@@ -322,7 +314,7 @@ export async function fetchStockPropio(): Promise<number> {
     const pendientes = Number(pendRes.rows[0].qty)
     return Math.max(0, disponibles - pendientes)
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -339,11 +331,10 @@ export interface VentaPorModelo {
  * o desde devices (consignación). Si no se encuentra, usa 'Desconocido'.
  */
 export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       fecha: Date
@@ -372,7 +363,7 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
       ventas: r.ventas,
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -389,11 +380,10 @@ export interface VentaTercero {
  * El filtrado por "terceros" se hace en el consumidor.
  */
 export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ store_name: string; client_id: string; fecha: Date; ventas: string; monto: string }>(
       `SELECT o.store_name,
@@ -415,7 +405,7 @@ export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
       monto: Number(r.monto),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -429,11 +419,10 @@ export interface TrustonicStats {
 }
 
 export async function fetchTrustonicStats(): Promise<TrustonicStats> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0, tasaActivacion: 0, tiempoPromActivacionDias: 0 }
+  const pool = getPool()
+  if (!pool) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0, tasaActivacion: 0, tiempoPromActivacionDias: 0 }
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ bloqueados: string; activos: string; total: string; total_sin_idle: string; mediana_dias: string }>(
       `WITH stats AS (
@@ -474,7 +463,7 @@ export async function fetchTrustonicStats(): Promise<TrustonicStats> {
       tiempoPromActivacionDias: Number(r.mediana_dias),
     }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -495,11 +484,10 @@ export interface KnoxGuardDevice {
  * Dispositivos sin Trustonic con cuotas vencidas no cobradas y >3 días de atraso.
  */
 export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       imei: string
@@ -543,7 +531,7 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
       debe_bloquear: true,
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -559,17 +547,10 @@ export interface ConversionDiaria {
  * desde la tabla `orders` de GOcuotas directamente.
  */
 export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
-  const host = process.env.PG_GOCUOTAS_HOST
-  const user = process.env.PG_GOCUOTAS_USER
-  const pass = process.env.PG_GOCUOTAS_PASS
-  const db = process.env.PG_GOCUOTAS_DB
-  if (!host || !user || !pass || !db) return []
+  const pool = getGocuotasPool()
+  if (!pool) return []
 
-  const client = new Client({
-    host, port: 5432, user, password: pass, database: db,
-    ssl: { rejectUnauthorized: false },
-  })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ fecha: Date; total: string; delivered: string; pct: string }>(
       `SELECT
@@ -591,7 +572,7 @@ export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
       pct: Number(r.pct),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -607,12 +588,10 @@ export interface AddonStock {
 }
 
 export async function fetchAddonStock(): Promise<AddonStock[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const { Client } = await import('pg')
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ id: string; display_name: string; stock: string; price: string }>(
       `SELECT id, display_name, COALESCE(stock, 0)::text AS stock, price
@@ -629,7 +608,7 @@ export async function fetchAddonStock(): Promise<AddonStock[]> {
       price: Number(r.price) / 100, // centavos → pesos
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -651,11 +630,10 @@ export interface ActivacionRow {
 }
 
 export async function fetchActivacionPorMes(): Promise<ActivacionRow[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       mes_originacion: string
@@ -709,7 +687,7 @@ export async function fetchActivacionPorMes(): Promise<ActivacionRow[]> {
       promDias: Number(r.prom_dias),
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -727,11 +705,10 @@ export interface PDHardRow {
 }
 
 export async function fetchPDHardCuota2(): Promise<PDHardRow[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       mes: string; store_name: string; client_id: string; den_hard: string; num_hard: string
@@ -767,7 +744,7 @@ export async function fetchPDHardCuota2(): Promise<PDHardRow[]> {
       }
     })
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -786,11 +763,10 @@ export interface AlertaSucursal {
 }
 
 export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     // PD Hard cuota 2 por store (ordenes >20 dias)
     const pdRes = await client.query<{
@@ -858,7 +834,7 @@ export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
 
     return result.sort((a, b) => b.pdHard - a.pdHard)
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -874,11 +850,10 @@ export interface AlertaCuota1 {
 }
 
 export async function fetchAlertasCuota1(): Promise<AlertaCuota1[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       order_id: string; store_name: string; client_id: string; fecha: string;
@@ -915,7 +890,7 @@ export async function fetchAlertasCuota1(): Promise<AlertaCuota1[]> {
       }
     })
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -944,11 +919,10 @@ export interface AlertaDNI {
 }
 
 export async function fetchAlertasDNI(): Promise<AlertaDNI[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     // Usuarios con 2+ ordenes
     const users = await client.query<{
@@ -1012,7 +986,7 @@ export async function fetchAlertasDNI(): Promise<AlertaDNI[]> {
       }
     })
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -1033,11 +1007,10 @@ export interface AlertaTiendaDNI {
 }
 
 export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     // Solo terceros (excluir client_ids propios)
     const res = await client.query<{
@@ -1091,6 +1064,6 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
 
     return Array.from(map.values()).sort((a, b) => b.usuariosMulti - a.usuariosMulti)
   } finally {
-    await client.end()
+    client.release()
   }
 }

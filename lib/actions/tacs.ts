@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client } from 'pg'
+import { getPool } from '@/lib/db-pool'
 import { revalidatePath } from 'next/cache'
 
 export interface TacCargado {
@@ -31,11 +31,10 @@ const MARCAS_EXCLUIDAS = ['samsung', 'apple']
 
 // Fetch TACs únicos del inventario de GOcelular (excluyendo marcas que no usan Trustonic)
 async function fetchTacsInventario(): Promise<TacInventario[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ tac: string; marca: string; modelo: string }>(
       `SELECT DISTINCT
@@ -50,7 +49,7 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
     )
     return res.rows.filter(r => !MARCAS_EXCLUIDAS.includes(r.marca.toLowerCase()))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 

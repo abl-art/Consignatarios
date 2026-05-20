@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client } from 'pg'
+import { getPool, getGocuotasPool } from '@/lib/db-pool'
 import { revalidatePath } from 'next/cache'
 
 // ---------------------------------------------------------------------------
@@ -191,11 +191,10 @@ function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
 async function fetchIncomeFromGocelular(): Promise<
   { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number; in_vencida: number }[]
 > {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       cash_date: Date | string
@@ -244,7 +243,7 @@ async function fetchIncomeFromGocelular(): Promise<
         in_vencida: Number(r.in_vencida),
       }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -260,11 +259,9 @@ async function fetchVta3eroFromGocuotas(): Promise<
   const db = process.env.PG_GOCUOTAS_DB
   if (!host || !user || !pass || !db) return []
 
-  const client = new Client({
-    host, port: 5432, user, password: pass, database: db,
-    ssl: { rejectUnauthorized: false },
-  })
-  await client.connect()
+  const gocuotasPool = getGocuotasPool()
+  if (!gocuotasPool) return []
+  const client = await gocuotasPool.connect()
   try {
     const placeholders = CLIENT_IDS_TERCEROS_GOCUOTAS.map((_, i) => `$${i + 1}`).join(',')
     const res = await client.query<{ cash_date: Date; out_vta3ero: string }>(
@@ -284,7 +281,7 @@ async function fetchVta3eroFromGocuotas(): Promise<
       out_vta3ero: -Number(r.out_vta3ero), // negativo porque es un egreso
     }))
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -528,11 +525,10 @@ export async function fetchCuotasStats(): Promise<{
   ppp_mora: number
 }> {
   const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, contracargos: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, pct_contracargos: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, monto_contracargos: 0, ppp_recupero: 0, ppp_mora: 0 }
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return empty
+  const pool = getPool()
+  if (!pool) return empty
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       total: string
@@ -611,7 +607,7 @@ export async function fetchCuotasStats(): Promise<{
       ppp_mora: Math.round(Number(row.ppp_mora)),
     }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -760,8 +756,8 @@ export async function fetchDPDIndicadores(): Promise<{
   byDueMonth: DPDRow[]
 }> {
   const empty = { byOrigination: [], byDueMonth: [] }
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return empty
+  const pool = getPool()
+  if (!pool) return empty
 
   const baseQuery = (mesExpr: string) => `
     SELECT
@@ -792,8 +788,7 @@ export async function fetchDPDIndicadores(): Promise<{
     ORDER BY 1
   `
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     type QRow = {
       mes: Date | string
@@ -839,7 +834,7 @@ export async function fetchDPDIndicadores(): Promise<{
       byDueMonth: parseRows(resDue.rows),
     }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -867,8 +862,8 @@ export async function fetchPDIndicadores(): Promise<{
   maxCuota: number
 }> {
   const empty = { byOrigination: [], byDueMonth: [], resumen: [], maxCuota: 0 }
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return empty
+  const pool = getPool()
+  if (!pool) return empty
 
   const baseQuery = (mesExpr: string) => `
     SELECT
@@ -895,8 +890,7 @@ export async function fetchPDIndicadores(): Promise<{
     ORDER BY 1, 2
   `
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     type QRow = { mes: Date | string; cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }
 
@@ -967,7 +961,7 @@ export async function fetchPDIndicadores(): Promise<{
 
     return { byOrigination, byDueMonth, resumen, maxCuota }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
@@ -1005,11 +999,10 @@ interface VintageRow {
 }
 
 export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{
       origination_month: Date | string
@@ -1139,6 +1132,6 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
         }
       })
   } finally {
-    await client.end()
+    client.release()
   }
 }

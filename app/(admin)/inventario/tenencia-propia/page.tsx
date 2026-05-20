@@ -1,4 +1,4 @@
-import { Client } from 'pg'
+import { getPool } from '@/lib/db-pool'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
 
@@ -22,12 +22,11 @@ interface UnmatchedRow {
 }
 
 async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{ rows: ModeloRow[]; unmatched: UnmatchedRow[]; error: string | null }> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { rows: [], unmatched: [], error: 'GOCELULAR_DB_URL no configurada' }
+  const pool = getPool()
+  if (!pool) return { rows: [], unmatched: [], error: 'GOCELULAR_DB_URL no configurada' }
 
-  const client = new Client({ connectionString: url })
+  const client = await pool.connect()
   try {
-    await client.connect()
 
     // 1. Disponibles por modelo
     const disponiblesRes = await client.query<{ model_code: string; qty: string }>(
@@ -139,7 +138,7 @@ async function loadStockPropio(preciosNewsan: Record<string, number>): Promise<{
   } catch (e: unknown) {
     return { rows: [], unmatched: [], error: e instanceof Error ? e.message : String(e) }
   } finally {
-    await client.end().catch(() => {})
+    client.release()
   }
 }
 

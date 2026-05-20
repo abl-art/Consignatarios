@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client } from 'pg'
+import { getPool } from '@/lib/db-pool'
 import { revalidatePath } from 'next/cache'
 import { getMejorPrecio } from './compras'
 import { buscarPrecio } from '@/lib/utils'
@@ -55,8 +55,9 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
   const precios = await getMejorPrecio()
 
   // Consultar GOcelular: disponibles y pendientes por modelo
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const pool = getPool()
+  if (!pool) return { error: 'GOCELULAR_DB_URL no configurada' }
+  const client = await pool.connect()
   try {
     // Disponibles
     const dispRes = await client.query<{ model_name: string; qty: string }>(
@@ -137,7 +138,7 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
     revalidatePath('/auditoria-stock')
     return { ok: true, id: row.id }
   } finally {
-    await client.end()
+    client.release()
   }
 }
 

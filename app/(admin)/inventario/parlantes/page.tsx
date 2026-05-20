@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { Client } from 'pg'
+import { getPool } from '@/lib/db-pool'
 import { formatearMoneda } from '@/lib/utils'
 import { getPedidos } from '@/lib/actions/compras'
 
@@ -31,12 +31,11 @@ interface Row {
 }
 
 async function loadData(): Promise<{ rows: Row[]; error: string | null }> {
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return { rows: [], error: 'GOCELULAR_DB_URL no configurada' }
+  const pool = getPool()
+  if (!pool) return { rows: [], error: 'GOCELULAR_DB_URL no configurada' }
 
-  const client = new Client({ connectionString: url })
+  const client = await pool.connect()
   try {
-    await client.connect()
 
     // 1. Disponibles desde store_products (fuente de verdad)
     const stockRes = await client.query<{ display_name: string; stock: string; price: string }>(
@@ -93,7 +92,7 @@ async function loadData(): Promise<{ rows: Row[]; error: string | null }> {
   } catch (e: unknown) {
     return { rows: [], error: e instanceof Error ? e.message : String(e) }
   } finally {
-    await client.end().catch(() => {})
+    client.release()
   }
 }
 

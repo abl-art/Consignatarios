@@ -412,29 +412,27 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
 }
 
 async function fetchModelosActivos(): Promise<{ name: string; model_code: string }[]> {
-  const { Client } = await import('pg')
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return []
+  const { getPool } = await import('@/lib/db-pool')
+  const pool = getPool()
+  if (!pool) return []
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ name: string; model_code: string }>(
       `SELECT name, model_code FROM device_models WHERE active = true ORDER BY brand, name`
     )
     return res.rows
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
 async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, number>> {
-  const { Client } = await import('pg')
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return {}
+  const { getPool } = await import('@/lib/db-pool')
+  const pool = getPool()
+  if (!pool) return {}
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const res = await client.query<{ modelo: string; ventas: string }>(
       `SELECT COALESCE(so.product_name, 'Desconocido') AS modelo, COUNT(*)::text AS ventas
@@ -453,17 +451,16 @@ async function fetchVentasPorModeloDesde(desde: string): Promise<Record<string, 
     }
     return result
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
 async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
-  const { Client } = await import('pg')
-  const url = process.env.GOCELULAR_DB_URL
-  if (!url) return {}
+  const { getPool } = await import('@/lib/db-pool')
+  const pool = getPool()
+  if (!pool) return {}
 
-  const client = new Client({ connectionString: url })
-  await client.connect()
+  const client = await pool.connect()
   try {
     const [dispRes, pendRes] = await Promise.all([
       // Disponibles por modelo
@@ -515,7 +512,7 @@ async function fetchStockCelularesPorModelo(): Promise<Record<string, number>> {
     }
     return result
   } finally {
-    await client.end()
+    client.release()
   }
 }
 
