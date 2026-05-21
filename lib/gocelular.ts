@@ -1124,3 +1124,88 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
     client.release()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Alerta 5: Órdenes de terceros sin IMEI asignado
+// ---------------------------------------------------------------------------
+
+export interface AlertaSinImeiOrden {
+  orderId: string
+  userDni: string
+  userName: string
+  fecha: string
+  monto: number
+}
+
+export interface AlertaSinImeiTienda {
+  storeName: string
+  clientId: string
+  sinImei: number
+  total: number
+  ordenes: AlertaSinImeiOrden[]
+}
+
+export async function fetchAlertasSinImei(): Promise<AlertaSinImeiTienda[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      store_name: string; client_id: string; order_id: string;
+      user_dni: string; user_name: string; fecha: string; monto: string
+    }>(
+      `SELECT o.store_name, o.client_id::text AS client_id,
+        o.order_id::text AS order_id,
+        COALESCE(o.user_dni::text, '') AS user_dni,
+        COALESCE(o.user_name, 'Sin nombre') AS user_name,
+        o.order_created_at::date::text AS fecha,
+        o.total_order_amount::text AS monto
+      FROM gocuotas_orders o
+      LEFT JOIN devices d ON d.order_id = o.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
+        AND d.imei IS NULL
+      ORDER BY o.store_name, o.order_created_at DESC`
+    )
+
+    const map = new Map<string, AlertaSinImeiTienda>()
+    for (const r of res.rows) {
+      let monto = Number(r.monto)
+      if (monto > 5000000) monto = monto / 100
+      const key = r.store_name
+      const orden: AlertaSinImeiOrden = {
+        orderId: r.order_id, userDni: r.user_dni, userName: r.user_name,
+        fecha: r.fecha, monto,
+      }
+      const existing = map.get(key)
+      if (existing) {
+        existing.sinImei++
+        existing.ordenes.push(orden)
+      } else {
+        map.set(key, {
+          storeName: r.store_name, clientId: r.client_id,
+          sinImei: 1, total: 0, ordenes: [orden],
+        })
+      }
+    }
+
+    // Traer totales por tienda para contexto
+    const totRes = await client.query<{ store_name: string; total: string }>(
+      `SELECT o.store_name, COUNT(*)::text AS total
+       FROM gocuotas_orders o
+       WHERE o.order_delivered_at IS NOT NULL AND o.order_discarded_at IS NULL
+         AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
+       GROUP BY o.store_name`
+    )
+    for (const r of totRes.rows) {
+      const t = map.get(r.store_name)
+      if (t) t.total = Number(r.total)
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.sinImei - a.sinImei)
+  } finally {
+    client.release()
+  }
+}

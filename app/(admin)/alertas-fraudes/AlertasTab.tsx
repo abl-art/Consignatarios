@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { AlertaSucursal, AlertaCuota1, AlertaDNI, AlertaTiendaDNI } from '@/lib/gocelular'
+import type { AlertaSucursal, AlertaCuota1, AlertaDNI, AlertaTiendaDNI, AlertaSinImeiTienda } from '@/lib/gocelular'
 import { formatearMoneda } from '@/lib/utils'
 
 const MERCHANTS: Record<string, string> = {
@@ -21,15 +21,18 @@ interface Props {
   cuota1: AlertaCuota1[]
   dniUsuarios: AlertaDNI[]
   dniTiendas: AlertaTiendaDNI[]
+  sinImei: AlertaSinImeiTienda[]
 }
 
-export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas }: Props) {
+export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas, sinImei }: Props) {
   const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
   const [expandedStore, setExpandedStore] = useState<string | null>(null)
   const [expandedMerchantC1, setExpandedMerchantC1] = useState<string | null>(null)
   const [expandedC1Store, setExpandedC1Store] = useState<string | null>(null)
   const [expandedDni, setExpandedDni] = useState<string | null>(null)
   const [expandedTienda, setExpandedTienda] = useState<string | null>(null)
+  const [expandedImeiMerchant, setExpandedImeiMerchant] = useState<string | null>(null)
+  const [expandedImeiStore, setExpandedImeiStore] = useState<string | null>(null)
 
   const sucPorMerchant = useMemo(() => {
     const map = new Map<string, AlertaSucursal[]>()
@@ -69,6 +72,20 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
       }
     }).sort((a, b) => b.totalOrdenes - a.totalOrdenes)
   }, [cuota1])
+
+  // Sin IMEI agrupado por merchant
+  const sinImeiPorMerchant = useMemo(() => {
+    const map = new Map<string, AlertaSinImeiTienda[]>()
+    for (const t of sinImei) { const arr = map.get(t.clientId) ?? []; arr.push(t); map.set(t.clientId, arr) }
+    return Array.from(map.entries()).map(([clientId, stores]) => ({
+      clientId, name: merchantName(clientId),
+      stores: stores.sort((a, b) => b.sinImei - a.sinImei),
+      totalSinImei: stores.reduce((s, t) => s + t.sinImei, 0),
+      totalOrdenes: stores.reduce((s, t) => s + t.total, 0),
+    })).sort((a, b) => b.totalSinImei - a.totalSinImei)
+  }, [sinImei])
+
+  const totalSinImei = sinImei.reduce((s, t) => s + t.sinImei, 0)
 
   return (
     <div className="space-y-6">
@@ -359,6 +376,81 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
                         <td className={`px-3 py-1.5 text-right font-bold ${u.bloqueados > 0 ? 'text-red-700' : 'text-gray-400'}`}>{u.bloqueados > 0 ? u.bloqueados : '—'}</td>
                       </tr>
                     )) : []),
+                  ]
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* ── Alerta 5: Ordenes terceros sin IMEI ── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-rose-500 shrink-0"></div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-gray-900">Ordenes de terceros sin IMEI asignado</h3>
+            <p className="text-[10px] text-gray-400">Ordenes entregadas que nunca recibieron un equipo. Clic merchant → tienda → ordenes.</p>
+          </div>
+          <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium shrink-0">{totalSinImei}</span>
+        </div>
+        <div className="overflow-auto max-h-[500px]">
+          {sinImeiPorMerchant.length === 0 ? (
+            <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="w-6 px-2 py-2"></th>
+                  <th className="text-left px-2 py-2 font-medium text-gray-600">Merchant / Tienda / Orden</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">DNI</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">Nombre</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Fecha</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Sin IMEI</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Total ord.</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Monto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sinImeiPorMerchant.flatMap(m => {
+                  const isMExp = expandedImeiMerchant === m.clientId
+                  return [
+                    <tr key={m.clientId} onClick={() => { setExpandedImeiMerchant(isMExp ? null : m.clientId); setExpandedImeiStore(null) }}
+                      className={`cursor-pointer hover:bg-gray-100 font-semibold ${isMExp ? 'bg-gray-50' : ''}`}>
+                      <td className="px-2 py-2 text-gray-400">{isMExp ? '▼' : '▶'}</td>
+                      <td className="px-2 py-2 text-gray-900">{m.name} <span className="text-gray-400 font-normal">({m.stores.length} tiendas)</span></td>
+                      <td className="px-3 py-2" colSpan={2}></td>
+                      <td className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-right text-rose-700 font-bold">{m.totalSinImei}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">{m.totalOrdenes}</td>
+                      <td className="px-3 py-2"></td>
+                    </tr>,
+                    ...(isMExp ? m.stores.flatMap(t => {
+                      const isSExp = expandedImeiStore === t.storeName
+                      return [
+                        <tr key={`si-${t.storeName}`} onClick={(e) => { e.stopPropagation(); setExpandedImeiStore(isSExp ? null : t.storeName) }}
+                          className={`cursor-pointer border-l-4 border-l-rose-300 bg-rose-50/30 hover:bg-rose-100/40 ${isSExp ? 'font-semibold' : ''}`}>
+                          <td className="pl-6 py-1.5 text-gray-400">{isSExp ? '▼' : '▶'}</td>
+                          <td className="px-2 py-1.5 text-gray-700 truncate max-w-[220px]" title={t.storeName}>{t.storeName}</td>
+                          <td className="px-3 py-1.5" colSpan={2}></td>
+                          <td className="px-3 py-1.5"></td>
+                          <td className="px-3 py-1.5 text-right text-rose-700 font-bold">{t.sinImei}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-500">{t.total}</td>
+                          <td className="px-3 py-1.5"></td>
+                        </tr>,
+                        ...(isSExp ? t.ordenes.map(o => (
+                          <tr key={o.orderId} className="border-l-4 border-l-rose-200 bg-rose-50/20">
+                            <td className="pl-10 py-1"></td>
+                            <td className="px-2 py-1 text-gray-400 font-mono">#{o.orderId}</td>
+                            <td className="px-3 py-1 font-mono text-gray-700">{o.userDni}</td>
+                            <td className="px-3 py-1 text-gray-600 truncate max-w-[120px]" title={o.userName}>{o.userName}</td>
+                            <td className="px-3 py-1 text-right text-gray-400">{o.fecha}</td>
+                            <td className="px-3 py-1" colSpan={2}></td>
+                            <td className="px-3 py-1 text-right text-gray-600">{formatearMoneda(o.monto)}</td>
+                          </tr>
+                        )) : []),
+                      ]
+                    }) : []),
                   ]
                 })}
               </tbody>
