@@ -1,9 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import type { VentasPorProvincia, VentasPorCiudad } from '@/lib/gocelular'
-import { PROVINCIAS_SVG } from './argentina-paths'
 
 const COLORES = ['#E91E7B', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4', '#F97316', '#6366F1', '#84CC16']
 
@@ -22,41 +21,78 @@ export default function GeografiaVentas({ provincias, ciudades }: Props) {
     return m
   }, [provincias])
 
-  function getColor(prov: string): string {
-    const ordenes = provMap.get(prov) ?? 0
-    if (ordenes === 0) return '#f3f4f6'
-    const intensity = Math.max(0.2, ordenes / maxOrdenes)
-    if (top5.has(prov)) return `rgba(233, 30, 123, ${intensity})`
-    return `rgba(99, 102, 241, ${intensity})`
-  }
+  const svgRef = useRef<HTMLObjectElement>(null)
+
+  // Color provinces when SVG loads
+  useEffect(() => {
+    function colorize() {
+      const obj = svgRef.current
+      if (!obj) return
+      const svgDoc = obj.contentDocument
+      if (!svgDoc) return
+
+      const paths = svgDoc.querySelectorAll('path[data-prov]')
+      paths.forEach((path) => {
+        const prov = path.getAttribute('data-prov') || ''
+        const ordenes = provMap.get(prov) ?? 0
+        const isTop = top5.has(prov)
+        const intensity = ordenes > 0 ? Math.max(0.2, ordenes / maxOrdenes) : 0
+
+        let fill = '#f3f4f6'
+        if (ordenes > 0) {
+          if (isTop) {
+            const r = 233, g = Math.round(30 + (1 - intensity) * 180), b = Math.round(123 + (1 - intensity) * 100)
+            fill = `rgb(${r},${g},${b})`
+          } else {
+            const r = Math.round(99 + (1 - intensity) * 140), g = Math.round(102 + (1 - intensity) * 140), b = Math.round(241 - (1 - intensity) * 40)
+            fill = `rgb(${r},${g},${b})`
+          }
+        }
+
+        const el = path as SVGPathElement
+        el.style.fill = fill
+        el.style.stroke = isTop ? '#E91E7B' : '#9ca3af'
+        el.style.strokeWidth = isTop ? '1.5' : '0.5'
+        el.style.cursor = 'default'
+
+        // Add number label
+        if (ordenes > 0) {
+          const bbox = el.getBBox()
+          const cx = bbox.x + bbox.width / 2
+          const cy = bbox.y + bbox.height / 2
+          const text = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'text')
+          text.setAttribute('x', String(cx))
+          text.setAttribute('y', String(cy))
+          text.setAttribute('text-anchor', 'middle')
+          text.setAttribute('dominant-baseline', 'central')
+          text.setAttribute('font-size', ordenes >= 100 ? '22' : '18')
+          text.setAttribute('font-weight', '700')
+          text.setAttribute('fill', intensity > 0.4 ? '#fff' : '#111827')
+          text.setAttribute('pointer-events', 'none')
+          text.textContent = String(ordenes)
+          el.parentElement?.appendChild(text)
+        }
+      })
+    }
+
+    const obj = svgRef.current
+    if (obj) {
+      obj.addEventListener('load', colorize)
+      // Also try immediately in case already loaded
+      setTimeout(colorize, 100)
+    }
+    return () => { obj?.removeEventListener('load', colorize) }
+  }, [provMap, top5, maxOrdenes])
 
   return (
     <div className="space-y-4">
-      {/* Mapa político */}
+      {/* Mapa */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Ventas por provincia</h3>
         <p className="text-[10px] text-gray-400 mb-2">{total} ordenes propias</p>
         <div className="flex justify-center">
-          <svg viewBox="20 0 320 590" className="w-full max-w-[260px]">
-            {Object.entries(PROVINCIAS_SVG).map(([prov, { d, cx, cy }]) => {
-              const ordenes = provMap.get(prov) ?? 0
-              const isTop5 = top5.has(prov)
-              return (
-                <g key={prov}>
-                  <path d={d} fill={getColor(prov)}
-                    stroke={isTop5 ? '#E91E7B' : '#9ca3af'} strokeWidth={isTop5 ? 1.5 : 0.5}
-                  />
-                  {ordenes > 0 && (
-                    <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central"
-                      fontSize={ordenes >= 100 ? 10 : 9} fontWeight={700}
-                      fill={ordenes > maxOrdenes * 0.25 ? '#fff' : '#111827'}>
-                      {ordenes}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-          </svg>
+          <object ref={svgRef} data="/argentina-provincias.svg" type="image/svg+xml"
+            className="w-full max-w-[240px] h-auto" />
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2 justify-center">
           {provincias.slice(0, 5).map((p, i) => (
@@ -67,7 +103,7 @@ export default function GeografiaVentas({ provincias, ciudades }: Props) {
         </div>
       </div>
 
-      {/* Torta ciudades */}
+      {/* Torta */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Top 10 ciudades</h3>
         <p className="text-[10px] text-gray-400 mb-3">Por cantidad de ordenes propias</p>
@@ -75,8 +111,7 @@ export default function GeografiaVentas({ provincias, ciudades }: Props) {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={ciudades} dataKey="ordenes" nameKey="ciudad" cx="50%" cy="50%"
-                outerRadius={75} innerRadius={30} paddingAngle={2}
-                label={false}>
+                outerRadius={75} innerRadius={30} paddingAngle={2} label={false}>
                 {ciudades.map((_, i) => <Cell key={i} fill={COLORES[i % COLORES.length]} />)}
               </Pie>
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
