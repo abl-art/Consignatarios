@@ -117,26 +117,34 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
   useEffect(() => { guardardasRef.current = guardadas }, [guardadas])
   useEffect(() => { notasContentRef.current = notasContent }, [notasContent])
 
-  // Fetch fresh data on mount
-  useEffect(() => {
+  // Fetch fresh data on mount + when tab becomes visible (sync between devices)
+  const fetchGuardadasFresh = useCallback(() => {
     fetchNotasGuardadas().then(fresh => {
       setGuardadas(fresh)
       guardardasRef.current = fresh
     })
   }, [])
 
-  // Save on page hide / beforeunload — protects ALL notas data
+  useEffect(() => { fetchGuardadasFresh() }, [fetchGuardadasFresh])
+
+  // Save on page hide + sync on page visible — protects ALL notas data
   useEffect(() => {
-    function flushNotas() {
-      if (document.visibilityState === 'hidden' && notasContentRef.current !== notasLastSaved.current) {
-        lsSet(LS_KEYS.notas, notasContentRef.current)
-        guardarNotas(notasContentRef.current)
-        notasLastSaved.current = notasContentRef.current
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        // Guardar al salir
+        if (notasContentRef.current !== notasLastSaved.current) {
+          lsSet(LS_KEYS.notas, notasContentRef.current)
+          guardarNotas(notasContentRef.current)
+          notasLastSaved.current = notasContentRef.current
+        }
+      } else {
+        // Al volver: re-fetch para sincronizar con cambios de otros dispositivos
+        fetchGuardadasFresh()
       }
     }
-    document.addEventListener('visibilitychange', flushNotas)
-    return () => document.removeEventListener('visibilitychange', flushNotas)
-  }, [])
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [fetchGuardadasFresh])
 
   const updateNotasContent = useCallback((html: string) => {
     setNotasContent(html)
@@ -219,8 +227,8 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
   const { lunes, dias } = getSemana(weekOffset)
 
-  // Al montar: siempre cargar datos frescos de la DB (no confiar en server component)
-  useEffect(() => {
+  // Fetch fresh data from DB
+  function syncFromDB() {
     fetchTodos().then(fresh => {
       const freshData = fresh as WeekData
       setData(freshData)
@@ -230,27 +238,33 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
       setNotasEventos(fresh)
       evDataRef.current = fresh
     })
-  }, [])
+  }
 
-  // Flush pending saves on page hide/unload
+  // Al montar: cargar datos frescos
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { syncFromDB() }, [])
+
+  // Flush on hide + sync on visible (multi-device support)
   useEffect(() => {
-    function flushOnHide() {
+    function onVisibilityChange() {
       if (document.visibilityState === 'hidden') {
-        // Force immediate save of latest state
+        // Guardar al salir
         const todosPayload = JSON.stringify(dataRef.current)
         const evPayload = JSON.stringify(evDataRef.current)
-        navigator.sendBeacon?.('/api/notas-beacon', JSON.stringify({ type: 'noop' })) // trigger connection
-        // Use the save queue to ensure latest data is sent
         saveQueue.current = saveQueue.current.then(async () => {
           try {
             await guardarTodos(JSON.parse(todosPayload) as WeekData)
             await guardarNotasEventos(JSON.parse(evPayload))
           } catch { /* best effort */ }
         })
+      } else {
+        // Al volver: re-fetch para sincronizar con otros dispositivos
+        syncFromDB()
       }
     }
-    document.addEventListener('visibilitychange', flushOnHide)
-    return () => document.removeEventListener('visibilitychange', flushOnHide)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Cargar eventos de Google Calendar para la semana visible
