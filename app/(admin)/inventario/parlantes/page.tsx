@@ -78,14 +78,16 @@ async function loadData(): Promise<{ rows: Row[]; error: string | null }> {
       }
     }
 
+    const disponibleCalc = ingresos - ventas
+
     return {
       rows: [{
         producto: NOMBRE_UNIFICADO,
         ingresos,
         ventas,
-        disponibles,
+        disponibles: disponibleCalc,
         precioUnitario: precioCompra,
-        valuacion: disponibles * precioCompra,
+        valuacion: disponibleCalc * precioCompra,
       }],
       error: null,
     }
@@ -108,7 +110,7 @@ export default async function ParlantesPage() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Parlantes</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Inventario de parlantes — ingresos desde pedidos, ventas y disponibles desde GOcelular.
+        Inventario de parlantes — disponibles = ingresos - ventas.
       </p>
 
       {error && (
