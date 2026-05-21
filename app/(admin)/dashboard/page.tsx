@@ -2,15 +2,16 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, fetchVentasGeografia, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ConversionChart from './ConversionChart'
+import GeografiaVentas from './GeografiaVentas'
 
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, geografia] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -21,6 +22,7 @@ export default async function DashboardPage() {
     getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
     fetchTrustonicStats(),
+    fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [] })),
   ])
 
   // Valorización tenencia propia
@@ -50,7 +52,11 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard360</h1>
       <p className="text-sm text-gray-500 mb-6">Vista general de GOcelular</p>
 
-      <VentasDelDia />
+      {/* Ventas del día + Geografía */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <VentasDelDia />
+        <GeografiaVentas provincias={geografia.provincias} ciudades={geografia.ciudades} />
+      </div>
 
       {/* Contracargos + Stock */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
@@ -185,14 +191,14 @@ async function VentasDelDia() {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Ventas del día — GOcelular</h2>
+          <h2 className="text-base font-semibold text-gray-900">Ventas del día</h2>
           <p className="text-xs text-gray-500">{totalVentas} ventas · {formatearMoneda(totalMonto)}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="space-y-2">
         {canales.map((canal) => {
           const items = clasificadas.filter((v) => v.canal === canal.key)
           const canalVentas = items.reduce((s, v) => s + v.ventas, 0)
@@ -201,22 +207,20 @@ async function VentasDelDia() {
           const Wrapper = canal.key === 'terceros' ? 'a' : 'div'
           const extraProps = canal.key === 'terceros' ? { href: '/dashboard/terceros' } : {}
           return (
-            <Wrapper key={canal.key} {...extraProps} className={`rounded-xl border ${canal.borderColor} ${canal.color} p-4 ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
-              <div className="flex items-center justify-between mb-3">
+            <Wrapper key={canal.key} {...extraProps} className={`flex items-center justify-between rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-3 ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
+              <div className="flex items-center gap-3">
                 <h3 className={`text-sm font-bold ${canal.iconColor}`}>{canal.label}</h3>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-gray-900">{canalVentas}</p>
-                  <p className="text-xs text-gray-500">ventas</p>
+                {canal.key === 'terceros' && canalVentas > 0 && (
+                  <span className="text-[10px] text-gray-400">ver detalle →</span>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <p className={`text-lg font-bold ${canal.iconColor}`}>{formatearMoneda(canalMonto)}</p>
+                <div className="text-right min-w-[40px]">
+                  <p className="text-sm font-bold text-gray-900">{canalVentas}</p>
+                  <p className="text-[10px] text-gray-400">ventas</p>
                 </div>
               </div>
-              <p className={`text-xl font-bold ${canal.iconColor}`}>{formatearMoneda(canalMonto)}</p>
-
-              {items.length === 0 && (
-                <p className="text-xs text-gray-400 mt-2">Sin ventas hoy</p>
-              )}
-              {canal.key === 'terceros' && canalVentas > 0 && (
-                <p className="text-[10px] text-gray-400 mt-2">Click para ver detalle por merchant</p>
-              )}
             </Wrapper>
           )
         })}

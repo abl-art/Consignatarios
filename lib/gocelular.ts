@@ -3,6 +3,56 @@ import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS } from './client-ids
 
 export { CLIENT_IDS_PROPIOS }
 
+// ---------------------------------------------------------------------------
+// Ventas por geografía (solo ventas propias)
+// ---------------------------------------------------------------------------
+
+export interface VentasPorProvincia {
+  provincia: string
+  ordenes: number
+}
+
+export interface VentasPorCiudad {
+  ciudad: string
+  provincia: string
+  ordenes: number
+}
+
+export async function fetchVentasGeografia(): Promise<{ provincias: VentasPorProvincia[]; ciudades: VentasPorCiudad[] }> {
+  const pool = getPool()
+  if (!pool) return { provincias: [], ciudades: [] }
+
+  const client = await pool.connect()
+  try {
+    const [provRes, cityRes] = await Promise.all([
+      client.query<{ provincia: string; ordenes: string }>(
+        `SELECT UPPER(TRIM(so.shipping_province)) AS provincia, COUNT(*)::text AS ordenes
+         FROM store_orders so
+         JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+         WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
+           AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+           AND so.shipping_province IS NOT NULL AND TRIM(so.shipping_province) != ''
+         GROUP BY 1 ORDER BY 2 DESC`
+      ),
+      client.query<{ ciudad: string; provincia: string; ordenes: string }>(
+        `SELECT UPPER(TRIM(so.shipping_city)) AS ciudad, UPPER(TRIM(so.shipping_province)) AS provincia, COUNT(*)::text AS ordenes
+         FROM store_orders so
+         JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+         WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
+           AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+           AND so.shipping_city IS NOT NULL AND TRIM(so.shipping_city) != ''
+         GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10`
+      ),
+    ])
+    return {
+      provincias: provRes.rows.map(r => ({ provincia: r.provincia, ordenes: Number(r.ordenes) })),
+      ciudades: cityRes.rows.map(r => ({ ciudad: r.ciudad, provincia: r.provincia, ordenes: Number(r.ordenes) })),
+    }
+  } finally {
+    client.release()
+  }
+}
+
 export interface VentaDiaria {
   store_name: string
   client_id: string
