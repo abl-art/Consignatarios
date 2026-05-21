@@ -32,7 +32,7 @@ export async function fetchVentasGeografia(): Promise<{ provincias: VentasPorPro
          WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
            AND go.client_id::text IN (${SQL_IDS_PROPIOS})
            AND so.shipping_province IS NOT NULL AND TRIM(so.shipping_province) != ''
-         GROUP BY 1 ORDER BY 2 DESC`
+         GROUP BY 1 ORDER BY COUNT(*) DESC`
       ),
       client.query<{ ciudad: string; provincia: string; ordenes: string }>(
         `SELECT UPPER(TRIM(so.shipping_city)) AS ciudad, UPPER(TRIM(so.shipping_province)) AS provincia, COUNT(*)::text AS ordenes
@@ -41,7 +41,7 @@ export async function fetchVentasGeografia(): Promise<{ provincias: VentasPorPro
          WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
            AND go.client_id::text IN (${SQL_IDS_PROPIOS})
            AND so.shipping_city IS NOT NULL AND TRIM(so.shipping_city) != ''
-         GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10`
+         GROUP BY 1, 2 ORDER BY COUNT(*) DESC LIMIT 10`
       ),
     ])
     return {
