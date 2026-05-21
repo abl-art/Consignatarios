@@ -33,6 +33,9 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
   const [expandedTienda, setExpandedTienda] = useState<string | null>(null)
   const [expandedImeiMerchant, setExpandedImeiMerchant] = useState<string | null>(null)
   const [expandedImeiStore, setExpandedImeiStore] = useState<string | null>(null)
+  const [openAlert, setOpenAlert] = useState<number | null>(null)
+
+  function toggleAlert(n: number) { setOpenAlert(prev => prev === n ? null : n) }
 
   const sucPorMerchant = useMemo(() => {
     const map = new Map<string, AlertaSucursal[]>()
@@ -82,24 +85,26 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
       stores: stores.sort((a, b) => b.sinImei - a.sinImei),
       totalSinImei: stores.reduce((s, t) => s + t.sinImei, 0),
       totalOrdenes: stores.reduce((s, t) => s + t.total, 0),
+      totalMonto: stores.reduce((s, t) => s + t.ordenes.reduce((s2, o) => s2 + o.monto, 0), 0),
     })).sort((a, b) => b.totalSinImei - a.totalSinImei)
   }, [sinImei])
 
   const totalSinImei = sinImei.reduce((s, t) => s + t.sinImei, 0)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* ── Alerta 1: PD Hard / Tasa Activación ── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(1)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 1 ? '▼' : '▶'}</span>
           <div className="w-3 h-3 rounded-full bg-red-500 shrink-0"></div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">PD Hard &gt;50% o Tasa Activacion &lt;90%</h3>
-            <p className="text-[10px] text-gray-400">Ordenes +20 dias. Clic merchant → sucursal → ordenes con DNI.</p>
+            <p className="text-[10px] text-gray-400">Ordenes +20 dias. Merchant → sucursal → ordenes con DNI.</p>
           </div>
           <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium shrink-0">{sucursales.length}</span>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
+        </button>
+        {openAlert === 1 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
           {sucPorMerchant.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -176,20 +181,21 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── Alerta 2: Cuota 1 > 50% ── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(2)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 2 ? '▼' : '▶'}</span>
           <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0"></div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">Cuota 1 &gt; 50% del valor del equipo</h3>
-            <p className="text-[10px] text-gray-400">Anticipo sospechosamente alto. Clic merchant → tienda → ordenes.</p>
+            <p className="text-[10px] text-gray-400">Anticipo sospechosamente alto. Merchant → tienda → ordenes.</p>
           </div>
           <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium shrink-0">{cuota1.length}</span>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
+        </button>
+        {openAlert === 2 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
           {c1PorMerchant.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -254,20 +260,21 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── Alerta 3: DNI con 2+ ordenes ── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(3)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 3 ? '▼' : '▶'}</span>
           <div className="w-3 h-3 rounded-full bg-purple-500 shrink-0"></div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">Usuarios con 2+ ordenes (por DNI)</h3>
-            <p className="text-[10px] text-gray-400">Mismo DNI en multiples compras. Clic para ver detalle de cada orden.</p>
+            <p className="text-[10px] text-gray-400">Mismo DNI en multiples compras. Clic para ver detalle.</p>
           </div>
           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium shrink-0">{dniUsuarios.length}</span>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
+        </button>
+        {openAlert === 3 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
           {dniUsuarios.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -320,20 +327,21 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── Alerta 4: Tiendas terceros con DNI repetido ── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(4)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 4 ? '▼' : '▶'}</span>
           <div className="w-3 h-3 rounded-full bg-indigo-500 shrink-0"></div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">Tiendas terceros con DNI repetido</h3>
-            <p className="text-[10px] text-gray-400">Solo terceros. Posible connivencia con vendedores. Clic para ver usuarios.</p>
+            <p className="text-[10px] text-gray-400">Solo terceros. Posible connivencia con vendedores.</p>
           </div>
           <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium shrink-0">{dniTiendas.length}</span>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
+        </button>
+        {openAlert === 4 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
           {dniTiendas.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -381,20 +389,21 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── Alerta 5: Ordenes terceros sin IMEI ── */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(5)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 5 ? '▼' : '▶'}</span>
           <div className="w-3 h-3 rounded-full bg-rose-500 shrink-0"></div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">Ordenes de terceros sin IMEI asignado</h3>
-            <p className="text-[10px] text-gray-400">Ordenes entregadas que nunca recibieron un equipo. Clic merchant → tienda → ordenes.</p>
+            <p className="text-[10px] text-gray-400">Ordenes entregadas sin equipo. Merchant → tienda → ordenes.</p>
           </div>
           <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium shrink-0">{totalSinImei}</span>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
+        </button>
+        {openAlert === 5 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
           {sinImeiPorMerchant.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -423,7 +432,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
                       <td className="px-3 py-2"></td>
                       <td className="px-3 py-2 text-right text-rose-700 font-bold">{m.totalSinImei}</td>
                       <td className="px-3 py-2 text-right text-gray-500">{m.totalOrdenes}</td>
-                      <td className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-right text-rose-700 font-semibold">{formatearMoneda(m.totalMonto)}</td>
                     </tr>,
                     ...(isMExp ? m.stores.flatMap(t => {
                       const isSExp = expandedImeiStore === t.storeName
@@ -436,7 +445,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
                           <td className="px-3 py-1.5"></td>
                           <td className="px-3 py-1.5 text-right text-rose-700 font-bold">{t.sinImei}</td>
                           <td className="px-3 py-1.5 text-right text-gray-500">{t.total}</td>
-                          <td className="px-3 py-1.5"></td>
+                          <td className="px-3 py-1.5 text-right text-rose-700 font-medium">{formatearMoneda(t.ordenes.reduce((s, o) => s + o.monto, 0))}</td>
                         </tr>,
                         ...(isSExp ? t.ordenes.map(o => (
                           <tr key={o.orderId} className="border-l-4 border-l-rose-200 bg-rose-50/20">
@@ -456,7 +465,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   )
