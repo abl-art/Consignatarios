@@ -752,6 +752,16 @@ export async function fetchPDHardCuota2(): Promise<PDHardRow[]> {
 // Alertas de fraude: sucursales sospechosas y cuota 1 alta
 // ---------------------------------------------------------------------------
 
+export interface AlertaSucursalOrden {
+  orderId: string
+  userDni: string
+  userName: string
+  fecha: string
+  monto: number
+  bloqueado: boolean
+  deviceStatus: string
+}
+
 export interface AlertaSucursal {
   storeName: string
   clientId: string
@@ -760,6 +770,7 @@ export interface AlertaSucursal {
   asignados: number
   activados: number
   tasaActivacion: number
+  detalleOrdenes: AlertaSucursalOrden[]
 }
 
 export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
@@ -809,7 +820,9 @@ export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
       actMap.set(r.store_name, { asignados: Number(r.asignados), activados: Number(r.activados) })
     }
 
-    const result: AlertaSucursal[] = []
+    // Identificar stores alertadas
+    const alertStores: string[] = []
+    const tempResult: Omit<AlertaSucursal, 'detalleOrdenes'>[] = []
     for (const r of pdRes.rows) {
       const den = Number(r.den)
       const num = Number(r.num)
@@ -820,7 +833,8 @@ export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
       const tasa = asignados > 0 ? Math.round((activados / asignados) * 1000) / 10 : 100
 
       if (pd > 50 || tasa < 90) {
-        result.push({
+        alertStores.push(r.store_name)
+        tempResult.push({
           storeName: r.store_name,
           clientId: r.client_id,
           ordenes: Number(r.ordenes),
@@ -831,6 +845,49 @@ export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
         })
       }
     }
+
+    // Traer detalle de órdenes (DNI, bloqueado) de las sucursales alertadas
+    const ordenesMap = new Map<string, AlertaSucursalOrden[]>()
+    if (alertStores.length > 0) {
+      const detRes = await client.query<{
+        store_name: string; order_id: string; user_dni: string; user_name: string;
+        fecha: string; monto: string; device_status: string | null
+      }>(
+        `SELECT o.store_name, o.order_id::text AS order_id,
+          COALESCE(o.user_dni::text, '') AS user_dni, COALESCE(o.user_name, 'Sin nombre') AS user_name,
+          o.order_created_at::date::text AS fecha,
+          o.total_order_amount::text AS monto,
+          d.trustonic_status::text AS device_status
+        FROM gocuotas_orders o
+        LEFT JOIN devices d ON d.order_id = o.order_id::text
+        WHERE o.order_delivered_at IS NOT NULL
+          AND o.order_discarded_at IS NULL
+          AND o.order_created_at < CURRENT_DATE - 20
+          AND o.store_name = ANY($1)
+        ORDER BY o.store_name, o.order_created_at DESC`,
+        [alertStores]
+      )
+      for (const r of detRes.rows) {
+        let monto = Number(r.monto)
+        if (monto > 5000000) monto = monto / 100
+        const arr = ordenesMap.get(r.store_name) ?? []
+        arr.push({
+          orderId: r.order_id,
+          userDni: r.user_dni,
+          userName: r.user_name,
+          fecha: r.fecha,
+          monto,
+          bloqueado: r.device_status === 'locked',
+          deviceStatus: r.device_status || 'sin device',
+        })
+        ordenesMap.set(r.store_name, arr)
+      }
+    }
+
+    const result: AlertaSucursal[] = tempResult.map(s => ({
+      ...s,
+      detalleOrdenes: ordenesMap.get(s.storeName) ?? [],
+    }))
 
     return result.sort((a, b) => b.pdHard - a.pdHard)
   } finally {
