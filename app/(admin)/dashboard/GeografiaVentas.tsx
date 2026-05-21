@@ -37,7 +37,7 @@ export default function GeografiaVentas({ provincias, ciudades }: Props) {
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Ventas por provincia</h3>
         <p className="text-[10px] text-gray-400 mb-2">{total} ordenes propias</p>
         <div className="flex justify-center">
-          <svg viewBox="20 0 300 560" className="w-full max-w-[280px]">
+          <svg viewBox="20 0 320 590" className="w-full max-w-[260px]">
             {Object.entries(PROVINCIAS_SVG).map(([prov, { d, cx, cy }]) => {
               const ordenes = provMap.get(prov) ?? 0
               const isTop5 = top5.has(prov)
