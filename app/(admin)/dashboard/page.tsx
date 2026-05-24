@@ -22,7 +22,7 @@ export default async function DashboardPage() {
     getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
     fetchTrustonicStats(),
-    fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [] })),
+    fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
   ])
 
   // Valorización tenencia propia
@@ -55,7 +55,7 @@ export default async function DashboardPage() {
       {/* Ventas del día + Geografía */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <VentasDelDia />
-        <GeografiaVentas provincias={geografia.provincias} ciudades={geografia.ciudades} />
+        <GeografiaVentas data={geografia} />
       </div>
 
       {/* Contracargos + Stock */}

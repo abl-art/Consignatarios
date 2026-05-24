@@ -18,13 +18,22 @@ export interface VentasPorCiudad {
   ordenes: number
 }
 
-export async function fetchVentasGeografia(): Promise<{ provincias: VentasPorProvincia[]; ciudades: VentasPorCiudad[] }> {
+export interface GeografiaData {
+  provincias: VentasPorProvincia[]
+  ciudades: VentasPorCiudad[]
+  totalOrdenes: number
+  retirosSucursal: number
+  pctRetiros: number
+}
+
+export async function fetchVentasGeografia(): Promise<GeografiaData> {
+  const empty: GeografiaData = { provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 }
   const pool = getPool()
-  if (!pool) return { provincias: [], ciudades: [] }
+  if (!pool) return empty
 
   const client = await pool.connect()
   try {
-    const [provRes, cityRes] = await Promise.all([
+    const [provRes, cityRes, statsRes] = await Promise.all([
       client.query<{ provincia: string; ordenes: string }>(
         `SELECT UPPER(TRIM(so.shipping_province)) AS provincia, COUNT(*)::text AS ordenes
          FROM store_orders so
@@ -34,19 +43,43 @@ export async function fetchVentasGeografia(): Promise<{ provincias: VentasPorPro
            AND so.shipping_province IS NOT NULL AND TRIM(so.shipping_province) != ''
          GROUP BY 1 ORDER BY COUNT(*) DESC`
       ),
+      // Normalizar ciudades: agrupar "CORDOBA - BARRIO" como "CORDOBA"
       client.query<{ ciudad: string; provincia: string; ordenes: string }>(
-        `SELECT UPPER(TRIM(so.shipping_city)) AS ciudad, UPPER(TRIM(so.shipping_province)) AS provincia, COUNT(*)::text AS ordenes
+        `SELECT ciudad, provincia, SUM(qty)::text AS ordenes FROM (
+           SELECT
+             CASE WHEN UPPER(TRIM(so.shipping_city)) LIKE '%-%'
+               THEN UPPER(TRIM(SPLIT_PART(so.shipping_city, '-', 1)))
+               ELSE UPPER(TRIM(so.shipping_city))
+             END AS ciudad,
+             UPPER(TRIM(so.shipping_province)) AS provincia,
+             COUNT(*) AS qty
+           FROM store_orders so
+           JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+           WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
+             AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+             AND so.shipping_city IS NOT NULL AND TRIM(so.shipping_city) != ''
+           GROUP BY 1, 2
+         ) sub
+         GROUP BY 1, 2 ORDER BY SUM(qty) DESC LIMIT 5`
+      ),
+      // Retiros en sucursal
+      client.query<{ total: string; sucursal: string }>(
+        `SELECT COUNT(*)::text AS total,
+           COUNT(*) FILTER (WHERE so.shipping_method::text = 'sucursal')::text AS sucursal
          FROM store_orders so
          JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
          WHERE go.order_delivered_at IS NOT NULL AND go.order_discarded_at IS NULL
-           AND go.client_id::text IN (${SQL_IDS_PROPIOS})
-           AND so.shipping_city IS NOT NULL AND TRIM(so.shipping_city) != ''
-         GROUP BY 1, 2 ORDER BY COUNT(*) DESC LIMIT 10`
+           AND go.client_id::text IN (${SQL_IDS_PROPIOS})`
       ),
     ])
+    const totalOrdenes = Number(statsRes.rows[0].total)
+    const retirosSucursal = Number(statsRes.rows[0].sucursal)
     return {
       provincias: provRes.rows.map(r => ({ provincia: r.provincia, ordenes: Number(r.ordenes) })),
       ciudades: cityRes.rows.map(r => ({ ciudad: r.ciudad, provincia: r.provincia, ordenes: Number(r.ordenes) })),
+      totalOrdenes,
+      retirosSucursal,
+      pctRetiros: totalOrdenes > 0 ? Math.round((retirosSucursal / totalOrdenes) * 1000) / 10 : 0,
     }
   } finally {
     client.release()
