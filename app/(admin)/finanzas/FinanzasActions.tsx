@@ -151,6 +151,7 @@ export function CargarEgresoButton() {
                   <option value="Sueldos">Sueldos</option>
                   <option value="Envios">Envios</option>
                   <option value="Interes">Interes</option>
+                  <option value="Vta Terceros">Vta Terceros</option>
                   <option value="Otros">Otros</option>
                 </select>
               </div>
@@ -365,6 +366,7 @@ export function EditarEgresoButton({ id, flujo_dia: initDia, concepto: initConce
                   <option value="Sueldos">Sueldos</option>
                   <option value="Envios">Envios</option>
                   <option value="Interes">Interes</option>
+                  <option value="Vta Terceros">Vta Terceros</option>
                   <option value="Otros">Otros</option>
                 </select>
               </div>

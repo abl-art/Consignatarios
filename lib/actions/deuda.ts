@@ -186,15 +186,18 @@ export async function fetchMovimientos(prestamoId?: string): Promise<DeudaMovimi
   })) as DeudaMovimiento[]
 }
 
-export async function fetchInteresesPagadosMes(): Promise<number> {
+export async function fetchInteresesPagadosMes(): Promise<{ mesActual: number; acumulado: number }> {
   const sb = createAdminClient()
   const inicioMes = new Date()
   inicioMes.setDate(1)
   const { data } = await sb
     .from('deuda_movimientos')
-    .select('monto')
+    .select('monto, fecha')
     .eq('tipo', 'interes')
-    .gte('fecha', inicioMes.toISOString().slice(0, 10))
-  if (!data) return 0
-  return data.reduce((sum: number, r: { monto: number }) => sum + Number(r.monto), 0)
+  if (!data) return { mesActual: 0, acumulado: 0 }
+  const acumulado = data.reduce((sum: number, r: { monto: number }) => sum + Number(r.monto), 0)
+  const mesActual = data
+    .filter((r: { fecha: string }) => r.fecha >= inicioMes.toISOString().slice(0, 10))
+    .reduce((sum: number, r: { monto: number }) => sum + Number(r.monto), 0)
+  return { mesActual, acumulado }
 }

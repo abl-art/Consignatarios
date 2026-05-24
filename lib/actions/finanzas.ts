@@ -686,6 +686,7 @@ export async function fetchEgresosStats(): Promise<{
     envios: 'envios',
     interes: 'interes',
     vta3ero: 'vta3ero',
+    'vta terceros': 'vta3ero',
   }
 
   type MesRow = {

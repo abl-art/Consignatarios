@@ -10,7 +10,7 @@ interface DeudaTabProps {
   prestamos: DeudaPrestamo[]
   movimientos: DeudaMovimiento[]
   config: DeudaConfig
-  interesesMes: number
+  interesesMes: { mesActual: number; acumulado: number }
 }
 
 export default function DeudaTab({ prestamos, movimientos, config, interesesMes }: DeudaTabProps) {
@@ -32,10 +32,24 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
   const [saldoMinimo, setSaldoMinimo] = useState(String(config.saldo_minimo))
 
   const activos = prestamos.filter(p => p.estado === 'activo')
+  // Deuda vigente = saldo_capital de activos - devoluciones registradas
+  const totalDevoluciones = movimientos
+    .filter(m => m.tipo === 'devolucion' && activos.some(p => p.id === m.prestamo_id))
+    .reduce((sum, m) => sum + m.monto, 0)
   const deudaVigente = activos.reduce((sum, p) => sum + p.saldo_capital, 0)
   const disponible = config.limite - deudaVigente
   const usoPct = config.limite > 0 ? (deudaVigente / config.limite) * 100 : 0
   const barColor = usoPct < 50 ? 'bg-green-500' : usoPct < 80 ? 'bg-yellow-500' : 'bg-red-500'
+
+  // Intereses devengados: calcular desde fecha_toma de cada préstamo activo
+  const hoy = new Date()
+  const interesesDevengados = activos.reduce((sum, p) => {
+    const desde = new Date(p.fecha_toma)
+    const dias = Math.max(0, Math.floor((hoy.getTime() - desde.getTime()) / 86400000))
+    const interes = p.saldo_capital * (p.tasa_anual / 365) * dias
+    return sum + interes
+  }, 0)
+  const totalIntereses = interesesMes.acumulado + interesesDevengados
 
   async function handleSaveConfig() {
     setSaving(true)
@@ -83,8 +97,11 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
           <p className="text-xl font-bold text-green-600">{formatearMoneda(disponible)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 mb-1">Intereses pagados (mes)</p>
-          <p className="text-xl font-bold text-gray-900">{formatearMoneda(interesesMes)}</p>
+          <p className="text-xs text-gray-500 mb-1">Intereses devengados</p>
+          <p className="text-xl font-bold text-amber-700">{formatearMoneda(interesesDevengados)}</p>
+          {interesesMes.acumulado > 0 && (
+            <p className="text-[10px] text-gray-400 mt-1">Pagados: {formatearMoneda(interesesMes.acumulado)}</p>
+          )}
         </div>
       </div>
 
