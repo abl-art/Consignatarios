@@ -31,25 +31,26 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
   const [limite, setLimite] = useState(String(config.limite))
   const [saldoMinimo, setSaldoMinimo] = useState(String(config.saldo_minimo))
 
-  const activos = prestamos.filter(p => p.estado === 'activo')
-  // Deuda vigente = saldo_capital de activos - devoluciones registradas
-  const totalDevoluciones = movimientos
-    .filter(m => m.tipo === 'devolucion' && activos.some(p => p.id === m.prestamo_id))
-    .reduce((sum, m) => sum + m.monto, 0)
-  const deudaVigente = activos.reduce((sum, p) => sum + p.saldo_capital, 0)
+  const hoy = new Date().toISOString().slice(0, 10)
+
+  // Vigentes = activos cuya fecha de vencimiento NO pasó (no devueltos)
+  const vigentes = prestamos.filter(p => p.estado === 'activo' && (!p.fecha_vencimiento || p.fecha_vencimiento > hoy))
+  // Devueltos = activos cuya fecha de vencimiento ya pasó
+  const devueltos = prestamos.filter(p => p.estado === 'activo' && p.fecha_vencimiento && p.fecha_vencimiento <= hoy)
+
+  const deudaVigente = vigentes.reduce((sum, p) => sum + p.saldo_capital, 0)
   const disponible = config.limite - deudaVigente
   const usoPct = config.limite > 0 ? (deudaVigente / config.limite) * 100 : 0
   const barColor = usoPct < 50 ? 'bg-green-500' : usoPct < 80 ? 'bg-yellow-500' : 'bg-red-500'
 
-  // Intereses devengados: calcular desde fecha_toma de cada préstamo activo
-  const hoy = new Date()
-  const interesesDevengados = activos.reduce((sum, p) => {
+  // Intereses devengados: solo sobre préstamos vigentes (no vencidos)
+  const hoyDate = new Date()
+  const interesesDevengados = vigentes.reduce((sum, p) => {
     const desde = new Date(p.fecha_toma)
-    const dias = Math.max(0, Math.floor((hoy.getTime() - desde.getTime()) / 86400000))
+    const dias = Math.max(0, Math.floor((hoyDate.getTime() - desde.getTime()) / 86400000))
     const interes = p.saldo_capital * (p.tasa_anual / 365) * dias
     return sum + interes
   }, 0)
-  const totalIntereses = interesesMes.acumulado + interesesDevengados
 
   async function handleSaveConfig() {
     setSaving(true)
@@ -154,7 +155,7 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
                   <tr
                     key={p.id}
                     onClick={() => setExpandedId(prev => prev === p.id ? null : p.id)}
-                    className={`border-b border-gray-100 cursor-pointer transition-colors ${p.estado === 'cancelado' ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}
+                    className={`border-b border-gray-100 cursor-pointer transition-colors ${p.estado === 'cancelado' || (p.fecha_vencimiento && p.fecha_vencimiento <= hoy) ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3">
                       <span className="mr-1 text-gray-400">{expandedId === p.id ? '▾' : '▸'}</span>
