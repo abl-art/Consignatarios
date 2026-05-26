@@ -1218,6 +1218,23 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
 
                             {/* IMEI upload/download */}
                             <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
+
+                            {/* Cancelar pedido */}
+                            <div className="mt-4 pt-3 border-t border-gray-200 flex justify-end">
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  const motivo = prompt('Motivo de cancelacion (ej: proveedor sin stock, error, etc.):')
+                                  if (!motivo) return
+                                  if (!confirm(`¿Cancelar este pedido de ${p.proveedorNombre}? Se eliminara permanentemente.\n\nMotivo: ${motivo}`)) return
+                                  await eliminarPedido(p.id)
+                                  router.refresh()
+                                }}
+                                className="px-4 py-2 text-xs text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                              >
+                                Cancelar pedido
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )}
