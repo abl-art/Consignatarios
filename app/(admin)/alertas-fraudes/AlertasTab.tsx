@@ -10,6 +10,7 @@ const MERCHANTS: Record<string, string> = {
   '2461631': 'Ecommerce GOcelular',
   '5495277': 'RIIING',
   '6033574': 'TECNO COMPRO',
+  '6115009': 'Plus Phone',
 }
 
 function merchantName(id: string): string {
