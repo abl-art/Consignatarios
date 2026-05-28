@@ -304,7 +304,10 @@ function modelMatchKey(name: string): string {
   return `${brand}-${model}-${storage}`
 }
 
-export async function getInventarioByCategoria(categoria: string): Promise<InventarioCategoria[]> {
+export async function getInventarioByCategoria(
+  categoria: string,
+  modelosOcultos: string[] = [],
+): Promise<InventarioCategoria[]> {
   const pedidos = await getPedidos()
 
   const items: { modelo: string; cantidad: number; precio: number; proveedor: string; fechaRecepcion: string }[] = []
@@ -409,7 +412,12 @@ export async function getInventarioByCategoria(categoria: string): Promise<Inven
     })
   }
 
-  return result.sort((a, b) => b.compras - a.compras)
+  const ocultos = new Set(modelosOcultos.map(m => m.toLowerCase()))
+  const filtered = ocultos.size > 0
+    ? result.filter(r => !ocultos.has(r.modelo.toLowerCase()))
+    : result
+
+  return filtered.sort((a, b) => b.compras - a.compras)
 }
 
 async function fetchModelosActivos(): Promise<{ name: string; model_code: string }[]> {

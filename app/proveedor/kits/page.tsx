@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { getInventarioByCategoria, getProductos } from '@/lib/actions/compras'
+import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import { formatearMoneda } from '@/lib/utils'
 import EntregaForm from './EntregaForm'
 
@@ -16,18 +17,23 @@ export default async function ProveedorKitsPage({
     redirect('/login')
   }
 
-  const [items, allProductos] = await Promise.all([
+  const [items, allProductos, modelosOcultos] = await Promise.all([
     getInventarioByCategoria('Kits de Seguridad'),
     getProductos(),
+    getModelosOcultos(),
   ])
   const celulares = (allProductos as { id: string; nombre: string; codigo: string; categoria: string }[])
     .filter(p => p.categoria === 'Celulares')
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
-  const totalCompras = items.reduce((s, r) => s + r.compras, 0)
-  const totalVentas = items.reduce((s, r) => s + r.ventas, 0)
-  const totalDisponible = items.reduce((s, r) => s + r.disponible, 0)
-  const totalStockCel = items.reduce((s, r) => s + r.stockCelulares, 0)
+  const ocultos = new Set(modelosOcultos.map(m => m.toLowerCase()))
+  const itemsFiltrados = items.filter(r => !ocultos.has(r.modelo.toLowerCase()))
+  const celularesFiltrados = celulares.filter(p => !ocultos.has(p.nombre.toLowerCase()))
+
+  const totalCompras = itemsFiltrados.reduce((s, r) => s + r.compras, 0)
+  const totalVentas = itemsFiltrados.reduce((s, r) => s + r.ventas, 0)
+  const totalDisponible = itemsFiltrados.reduce((s, r) => s + r.disponible, 0)
+  const totalStockCel = itemsFiltrados.reduce((s, r) => s + r.stockCelulares, 0)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,7 +70,7 @@ export default async function ProveedorKitsPage({
           </div>
         </div>
 
-        {items.length === 0 ? (
+        {itemsFiltrados.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
             Sin kits registrados.
           </div>
@@ -82,7 +88,7 @@ export default async function ProveedorKitsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {items.map((r) => {
+                {itemsFiltrados.map((r) => {
                   const diferencia = r.disponible - r.stockCelulares
                   return (
                     <tr key={r.modelo} className={`hover:bg-gray-50 ${diferencia < 0 ? 'bg-amber-50' : ''}`}>
@@ -126,7 +132,7 @@ export default async function ProveedorKitsPage({
         {/* Formulario de entrega */}
         <EntregaForm
           token={searchParams.token!}
-          productos={celulares.map(p => ({ id: p.id, nombre: p.nombre, codigo: p.codigo }))}
+          productos={celularesFiltrados.map(p => ({ id: p.id, nombre: p.nombre, codigo: p.codigo }))}
         />
       </div>
     </div>
