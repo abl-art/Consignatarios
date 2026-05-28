@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import { ocultarModelo, mostrarModelo } from '@/lib/actions/kits-ocultos'
 import { formatearMoneda } from '@/lib/utils'
+import ExistenciasMensuales from '@/components/inventario/ExistenciasMensuales'
+import type { CierreMensual } from '@/lib/actions/accesorios-ventas'
 
 interface Item {
   modelo: string
@@ -17,6 +19,7 @@ interface Item {
 interface Props {
   items: Item[]
   modelosOcultos: string[]
+  cierres: CierreMensual[]
 }
 
 function EyeIcon() {
@@ -37,7 +40,7 @@ function EyeOffIcon() {
   )
 }
 
-export default function KitsTable({ items, modelosOcultos }: Props) {
+export default function KitsTable({ items, modelosOcultos, cierres }: Props) {
   const [mostrarOcultos, setMostrarOcultos] = useState(false)
   const [ocultos, setOcultos] = useState<Set<string>>(
     new Set(modelosOcultos.map(m => m.toLowerCase()))
@@ -186,10 +189,12 @@ export default function KitsTable({ items, modelosOcultos }: Props) {
         </div>
       )}
 
-      <p className="text-xs text-gray-400 mt-3">
+      <p className="text-xs text-gray-400 mt-3 mb-6">
         * &quot;Stock cel.&quot; muestra celulares disponibles en inventario GOcelular para cada modelo.
         Si el stock de celulares supera los kits disponibles, aparece REPONER.
       </p>
+
+      <ExistenciasMensuales cierres={cierres} categoria="kits de seguridad" />
     </>
   )
 }

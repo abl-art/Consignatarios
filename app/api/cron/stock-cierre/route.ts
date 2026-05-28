@@ -7,6 +7,8 @@ import {
   AURICULARES_CONFIG,
   type CategoriaConfig,
 } from '@/lib/actions/accesorios-ventas'
+import { getInventarioByCategoria } from '@/lib/actions/compras'
+import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,6 +88,42 @@ export async function GET(request: Request) {
       results.push(`${config.categoria}: ERROR ${error.message}`)
     } else {
       results.push(`${config.categoria}: stock=${stock}, precio=${precio}, valuacion=${stock * precio}`)
+    }
+  }
+
+  // --- Kits de Seguridad ---
+  const kitsCategoria = 'kits-seguridad'
+  const { data: kitsExisting } = await admin
+    .from('stock_cierre_mensual')
+    .select('id')
+    .eq('periodo', periodo)
+    .eq('categoria', kitsCategoria)
+    .maybeSingle()
+
+  if (kitsExisting) {
+    results.push(`${kitsCategoria}: ya existe cierre para ${periodo}`)
+  } else {
+    const modelosOcultos = await getModelosOcultos()
+    const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
+    const totalDisponible = kitsItems.reduce((s, r) => s + r.disponible, 0)
+    const totalValuacion = kitsItems.reduce((s, r) => s + r.valuacion, 0)
+    const precioPromedio = kitsItems.length > 0
+      ? Math.round(totalValuacion / Math.max(totalDisponible, 1))
+      : 0
+
+    const { error: kitsError } = await admin.from('stock_cierre_mensual').insert({
+      periodo,
+      categoria: kitsCategoria,
+      producto: 'Kits de Seguridad',
+      stock_final: totalDisponible,
+      precio_unitario: precioPromedio,
+      valuacion: totalValuacion,
+    })
+
+    if (kitsError) {
+      results.push(`${kitsCategoria}: ERROR ${kitsError.message}`)
+    } else {
+      results.push(`${kitsCategoria}: stock=${totalDisponible}, valuacion=${totalValuacion}`)
     }
   }
 
