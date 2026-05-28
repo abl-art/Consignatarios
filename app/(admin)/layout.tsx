@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
       { href: '/inventario/auriculares', label: 'Auriculares', icon: 'inventario' },
       { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', icon: 'inventario' },
       { href: '/auditoria-stock', label: 'Auditoría Stock', icon: 'auditorias' },
+      { href: '/pase-contabilidad', label: 'Pase a Contabilidad', icon: 'auditorias' },
     ],
   },
   {
