@@ -1,24 +1,32 @@
 import Link from 'next/link'
 import { fetchStockPropio, fetchAddonStock } from '@/lib/gocelular'
+import { getInventarioByCategoria } from '@/lib/actions/compras'
+import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 
+const SMARTWATCHES_KW = ['pulsera', 'band', 'watch', 'smartwatch', 'reloj']
 const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
 const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz']
 
 export default async function InventarioPage() {
-  const [stockCelulares, addons] = await Promise.all([
+  const [stockCelulares, addons, modelosOcultos] = await Promise.all([
     fetchStockPropio(),
     fetchAddonStock(),
+    getModelosOcultos(),
   ])
 
+  const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
+  const stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
+
+  const stockSmartwatch = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
   const stockAuriculares = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
   const stockParlantes = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
 
   const categorias = [
     { href: '/inventario/celulares', label: 'Celulares', stock: stockCelulares, color: 'bg-magenta-600', icon: '📱' },
-    { href: '/inventario/smartwatches', label: 'Smartwatches', stock: 0, color: 'bg-blue-600', icon: '⌚' },
+    { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, color: 'bg-blue-600', icon: '⌚' },
     { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, color: 'bg-purple-600', icon: '🔊' },
     { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, color: 'bg-cyan-600', icon: '🎧' },
-    { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', stock: 0, color: 'bg-amber-600', icon: '🔒' },
+    { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', stock: stockKits, color: 'bg-amber-600', icon: '🔒' },
   ]
 
   const totalStock = categorias.reduce((s, c) => s + c.stock, 0)
