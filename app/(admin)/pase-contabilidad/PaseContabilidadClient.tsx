@@ -57,7 +57,7 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
           {/* Advertencia si incompleto */}
           {!reporte.completo && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
-              <strong>Reporte incompleto:</strong> faltan datos de alguna categoría. Revisá las notas en la tabla.
+              <strong>Reporte incompleto:</strong> faltan datos de alguna categoria. Revisa las notas en la tabla.
             </div>
           )}
 
@@ -66,9 +66,9 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-6 py-3 font-medium text-gray-600">Categoría</th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-600">Existencia Final</th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-600">Valuación</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-600">Categoria</th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-600">Existencia Final (uds)</th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-600">Valuacion</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-600">Estado</th>
                 </tr>
               </thead>
@@ -122,7 +122,7 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
             Descargar PDF
           </a>
           {!reporte.completo && (
-            <p className="text-xs text-gray-400 mt-2">El PDF incluirá solo las categorías con datos completos.</p>
+            <p className="text-xs text-gray-400 mt-2">El PDF incluira solo las categorias con datos completos.</p>
           )}
         </>
       )}

@@ -57,18 +57,20 @@ export async function fetchReporteContabilidad(periodo: string): Promise<Reporte
 
   const { data: auditoria } = await sb
     .from('auditorias_stock_propio')
-    .select('estado, total_real, valor_existencia_final')
+    .select('estado, detalle, valor_existencia_final')
     .eq('fecha_corte', ultimoDia)
     .single()
 
   const lineas: LineaReporte[] = []
 
   if (!auditoria) {
-    lineas.push({ categoria: 'Celulares', stockFinal: null, valuacion: null, estado: 'sin_datos', nota: 'Sin auditoría para este período' })
+    lineas.push({ categoria: 'Celulares', stockFinal: null, valuacion: null, estado: 'sin_datos', nota: 'Sin auditoria para este periodo' })
   } else if (auditoria.estado !== 'firmada') {
-    lineas.push({ categoria: 'Celulares', stockFinal: null, valuacion: null, estado: 'pendiente', nota: `Auditoría en estado: ${auditoria.estado}` })
+    lineas.push({ categoria: 'Celulares', stockFinal: null, valuacion: null, estado: 'pendiente', nota: `Auditoria en estado: ${auditoria.estado}` })
   } else {
-    lineas.push({ categoria: 'Celulares', stockFinal: Number(auditoria.total_real), valuacion: Number(auditoria.valor_existencia_final), estado: 'ok', nota: null })
+    const detalle = typeof auditoria.detalle === 'string' ? JSON.parse(auditoria.detalle) : auditoria.detalle
+    const unidades = (detalle as { real: number }[]).reduce((s: number, d: { real: number }) => s + d.real, 0)
+    lineas.push({ categoria: 'Celulares', stockFinal: unidades, valuacion: Number(auditoria.valor_existencia_final), estado: 'ok', nota: null })
   }
 
   const accesorios: { key: string; label: string }[] = [
@@ -83,7 +85,7 @@ export async function fetchReporteContabilidad(periodo: string): Promise<Reporte
     if (cierre) {
       lineas.push({ categoria: acc.label, stockFinal: cierre.stock_final, valuacion: cierre.valuacion, estado: 'ok', nota: null })
     } else {
-      lineas.push({ categoria: acc.label, stockFinal: null, valuacion: null, estado: 'sin_datos', nota: 'Sin cierre para este período' })
+      lineas.push({ categoria: acc.label, stockFinal: null, valuacion: null, estado: 'sin_datos', nota: 'Sin cierre para este periodo' })
     }
   }
 
