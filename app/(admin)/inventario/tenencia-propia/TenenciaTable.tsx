@@ -58,7 +58,11 @@ function rowClasses(r: ModeloRow): { bg: string; label: string | null } {
 export default function TenenciaTable({ rows, unmatched, modelosOcultos }: Props) {
   const [mostrarOcultos, setMostrarOcultos] = useState(false)
   const [ocultos, setOcultos] = useState<Set<string>>(new Set(modelosOcultos))
+  const [marcaFiltro, setMarcaFiltro] = useState<string>('todas')
   const [, startTransition] = useTransition()
+
+  // Extraer marcas unicas de los datos
+  const marcas = Array.from(new Set(rows.map(r => r.brand))).sort()
 
   function esOculto(modelCode: string) {
     return ocultos.has(modelCode)
@@ -80,12 +84,20 @@ export default function TenenciaTable({ rows, unmatched, modelosOcultos }: Props
 
   const visibleRows = rows.filter(r => !esOculto(r.model_code))
   const hiddenCount = rows.filter(r => esOculto(r.model_code)).length
-  const displayRows = mostrarOcultos ? rows : visibleRows
 
-  const totalDisponibles = visibleRows.reduce((s, r) => s + r.disponibles, 0)
-  const totalPendientes = visibleRows.reduce((s, r) => s + r.pendientes, 0)
-  const totalReal = visibleRows.reduce((s, r) => s + r.real, 0)
-  const totalValor = visibleRows.reduce((s, r) => s + r.valor, 0)
+  const filteredByBrand = marcaFiltro === 'todas'
+    ? (mostrarOcultos ? rows : visibleRows)
+    : (mostrarOcultos ? rows : visibleRows).filter(r => r.brand === marcaFiltro)
+  const displayRows = filteredByBrand
+
+  // Totales siempre de visibles (no ocultos), filtrados por marca si aplica
+  const totalsBase = marcaFiltro === 'todas'
+    ? visibleRows
+    : visibleRows.filter(r => r.brand === marcaFiltro)
+  const totalDisponibles = totalsBase.reduce((s, r) => s + r.disponibles, 0)
+  const totalPendientes = totalsBase.reduce((s, r) => s + r.pendientes, 0)
+  const totalReal = totalsBase.reduce((s, r) => s + r.real, 0)
+  const totalValor = totalsBase.reduce((s, r) => s + r.valor, 0)
 
   return (
     <>
@@ -93,7 +105,7 @@ export default function TenenciaTable({ rows, unmatched, modelosOcultos }: Props
       <div className="bg-magenta-50 border border-magenta-200 rounded-xl p-4 mb-4 flex flex-wrap gap-3 md:gap-6 text-sm">
         <div>
           <p className="text-xs text-gray-500">Modelos activos</p>
-          <p className="font-bold text-gray-900">{visibleRows.length}</p>
+          <p className="font-bold text-gray-900">{totalsBase.length}</p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Disponibles</p>
@@ -111,6 +123,34 @@ export default function TenenciaTable({ rows, unmatched, modelosOcultos }: Props
           <p className="text-xs text-gray-500">Valor stock</p>
           <p className="font-bold text-green-700">{formatearMoneda(totalValor)}</p>
         </div>
+      </div>
+
+      {/* Filtros por marca */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500 mr-1">Marca:</span>
+        <button
+          onClick={() => setMarcaFiltro('todas')}
+          className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+            marcaFiltro === 'todas'
+              ? 'bg-[#E91E7B] text-white border-[#E91E7B]'
+              : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          Todas
+        </button>
+        {marcas.map(m => (
+          <button
+            key={m}
+            onClick={() => setMarcaFiltro(m)}
+            className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+              marcaFiltro === m
+                ? 'bg-[#E91E7B] text-white border-[#E91E7B]'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {m}
+          </button>
+        ))}
       </div>
 
       {/* Toggle ocultos */}
