@@ -13,7 +13,22 @@ export default async function ComprasPage() {
     getPedidos(),
   ])
 
-  const enTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt).length
+  const pedidosEnTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt)
+  const enTransito = pedidosEnTransito.length
+
+  // Resumen por modelo en tránsito
+  const transitoPorModelo: Record<string, { cantidad: number; proveedores: Set<string> }> = {}
+  for (const ped of pedidosEnTransito) {
+    for (const item of ped.items || []) {
+      const key = item.productoNombre
+      if (!transitoPorModelo[key]) transitoPorModelo[key] = { cantidad: 0, proveedores: new Set() }
+      transitoPorModelo[key].cantidad += item.cantidad
+      transitoPorModelo[key].proveedores.add(ped.proveedorNombre)
+    }
+  }
+  const transitoModelos = Object.entries(transitoPorModelo)
+    .map(([modelo, d]) => ({ modelo, cantidad: d.cantidad, proveedores: Array.from(d.proveedores) }))
+    .sort((a, b) => b.cantidad - a.cantidad)
 
   // Calcular plazos de entrega por proveedor y categoría
   const prodCatMap: Record<string, string> = {}
@@ -100,6 +115,45 @@ export default async function ComprasPage() {
           )
         })}
       </div>
+
+      {/* Resumen en tránsito por modelo */}
+      {transitoModelos.length > 0 && (
+        <div className="mt-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+              </svg>
+              <h3 className="text-sm font-semibold text-gray-900">En tránsito por modelo</h3>
+            </div>
+            <span className="text-xs text-gray-500">
+              {transitoModelos.reduce((s, m) => s + m.cantidad, 0)} unidades en {enTransito} pedidos
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-5 py-2 font-medium text-gray-600">Modelo</th>
+                <th className="text-center px-4 py-2 font-medium text-gray-600">Cantidad</th>
+                <th className="text-left px-4 py-2 font-medium text-gray-600">Proveedor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transitoModelos.map((m) => (
+                <tr key={m.modelo} className="border-b border-gray-100">
+                  <td className="px-5 py-2.5 font-medium text-gray-900">{m.modelo}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+                      {m.cantidad}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs">{m.proveedores.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Plazo promedio de entrega */}
       {plazos.length > 0 && <PlazoEntrega data={plazos} />}
