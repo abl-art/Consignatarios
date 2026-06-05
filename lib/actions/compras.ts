@@ -124,6 +124,14 @@ export async function eliminarProducto(id: string) {
   return { ok: true }
 }
 
+export async function toggleOcultoProducto(id: string, oculto: boolean) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('compras_productos').update({ oculto }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/compras')
+  return { ok: true }
+}
+
 // ---------------------------------------------------------------------------
 // CRUD: compras_precios
 // ---------------------------------------------------------------------------

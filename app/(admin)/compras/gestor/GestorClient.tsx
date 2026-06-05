@@ -26,6 +26,7 @@ interface Producto {
   codigo: string
   nombre: string
   categoria: string
+  oculto?: boolean
 }
 
 interface Precio {
@@ -96,6 +97,7 @@ export default function GestorClient({
   const [filtroCategoria, setFiltroCategoria] = useState('Celulares')
   const [filtroMarca, setFiltroMarca] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
+  const [mostrarInactivos, setMostrarInactivos] = useState(false)
   const [notas, setNotas] = useState<NotaPedido[]>(() =>
     pedidosGuardados.filter(p => p.estado === 'borrador' || p.estado === 'confirmado').map(p => ({
       id: p.id,
@@ -181,8 +183,11 @@ export default function GestorClient({
         (p) => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)
       )
     }
+    if (!mostrarInactivos) {
+      result = result.filter((p) => !p.oculto)
+    }
     return result
-  }, [productos, filtroCategoria, filtroMarca, busqueda])
+  }, [productos, filtroCategoria, filtroMarca, busqueda, mostrarInactivos])
 
   const proveedoresFiltrados = useMemo(() => {
     return proveedores.filter((prov) => {
@@ -624,6 +629,30 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
             </div>
           )}
 
+          {/* Toggle mostrar inactivos */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setMostrarInactivos(!mostrarInactivos)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                mostrarInactivos ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {mostrarInactivos ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                )}
+              </svg>
+              {mostrarInactivos ? 'Ocultando inactivos' : 'Mostrar inactivos'}
+            </button>
+            {mostrarInactivos && (
+              <span className="text-xs text-gray-400">
+                ({productos.filter(p => p.oculto).length} ocultos)
+              </span>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -651,7 +680,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     const enCarrito = cart.some(item => item.producto.id === prod.id)
                     const forecast = getForecastForProduct(prod.nombre)
                     return (
-                    <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${enCarrito ? 'bg-green-50' : ''}`}>
+                    <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${enCarrito ? 'bg-green-50' : ''} ${prod.oculto ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                         <div className="flex items-center gap-1">
                           {enCarrito && <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}

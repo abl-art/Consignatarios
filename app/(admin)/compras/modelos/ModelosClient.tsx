@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { agregarProducto, editarProducto, eliminarProducto, setPrecio, eliminarPrecio } from '@/lib/actions/compras'
+import { agregarProducto, editarProducto, eliminarProducto, toggleOcultoProducto, setPrecio, eliminarPrecio } from '@/lib/actions/compras'
 import { formatearMoneda } from '@/lib/utils'
 
 interface Proveedor {
@@ -18,6 +18,7 @@ interface Producto {
   codigo: string
   nombre: string
   categoria: string
+  oculto?: boolean
 }
 
 interface Precio {
@@ -58,6 +59,7 @@ export default function ModelosClient({
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [productForm, setProductForm] = useState(emptyProduct)
   const [loading, setLoading] = useState(false)
+  const [mostrarInactivos, setMostrarInactivos] = useState(false)
 
   // Price modal
   const [priceModal, setPriceModal] = useState<{
@@ -68,12 +70,15 @@ export default function ModelosClient({
   const [precioInput, setPrecioInput] = useState('')
   const [plazoInput, setPlazoInput] = useState('Contado')
 
-  // Filter products by category and brand
+  // Filter products by category, brand, and visibility
   let filtrados = filtroCategoria
     ? productos.filter((p) => p.categoria === filtroCategoria)
     : productos
   if (filtroMarca && filtroCategoria === 'Celulares') {
     filtrados = filtrados.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
+  }
+  if (!mostrarInactivos) {
+    filtrados = filtrados.filter((p) => !p.oculto)
   }
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
@@ -158,6 +163,13 @@ export default function ModelosClient({
     if (!confirm('¿Eliminar este producto y todos sus precios?')) return
     setLoading(true)
     await eliminarProducto(id)
+    setLoading(false)
+    router.refresh()
+  }
+
+  async function handleToggleOculto(prod: Producto) {
+    setLoading(true)
+    await toggleOcultoProducto(prod.id, !prod.oculto)
     setLoading(false)
     router.refresh()
   }
@@ -308,6 +320,30 @@ export default function ModelosClient({
         </div>
       )}
 
+      {/* Toggle mostrar inactivos */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={() => setMostrarInactivos(!mostrarInactivos)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+            mostrarInactivos ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {mostrarInactivos ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+            )}
+          </svg>
+          {mostrarInactivos ? 'Ocultando inactivos' : 'Mostrar inactivos'}
+        </button>
+        {mostrarInactivos && (
+          <span className="text-xs text-gray-400">
+            ({productos.filter(p => p.oculto).length} ocultos)
+          </span>
+        )}
+      </div>
+
       {/* Products table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
@@ -335,7 +371,7 @@ export default function ModelosClient({
               filtrados.map((prod) => {
                 const best = getBestPrecio(prod.id)
                 return (
-                  <tr key={prod.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${prod.oculto ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{prod.codigo || '-'}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
                     <td className="px-4 py-3">
@@ -374,6 +410,23 @@ export default function ModelosClient({
                     })}
                     <td className="px-4 py-3 text-center">
                       <div className="flex gap-1 justify-center">
+                        <button
+                          onClick={() => handleToggleOculto(prod)}
+                          title={prod.oculto ? 'Reactivar modelo' : 'Ocultar modelo'}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            prod.oculto
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {prod.oculto ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            )}
+                          </svg>
+                        </button>
                         <button
                           onClick={() => startEditProduct(prod)}
                           className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
