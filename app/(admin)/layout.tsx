@@ -69,6 +69,14 @@ const navItems: NavItem[] = [
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/gestion-tacs', label: 'Gestión TACs', icon: 'modelos', badge: true },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
+  {
+    href: '/grupo-go',
+    label: 'Grupo GO',
+    icon: 'dashboard',
+    children: [
+      { href: 'https://finanza.gocuotas.com', label: 'Finanzas', icon: 'finanzas' },
+    ],
+  },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
