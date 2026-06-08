@@ -1,127 +1,164 @@
-export const dynamic = 'force-dynamic'
+'use client'
 
 import Link from 'next/link'
 
 export default function GuiaComercialPage() {
+  function handleDownload() {
+    const el = document.getElementById('guia-content')
+    if (!el) return
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Guía Comercial - GOcelular</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:40px 20px;color:#1f2937;font-size:14px;line-height:1.6}h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:32px;padding-bottom:8px;border-bottom:1px solid #e5e7eb}h3{font-size:14px;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin-top:20px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e5e7eb;padding:8px 12px;text-align:left;font-size:13px}th{background:#f9fafb;font-weight:600}.faq{background:#f9fafb;border-radius:8px;padding:12px;margin:8px 0}.faq strong{display:block;margin-bottom:4px}.badge{display:inline-block;background:#f3f4f6;border-radius:20px;padding:2px 10px;font-size:12px;margin:2px}.highlight{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:12px 0}.stats{display:flex;gap:12px;margin:12px 0}.stat{flex:1;background:#f9fafb;border-radius:8px;padding:12px;text-align:center}.stat-value{font-size:20px;font-weight:700}.stat-label{font-size:11px;color:#9ca3af}p.subtitle{color:#6b7280;font-size:13px}</style></head><body>${el.innerHTML}</body></html>`
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'Guia-Comercial-GOcelular.html'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          href="/canales/afiliados"
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/canales/afiliados"
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Afiliados
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">Guia Comercial - Call Center</h1>
+        </div>
+        <button
+          onClick={handleDownload}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          Afiliados
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Guía Comercial - Call Center</h1>
+          Descargar
+        </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 space-y-8">
+      <div id="guia-content" className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 space-y-8">
 
         {/* Sección 1 */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
             <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">1</span>
-            ¿Qué es GOcelular?
+            Que es GOcelular
           </h2>
           <p className="text-sm text-gray-700 leading-relaxed mb-3">
-            GOcelular es una empresa de venta de celulares que ofrece financiación propia a través de la plataforma <strong>GOcuotas</strong>. El cliente compra un teléfono y lo paga en cuotas fijas, sin interés, sin tarjeta de crédito.
+            GOcelular es una empresa de venta de celulares que ofrece financiacion propia a traves de la plataforma <strong>GOcuotas</strong>. El cliente compra un telefono y lo paga en cuotas fijas, sin interes, sin tarjeta de credito.
           </p>
           <div className="bg-purple-50 rounded-lg p-4">
             <p className="text-sm font-semibold text-purple-800 mb-2">Propuesta de valor para el cliente:</p>
             <ul className="text-sm text-purple-700 space-y-1">
-              <li>• Celulares nuevos, sellados, con garantía</li>
-              <li>• Cuotas fijas sin interés</li>
-              <li>• No necesita tarjeta de crédito</li>
-              <li>• Aprobación rápida</li>
-              <li>• Entrega a domicilio o retiro en sucursal</li>
+              <li>Celulares nuevos, sellados, con garantia</li>
+              <li>Cuotas fijas sin interes</li>
+              <li>No necesita tarjeta de credito</li>
+              <li>Aprobacion rapida</li>
+              <li>Envio gratis a domicilio via Andreani</li>
+              <li>Incluye funda y vidrio templado de regalo</li>
             </ul>
           </div>
         </section>
 
         <hr className="border-gray-200" />
 
-        {/* Sección 2 */}
+        {/* Sección 2 - Productos reales de la tienda */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
             <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">2</span>
             Productos que vendemos
           </h2>
+          <p className="text-sm text-gray-500 mb-3">Celulares gama media y economica. Todos nuevos, sellados, compatibles con cualquier compañia.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Marca</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Gama</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Ejemplos</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Modelo</th>
+                  <th className="text-right px-4 py-2 font-medium text-gray-600">Precio</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ['Samsung', 'Media/Alta', 'Galaxy A series, Galaxy S series'],
-                  ['Motorola', 'Media', 'Moto G, Moto Edge'],
-                  ['Xiaomi', 'Económica/Media', 'Redmi, Poco'],
-                  ['Honor', 'Económica/Media', 'Honor X series'],
-                  ['Nubia', 'Media', 'Nubia Focus, Neo'],
-                  ['iPhone (Apple)', 'Alta', 'iPhone 15, iPhone 16'],
-                ].map(([marca, gama, ejemplos]) => (
-                  <tr key={marca} className="border-t border-gray-100">
-                    <td className="px-4 py-2 font-medium text-gray-900">{marca}</td>
-                    <td className="px-4 py-2 text-gray-600">{gama}</td>
-                    <td className="px-4 py-2 text-gray-500">{ejemplos}</td>
+                  ['Motorola Moto G06 64GB', '$278.100'],
+                  ['Motorola Moto G06 128GB', '$323.100'],
+                  ['Samsung Galaxy A07 64GB', '$350.100'],
+                  ['Samsung Galaxy A07 128GB', '$413.100'],
+                  ['Motorola Moto G17 128GB', '$431.100'],
+                  ['Xiaomi Redmi 14C 128/4GB', '$431.100'],
+                  ['Motorola Moto G17 256GB', '$503.100'],
+                  ['Xiaomi Redmi 14C 256/4GB', '$512.100'],
+                  ['Xiaomi Redmi Note 14 128/6GB', '$602.100'],
+                  ['Motorola Moto G67 256GB', '$737.100'],
+                  ['Samsung Galaxy A17 5G 256GB', '$818.100'],
+                  ['Motorola Moto G77 5G 256GB', '$863.100'],
+                  ['Xiaomi Redmi Note 14 Pro 256/8GB', '$890.100'],
+                  ['Samsung Galaxy A37 5G 256GB', '$1.313.100'],
+                  ['Samsung Galaxy A56 5G 256GB', '$1.305.000'],
+                ].map(([modelo, precio]) => (
+                  <tr key={modelo} className="border-t border-gray-100">
+                    <td className="px-4 py-2 font-medium text-gray-900">{modelo}</td>
+                    <td className="px-4 py-2 text-right text-gray-700">{precio}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {['Smartwatches', 'Auriculares', 'Parlantes', 'Kits de Seguridad'].map(cat => (
-              <span key={cat} className="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">{cat}</span>
-            ))}
+          <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <p className="text-sm font-semibold text-emerald-800 mb-1">Incluido con cada compra:</p>
+            <ul className="text-sm text-emerald-700 space-y-1">
+              <li>Funda protectora gratis</li>
+              <li>Vidrio templado gratis</li>
+              <li>Envio gratis por Andreani</li>
+              <li>Kit de Seguridad de regalo (en modelos seleccionados)</li>
+            </ul>
           </div>
         </section>
 
         <hr className="border-gray-200" />
 
-        {/* Sección 3 */}
+        {/* Sección 3 - Financiación corregida */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
             <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">3</span>
-            Cómo funciona la financiación
+            Como funciona la financiacion
           </h2>
           <div className="flex flex-wrap gap-2 mb-4">
-            {['1. Elige el celular', '2. Elige plan de cuotas', '3. Paga la entrega', '4. Cuotas mensuales fijas', '5. Recibe el equipo'].map((step, i) => (
+            {['1. Elige el celular', '2. Elige cantidad de cuotas', '3. Paga la 1ra cuota', '4. Recibe el equipo', '5. Paga cuotas restantes'].map((step, i) => (
               <div key={i} className="flex items-center gap-1">
                 <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700">{step}</span>
-                {i < 4 && <span className="text-gray-300">→</span>}
+                {i < 4 && <span className="text-gray-300">&rarr;</span>}
               </div>
             ))}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div className="bg-gray-50 rounded-lg p-3 text-center">
               <p className="text-xs text-gray-500">Entrega inicial</p>
-              <p className="text-lg font-bold text-gray-900">10%</p>
-              <p className="text-xs text-gray-400">del valor total</p>
+              <p className="text-lg font-bold text-gray-900">1ra cuota</p>
+              <p className="text-xs text-gray-400">se paga al comprar</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center">
               <p className="text-xs text-gray-500">Planes disponibles</p>
-              <p className="text-lg font-bold text-gray-900">3, 6, 9 o 12</p>
+              <p className="text-lg font-bold text-gray-900">2 a 9</p>
               <p className="text-xs text-gray-400">cuotas mensuales</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-gray-500">Interés</p>
+              <p className="text-xs text-gray-500">Interes</p>
               <p className="text-lg font-bold text-emerald-600">0%</p>
               <p className="text-xs text-gray-400">cuotas fijas</p>
             </div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm font-semibold text-blue-800 mb-1">Ejemplo práctico</p>
+            <p className="text-sm font-semibold text-blue-800 mb-1">Ejemplo practico</p>
             <p className="text-sm text-blue-700">
-              <strong>Samsung Galaxy A55 - $350.000</strong><br />
-              Entrega inicial (10%): $35.000 — 6 cuotas de $52.500<br />
-              <strong>Total que paga el cliente: $350.000 (sin recargo)</strong>
+              <strong>Motorola Moto G17 256GB - $503.100</strong><br />
+              6 cuotas de $83.850 (la primera se paga al momento de la compra)<br />
+              <strong>Total: $503.100 (sin recargo)</strong>
             </p>
           </div>
         </section>
@@ -138,10 +175,10 @@ export default function GuiaComercialPage() {
           <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Sobre el producto</h3>
           <div className="space-y-3 mb-6">
             {[
-              ['¿Los celulares son nuevos?', 'Sí, todos los equipos son nuevos, sellados de fábrica, con garantía oficial de la marca.'],
-              ['¿Tienen garantía?', 'Sí, todos los equipos cuentan con garantía oficial del fabricante (generalmente 12 meses). GOcelular acompaña al cliente durante todo el proceso si necesita hacer uso de la garantía.'],
-              ['¿Qué pasa si el celular viene fallado?', 'Se gestiona el cambio o reparación por garantía oficial. El cliente se contacta con nosotros y coordinamos todo con el servicio técnico autorizado.'],
-              ['¿Puedo elegir el color?', 'Depende de la disponibilidad de stock. Siempre informamos los colores disponibles antes de confirmar la venta.'],
+              ['Los celulares son nuevos?', 'Si, todos los equipos son nuevos, sellados de fabrica y compatibles con cualquier compañia telefonica.'],
+              ['Tienen garantia?', 'Si, todos los equipos cuentan con garantia oficial del fabricante. GOcelular acompaña al cliente durante todo el proceso si necesita hacer uso de la garantia.'],
+              ['Que pasa si el celular viene fallado?', 'Se gestiona el cambio o reparacion por garantia oficial. El cliente se contacta con nosotros y coordinamos todo con el servicio tecnico autorizado.'],
+              ['Puedo elegir el color?', 'Depende de la disponibilidad de stock. Siempre informamos los colores disponibles antes de confirmar la venta.'],
             ].map(([q, a]) => (
               <div key={q} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-sm font-semibold text-gray-800">&ldquo;{q}&rdquo;</p>
@@ -150,16 +187,16 @@ export default function GuiaComercialPage() {
             ))}
           </div>
 
-          <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Sobre la financiación</h3>
+          <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Sobre la financiacion</h3>
           <div className="space-y-3 mb-6">
             {[
-              ['¿Tiene interés?', 'No. Las cuotas son fijas y sin interés. El precio final en cuotas es el mismo precio de lista del equipo.'],
-              ['¿Necesito tarjeta de crédito?', 'No. La financiación es propia de GOcelular a través de GOcuotas. No se necesita tarjeta de crédito.'],
-              ['¿Cómo pago las cuotas?', 'Las cuotas se cobran mensualmente. El cliente puede pagar por débito automático (CBU), transferencia bancaria, o en puntos de pago habilitados.'],
-              ['¿Qué pasa si me atraso en una cuota?', 'Es importante pagar en fecha. El sistema registra los atrasos y si se acumulan pagos pendientes, el equipo puede quedar bloqueado hasta regularizar la situación.'],
-              ['¿El equipo se bloquea si no pago?', 'Sí, los equipos cuentan con un sistema de seguridad (Trustonic/Knox Guard) que permite bloquear el dispositivo en caso de morosidad prolongada. Una vez regularizado el pago, se desbloquea automáticamente.'],
-              ['¿Puedo cancelar anticipadamente?', 'Sí, el cliente puede adelantar cuotas o cancelar el total restante en cualquier momento sin penalidad.'],
-              ['¿Hacen verificación crediticia?', 'El proceso de aprobación es simple y rápido. Se validan datos básicos del cliente (DNI, datos personales). No es como un crédito bancario tradicional.'],
+              ['Tiene interes?', 'No. Las cuotas son fijas y sin interes. El precio final en cuotas es el mismo precio de lista del equipo.'],
+              ['Necesito tarjeta de credito?', 'No. La financiacion es propia de GOcelular a traves de GOcuotas. No se necesita tarjeta de credito.'],
+              ['Como pago las cuotas?', 'Las cuotas se pagan por la app de GOcuotas o por transferencia bancaria. El debito es mensual y automatico.'],
+              ['Que pasa si me atraso en una cuota?', 'El equipo se bloquea temporalmente hasta que se regularice la deuda. Una vez que se pone al dia, se desbloquea automaticamente.'],
+              ['Si me atraso en otra compra de GOcuotas, se bloquea el celular?', 'No, el bloqueo aplica unicamente a la compra del celular. Otras compras en GOcuotas no afectan al equipo.'],
+              ['Puedo cancelar anticipadamente?', 'Si, el cliente puede adelantar cuotas o cancelar el total restante en cualquier momento sin penalidad.'],
+              ['La compra consume mi limite en GOcuotas?', 'Si, el monto se descuenta del credito disponible en GOcuotas.'],
             ].map(([q, a]) => (
               <div key={q} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-sm font-semibold text-gray-800">&ldquo;{q}&rdquo;</p>
@@ -169,11 +206,24 @@ export default function GuiaComercialPage() {
           </div>
 
           <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Sobre la entrega</h3>
+          <div className="space-y-3 mb-6">
+            {[
+              ['Hacen envios?', 'Si, enviamos a domicilio a todo el pais por Andreani. El envio es completamente gratis.'],
+              ['Cuanto tarda la entrega?', 'El seguimiento se envia por mail al dia habil siguiente de la compra. La entrega depende de la zona pero generalmente es entre 2 y 5 dias habiles.'],
+              ['Tiene costo el envio?', 'No, el envio es siempre gratis.'],
+            ].map(([q, a]) => (
+              <div key={q} className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm font-semibold text-gray-800">&ldquo;{q}&rdquo;</p>
+                <p className="text-sm text-gray-600 mt-1">{a}</p>
+              </div>
+            ))}
+          </div>
+
+          <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Sobre el bloqueo del equipo</h3>
           <div className="space-y-3">
             {[
-              ['¿Hacen envíos?', 'Sí, hacemos envíos a domicilio a todo el país. También se puede retirar en nuestras sucursales.'],
-              ['¿Cuánto tarda la entrega?', 'Generalmente entre 24 y 72 horas hábiles para envíos en zona urbana. Para zonas del interior puede demorar algunos días más.'],
-              ['¿Tiene costo el envío?', 'Depende de la promoción vigente y la zona de entrega. Siempre se informa el costo de envío antes de confirmar la compra.'],
+              ['El equipo se bloquea si no pago?', 'Si, los equipos cuentan con un sistema de seguridad que bloquea el dispositivo en caso de morosidad. En la pantalla aparece la informacion de contacto para regularizar la deuda.'],
+              ['Si pago se desbloquea?', 'Si, una vez regularizada la deuda el equipo se desbloquea automaticamente.'],
             ].map(([q, a]) => (
               <div key={q} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-sm font-semibold text-gray-800">&ldquo;{q}&rdquo;</p>
@@ -185,77 +235,10 @@ export default function GuiaComercialPage() {
 
         <hr className="border-gray-200" />
 
-        {/* Sección 5 - Objeciones */}
-        <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">5</span>
-            Manejo de objeciones
-          </h2>
-          <div className="space-y-3">
-            {[
-              ['Es muy caro / Lo vi más barato', 'Nuestro precio incluye financiación sin interés. Si comparás el precio de contado con otros, somos competitivos. Pero además te damos la posibilidad de pagarlo en cuotas sin ningún recargo, que es algo que muy pocos ofrecen sin tarjeta de crédito.'],
-              ['No confío en comprar online', 'Somos una empresa establecida con sucursales físicas. Podés retirar el equipo personalmente. Todos los equipos tienen factura y garantía oficial.'],
-              ['Tengo miedo de que me bloqueen el teléfono', 'El bloqueo es solo una medida de seguridad en caso de falta de pago prolongada. Si pagás tus cuotas normalmente, nunca vas a tener ese problema.'],
-              ['¿Y si no me aprueban?', 'El proceso de aprobación es mucho más flexible que un banco. Necesitamos datos básicos y en pocos minutos te confirmamos. La gran mayoría de solicitudes son aprobadas.'],
-              ['Prefiero pagar de contado', 'Perfecto, también tenemos precio de contado. Pero si preferís cuidar tu flujo de plata, te conviene aprovechar las cuotas sin interés.'],
-            ].map(([objecion, respuesta]) => (
-              <div key={objecion} className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-                <p className="text-sm font-semibold text-amber-800">🗣 &ldquo;{objecion}&rdquo;</p>
-                <p className="text-sm text-amber-700 mt-1">→ {respuesta}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <hr className="border-gray-200" />
-
-        {/* Sección 6 - Proceso de venta */}
-        <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">6</span>
-            Proceso de venta paso a paso
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-emerald-700 mb-2">Apertura</h3>
-              <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
-                <li>Presentarse: nombre + &ldquo;de GOcelular&rdquo;</li>
-                <li>Preguntar qué equipo está buscando o qué necesita</li>
-                <li>Escuchar y detectar: presupuesto, uso principal, marca preferida</li>
-              </ol>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-blue-700 mb-2">Presentación</h3>
-              <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside" start={4}>
-                <li>Ofrecer 1-2 opciones que se ajusten al perfil</li>
-                <li>Mencionar el precio y la opción de cuotas sin interés</li>
-                <li>Destacar: &ldquo;sin tarjeta, cuotas fijas, equipo nuevo con garantía&rdquo;</li>
-              </ol>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-purple-700 mb-2">Cierre</h3>
-              <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside" start={7}>
-                <li>Preguntar: &ldquo;¿Te lo reservo? ¿Querés que te paso el link para completar la compra?&rdquo;</li>
-                <li>Guiar al cliente al proceso de compra en la tienda online</li>
-                <li>Confirmar datos de envío o retiro en sucursal</li>
-              </ol>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-amber-700 mb-2">Seguimiento</h3>
-              <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside" start={10}>
-                <li>Si no cierra en el momento, agendar un seguimiento</li>
-                <li>Enviar mensaje recordatorio con el modelo y el plan de cuotas</li>
-              </ol>
-            </div>
-          </div>
-        </section>
-
-        <hr className="border-gray-200" />
-
-        {/* Sección 7 - Datos operativos */}
+        {/* Sección 5 - Datos operativos */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">7</span>
+            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">5</span>
             Datos operativos clave
           </h2>
           <div className="overflow-x-auto">
@@ -264,12 +247,13 @@ export default function GuiaComercialPage() {
                 {[
                   ['Tienda Online', 'gocelular.gocuotas.com/tienda'],
                   ['Plataforma de cobro', 'GOcuotas'],
-                  ['Métodos de pago cuotas', 'CBU, transferencia, puntos de pago'],
-                  ['Planes de cuotas', '3, 6, 9 o 12 meses'],
-                  ['Interés', '0% - cuotas fijas'],
-                  ['Garantía equipos', 'Garantía oficial del fabricante'],
-                  ['Sistema de seguridad', 'Trustonic / Knox Guard'],
-                  ['Envíos', 'A domicilio (todo el país) o retiro en sucursal'],
+                  ['Metodos de pago cuotas', 'App GOcuotas o transferencia bancaria'],
+                  ['Planes de cuotas', '2 a 9 cuotas mensuales'],
+                  ['Entrega inicial', '1ra cuota (se paga al comprar)'],
+                  ['Interes', '0% - cuotas fijas'],
+                  ['Garantia equipos', 'Garantia oficial del fabricante'],
+                  ['Envio', 'Gratis a todo el pais (Andreani)'],
+                  ['Incluye', 'Funda + vidrio templado gratis'],
                 ].map(([concepto, detalle]) => (
                   <tr key={concepto} className="border-t border-gray-100">
                     <td className="px-4 py-2 font-medium text-gray-800 bg-gray-50 w-1/3">{concepto}</td>
@@ -278,31 +262,6 @@ export default function GuiaComercialPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
-
-        <hr className="border-gray-200" />
-
-        {/* Sección 8 - Tips */}
-        <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">8</span>
-            Tips para el supervisor
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              ['Capacitar en producto', 'Los agentes deben conocer las diferencias básicas entre marcas y modelos para hacer recomendaciones creíbles'],
-              ['Manejar objeciones con empatía', 'Nunca discutir con el cliente. Validar su preocupación y redirigir con beneficios'],
-              ['Urgencia sana', '"Este modelo se está vendiendo mucho" o "Tenemos pocas unidades de este color" (solo si es cierto)'],
-              ['Seguimiento es clave', 'El 30-40% de las ventas se cierra en el segundo o tercer contacto, no en el primero'],
-              ['Simplicidad ante todo', 'No abrumar con info técnica. El cliente quiere saber: precio, cuotas, y cuándo lo recibe'],
-              ['Registrar todo', 'Cada interacción, cada objeción, cada resultado. Los datos son la base para mejorar la conversión'],
-            ].map(([titulo, desc]) => (
-              <div key={titulo} className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm font-semibold text-gray-800">{titulo}</p>
-                <p className="text-xs text-gray-500 mt-1">{desc}</p>
-              </div>
-            ))}
           </div>
         </section>
 
