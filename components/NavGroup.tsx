@@ -10,6 +10,7 @@ interface NavChild {
   label: string
   icon: IconName
   badge?: number
+  header?: boolean
 }
 
 export default function NavGroup({
@@ -54,6 +55,21 @@ export default function NavGroup({
       {open && (
         <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
           {children.map((child) => {
+            if (child.header) {
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  className={`flex items-center gap-2 px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                    pathname.startsWith(child.href)
+                      ? 'text-magenta-700'
+                      : 'text-gray-400 hover:text-magenta-700'
+                  }`}
+                >
+                  <span>{child.label}</span>
+                </Link>
+              )
+            }
             const isExternal = child.href.startsWith('http')
             if (isExternal) {
               return (

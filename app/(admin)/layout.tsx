@@ -12,7 +12,7 @@ interface NavItem {
   icon: IconName
   external?: boolean
   badge?: boolean
-  children?: { href: string; label: string; icon: IconName; badge?: number }[]
+  children?: { href: string; label: string; icon: IconName; badge?: number; header?: boolean }[]
 }
 
 const navItems: NavItem[] = [
@@ -23,9 +23,25 @@ const navItems: NavItem[] = [
     icon: 'tienda',
     children: [
       { href: 'https://gocelular.gocuotas.com/tienda', label: 'Tienda Online', icon: 'tienda' },
-      { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas' },
-      { href: '/canales/afiliados', label: 'Afiliados', icon: 'consignatarios' },
-      { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios' },
+      // Venta a Terceros
+      { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas', header: true },
+      { href: '/terceros/crm', label: 'CRM', icon: 'consignatarios' },
+      { href: '/terceros/altas', label: 'Altas', icon: 'tienda' },
+      // Afiliados
+      { href: '/canales/afiliados', label: 'Afiliados', icon: 'consignatarios', header: true },
+      { href: '/canales/afiliados/guia', label: 'Guía Comercial', icon: 'documento' },
+      // Consignatarios
+      { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios', header: true },
+      { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
+      { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
+      { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
+      { href: '/consignatarios/credenciales', label: 'Credenciales', icon: 'consignatarios' },
+      { href: '/garantias', label: 'Garantías', icon: 'garantias' },
+      { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
+      { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
+      { href: '/ventas', label: 'Ventas', icon: 'ventas' },
+      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
+      { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
@@ -44,23 +60,6 @@ const navItems: NavItem[] = [
       { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', icon: 'inventario' },
       { href: '/auditoria-stock', label: 'Auditoría Stock', icon: 'auditorias' },
       { href: '/pase-contabilidad', label: 'Pase a Contabilidad', icon: 'auditorias' },
-    ],
-  },
-  {
-    href: '/consignatarios',
-    label: 'Consignatarios',
-    icon: 'consignatarios',
-    children: [
-      { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
-      { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
-      { href: '/consignatarios/credenciales', label: 'Credenciales', icon: 'consignatarios' },
-      { href: '/garantias', label: 'Garantías', icon: 'garantias' },
-      { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
-      { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
-      { href: '/ventas', label: 'Ventas', icon: 'ventas' },
-      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
-      { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
   // /modelos page kept for admin access but hidden from nav - managed via Compras now
