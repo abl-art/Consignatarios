@@ -53,23 +53,41 @@ export default function NavGroup({
       </div>
       {open && (
         <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
-          {children.map((child) => (
-            <Link
-              key={child.href}
-              href={child.href}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                pathname.startsWith(child.href)
-                  ? 'bg-magenta-50 text-magenta-700'
-                  : 'text-gray-500 hover:bg-magenta-50 hover:text-magenta-700'
-              }`}
-            >
-              <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
-              <span>{child.label}</span>
-              {child.badge && child.badge > 0 && (
-                <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white rounded-full">{child.badge}</span>
-              )}
-            </Link>
-          ))}
+          {children.map((child) => {
+            const isExternal = child.href.startsWith('http')
+            if (isExternal) {
+              return (
+                <a
+                  key={child.href}
+                  href={child.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
+                >
+                  <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
+                  <span>{child.label}</span>
+                  <svg className="w-2.5 h-2.5 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </a>
+              )
+            }
+            return (
+              <Link
+                key={child.href}
+                href={child.href}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  pathname.startsWith(child.href)
+                    ? 'bg-magenta-50 text-magenta-700'
+                    : 'text-gray-500 hover:bg-magenta-50 hover:text-magenta-700'
+                }`}
+              >
+                <NavIcon name={child.icon} className="w-3.5 h-3.5 shrink-0" />
+                <span>{child.label}</span>
+                {child.badge && child.badge > 0 && (
+                  <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white rounded-full">{child.badge}</span>
+                )}
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
