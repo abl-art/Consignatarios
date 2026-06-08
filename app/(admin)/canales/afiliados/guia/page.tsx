@@ -93,14 +93,24 @@ export default function GuiaComercialPage() {
               </div>
             ))}
           </div>
-          <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-sm font-semibold text-emerald-800 mb-1">Incluido con cada compra:</p>
-            <ul className="text-sm text-emerald-700 space-y-1">
-              <li>Funda protectora gratis</li>
-              <li>Vidrio templado gratis</li>
-              <li>Envio gratis por Andreani</li>
-              <li>Kit de Seguridad de regalo (en modelos seleccionados)</li>
-            </ul>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-emerald-800 mb-1">Incluido con cada compra:</p>
+              <ul className="text-sm text-emerald-700 space-y-1">
+                <li>Funda protectora gratis</li>
+                <li>Vidrio templado gratis</li>
+                <li>Envio gratis por Andreani</li>
+              </ul>
+            </div>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-indigo-800 mb-1">Add-ons disponibles:</p>
+              <ul className="text-sm text-indigo-700 space-y-1">
+                <li>Auriculares</li>
+                <li>Smartwatch</li>
+                <li>Parlantes</li>
+              </ul>
+              <p className="text-xs text-indigo-500 mt-2">Los add-ons solo se pueden comprar junto con un celular, no se venden por separado.</p>
+            </div>
           </div>
         </section>
 
