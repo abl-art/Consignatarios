@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido } from '@/lib/actions/compras'
 
 interface Proveedor {
   id: string
@@ -519,6 +519,8 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     pedidosGuardados.forEach(p => { if (p.ingresoStockAt) map[p.id] = p.ingresoStockAt })
     return map
   })
+  const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null)
+  const [editingItems, setEditingItems] = useState<PedidoGuardado['items']>([])
   const [filtroProvEnviados, setFiltroProvEnviados] = useState('')
   const [filtroFechaEnviados, setFiltroFechaEnviados] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'' | 'transito' | 'recibido' | 'ingresado'>('')
@@ -1218,52 +1220,134 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                       {expandedPedido === p.id && (
                         <tr>
                           <td colSpan={9} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-gray-200">
-                                  <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
-                                  <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
-                                  <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
-                                  <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {p.items.map((item, idx) => (
-                                  <tr key={idx} className="border-b border-gray-100">
-                                    <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
-                                    <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
-                                    <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
-                                    <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot>
-                                <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
-                                <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
-                                <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalConIva)}</td></tr>
-                              </tfoot>
-                            </table>
-                            {p.enviadoPor && <p className="text-xs text-gray-400 mt-2">Enviado por {p.enviadoPor}</p>}
+                            {editingPedidoId === p.id ? (
+                              <>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-gray-200">
+                                      <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+                                      <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
+                                      <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
+                                      <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {editingItems.map((item, idx) => (
+                                      <tr key={idx} className="border-b border-gray-100">
+                                        <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
+                                        <td className="py-1.5 text-center">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            value={item.cantidad}
+                                            onChange={(e) => {
+                                              const val = parseInt(e.target.value) || 0
+                                              setEditingItems(prev => prev.map((it, i) => i === idx ? { ...it, cantidad: val } : it))
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-xs"
+                                          />
+                                        </td>
+                                        <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
+                                        <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    {(() => {
+                                      const netoEdit = editingItems.reduce((s, i) => s + i.precio * i.cantidad, 0)
+                                      return (
+                                        <>
+                                          <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(netoEdit)}</td></tr>
+                                          <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(netoEdit * 0.21)}</td></tr>
+                                          <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(netoEdit * 1.21)}</td></tr>
+                                        </>
+                                      )
+                                    })()}
+                                  </tfoot>
+                                </table>
+                                <p className="text-[11px] text-amber-600 mt-2">Los items con cantidad 0 se eliminarán del pedido.</p>
+                                <div className="mt-3 flex gap-2 justify-end">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setEditingPedidoId(null) }}
+                                    className="px-4 py-2 text-xs text-gray-600 hover:text-gray-800 transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      if (!confirm('¿Guardar los cambios en este pedido enviado?')) return
+                                      await modificarItemsPedido(p.id, editingItems)
+                                      setEditingPedidoId(null)
+                                      router.refresh()
+                                    }}
+                                    className="px-5 py-2 text-xs bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                                  >
+                                    Guardar cambios
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-gray-200">
+                                      <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+                                      <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
+                                      <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
+                                      <th className="text-right py-1.5 font-medium text-gray-500">Subtotal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {p.items.map((item, idx) => (
+                                      <tr key={idx} className="border-b border-gray-100">
+                                        <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
+                                        <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
+                                        <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
+                                        <td className="py-1.5 text-right font-medium text-gray-800">{formatearMoneda(item.precio * item.cantidad)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
+                                    <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
+                                    <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalConIva)}</td></tr>
+                                  </tfoot>
+                                </table>
+                                {p.enviadoPor && <p className="text-xs text-gray-400 mt-2">Enviado por {p.enviadoPor}</p>}
 
-                            {/* IMEI upload/download */}
-                            <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
+                                {/* IMEI upload/download */}
+                                <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
 
-                            {/* Cancelar pedido */}
-                            <div className="mt-4 pt-3 border-t border-gray-200 flex justify-end">
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  const motivo = prompt('Motivo de cancelacion (ej: proveedor sin stock, error, etc.):')
-                                  if (!motivo) return
-                                  if (!confirm(`¿Cancelar este pedido de ${p.proveedorNombre}? Se eliminara permanentemente.\n\nMotivo: ${motivo}`)) return
-                                  await eliminarPedido(p.id)
-                                  router.refresh()
-                                }}
-                                className="px-4 py-2 text-xs text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-                              >
-                                Cancelar pedido
-                              </button>
-                            </div>
+                                {/* Modificar / Cancelar pedido */}
+                                <div className="mt-4 pt-3 border-t border-gray-200 flex justify-between">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setEditingPedidoId(p.id)
+                                      setEditingItems(p.items.map(i => ({ ...i })))
+                                    }}
+                                    className="px-4 py-2 text-xs text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                                  >
+                                    Modificar pedido
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      const motivo = prompt('Motivo de cancelacion (ej: proveedor sin stock, error, etc.):')
+                                      if (!motivo) return
+                                      if (!confirm(`¿Cancelar este pedido de ${p.proveedorNombre}? Se eliminara permanentemente.\n\nMotivo: ${motivo}`)) return
+                                      await eliminarPedido(p.id)
+                                      router.refresh()
+                                    }}
+                                    className="px-4 py-2 text-xs text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                                  >
+                                    Cancelar pedido
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </td>
                         </tr>
                       )}

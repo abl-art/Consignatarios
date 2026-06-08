@@ -236,6 +236,15 @@ export async function actualizarEstadoPedido(pedidoId: string, estado: 'borrador
   return guardarPedido(pedido)
 }
 
+export async function modificarItemsPedido(pedidoId: string, items: Pedido['items']) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.items = items.filter(i => i.cantidad > 0)
+  return guardarPedido(pedido)
+}
+
 export async function marcarEntregado(pedidoId: string) {
   const supabase = createAdminClient()
   const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
