@@ -6,7 +6,7 @@ export default function GuiaComercialPage() {
   function handleDownload() {
     const el = document.getElementById('guia-content')
     if (!el) return
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Guía Comercial - GOcelular</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:40px 20px;color:#1f2937;font-size:14px;line-height:1.6}h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:32px;padding-bottom:8px;border-bottom:1px solid #e5e7eb}h3{font-size:14px;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin-top:20px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e5e7eb;padding:8px 12px;text-align:left;font-size:13px}th{background:#f9fafb;font-weight:600}.faq{background:#f9fafb;border-radius:8px;padding:12px;margin:8px 0}.faq strong{display:block;margin-bottom:4px}.badge{display:inline-block;background:#f3f4f6;border-radius:20px;padding:2px 10px;font-size:12px;margin:2px}.highlight{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:12px 0}.stats{display:flex;gap:12px;margin:12px 0}.stat{flex:1;background:#f9fafb;border-radius:8px;padding:12px;text-align:center}.stat-value{font-size:20px;font-weight:700}.stat-label{font-size:11px;color:#9ca3af}p.subtitle{color:#6b7280;font-size:13px}</style></head><body>${el.innerHTML}</body></html>`
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Guia Comercial - GOcelular</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:40px 20px;color:#1f2937;font-size:14px;line-height:1.6}h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:32px;padding-bottom:8px;border-bottom:1px solid #e5e7eb}h3{font-size:14px;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin-top:20px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e5e7eb;padding:8px 12px;text-align:left;font-size:13px}th{background:#f9fafb;font-weight:600}.faq{background:#f9fafb;border-radius:8px;padding:12px;margin:8px 0}.faq strong{display:block;margin-bottom:4px}.badge{display:inline-block;background:#f3f4f6;border-radius:20px;padding:2px 10px;font-size:12px;margin:2px}.highlight{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:12px 0}.stats{display:flex;gap:12px;margin:12px 0}.stat{flex:1;background:#f9fafb;border-radius:8px;padding:12px;text-align:center}.stat-value{font-size:20px;font-weight:700}.stat-label{font-size:11px;color:#9ca3af}p.subtitle{color:#6b7280;font-size:13px}</style></head><body>${el.innerHTML}</body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -29,7 +29,7 @@ export default function GuiaComercialPage() {
             </svg>
             Afiliados
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Guia Comercial - Call Center</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Guia Comercial</h1>
         </div>
         <button
           onClick={handleDownload}
@@ -74,40 +74,24 @@ export default function GuiaComercialPage() {
             <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">2</span>
             Productos que vendemos
           </h2>
-          <p className="text-sm text-gray-500 mb-3">Celulares gama media y economica. Todos nuevos, sellados, compatibles con cualquier compañia.</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Modelo</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">Precio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Motorola Moto G06 64GB', '$278.100'],
-                  ['Motorola Moto G06 128GB', '$323.100'],
-                  ['Samsung Galaxy A07 64GB', '$350.100'],
-                  ['Samsung Galaxy A07 128GB', '$413.100'],
-                  ['Motorola Moto G17 128GB', '$431.100'],
-                  ['Xiaomi Redmi 14C 128/4GB', '$431.100'],
-                  ['Motorola Moto G17 256GB', '$503.100'],
-                  ['Xiaomi Redmi 14C 256/4GB', '$512.100'],
-                  ['Xiaomi Redmi Note 14 128/6GB', '$602.100'],
-                  ['Motorola Moto G67 256GB', '$737.100'],
-                  ['Samsung Galaxy A17 5G 256GB', '$818.100'],
-                  ['Motorola Moto G77 5G 256GB', '$863.100'],
-                  ['Xiaomi Redmi Note 14 Pro 256/8GB', '$890.100'],
-                  ['Samsung Galaxy A37 5G 256GB', '$1.313.100'],
-                  ['Samsung Galaxy A56 5G 256GB', '$1.305.000'],
-                ].map(([modelo, precio]) => (
-                  <tr key={modelo} className="border-t border-gray-100">
-                    <td className="px-4 py-2 font-medium text-gray-900">{modelo}</td>
-                    <td className="px-4 py-2 text-right text-gray-700">{precio}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <p className="text-sm text-gray-500 mb-4">Celulares gama media y economica. Todos nuevos, sellados, compatibles con cualquier compañia.</p>
+          <div className="space-y-4">
+            {[
+              { marca: 'Motorola', modelos: ['Moto G06 64GB', 'Moto G06 128GB', 'Moto G17 128GB', 'Moto G17 256GB', 'Moto G67 256GB', 'Moto G77 5G 256GB'] },
+              { marca: 'Samsung', modelos: ['Galaxy A07 64GB', 'Galaxy A07 128GB', 'Galaxy A17 5G 256GB', 'Galaxy A37 5G 256GB', 'Galaxy A56 5G 256GB'] },
+              { marca: 'Xiaomi', modelos: ['Redmi 14C 128/4GB', 'Redmi 14C 256/4GB', 'Redmi Note 14 128/6GB', 'Redmi Note 14 Pro 256/8GB'] },
+            ].map(({ marca, modelos }) => (
+              <div key={marca} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2">
+                  <p className="text-sm font-semibold text-gray-800">{marca}</p>
+                </div>
+                <div className="px-4 py-2 flex flex-wrap gap-2">
+                  {modelos.map(m => (
+                    <span key={m} className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-700">{m}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
             <p className="text-sm font-semibold text-emerald-800 mb-1">Incluido con cada compra:</p>
@@ -165,10 +149,46 @@ export default function GuiaComercialPage() {
 
         <hr className="border-gray-200" />
 
-        {/* Sección 4 - FAQ */}
+        {/* Sección 4 - Consulta de límite */}
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">4</span>
+            Como saber el limite disponible del cliente
+          </h2>
+          <p className="text-sm text-gray-700 leading-relaxed mb-3">
+            Vas a tener acceso a un panel donde podras consultar el limite disponible de cada cliente para orientarlo sobre que celular puede comprar segun su capacidad de pago.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-sm font-semibold text-blue-800 mb-1">Recomendacion para el agente</p>
+            <p className="text-sm text-blue-700">
+              Siempre preguntale al cliente cuanto dinero podria pagar en la primera cuota. Con ese dato podes calcular rapidamente a que productos puede acceder y ofrecerle las mejores opciones dentro de su presupuesto.
+            </p>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm font-semibold text-gray-800 mb-2">Credenciales de consulta de saldo</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 w-16">Acceso:</span>
+                <code className="text-sm bg-white px-2 py-1 rounded border border-gray-200 text-gray-800">gocuotas.com</code>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 w-16">Usuario:</span>
+                <code className="text-sm bg-white px-2 py-1 rounded border border-gray-200 text-gray-800">afiliados@gocelular.com</code>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 w-16">Clave:</span>
+                <code className="text-sm bg-white px-2 py-1 rounded border border-gray-200 text-gray-800">afiliados</code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <hr className="border-gray-200" />
+
+        {/* Sección 5 - FAQ */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">4</span>
+            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">5</span>
             Preguntas frecuentes de los clientes
           </h2>
 
@@ -238,7 +258,7 @@ export default function GuiaComercialPage() {
         {/* Sección 5 - Datos operativos */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">5</span>
+            <span className="w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-bold">6</span>
             Datos operativos clave
           </h2>
           <div className="overflow-x-auto">
