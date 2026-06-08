@@ -74,7 +74,7 @@ const navItems: NavItem[] = [
     label: 'Grupo GO',
     icon: 'dashboard',
     children: [
-      { href: 'https://finanza.gocuotas.com', label: 'Finanzas', icon: 'finanzas' },
+      { href: 'https://finanzas.gocuotas.com', label: 'Finanzas', icon: 'finanzas' },
     ],
   },
 ]
