@@ -94,6 +94,8 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
     buscarTacEnDevices(q).then(found => {
       if (found) {
         setBusquedaResult({ status: 'pendiente', tac: found })
+        // Agregar a pendientes para que aparezca en las tarjetas
+        setPendientesTerceros(prev => prev.some(t => t.tac === found.tac) ? prev : [...prev, found])
       } else {
         setBusquedaResult({ status: 'not_found', tac: null })
       }
