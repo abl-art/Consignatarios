@@ -53,11 +53,9 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard360</h1>
       <p className="text-sm text-gray-500 mb-6">Vista general de GOcelular</p>
 
-      {/* Ventas del día + Tiempo de Entrega */}
+      {/* Ventas del día + Tiempo de Entrega + Donde vendemos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <VentasDelDia />
-        </div>
+        <VentasDelDia />
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Tiempo promedio de entrega</h2>
           <p className="text-[10px] text-gray-400 -mt-2 mb-4">Orden confirmada → tracking Andreani</p>
@@ -80,10 +78,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Geografía */}
-      <div className="mt-4">
         <GeografiaVentas data={geografia} />
       </div>
 
