@@ -1,5 +1,5 @@
 import { getPool, getGocuotasPool } from './db-pool'
-import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS } from './client-ids'
+import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, SQL_IDS_TODOS, SQL_IDS_PROPIOS } from './client-ids'
 
 export { CLIENT_IDS_PROPIOS }
 
@@ -1289,6 +1289,150 @@ export async function fetchAlertasSinImei(): Promise<AlertaSinImeiTienda[]> {
     }
 
     return Array.from(map.values()).sort((a, b) => b.sinImei - a.sinImei)
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Alerta: equipos con todas las cuotas pagadas (posible adelanto sospechoso)
+// ---------------------------------------------------------------------------
+
+export interface AlertaCuotasPagadasDetalle {
+  orderId: string
+  userDni: string
+  userName: string
+  storeName: string
+  clientId: string
+  esTercero: boolean
+  totalCuotas: number
+  fechaOrden: string
+  fechaUltimoPago: string
+  diasAdelanto: number // dias entre orden y ultimo pago
+}
+
+export interface AlertaCuotasPagadas {
+  total: number
+  promedioAdelanto: number // dias promedio entre creacion y ultimo pago
+  detalle: AlertaCuotasPagadasDetalle[]
+}
+
+export async function fetchAlertaCuotasPagadas(): Promise<AlertaCuotasPagadas> {
+  const pool = getPool()
+  if (!pool) return { total: 0, promedioAdelanto: 0, detalle: [] }
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      order_id: string
+      user_dni: string
+      user_name: string
+      store_name: string
+      client_id: string
+      total_cuotas: string
+      fecha_orden: string
+      fecha_ultimo_pago: string
+      dias_adelanto: string
+    }>(`
+      WITH pagadas AS (
+        SELECT go.order_id, go.user_dni, go.user_name, go.store_name, go.client_id,
+          go.order_created_at AS fecha_orden,
+          COUNT(i.installment_id)::text AS total_cuotas,
+          MAX(i.installment_collected_at)::text AS fecha_ultimo_pago,
+          EXTRACT(DAY FROM MAX(i.installment_due_at) - go.order_created_at)::text AS dias_adelanto
+        FROM gocuotas_orders go
+        JOIN gocuotas_installments i ON i.order_id::text = go.order_id::text
+        WHERE go.order_discarded_at IS NULL
+          AND go.order_created_at IS NOT NULL
+        GROUP BY go.order_id, go.user_dni, go.user_name, go.store_name, go.client_id, go.order_created_at
+        HAVING COUNT(i.installment_id) = COUNT(i.installment_collected_at)
+          AND COUNT(i.installment_id) > 1
+      )
+      SELECT * FROM pagadas ORDER BY dias_adelanto ASC
+    `)
+
+    const terceroIds = new Set(CLIENT_IDS_TERCEROS)
+    const detalle: AlertaCuotasPagadasDetalle[] = res.rows.map(r => ({
+      orderId: r.order_id,
+      userDni: r.user_dni ?? '',
+      userName: r.user_name ?? '',
+      storeName: r.store_name,
+      clientId: r.client_id,
+      esTercero: terceroIds.has(r.client_id),
+      totalCuotas: Number(r.total_cuotas),
+      fechaOrden: r.fecha_orden?.slice(0, 10) ?? '',
+      fechaUltimoPago: r.fecha_ultimo_pago?.slice(0, 10) ?? '',
+      diasAdelanto: Number(r.dias_adelanto),
+    }))
+
+    const promedioAdelanto = detalle.length > 0
+      ? Math.round(detalle.reduce((s, d) => s + d.diasAdelanto, 0) / detalle.length)
+      : 0
+
+    return { total: detalle.length, promedioAdelanto, detalle }
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tiempo promedio de entrega: orden confirmada → tracking Andreani creado
+// ---------------------------------------------------------------------------
+
+export interface TiempoEntregaData {
+  promedioDias: number
+  medianaDias: number
+  totalEnvios: number
+  promedio30d: number
+  mediana30d: number
+  envios30d: number
+}
+
+export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
+  const pool = getPool()
+  if (!pool) return { promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 }
+
+  const client = await pool.connect()
+  try {
+    const [allRes, recentRes] = await Promise.all([
+      client.query<{ prom: string; mediana: string; total: string }>(
+        `SELECT
+          ROUND(AVG(EXTRACT(EPOCH FROM (s.created_at - go.order_created_at)) / 86400)::numeric, 1)::text AS prom,
+          ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (s.created_at - go.order_created_at)) / 86400)::numeric, 1)::text AS mediana,
+          COUNT(*)::text AS total
+        FROM shipments s
+        JOIN store_orders so ON so.id = s.store_order_id
+        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+        WHERE s.tracking_number IS NOT NULL
+          AND go.order_discarded_at IS NULL
+          AND go.order_created_at IS NOT NULL
+          AND s.created_at > go.order_created_at`
+      ),
+      client.query<{ prom: string; mediana: string; total: string }>(
+        `SELECT
+          ROUND(AVG(EXTRACT(EPOCH FROM (s.created_at - go.order_created_at)) / 86400)::numeric, 1)::text AS prom,
+          ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (s.created_at - go.order_created_at)) / 86400)::numeric, 1)::text AS mediana,
+          COUNT(*)::text AS total
+        FROM shipments s
+        JOIN store_orders so ON so.id = s.store_order_id
+        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+        WHERE s.tracking_number IS NOT NULL
+          AND go.order_discarded_at IS NULL
+          AND go.order_created_at IS NOT NULL
+          AND s.created_at > go.order_created_at
+          AND go.order_created_at >= CURRENT_DATE - 30`
+      ),
+    ])
+    const all = allRes.rows[0]
+    const recent = recentRes.rows[0]
+    return {
+      promedioDias: Number(all.prom),
+      medianaDias: Number(all.mediana),
+      totalEnvios: Number(all.total),
+      promedio30d: Number(recent.prom),
+      mediana30d: Number(recent.mediana),
+      envios30d: Number(recent.total),
+    }
   } finally {
     client.release()
   }
