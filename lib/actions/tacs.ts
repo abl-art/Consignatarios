@@ -37,30 +37,14 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
   const client = await pool.connect()
   try {
     const res = await client.query<{ tac: string; marca: string; modelo: string }>(
-      `SELECT DISTINCT tac, marca, modelo FROM (
-        -- Fuente 1: inventory_items (stock ecommerce)
-        SELECT
-          SUBSTRING(ii.imei, 1, 8) AS tac,
-          COALESCE(dm.brand, 'Desconocido') AS marca,
-          COALESCE(dm.name, ii.model_code) AS modelo
-        FROM inventory_items ii
-        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
-        WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
-          AND SUBSTRING(ii.imei, 1, 8) != '00000000'
-
-        UNION
-
-        -- Fuente 2: devices (ventas consignatarios/terceros)
-        SELECT
-          SUBSTRING(d.imei, 1, 8) AS tac,
-          COALESCE(d.brand, 'Desconocido') AS marca,
-          COALESCE(d.model, 'Desconocido') AS modelo
-        FROM devices d
-        WHERE d.imei IS NOT NULL AND LENGTH(d.imei) >= 8
-          AND SUBSTRING(d.imei, 1, 8) != '00000000'
-          AND (d.is_test_device = false OR d.is_test_device IS NULL)
-          AND LOWER(COALESCE(d.brand, '')) NOT IN ('samsung', 'apple')
-      ) AS all_tacs
+      `SELECT DISTINCT
+        SUBSTRING(ii.imei, 1, 8) AS tac,
+        COALESCE(dm.brand, 'Desconocido') AS marca,
+        COALESCE(dm.name, ii.model_code) AS modelo
+       FROM inventory_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
+         AND SUBSTRING(ii.imei, 1, 8) != '00000000'
        ORDER BY marca, modelo`
     )
     return res.rows.filter(r => !MARCAS_EXCLUIDAS.includes(r.marca.toLowerCase()))
@@ -172,6 +156,31 @@ export async function procesarArchivoTerceros(items: { imei: string; marca: stri
   }
 
   return pendientes
+}
+
+// Buscar un TAC en la tabla devices (fallback cuando no se encuentra en inventario ni tacs_cargados)
+export async function buscarTacEnDevices(tac: string): Promise<TacPendiente | null> {
+  const pool = getPool()
+  if (!pool || tac.length < 8) return null
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ marca: string; modelo: string }>(
+      `SELECT DISTINCT
+        COALESCE(d.brand, 'Desconocido') AS marca,
+        COALESCE(d.model, 'Desconocido') AS modelo
+       FROM devices d
+       WHERE SUBSTRING(d.imei, 1, 8) = $1
+         AND (d.is_test_device = false OR d.is_test_device IS NULL)
+         AND LOWER(COALESCE(d.brand, '')) NOT IN ('samsung', 'apple')
+       LIMIT 1`,
+      [tac]
+    )
+    if (res.rows.length === 0) return null
+    return { tac, marca: res.rows[0].marca, modelo: res.rows[0].modelo, origen: 'terceros' }
+  } finally {
+    client.release()
+  }
 }
 
 // Carga inicial: sincronizar inventario GOcelular → tacs_cargados
