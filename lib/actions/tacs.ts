@@ -29,7 +29,7 @@ export interface TacPendiente {
 // Marcas excluidas de Trustonic (no necesitan carga de TAC)
 const MARCAS_EXCLUIDAS = ['samsung', 'apple']
 
-// Fetch TACs únicos del inventario de GOcelular (excluyendo marcas que no usan Trustonic)
+// Fetch TACs únicos de inventario + devices (excluyendo marcas que no usan Trustonic)
 async function fetchTacsInventario(): Promise<TacInventario[]> {
   const pool = getPool()
   if (!pool) return []
@@ -37,17 +37,60 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
   const client = await pool.connect()
   try {
     const res = await client.query<{ tac: string; marca: string; modelo: string }>(
-      `SELECT DISTINCT
-        SUBSTRING(ii.imei, 1, 8) AS tac,
-        COALESCE(dm.brand, 'Desconocido') AS marca,
-        COALESCE(dm.name, ii.model_code) AS modelo
-       FROM inventory_items ii
-       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
-       WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
-         AND SUBSTRING(ii.imei, 1, 8) != '00000000'
+      `SELECT DISTINCT tac, marca, modelo FROM (
+        -- Fuente 1: inventory_items (stock ecommerce)
+        SELECT
+          SUBSTRING(ii.imei, 1, 8) AS tac,
+          COALESCE(dm.brand, 'Desconocido') AS marca,
+          COALESCE(dm.name, ii.model_code) AS modelo
+        FROM inventory_items ii
+        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+        WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
+          AND SUBSTRING(ii.imei, 1, 8) != '00000000'
+
+        UNION
+
+        -- Fuente 2: devices (ventas consignatarios/terceros)
+        SELECT
+          SUBSTRING(d.imei, 1, 8) AS tac,
+          COALESCE(d.brand, 'Desconocido') AS marca,
+          COALESCE(d.model, 'Desconocido') AS modelo
+        FROM devices d
+        WHERE d.imei IS NOT NULL AND LENGTH(d.imei) >= 8
+          AND SUBSTRING(d.imei, 1, 8) != '00000000'
+          AND (d.is_test_device = false OR d.is_test_device IS NULL)
+          AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%samsung%'
+          AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%apple%'
+      ) AS all_tacs
        ORDER BY marca, modelo`
     )
     return res.rows.filter(r => !MARCAS_EXCLUIDAS.includes(r.marca.toLowerCase()))
+  } finally {
+    client.release()
+  }
+}
+
+// TACs de devices que ya tienen Trustonic activado → se marcan automáticamente como cargados
+async function fetchTacsYaActivados(): Promise<TacInventario[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ tac: string; marca: string; modelo: string }>(
+      `SELECT DISTINCT
+        SUBSTRING(d.imei, 1, 8) AS tac,
+        COALESCE(d.brand, 'Desconocido') AS marca,
+        COALESCE(d.model, 'Desconocido') AS modelo
+       FROM devices d
+       WHERE d.imei IS NOT NULL AND LENGTH(d.imei) >= 8
+         AND SUBSTRING(d.imei, 1, 8) != '00000000'
+         AND (d.is_test_device = false OR d.is_test_device IS NULL)
+         AND d.trustonic_status IS NOT NULL
+         AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%samsung%'
+         AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%apple%'`
+    )
+    return res.rows
   } finally {
     client.release()
   }
@@ -60,16 +103,31 @@ export async function fetchTacsCargados(): Promise<TacCargado[]> {
   return (data ?? []) as TacCargado[]
 }
 
-// Detectar TACs nuevos (en inventario pero no en tacs_cargados)
+// Detectar TACs nuevos (en inventario/devices pero no en tacs_cargados)
+// Auto-sincroniza TACs de devices que ya tienen Trustonic activado
 export async function detectarTacsPendientes(): Promise<TacPendiente[]> {
-  const [inventario, cargados] = await Promise.all([
+  const [inventario, cargados, yaActivados] = await Promise.all([
     fetchTacsInventario(),
     fetchTacsCargados(),
+    fetchTacsYaActivados(),
   ])
 
   const cargadosSet = new Set(cargados.map(t => t.tac))
-  const pendientes: TacPendiente[] = []
 
+  // Auto-marcar como cargados los TACs que ya tienen Trustonic activado
+  const nuevosActivados = yaActivados.filter(t => !cargadosSet.has(t.tac))
+  if (nuevosActivados.length > 0) {
+    const sb = createAdminClient()
+    for (const t of nuevosActivados) {
+      await sb.from('tacs_cargados').upsert({
+        tac: t.tac, marca: t.marca, modelo: t.modelo,
+        origen: 'terceros', estado: 'cargado',
+      }, { onConflict: 'tac' })
+      cargadosSet.add(t.tac)
+    }
+  }
+
+  const pendientes: TacPendiente[] = []
   for (const t of inventario) {
     if (!cargadosSet.has(t.tac)) {
       pendientes.push({ ...t, origen: 'inventario' })
@@ -172,7 +230,8 @@ export async function buscarTacEnDevices(tac: string): Promise<TacPendiente | nu
        FROM devices d
        WHERE SUBSTRING(d.imei, 1, 8) = $1
          AND (d.is_test_device = false OR d.is_test_device IS NULL)
-         AND LOWER(COALESCE(d.brand, '')) NOT IN ('samsung', 'apple')
+         AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%samsung%'
+         AND LOWER(COALESCE(d.brand, '')) NOT LIKE '%apple%'
        LIMIT 1`,
       [tac]
     )
