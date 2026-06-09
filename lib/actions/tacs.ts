@@ -59,6 +59,7 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
         WHERE d.imei IS NOT NULL AND LENGTH(d.imei) >= 8
           AND SUBSTRING(d.imei, 1, 8) != '00000000'
           AND (d.is_test_device = false OR d.is_test_device IS NULL)
+          AND LOWER(COALESCE(d.brand, '')) NOT IN ('samsung', 'apple')
       ) AS all_tacs
        ORDER BY marca, modelo`
     )
