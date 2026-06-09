@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { solicitarCargaTacs, confirmarTacsCargados, procesarArchivoTerceros, buscarTacEnDevices, type TacCargado, type TacPendiente } from '@/lib/actions/tacs'
+import { solicitarCargaTacs, confirmarTacsCargados, procesarArchivoTerceros, type TacCargado, type TacPendiente } from '@/lib/actions/tacs'
 
 interface Props {
   cargados: TacCargado[]
@@ -75,34 +75,17 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
     router.refresh()
   }
 
-  // Resultado de búsqueda de TAC (con fallback async a tabla devices)
-  const [busquedaResult, setBusquedaResult] = useState<{ status: 'cargado' | 'solicitado' | 'pendiente' | 'not_found'; tac: TacCargado | TacPendiente | null } | null>(null)
-  const [buscando, setBuscando] = useState(false)
-
-  useEffect(() => {
-    if (busqueda.trim().length < 4) { setBusquedaResult(null); return }
+  // Resultado de búsqueda de TAC
+  const busquedaResult = busqueda.length >= 4 ? (() => {
     const q = busqueda.trim()
-    // Búsqueda local primero
     const enCargados = cargados.find(t => t.tac === q)
-    if (enCargados) { setBusquedaResult({ status: 'cargado', tac: enCargados }); return }
+    if (enCargados) return { status: 'cargado' as const, tac: enCargados }
     const enSolicitados = solicitados.find(t => t.tac === q)
-    if (enSolicitados) { setBusquedaResult({ status: 'solicitado', tac: enSolicitados }); return }
+    if (enSolicitados) return { status: 'solicitado' as const, tac: enSolicitados }
     const enPendientes = todosPendientes.find(t => t.tac === q)
-    if (enPendientes) { setBusquedaResult({ status: 'pendiente', tac: enPendientes }); return }
-    // Fallback: buscar en tabla devices de GOcelular
-    setBuscando(true)
-    buscarTacEnDevices(q).then(found => {
-      if (found) {
-        setBusquedaResult({ status: 'pendiente', tac: found })
-        // Agregar a pendientes para que aparezca en las tarjetas
-        setPendientesTerceros(prev => prev.some(t => t.tac === found.tac) ? prev : [...prev, found])
-      } else {
-        setBusquedaResult({ status: 'not_found', tac: null })
-      }
-      setBuscando(false)
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busqueda])
+    if (enPendientes) return { status: 'pendiente' as const, tac: enPendientes }
+    return { status: 'not_found' as const, tac: null }
+  })() : null
 
   function descargarTemplate() {
     import('xlsx').then(XLSX => {
@@ -175,8 +158,7 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
           <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value.replace(/\D/g, '').slice(0, 8))}
             placeholder="Buscar TAC (8 d&iacute;gitos)..." maxLength={8}
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" />
-          {buscando && <span className="text-sm text-gray-400">Buscando...</span>}
-          {!buscando && busquedaResult && (
+          {busquedaResult && (
             <div className="flex items-center gap-2">
               {statusBadge(busquedaResult.status)}
               {busquedaResult.tac && <span className="text-sm text-gray-700">{busquedaResult.tac.marca} &mdash; {busquedaResult.tac.modelo}</span>}
