@@ -37,14 +37,29 @@ async function fetchTacsInventario(): Promise<TacInventario[]> {
   const client = await pool.connect()
   try {
     const res = await client.query<{ tac: string; marca: string; modelo: string }>(
-      `SELECT DISTINCT
-        SUBSTRING(ii.imei, 1, 8) AS tac,
-        COALESCE(dm.brand, 'Desconocido') AS marca,
-        COALESCE(dm.name, ii.model_code) AS modelo
-       FROM inventory_items ii
-       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
-       WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
-         AND SUBSTRING(ii.imei, 1, 8) != '00000000'
+      `SELECT DISTINCT tac, marca, modelo FROM (
+        -- Fuente 1: inventory_items (stock ecommerce)
+        SELECT
+          SUBSTRING(ii.imei, 1, 8) AS tac,
+          COALESCE(dm.brand, 'Desconocido') AS marca,
+          COALESCE(dm.name, ii.model_code) AS modelo
+        FROM inventory_items ii
+        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+        WHERE ii.imei IS NOT NULL AND LENGTH(ii.imei) >= 8
+          AND SUBSTRING(ii.imei, 1, 8) != '00000000'
+
+        UNION
+
+        -- Fuente 2: devices (ventas consignatarios/terceros)
+        SELECT
+          SUBSTRING(d.imei, 1, 8) AS tac,
+          COALESCE(d.brand, 'Desconocido') AS marca,
+          COALESCE(d.model, 'Desconocido') AS modelo
+        FROM devices d
+        WHERE d.imei IS NOT NULL AND LENGTH(d.imei) >= 8
+          AND SUBSTRING(d.imei, 1, 8) != '00000000'
+          AND (d.is_test_device = false OR d.is_test_device IS NULL)
+      ) AS all_tacs
        ORDER BY marca, modelo`
     )
     return res.rows.filter(r => !MARCAS_EXCLUIDAS.includes(r.marca.toLowerCase()))
