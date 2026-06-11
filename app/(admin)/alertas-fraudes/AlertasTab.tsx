@@ -46,6 +46,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
   const [expandedTienda, setExpandedTienda] = useState<string | null>(null)
   const [expandedImeiMerchant, setExpandedImeiMerchant] = useState<string | null>(null)
   const [expandedImeiStore, setExpandedImeiStore] = useState<string | null>(null)
+  const [expandedAsigMerchant, setExpandedAsigMerchant] = useState<string | null>(null)
   const [openAlert, setOpenAlert] = useState<number | null>(null)
 
   function toggleAlert(n: number) { setOpenAlert(prev => prev === n ? null : n) }
@@ -491,14 +492,33 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
           </div>
           <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full font-medium shrink-0">{tiempoAsignacion.reduce((s, t) => s + t.total, 0)}</span>
         </button>
-        {openAlert === 7 && <div className="overflow-auto max-h-[600px] border-t border-gray-100">
-          {tiempoAsignacion.length === 0 ? (
+        {openAlert === 7 && (() => {
+          // Agrupar por merchant
+          const asigPorMerchant = (() => {
+            const map = new Map<string, TiempoAsignacionTienda[]>()
+            for (const t of tiempoAsignacion) { const arr = map.get(t.clientId) ?? []; arr.push(t); map.set(t.clientId, arr) }
+            return Array.from(map.entries()).map(([clientId, stores]) => {
+              const sum = (fn: (t: TiempoAsignacionTienda) => number) => stores.reduce((s, t) => s + fn(t), 0)
+              return {
+                clientId, name: merchantName(clientId),
+                stores: stores.sort((a, b) => b.total - a.total),
+                total: sum(t => t.total), dentro30min: sum(t => t.dentro30min),
+                entre30y60: sum(t => t.entre30y60), mas1h: sum(t => t.mas1h),
+                activos: sum(t => t.activos), bloqueados: sum(t => t.bloqueados),
+                idle: sum(t => t.idle), readyForUse: sum(t => t.readyForUse), sinTrustonic: sum(t => t.sinTrustonic),
+              }
+            }).sort((a, b) => b.total - a.total)
+          })()
+
+          return <div className="overflow-auto max-h-[600px] border-t border-gray-100">
+          {asigPorMerchant.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin datos</div>
           ) : (
             <table className="w-full text-xs">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium text-gray-600">Tienda</th>
+                  <th className="w-6 px-2 py-2"></th>
+                  <th className="text-left px-2 py-2 font-medium text-gray-600">Merchant / Tienda</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-600">Total</th>
                   <th className="text-right px-2 py-2 font-medium text-green-700">&le;30min</th>
                   <th className="text-right px-2 py-2 font-medium text-green-700">%</th>
@@ -508,79 +528,72 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
                   <th className="text-right px-2 py-2 font-medium text-red-700">%</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-600">Más rápido</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-600">Más lento</th>
-                  <th className="text-center px-2 py-2 font-medium text-gray-600">Trustonic</th>
+                  <th className="text-right px-2 py-2 font-medium text-green-700">Activo</th>
+                  <th className="text-right px-2 py-2 font-medium text-red-700">Bloq</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-500">Idle</th>
+                  <th className="text-right px-2 py-2 font-medium text-blue-700">Ready</th>
+                  <th className="text-right px-2 py-2 font-medium text-orange-700">Sin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {tiempoAsignacion.map(t => {
-                  const pct30 = t.total > 0 ? Math.round(t.dentro30min / t.total * 100) : 0
-                  const pct3060 = t.total > 0 ? Math.round(t.entre30y60 / t.total * 100) : 0
-                  const pct1h = t.total > 0 ? Math.round(t.mas1h / t.total * 100) : 0
-                  const rowColor = pct30 >= 80 ? '' : pct30 >= 50 ? 'bg-amber-50/50' : 'bg-red-50/50'
-                  return (
-                    <tr key={t.storeName} className={`hover:bg-gray-100 ${rowColor}`}>
-                      <td className="px-3 py-2 text-gray-700 truncate max-w-[250px]" title={t.storeName}>{t.storeName}</td>
-                      <td className="px-2 py-2 text-right font-bold text-gray-900">{t.total}</td>
-                      <td className="px-2 py-2 text-right text-green-700 font-semibold">{t.dentro30min}</td>
-                      <td className={`px-2 py-2 text-right font-bold ${pct30 >= 80 ? 'text-green-700' : pct30 >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{pct30}%</td>
-                      <td className="px-2 py-2 text-right text-amber-700">{t.entre30y60}</td>
-                      <td className="px-2 py-2 text-right text-amber-700">{pct3060}%</td>
-                      <td className="px-2 py-2 text-right text-red-700 font-semibold">{t.mas1h}</td>
-                      <td className="px-2 py-2 text-right text-red-700 font-bold">{pct1h}%</td>
-                      <td className="px-2 py-2 text-right text-gray-500">{formatMin(t.minMin)}</td>
-                      <td className="px-2 py-2 text-right text-gray-500">{formatMin(t.maxMin)}</td>
-                      <td className="px-2 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1 flex-wrap">
-                          {t.activos > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-700">{t.activos} act</span>}
-                          {t.bloqueados > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700">{t.bloqueados} bloq</span>}
-                          {t.idle > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600">{t.idle} idle</span>}
-                          {t.readyForUse > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700">{t.readyForUse} ready</span>}
-                          {t.sinTrustonic > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-orange-100 text-orange-700">{t.sinTrustonic} sin</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  )
+                {asigPorMerchant.flatMap(m => {
+                  const isMExp = expandedAsigMerchant === m.clientId
+                  const mPct30 = m.total > 0 ? Math.round(m.dentro30min / m.total * 100) : 0
+                  const mPct3060 = m.total > 0 ? Math.round(m.entre30y60 / m.total * 100) : 0
+                  const mPct1h = m.total > 0 ? Math.round(m.mas1h / m.total * 100) : 0
+                  return [
+                    <tr key={m.clientId} onClick={() => setExpandedAsigMerchant(isMExp ? null : m.clientId)}
+                      className={`cursor-pointer hover:bg-gray-100 font-semibold ${isMExp ? 'bg-gray-50' : ''}`}>
+                      <td className="px-2 py-2 text-gray-400">{isMExp ? '▼' : '▶'}</td>
+                      <td className="px-2 py-2 text-gray-900">{m.name} <span className="text-gray-400 font-normal">({m.stores.length} suc.)</span></td>
+                      <td className="px-2 py-2 text-right">{m.total}</td>
+                      <td className="px-2 py-2 text-right text-green-700">{m.dentro30min}</td>
+                      <td className={`px-2 py-2 text-right font-bold ${mPct30 >= 80 ? 'text-green-700' : mPct30 >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{mPct30}%</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{m.entre30y60}</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{mPct3060}%</td>
+                      <td className="px-2 py-2 text-right text-red-700">{m.mas1h}</td>
+                      <td className="px-2 py-2 text-right text-red-700 font-bold">{mPct1h}%</td>
+                      <td className="px-2 py-2"></td>
+                      <td className="px-2 py-2"></td>
+                      <td className="px-2 py-2 text-right text-green-700">{m.activos || '—'}</td>
+                      <td className="px-2 py-2 text-right text-red-700">{m.bloqueados || '—'}</td>
+                      <td className="px-2 py-2 text-right text-gray-500">{m.idle || '—'}</td>
+                      <td className="px-2 py-2 text-right text-blue-700">{m.readyForUse || '—'}</td>
+                      <td className="px-2 py-2 text-right text-orange-700">{m.sinTrustonic || '—'}</td>
+                    </tr>,
+                    ...(isMExp ? m.stores.map(t => {
+                      const pct30 = t.total > 0 ? Math.round(t.dentro30min / t.total * 100) : 0
+                      const pct3060 = t.total > 0 ? Math.round(t.entre30y60 / t.total * 100) : 0
+                      const pct1h = t.total > 0 ? Math.round(t.mas1h / t.total * 100) : 0
+                      const rowColor = pct30 >= 80 ? '' : pct30 >= 50 ? 'bg-amber-50/50' : 'bg-red-50/50'
+                      return (
+                        <tr key={t.storeName} className={`border-l-4 border-l-cyan-300 ${rowColor} hover:bg-gray-100`}>
+                          <td className="px-2 py-1.5"></td>
+                          <td className="px-2 py-1.5 text-gray-700 truncate max-w-[220px]" title={t.storeName}>{t.storeName}</td>
+                          <td className="px-2 py-1.5 text-right font-bold text-gray-900">{t.total}</td>
+                          <td className="px-2 py-1.5 text-right text-green-700 font-semibold">{t.dentro30min}</td>
+                          <td className={`px-2 py-1.5 text-right font-bold ${pct30 >= 80 ? 'text-green-700' : pct30 >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{pct30}%</td>
+                          <td className="px-2 py-1.5 text-right text-amber-700">{t.entre30y60}</td>
+                          <td className="px-2 py-1.5 text-right text-amber-700">{pct3060}%</td>
+                          <td className="px-2 py-1.5 text-right text-red-700 font-semibold">{t.mas1h}</td>
+                          <td className="px-2 py-1.5 text-right text-red-700 font-bold">{pct1h}%</td>
+                          <td className="px-2 py-1.5 text-right text-gray-500">{formatMin(t.minMin)}</td>
+                          <td className="px-2 py-1.5 text-right text-gray-500">{formatMin(t.maxMin)}</td>
+                          <td className="px-2 py-1.5 text-right text-green-700">{t.activos || '—'}</td>
+                          <td className={`px-2 py-1.5 text-right ${t.bloqueados > 0 ? 'text-red-700 font-bold' : 'text-gray-400'}`}>{t.bloqueados || '—'}</td>
+                          <td className="px-2 py-1.5 text-right text-gray-500">{t.idle || '—'}</td>
+                          <td className="px-2 py-1.5 text-right text-blue-700">{t.readyForUse || '—'}</td>
+                          <td className={`px-2 py-1.5 text-right ${t.sinTrustonic > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}`}>{t.sinTrustonic || '—'}</td>
+                        </tr>
+                      )
+                    }) : []),
+                  ]
                 })}
               </tbody>
-              <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
-                {(() => {
-                  const totals = tiempoAsignacion.reduce((acc, t) => ({
-                    total: acc.total + t.total,
-                    dentro30min: acc.dentro30min + t.dentro30min,
-                    entre30y60: acc.entre30y60 + t.entre30y60,
-                    mas1h: acc.mas1h + t.mas1h,
-                    activos: acc.activos + t.activos,
-                    bloqueados: acc.bloqueados + t.bloqueados,
-                    idle: acc.idle + t.idle,
-                    readyForUse: acc.readyForUse + t.readyForUse,
-                    sinTrustonic: acc.sinTrustonic + t.sinTrustonic,
-                  }), { total: 0, dentro30min: 0, entre30y60: 0, mas1h: 0, activos: 0, bloqueados: 0, idle: 0, readyForUse: 0, sinTrustonic: 0 })
-                  return (
-                    <tr>
-                      <td className="px-3 py-2 text-gray-900">TOTAL</td>
-                      <td className="px-2 py-2 text-right text-gray-900">{totals.total}</td>
-                      <td className="px-2 py-2 text-right text-green-700">{totals.dentro30min}</td>
-                      <td className="px-2 py-2 text-right text-green-700">{totals.total > 0 ? Math.round(totals.dentro30min / totals.total * 100) : 0}%</td>
-                      <td className="px-2 py-2 text-right text-amber-700">{totals.entre30y60}</td>
-                      <td className="px-2 py-2 text-right text-amber-700">{totals.total > 0 ? Math.round(totals.entre30y60 / totals.total * 100) : 0}%</td>
-                      <td className="px-2 py-2 text-right text-red-700">{totals.mas1h}</td>
-                      <td className="px-2 py-2 text-right text-red-700">{totals.total > 0 ? Math.round(totals.mas1h / totals.total * 100) : 0}%</td>
-                      <td className="px-2 py-2" colSpan={2}></td>
-                      <td className="px-2 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1 flex-wrap">
-                          {totals.activos > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-green-100 text-green-700">{totals.activos}</span>}
-                          {totals.bloqueados > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-red-100 text-red-700">{totals.bloqueados}</span>}
-                          {totals.idle > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-gray-100 text-gray-600">{totals.idle}</span>}
-                          {totals.sinTrustonic > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-orange-100 text-orange-700">{totals.sinTrustonic}</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })()}
-              </tfoot>
             </table>
           )}
-        </div>}
+          </div>
+        })()}
       </div>
 
       {/* Alerta 6: Cuotas 100% pagadas */}
