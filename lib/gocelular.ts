@@ -1518,3 +1518,65 @@ export async function fetchTiempoAsignacion(): Promise<TiempoAsignacionTienda[]>
     client.release()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Órdenes de terceros con IMEI asignado (para control de facturación)
+// ---------------------------------------------------------------------------
+
+export interface OrdenConImei {
+  orderId: string
+  storeName: string
+  clientId: string
+  fecha: string
+  monto: number
+  imei: string
+  userDni: string
+  userName: string
+}
+
+export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      order_id: string; store_name: string; client_id: string
+      fecha: string; monto: string; imei: string
+      user_dni: string; user_name: string
+    }>(
+      `SELECT
+        go.order_id::text AS order_id,
+        go.store_name,
+        go.client_id::text AS client_id,
+        go.order_delivered_at::date::text AS fecha,
+        go.total_order_amount::text AS monto,
+        d.imei,
+        COALESCE(go.user_dni::text, '') AS user_dni,
+        COALESCE(go.user_name, '') AS user_name
+      FROM devices d
+      JOIN gocuotas_orders go ON go.order_id = d.order_id
+      WHERE go.order_delivered_at IS NOT NULL
+        AND go.order_discarded_at IS NULL
+        AND go.client_id::text NOT IN (${SQL_IDS_PROPIOS})
+        AND (d.is_test_device = false OR d.is_test_device IS NULL)
+      ORDER BY go.order_delivered_at DESC`
+    )
+    return res.rows.map(r => {
+      let monto = Number(r.monto)
+      if (monto > 5000000) monto = monto / 100
+      return {
+        orderId: r.order_id,
+        storeName: r.store_name,
+        clientId: r.client_id,
+        fecha: r.fecha,
+        monto,
+        imei: r.imei,
+        userDni: r.user_dni,
+        userName: r.user_name,
+      }
+    })
+  } finally {
+    client.release()
+  }
+}
