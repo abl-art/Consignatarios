@@ -1475,13 +1475,13 @@ export async function fetchTiempoAsignacion(): Promise<TiempoAsignacionTienda[]>
         go.store_name,
         go.client_id::text AS client_id,
         COUNT(*)::text AS total,
-        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 5)::text AS dentro_5min,
-        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 30)::text AS dentro_30min,
-        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 > 30
-          AND EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 60)::text AS entre_30_60,
-        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 > 60)::text AS mas_1h,
-        ROUND(MIN(EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60)::numeric, 1)::text AS min_min,
-        ROUND(MAX(EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60)::numeric, 1)::text AS max_min,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60 <= 5)::text AS dentro_5min,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60 <= 30)::text AS dentro_30min,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60 > 30
+          AND EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60 <= 60)::text AS entre_30_60,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60 > 60)::text AS mas_1h,
+        ROUND(MIN(EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60)::numeric, 1)::text AS min_min,
+        ROUND(MAX(EXTRACT(EPOCH FROM (d.created_at - go.order_delivered_at)) / 60)::numeric, 1)::text AS max_min,
         COUNT(*) FILTER (WHERE d.trustonic_status::text = 'active')::text AS activos,
         COUNT(*) FILTER (WHERE d.trustonic_status::text = 'locked')::text AS bloqueados,
         COUNT(*) FILTER (WHERE d.trustonic_status::text = 'idle')::text AS idle,
@@ -1490,11 +1490,11 @@ export async function fetchTiempoAsignacion(): Promise<TiempoAsignacionTienda[]>
       FROM devices d
       JOIN gocuotas_orders go ON go.order_id = d.order_id
       WHERE go.order_discarded_at IS NULL
-        AND go.order_created_at IS NOT NULL
-        AND d.created_at > go.order_created_at
+        AND go.order_delivered_at IS NOT NULL
+        AND d.created_at > go.order_delivered_at
         AND (d.is_test_device = false OR d.is_test_device IS NULL)
         AND go.client_id::text NOT IN (${SQL_IDS_PROPIOS})
-        AND go.order_created_at >= CURRENT_DATE - 90
+        AND go.order_delivered_at >= CURRENT_DATE - 90
       GROUP BY go.store_name, go.client_id
       ORDER BY COUNT(*) DESC`
     )

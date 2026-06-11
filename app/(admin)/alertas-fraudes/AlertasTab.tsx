@@ -487,7 +487,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
           <div className="w-3 h-3 rounded-full bg-cyan-500 shrink-0"></div>
           <div className="flex-1 text-left">
             <h3 className="text-sm font-semibold text-gray-900">Tiempo hasta asignación IMEI (terceros)</h3>
-            <p className="text-[10px] text-gray-400">Últimos 90 días. &gt;30 min el dispositivo puede ya estar encendido y no se podrá enrolar.</p>
+            <p className="text-[10px] text-gray-400">Desde delivered_at hasta asignación IMEI. Últimos 90 días. &gt;30 min el dispositivo puede ya estar encendido y no se podrá enrolar.</p>
           </div>
           <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full font-medium shrink-0">{tiempoAsignacion.reduce((s, t) => s + t.total, 0)}</span>
         </button>
