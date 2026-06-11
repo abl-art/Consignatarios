@@ -1437,3 +1437,84 @@ export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
     client.release()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Tiempo hasta asignación IMEI por tienda (terceros)
+// ---------------------------------------------------------------------------
+
+export interface TiempoAsignacionTienda {
+  storeName: string
+  clientId: string
+  total: number
+  dentro5min: number
+  dentro30min: number
+  entre30y60: number
+  mas1h: number
+  minMin: number
+  maxMin: number
+  activos: number
+  bloqueados: number
+  idle: number
+  readyForUse: number
+  sinTrustonic: number
+}
+
+export async function fetchTiempoAsignacion(): Promise<TiempoAsignacionTienda[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      store_name: string; client_id: string; total: string
+      dentro_5min: string; dentro_30min: string; entre_30_60: string; mas_1h: string
+      min_min: string; max_min: string
+      activos: string; bloqueados: string; idle: string; ready_for_use: string; sin_trustonic: string
+    }>(
+      `SELECT
+        go.store_name,
+        go.client_id::text AS client_id,
+        COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 5)::text AS dentro_5min,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 30)::text AS dentro_30min,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 > 30
+          AND EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 <= 60)::text AS entre_30_60,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60 > 60)::text AS mas_1h,
+        ROUND(MIN(EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60)::numeric, 1)::text AS min_min,
+        ROUND(MAX(EXTRACT(EPOCH FROM (d.created_at - go.order_created_at)) / 60)::numeric, 1)::text AS max_min,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'active')::text AS activos,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'locked')::text AS bloqueados,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'idle')::text AS idle,
+        COUNT(*) FILTER (WHERE d.trustonic_status::text = 'ready_for_use')::text AS ready_for_use,
+        COUNT(*) FILTER (WHERE d.trustonic_status IS NULL OR d.trustonic_status::text = 'NOT_ENROLLED')::text AS sin_trustonic
+      FROM devices d
+      JOIN gocuotas_orders go ON go.order_id = d.order_id
+      WHERE go.order_discarded_at IS NULL
+        AND go.order_created_at IS NOT NULL
+        AND d.created_at > go.order_created_at
+        AND (d.is_test_device = false OR d.is_test_device IS NULL)
+        AND go.client_id::text NOT IN (${SQL_IDS_PROPIOS})
+        AND go.order_created_at >= CURRENT_DATE - 90
+      GROUP BY go.store_name, go.client_id
+      ORDER BY COUNT(*) DESC`
+    )
+    return res.rows.map(r => ({
+      storeName: r.store_name,
+      clientId: r.client_id,
+      total: Number(r.total),
+      dentro5min: Number(r.dentro_5min),
+      dentro30min: Number(r.dentro_30min),
+      entre30y60: Number(r.entre_30_60),
+      mas1h: Number(r.mas_1h),
+      minMin: Number(r.min_min),
+      maxMin: Number(r.max_min),
+      activos: Number(r.activos),
+      bloqueados: Number(r.bloqueados),
+      idle: Number(r.idle),
+      readyForUse: Number(r.ready_for_use),
+      sinTrustonic: Number(r.sin_trustonic),
+    }))
+  } finally {
+    client.release()
+  }
+}

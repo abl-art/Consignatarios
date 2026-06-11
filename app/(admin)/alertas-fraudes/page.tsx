@@ -1,12 +1,12 @@
 export const dynamic = 'force-dynamic'
 
-import { fetchActivacionPorMes, fetchPDHardCuota2, fetchAlertasSucursales, fetchAlertasCuota1, fetchAlertasDNI, fetchAlertasTiendaDNI, fetchAlertasSinImei } from '@/lib/gocelular'
+import { fetchActivacionPorMes, fetchPDHardCuota2, fetchAlertasSucursales, fetchAlertasCuota1, fetchAlertasDNI, fetchAlertasTiendaDNI, fetchAlertasSinImei, fetchAlertaCuotasPagadas, fetchTiempoAsignacion } from '@/lib/gocelular'
 import SectionTabs from '@/components/SectionTabs'
 import ActivacionTab from './ActivacionTab'
 import AlertasTab from './AlertasTab'
 
 export default async function AlertasFraudesPage() {
-  const [activacionData, pdData, alertaSucursales, alertaCuota1, dniUsuarios, dniTiendas, sinImei] = await Promise.all([
+  const [activacionData, pdData, alertaSucursales, alertaCuota1, dniUsuarios, dniTiendas, sinImei, cuotasPagadas, tiempoAsignacion] = await Promise.all([
     fetchActivacionPorMes().catch(() => []),
     fetchPDHardCuota2().catch(() => []),
     fetchAlertasSucursales().catch(() => []),
@@ -14,10 +14,12 @@ export default async function AlertasFraudesPage() {
     fetchAlertasDNI().catch(() => []),
     fetchAlertasTiendaDNI().catch(() => []),
     fetchAlertasSinImei().catch(() => []),
+    fetchAlertaCuotasPagadas().catch(() => ({ total: 0, promedioAdelanto: 0, detalle: [] })),
+    fetchTiempoAsignacion().catch(() => []),
   ])
 
-  const totalSinImei = sinImei.reduce((s, t) => s + t.sinImei, 0)
-  const totalAlertas = alertaSucursales.length + alertaCuota1.length + dniUsuarios.length + dniTiendas.length + totalSinImei
+  const totalSinImei = sinImei.reduce((s: number, t: { sinImei: number }) => s + t.sinImei, 0)
+  const totalAlertas = alertaSucursales.length + alertaCuota1.length + dniUsuarios.length + dniTiendas.length + totalSinImei + cuotasPagadas.total
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -26,7 +28,7 @@ export default async function AlertasFraudesPage() {
 
       <SectionTabs
         tabs={[
-          { id: 'alertas', label: `Alertas (${totalAlertas})`, content: <AlertasTab sucursales={alertaSucursales} cuota1={alertaCuota1} dniUsuarios={dniUsuarios} dniTiendas={dniTiendas} sinImei={sinImei} /> },
+          { id: 'alertas', label: `Alertas (${totalAlertas})`, content: <AlertasTab sucursales={alertaSucursales} cuota1={alertaCuota1} dniUsuarios={dniUsuarios} dniTiendas={dniTiendas} sinImei={sinImei} cuotasPagadas={cuotasPagadas} tiempoAsignacion={tiempoAsignacion} /> },
           { id: 'activacion', label: 'Tasa de Activacion', content: <ActivacionTab data={activacionData} pdData={pdData} /> },
         ]}
       />

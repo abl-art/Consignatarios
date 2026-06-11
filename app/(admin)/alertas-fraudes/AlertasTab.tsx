@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { AlertaSucursal, AlertaCuota1, AlertaDNI, AlertaTiendaDNI, AlertaSinImeiTienda } from '@/lib/gocelular'
+import type { AlertaSucursal, AlertaCuota1, AlertaDNI, AlertaTiendaDNI, AlertaSinImeiTienda, AlertaCuotasPagadas, TiempoAsignacionTienda } from '@/lib/gocelular'
 import { formatearMoneda } from '@/lib/utils'
 
 const MERCHANTS: Record<string, string> = {
@@ -23,11 +23,23 @@ interface Props {
   dniUsuarios: AlertaDNI[]
   dniTiendas: AlertaTiendaDNI[]
   sinImei: AlertaSinImeiTienda[]
+  cuotasPagadas: AlertaCuotasPagadas
+  tiempoAsignacion: TiempoAsignacionTienda[]
 }
 
-export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas, sinImei }: Props) {
+function formatMin(min: number): string {
+  if (min < 1) return '<1 min'
+  if (min < 60) return `${Math.round(min)} min`
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  if (h >= 24) { const d = Math.round(h / 24 * 10) / 10; return `${d} días` }
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas, sinImei, cuotasPagadas, tiempoAsignacion }: Props) {
   const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
   const [expandedStore, setExpandedStore] = useState<string | null>(null)
+  const [showCuotasPagadas, setShowCuotasPagadas] = useState(false)
   const [expandedMerchantC1, setExpandedMerchantC1] = useState<string | null>(null)
   const [expandedC1Store, setExpandedC1Store] = useState<string | null>(null)
   const [expandedDni, setExpandedDni] = useState<string | null>(null)
@@ -467,6 +479,170 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
             </table>
           )}
         </div>}
+      </div>
+      {/* ── Alerta 7: Tiempo hasta asignación IMEI ── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(7)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 7 ? '▼' : '▶'}</span>
+          <div className="w-3 h-3 rounded-full bg-cyan-500 shrink-0"></div>
+          <div className="flex-1 text-left">
+            <h3 className="text-sm font-semibold text-gray-900">Tiempo hasta asignación IMEI (terceros)</h3>
+            <p className="text-[10px] text-gray-400">Últimos 90 días. &gt;30 min el dispositivo puede ya estar encendido y no se podrá enrolar.</p>
+          </div>
+          <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full font-medium shrink-0">{tiempoAsignacion.reduce((s, t) => s + t.total, 0)}</span>
+        </button>
+        {openAlert === 7 && <div className="overflow-auto max-h-[600px] border-t border-gray-100">
+          {tiempoAsignacion.length === 0 ? (
+            <div className="p-6 text-center text-green-700 text-sm">Sin datos</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">Tienda</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-600">Total</th>
+                  <th className="text-right px-2 py-2 font-medium text-green-700">&le;30min</th>
+                  <th className="text-right px-2 py-2 font-medium text-green-700">%</th>
+                  <th className="text-right px-2 py-2 font-medium text-amber-700">30-60min</th>
+                  <th className="text-right px-2 py-2 font-medium text-amber-700">%</th>
+                  <th className="text-right px-2 py-2 font-medium text-red-700">&gt;1h</th>
+                  <th className="text-right px-2 py-2 font-medium text-red-700">%</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-600">Más rápido</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-600">Más lento</th>
+                  <th className="text-center px-2 py-2 font-medium text-gray-600">Trustonic</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {tiempoAsignacion.map(t => {
+                  const pct30 = t.total > 0 ? Math.round(t.dentro30min / t.total * 100) : 0
+                  const pct3060 = t.total > 0 ? Math.round(t.entre30y60 / t.total * 100) : 0
+                  const pct1h = t.total > 0 ? Math.round(t.mas1h / t.total * 100) : 0
+                  const rowColor = pct30 >= 80 ? '' : pct30 >= 50 ? 'bg-amber-50/50' : 'bg-red-50/50'
+                  return (
+                    <tr key={t.storeName} className={`hover:bg-gray-100 ${rowColor}`}>
+                      <td className="px-3 py-2 text-gray-700 truncate max-w-[250px]" title={t.storeName}>{t.storeName}</td>
+                      <td className="px-2 py-2 text-right font-bold text-gray-900">{t.total}</td>
+                      <td className="px-2 py-2 text-right text-green-700 font-semibold">{t.dentro30min}</td>
+                      <td className={`px-2 py-2 text-right font-bold ${pct30 >= 80 ? 'text-green-700' : pct30 >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{pct30}%</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{t.entre30y60}</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{pct3060}%</td>
+                      <td className="px-2 py-2 text-right text-red-700 font-semibold">{t.mas1h}</td>
+                      <td className="px-2 py-2 text-right text-red-700 font-bold">{pct1h}%</td>
+                      <td className="px-2 py-2 text-right text-gray-500">{formatMin(t.minMin)}</td>
+                      <td className="px-2 py-2 text-right text-gray-500">{formatMin(t.maxMin)}</td>
+                      <td className="px-2 py-2 text-center">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          {t.activos > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-700">{t.activos} act</span>}
+                          {t.bloqueados > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700">{t.bloqueados} bloq</span>}
+                          {t.idle > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600">{t.idle} idle</span>}
+                          {t.readyForUse > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700">{t.readyForUse} ready</span>}
+                          {t.sinTrustonic > 0 && <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-orange-100 text-orange-700">{t.sinTrustonic} sin</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+                {(() => {
+                  const totals = tiempoAsignacion.reduce((acc, t) => ({
+                    total: acc.total + t.total,
+                    dentro30min: acc.dentro30min + t.dentro30min,
+                    entre30y60: acc.entre30y60 + t.entre30y60,
+                    mas1h: acc.mas1h + t.mas1h,
+                    activos: acc.activos + t.activos,
+                    bloqueados: acc.bloqueados + t.bloqueados,
+                    idle: acc.idle + t.idle,
+                    readyForUse: acc.readyForUse + t.readyForUse,
+                    sinTrustonic: acc.sinTrustonic + t.sinTrustonic,
+                  }), { total: 0, dentro30min: 0, entre30y60: 0, mas1h: 0, activos: 0, bloqueados: 0, idle: 0, readyForUse: 0, sinTrustonic: 0 })
+                  return (
+                    <tr>
+                      <td className="px-3 py-2 text-gray-900">TOTAL</td>
+                      <td className="px-2 py-2 text-right text-gray-900">{totals.total}</td>
+                      <td className="px-2 py-2 text-right text-green-700">{totals.dentro30min}</td>
+                      <td className="px-2 py-2 text-right text-green-700">{totals.total > 0 ? Math.round(totals.dentro30min / totals.total * 100) : 0}%</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{totals.entre30y60}</td>
+                      <td className="px-2 py-2 text-right text-amber-700">{totals.total > 0 ? Math.round(totals.entre30y60 / totals.total * 100) : 0}%</td>
+                      <td className="px-2 py-2 text-right text-red-700">{totals.mas1h}</td>
+                      <td className="px-2 py-2 text-right text-red-700">{totals.total > 0 ? Math.round(totals.mas1h / totals.total * 100) : 0}%</td>
+                      <td className="px-2 py-2" colSpan={2}></td>
+                      <td className="px-2 py-2 text-center">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          {totals.activos > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-green-100 text-green-700">{totals.activos}</span>}
+                          {totals.bloqueados > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-red-100 text-red-700">{totals.bloqueados}</span>}
+                          {totals.idle > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-gray-100 text-gray-600">{totals.idle}</span>}
+                          {totals.sinTrustonic > 0 && <span className="px-1 py-0.5 rounded text-[9px] bg-orange-100 text-orange-700">{totals.sinTrustonic}</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })()}
+              </tfoot>
+            </table>
+          )}
+        </div>}
+      </div>
+
+      {/* Alerta 6: Cuotas 100% pagadas */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => setShowCuotasPagadas(!showCuotasPagadas)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">💰</span>
+            <div className="text-left">
+              <p className="font-semibold text-gray-900 text-sm">Equipos con todas las cuotas pagadas</p>
+              <p className="text-xs text-gray-500">Plazo promedio de cancelacion: <span className="font-bold text-amber-700">{cuotasPagadas.promedioAdelanto} dias</span></p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full">{cuotasPagadas.total}</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showCuotasPagadas ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+        {showCuotasPagadas && (
+          cuotasPagadas.detalle.length === 0 ? (
+            <div className="border-t border-gray-200 p-6 text-center text-sm text-gray-400">No se pudieron cargar los datos. Recarga la pagina.</div>
+          ) : (
+          <div className="border-t border-gray-200 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Orden</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">DNI</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Cliente</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Tienda</th>
+                  <th className="text-center px-4 py-2 font-medium text-gray-600">Tipo</th>
+                  <th className="text-center px-4 py-2 font-medium text-gray-600">Cuotas</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Fecha orden</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600">Ultimo pago</th>
+                  <th className="text-right px-4 py-2 font-medium text-gray-600">Plazo (dias)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {cuotasPagadas.detalle.map(d => (
+                  <tr key={d.orderId} className={`hover:bg-gray-50 ${d.diasAdelanto < 60 ? 'bg-red-50' : ''}`}>
+                    <td className="px-4 py-2 text-gray-700 font-mono">{d.orderId.slice(0, 8)}...</td>
+                    <td className="px-4 py-2 text-gray-900 font-semibold">{d.userDni}</td>
+                    <td className="px-4 py-2 text-gray-700">{d.userName}</td>
+                    <td className="px-4 py-2 text-gray-600 truncate max-w-[200px]">{d.storeName}</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${d.esTercero ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {d.esTercero ? 'Tercero' : 'Propio'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-center font-semibold">{d.totalCuotas}</td>
+                    <td className="px-4 py-2 text-gray-600">{d.fechaOrden}</td>
+                    <td className="px-4 py-2 text-gray-600">{d.fechaUltimoPago}</td>
+                    <td className={`px-4 py-2 text-right font-bold ${d.diasAdelanto < 60 ? 'text-red-700' : 'text-gray-900'}`}>{d.diasAdelanto}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          )
+        )}
       </div>
     </div>
   )
