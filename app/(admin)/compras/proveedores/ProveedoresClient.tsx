@@ -14,6 +14,7 @@ interface Proveedor {
   email: string
   direccion: string // reused for tipo_producto
   notas: string // JSON: { marcas: string[], plazos: string, observaciones: string }
+  limite_cuenta_corriente: number | null
 }
 
 const TIPOS_PRODUCTO = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Kits de Seguridad']
@@ -53,11 +54,12 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
   const [marcas, setMarcas] = useState<string[]>([])
   const [plazos, setPlazos] = useState('')
   const [observaciones, setObservaciones] = useState('')
+  const [limiteCta, setLimiteCta] = useState('')
   const [loading, setLoading] = useState(false)
 
   function resetForm() {
     setNombre(''); setContacto(''); setCuit(''); setWhatsapp(''); setEmail('')
-    setTiposProducto([]); setMarcas([]); setPlazos(''); setObservaciones('')
+    setTiposProducto([]); setMarcas([]); setPlazos(''); setObservaciones(''); setLimiteCta('')
   }
 
   function startCreate() {
@@ -84,6 +86,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
     setMarcas(parsed.marcas)
     setPlazos(parsed.plazos)
     setObservaciones(parsed.observaciones)
+    setLimiteCta(p.limite_cuenta_corriente ? String(p.limite_cuenta_corriente) : '')
     setShowForm(true)
   }
 
@@ -113,6 +116,7 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
       nombre, contacto, cuit, whatsapp, email,
       direccion: JSON.stringify(tiposProducto),
       notas: buildNotas(marcas, plazos, observaciones),
+      limite_cuenta_corriente: limiteCta ? Number(limiteCta) : null,
     }
     if (editingId) {
       await editarProveedor(editingId, data)
@@ -171,6 +175,10 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="email@ejemplo.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Límite cuenta corriente</label>
+                <input type="number" value={limiteCta} onChange={(e) => setLimiteCta(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Ej: 50000000" />
               </div>
             </div>
 
@@ -256,6 +264,11 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
                         <span key={m} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m}</span>
                       ))}
                       {parsed.plazos && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{parsed.plazos}</span>}
+                      {p.limite_cuenta_corriente && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          Línea: ${(p.limite_cuenta_corriente / 1_000_000).toFixed(0)}M
+                        </span>
+                      )}
                     </div>
                     {parsed.observaciones && <p className="text-xs text-gray-400 mt-1">{parsed.observaciones}</p>}
                   </div>
