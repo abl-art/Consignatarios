@@ -16,6 +16,7 @@ interface ProveedorInput {
   cuit: string
   direccion: string
   notas: string
+  limite_cuenta_corriente?: number | null
 }
 
 interface ProductoInput {
@@ -48,6 +49,7 @@ export async function agregarProveedor(input: ProveedorInput) {
     cuit: input.cuit,
     direccion: input.direccion,
     notas: input.notas,
+    limite_cuenta_corriente: input.limite_cuenta_corriente ?? null,
   })
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -64,6 +66,7 @@ export async function editarProveedor(id: string, input: ProveedorInput) {
     cuit: input.cuit,
     direccion: input.direccion,
     notas: input.notas,
+    limite_cuenta_corriente: input.limite_cuenta_corriente ?? null,
   }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -593,3 +596,73 @@ export async function getMejorPrecio(): Promise<Record<string, number>> {
   return result
 }
 
+// ---------------------------------------------------------------------------
+// Cheques & Líneas disponibles
+// ---------------------------------------------------------------------------
+
+export async function getLineasDisponibles() {
+  const supabase = createAdminClient()
+
+  const { data: proveedores } = await supabase
+    .from('compras_proveedores')
+    .select('id, nombre, cuit, limite_cuenta_corriente')
+    .not('limite_cuenta_corriente', 'is', null)
+    .order('nombre')
+
+  if (!proveedores || proveedores.length === 0) return []
+
+  const hoy = new Date().toISOString().slice(0, 10)
+
+  const cuits = proveedores.map(p => p.cuit).filter(Boolean)
+  const { data: cheques } = await supabase
+    .from('cheques_proveedor')
+    .select('cuit, importe, fecha_pago')
+    .in('cuit', cuits)
+    .gte('fecha_pago', hoy)
+    .order('fecha_pago')
+
+  const chequesByCuit: Record<string, { importe: number; fecha_pago: string }[]> = {}
+  for (const ch of cheques || []) {
+    if (!chequesByCuit[ch.cuit]) chequesByCuit[ch.cuit] = []
+    chequesByCuit[ch.cuit].push({ importe: ch.importe, fecha_pago: ch.fecha_pago })
+  }
+
+  return proveedores.map(p => {
+    const chequesProveedor = chequesByCuit[p.cuit] || []
+    const totalPendiente = chequesProveedor.reduce((s, c) => s + c.importe, 0)
+    const limite = p.limite_cuenta_corriente || 0
+    const disponible = limite - totalPendiente
+
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      cuit: p.cuit,
+      limite,
+      totalPendiente,
+      disponible,
+      cheques: chequesProveedor,
+    }
+  })
+}
+
+export async function getLastSyncCheques(): Promise<string | null> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('flujo_config')
+    .select('value')
+    .eq('key', 'cheques_last_sync')
+    .single()
+  return data?.value ?? null
+}
+
+export async function triggerSyncCheques() {
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+  const res = await fetch(`${baseUrl}/api/cron/sync-cheques`, {
+    headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+  })
+  if (!res.ok) throw new Error('Sync failed')
+  revalidatePath('/compras')
+  return res.json()
+}
