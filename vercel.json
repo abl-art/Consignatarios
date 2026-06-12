@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/stock-cierre",
       "schedule": "59 2 1 * *"
+    },
+    {
+      "path": "/api/cron/sync-cheques",
+      "schedule": "0 21 * * *"
     }
   ]
 }
