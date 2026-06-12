@@ -2,15 +2,18 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import Link from 'next/link'
-import { getProveedores, getProductos, getPedidos } from '@/lib/actions/compras'
+import { getProveedores, getProductos, getPedidos, getLineasDisponibles, getLastSyncCheques } from '@/lib/actions/compras'
 import PlazoEntrega from './PlazoEntrega'
 import ComprasAnalisis from './ComprasAnalisis'
+import LineasDisponiblesChart from './LineasDisponiblesChart'
 
 export default async function ComprasPage() {
-  const [proveedores, productos, pedidos] = await Promise.all([
+  const [proveedores, productos, pedidos, lineas, lastSync] = await Promise.all([
     getProveedores(),
     getProductos(),
     getPedidos(),
+    getLineasDisponibles(),
+    getLastSyncCheques(),
   ])
 
   const pedidosEnTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt)
@@ -115,6 +118,8 @@ export default async function ComprasPage() {
           )
         })}
       </div>
+
+      <LineasDisponiblesChart lineas={lineas} lastSync={lastSync} />
 
       {/* Resumen en tránsito por modelo */}
       {transitoModelos.length > 0 && (
