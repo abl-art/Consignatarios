@@ -23,7 +23,7 @@ export interface TacPendiente {
   tac: string
   marca: string
   modelo: string
-  origen: 'inventario' | 'terceros'
+  origen: 'inventario' | 'terceros' | 'TAC is not in the database'
 }
 
 // Marcas excluidas de Trustonic (no necesitan carga de TAC)
@@ -77,19 +77,63 @@ export async function fetchTacsCargados(): Promise<TacCargado[]> {
   return (data ?? []) as TacCargado[]
 }
 
-// Detectar TACs nuevos (en inventario/devices pero no en tacs_cargados)
+// Fetch TACs de enrollments fallidos en Trustonic (TAC_NOT_EXIST)
+async function fetchTacsEnrollFallido(): Promise<TacPendiente[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ tac: string; marca: string; modelo: string }>(
+      `SELECT DISTINCT sub.tac,
+        COALESCE(
+          (SELECT d2.brand FROM devices d2 WHERE SUBSTRING(d2.imei, 1, 8) = sub.tac AND d2.brand IS NOT NULL LIMIT 1),
+          (SELECT dm.brand FROM inventory_items ii JOIN device_models dm ON dm.model_code = ii.model_code WHERE SUBSTRING(ii.imei, 1, 8) = sub.tac LIMIT 1),
+          'Desconocido'
+        ) AS marca,
+        COALESCE(
+          (SELECT d2.model FROM devices d2 WHERE SUBSTRING(d2.imei, 1, 8) = sub.tac AND d2.model IS NOT NULL LIMIT 1),
+          (SELECT dm.name FROM inventory_items ii JOIN device_models dm ON dm.model_code = ii.model_code WHERE SUBSTRING(ii.imei, 1, 8) = sub.tac LIMIT 1),
+          'Desconocido'
+        ) AS modelo
+      FROM (
+        SELECT DISTINCT SUBSTRING(device_imei, 1, 8) AS tac
+        FROM device_actions_log
+        WHERE action_type = 'enroll' AND result = 'failed'
+          AND error_details LIKE '%TAC is not in the database%'
+      ) sub
+      ORDER BY marca, modelo`
+    )
+    return res.rows.map(r => ({ ...r, origen: 'TAC is not in the database' as const }))
+  } finally {
+    client.release()
+  }
+}
+
+// Detectar TACs nuevos (en inventario/devices/enroll fallido pero no en tacs_cargados)
 export async function detectarTacsPendientes(): Promise<TacPendiente[]> {
-  const [inventario, cargados] = await Promise.all([
+  const [inventario, enrollFallido, cargados] = await Promise.all([
     fetchTacsInventario(),
+    fetchTacsEnrollFallido(),
     fetchTacsCargados(),
   ])
 
   const cargadosSet = new Set(cargados.map(t => t.tac))
   const pendientes: TacPendiente[] = []
+  const tacsSeen = new Set<string>()
 
+  // Primero inventario (tiene mejor info de marca/modelo)
   for (const t of inventario) {
     if (!cargadosSet.has(t.tac)) {
       pendientes.push({ ...t, origen: 'inventario' })
+      tacsSeen.add(t.tac)
+    }
+  }
+
+  // Luego enroll fallido (solo si no vino de inventario)
+  for (const t of enrollFallido) {
+    if (!cargadosSet.has(t.tac) && !tacsSeen.has(t.tac)) {
+      pendientes.push(t)
     }
   }
 

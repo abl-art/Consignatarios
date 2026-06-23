@@ -198,7 +198,11 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
                   <td className="px-4 py-2">{t.marca}</td>
                   <td className="px-4 py-2 text-gray-700">{t.modelo}</td>
                   <td className="px-4 py-2">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${t.origen === 'inventario' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      t.origen === 'inventario' ? 'bg-blue-100 text-blue-700'
+                        : t.origen === 'TAC is not in the database' ? 'bg-orange-100 text-orange-700'
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
                       {t.origen}
                     </span>
                   </td>
@@ -240,7 +244,11 @@ export default function GestionTacsClient({ cargados, solicitados, pendientesInv
                   <td className="px-4 py-2">{t.marca}</td>
                   <td className="px-4 py-2 text-gray-700">{t.modelo}</td>
                   <td className="px-4 py-2">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${t.origen === 'inventario' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      t.origen === 'inventario' ? 'bg-blue-100 text-blue-700'
+                        : t.origen === 'TAC is not in the database' ? 'bg-orange-100 text-orange-700'
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
                       {t.origen}
                     </span>
                   </td>
