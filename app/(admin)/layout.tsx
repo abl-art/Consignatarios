@@ -17,6 +17,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
+  { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
+  { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
   {
     href: '/canales',
     label: 'Canales de Comercialización',
@@ -44,8 +46,14 @@ const navItems: NavItem[] = [
       { href: '/reportes', label: 'Reportes', icon: 'reportes' },
     ],
   },
-  { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
-  { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
+  {
+    href: '/marketing',
+    label: 'Marketing',
+    icon: 'tienda',
+    children: [
+      { href: 'https://drive.google.com/drive/folders/1Yr4u9OjJ6r4ct90Au3_yy47RFkhWOlbC', label: 'Material Publicitario', icon: 'documento' },
+    ],
+  },
   { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
   { href: '/compras', label: 'Compras', icon: 'fabrica' },
   {
