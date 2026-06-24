@@ -73,10 +73,11 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
     }
   }, [filtroPartner, filteredPartners, totals])
 
-  // Only products with paid orders, grouped by product_name (merge across partners)
+  // Only products with paid orders, filtered by partner, grouped by product_name
   const paidProducts = useMemo(() => {
+    const filtered = filtroPartner ? productos.filter(p => p.partner_slug === filtroPartner) : productos
     const map = new Map<string, { name: string; paid: number; revenue: number }>()
-    for (const p of productos) {
+    for (const p of filtered) {
       if (p.paid <= 0) continue
       const existing = map.get(p.product_name)
       if (existing) {
@@ -87,7 +88,7 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
       }
     }
     return [...map.values()].sort((a, b) => b.paid - a.paid)
-  }, [productos])
+  }, [productos, filtroPartner])
 
   const maxPaid = paidProducts.length > 0 ? paidProducts[0].paid : 1
 
@@ -223,6 +224,18 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
               <p className="text-xs text-gray-400">Costo por touch</p>
               <p className="text-sm font-bold text-gray-900 font-mono">
                 {ft.touches > 0 ? fmtPesos(ft.commission_estimated / ft.touches) : '—'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400">Costo por visitante</p>
+              <p className="text-sm font-bold text-gray-900 font-mono">
+                {ft.visitors > 0 ? fmtPesos(ft.commission_estimated / ft.visitors) : '—'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400">Costo por venta</p>
+              <p className="text-sm font-bold text-gray-900 font-mono">
+                {ft.orders_paid > 0 ? fmtPesos(ft.commission_estimated / ft.orders_paid) : '—'}
               </p>
             </div>
           </div>
