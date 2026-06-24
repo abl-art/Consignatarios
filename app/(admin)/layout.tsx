@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
     icon: 'tienda',
     children: [
       { href: 'https://gocelular.gocuotas.com/tienda', label: 'Tienda Online', icon: 'tienda' },
+      { href: '/canales/tienda/desempeno', label: 'Desempeño Tienda', icon: 'dashboard' },
       // Venta a Terceros
       { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas', header: true },
       { href: '/terceros/crm', label: 'CRM', icon: 'consignatarios' },
