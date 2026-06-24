@@ -37,17 +37,10 @@ export interface AfiliadoProducto {
   revenue: number
 }
 
-export interface AfiliadoAtribucion {
-  rule: string
-  orders: number
-  paid: number
-}
-
 export interface DesempenoData {
   partners: AfiliadoStats[]
   diario: AfiliadoDiario[]
   productos: AfiliadoProducto[]
-  atribuciones: AfiliadoAtribucion[]
   totals: {
     touches: number
     visitors: number
@@ -67,23 +60,17 @@ const EMPTY_DATA: DesempenoData = {
   partners: [],
   diario: [],
   productos: [],
-  atribuciones: [],
   totals: {
-    touches: 0,
-    visitors: 0,
-    orders: 0,
-    orders_paid: 0,
-    orders_cancelled: 0,
-    revenue_paid: 0,
-    revenue_total: 0,
-    commission_estimated: 0,
-    conversion_touch_order: 0,
-    conversion_order_paid: 0,
-    conversion_touch_paid: 0,
+    touches: 0, visitors: 0, orders: 0, orders_paid: 0, orders_cancelled: 0,
+    revenue_paid: 0, revenue_total: 0, commission_estimated: 0,
+    conversion_touch_order: 0, conversion_order_paid: 0, conversion_touch_paid: 0,
   },
 }
 
-export async function fetchDesempenoAfiliados(dias: number = 30): Promise<DesempenoData> {
+// Partners excluidos (test/prueba)
+const PARTNERS_EXCLUIDOS = ['smoke']
+
+export async function fetchDesempenoAfiliados(desde: string, hasta: string): Promise<DesempenoData> {
   const pool = getPool()
   if (!pool) return EMPTY_DATA
 
@@ -112,12 +99,9 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
         END::numeric AS commission_estimated
       FROM affiliate_partners ap
       LEFT JOIN (
-        SELECT
-          partner_slug,
-          COUNT(*)::int AS touches,
-          COUNT(DISTINCT visitor_id)::int AS visitors
+        SELECT partner_slug, COUNT(*)::int AS touches, COUNT(DISTINCT visitor_id)::int AS visitors
         FROM affiliate_touches
-        WHERE occurred_at >= NOW() - INTERVAL '1 day' * $1
+        WHERE occurred_at >= $1::date AND occurred_at < ($2::date + 1)
         GROUP BY partner_slug
       ) t ON t.partner_slug = ap.slug
       LEFT JOIN (
@@ -131,15 +115,16 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
           COALESCE(SUM(so.product_price / 100), 0)::numeric AS revenue_total
         FROM store_orders so
         JOIN affiliate_partners ap2 ON ap2.id = so.attributed_partner_id
-        WHERE so.created_at >= NOW() - INTERVAL '1 day' * $1
+        WHERE so.created_at >= $1::date AND so.created_at < ($2::date + 1)
         GROUP BY ap2.slug
       ) o ON o.partner_slug = ap.slug
+      WHERE ap.slug != ALL($3)
       ORDER BY touches DESC, orders DESC
       `,
-      [dias]
+      [desde, hasta, PARTNERS_EXCLUIDOS]
     )
 
-    // Query 2 — Daily breakdown (fecha comes as Date from pg, needs string conversion)
+    // Query 2 — Daily breakdown
     const diarioRes = await client.query<Omit<AfiliadoDiario, 'fecha'> & { fecha: Date | string }>(
       `
       SELECT
@@ -151,79 +136,53 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
         COALESCE(o.orders_paid, 0)::int AS orders_paid,
         COALESCE(o.revenue, 0)::numeric AS revenue
       FROM (
-        SELECT DISTINCT
-          d.fecha,
-          ap.slug AS partner_slug
+        SELECT DISTINCT d.fecha, ap.slug AS partner_slug
         FROM affiliate_partners ap
         CROSS JOIN (
-          SELECT generate_series(
-            (NOW() - INTERVAL '1 day' * $1)::date,
-            CURRENT_DATE,
-            '1 day'::interval
-          )::date AS fecha
+          SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS fecha
         ) d
+        WHERE ap.slug != ALL($3)
       ) d
       LEFT JOIN (
-        SELECT
-          occurred_at::date AS fecha,
-          partner_slug,
-          COUNT(*)::int AS touches,
-          COUNT(DISTINCT visitor_id)::int AS visitors
+        SELECT occurred_at::date AS fecha, partner_slug,
+          COUNT(*)::int AS touches, COUNT(DISTINCT visitor_id)::int AS visitors
         FROM affiliate_touches
-        WHERE occurred_at >= NOW() - INTERVAL '1 day' * $1
+        WHERE occurred_at >= $1::date AND occurred_at < ($2::date + 1)
         GROUP BY occurred_at::date, partner_slug
       ) t ON t.fecha = d.fecha AND t.partner_slug = d.partner_slug
       LEFT JOIN (
-        SELECT
-          so.created_at::date AS fecha,
-          ap2.slug AS partner_slug,
+        SELECT so.created_at::date AS fecha, ap2.slug AS partner_slug,
           COUNT(*)::int AS orders,
           COUNT(*) FILTER (WHERE so.status = 'paid')::int AS orders_paid,
           COALESCE(SUM(so.product_price / 100) FILTER (WHERE so.status = 'paid'), 0)::numeric AS revenue
         FROM store_orders so
         JOIN affiliate_partners ap2 ON ap2.id = so.attributed_partner_id
-        WHERE so.created_at >= NOW() - INTERVAL '1 day' * $1
+        WHERE so.created_at >= $1::date AND so.created_at < ($2::date + 1)
         GROUP BY so.created_at::date, ap2.slug
       ) o ON o.fecha = d.fecha AND o.partner_slug = d.partner_slug
       WHERE COALESCE(t.touches, 0) > 0 OR COALESCE(o.orders, 0) > 0
       ORDER BY d.fecha DESC, d.partner_slug
       `,
-      [dias]
+      [desde, hasta, PARTNERS_EXCLUIDOS]
     )
 
     // Query 3 — Product breakdown (top 20)
     const productosRes = await client.query<AfiliadoProducto>(
       `
-      SELECT
-        so.product_name,
-        ap.slug AS partner_slug,
+      SELECT so.product_name, ap.slug AS partner_slug,
         COUNT(*)::int AS orders,
         COUNT(*) FILTER (WHERE so.status = 'paid')::int AS paid,
         COUNT(*) FILTER (WHERE so.status = 'cancelled')::int AS cancelled,
         COALESCE(SUM(so.product_price / 100) FILTER (WHERE so.status = 'paid'), 0)::numeric AS revenue
       FROM store_orders so
       JOIN affiliate_partners ap ON ap.id = so.attributed_partner_id
-      WHERE so.created_at >= NOW() - INTERVAL '1 day' * $1
+      WHERE so.created_at >= $1::date AND so.created_at < ($2::date + 1)
+        AND ap.slug != ALL($3)
       GROUP BY so.product_name, ap.slug
       ORDER BY orders DESC
       LIMIT 20
       `,
-      [dias]
-    )
-
-    // Query 4 — Attribution rules
-    const atribucionesRes = await client.query<AfiliadoAtribucion>(
-      `
-      SELECT
-        COALESCE(attribution_rule, 'unknown') AS rule,
-        COUNT(*)::int AS orders,
-        COUNT(*) FILTER (WHERE status = 'paid')::int AS paid
-      FROM store_orders
-      WHERE created_at >= NOW() - INTERVAL '1 day' * $1
-      GROUP BY attribution_rule
-      ORDER BY orders DESC
-      `,
-      [dias]
+      [desde, hasta, PARTNERS_EXCLUIDOS]
     )
 
     const partners: AfiliadoStats[] = partnersRes.rows.map((r) => ({
@@ -261,12 +220,6 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       revenue: Number(r.revenue),
     }))
 
-    const atribuciones: AfiliadoAtribucion[] = atribucionesRes.rows.map((r) => ({
-      rule: r.rule,
-      orders: Number(r.orders),
-      paid: Number(r.paid),
-    }))
-
     // Calculate totals
     const totalTouches = partners.reduce((s, p) => s + p.touches, 0)
     const totalVisitors = partners.reduce((s, p) => s + p.visitors, 0)
@@ -281,7 +234,6 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       partners,
       diario,
       productos,
-      atribuciones,
       totals: {
         touches: totalTouches,
         visitors: totalVisitors,
