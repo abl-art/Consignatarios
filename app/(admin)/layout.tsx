@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
       // Afiliados
       { href: '/canales/afiliados', label: 'Afiliados', icon: 'consignatarios', header: true },
       { href: '/canales/afiliados/guia', label: 'Guía Comercial', icon: 'documento' },
+      { href: '/canales/afiliados/desempeno', label: 'Desempeño', icon: 'dashboard' },
       // Consignatarios
       { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios', header: true },
       { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
