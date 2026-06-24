@@ -18,16 +18,6 @@ export interface AfiliadoStats {
   commission_estimated: number
 }
 
-export interface AfiliadoDiario {
-  fecha: string
-  partner_slug: string
-  touches: number
-  visitors: number
-  orders: number
-  orders_paid: number
-  revenue: number
-}
-
 export interface AfiliadoProducto {
   product_name: string
   partner_slug: string
@@ -39,7 +29,6 @@ export interface AfiliadoProducto {
 
 export interface DesempenoData {
   partners: AfiliadoStats[]
-  diario: AfiliadoDiario[]
   productos: AfiliadoProducto[]
   totals: {
     touches: number
@@ -58,7 +47,6 @@ export interface DesempenoData {
 
 const EMPTY_DATA: DesempenoData = {
   partners: [],
-  diario: [],
   productos: [],
   totals: {
     touches: 0, visitors: 0, orders: 0, orders_paid: 0, orders_cancelled: 0,
@@ -124,49 +112,7 @@ export async function fetchDesempenoAfiliados(desde: string, hasta: string): Pro
       [desde, hasta, PARTNERS_EXCLUIDOS]
     )
 
-    // Query 2 — Daily breakdown
-    const diarioRes = await client.query<Omit<AfiliadoDiario, 'fecha'> & { fecha: Date | string }>(
-      `
-      SELECT
-        d.fecha,
-        d.partner_slug,
-        COALESCE(t.touches, 0)::int AS touches,
-        COALESCE(t.visitors, 0)::int AS visitors,
-        COALESCE(o.orders, 0)::int AS orders,
-        COALESCE(o.orders_paid, 0)::int AS orders_paid,
-        COALESCE(o.revenue, 0)::numeric AS revenue
-      FROM (
-        SELECT DISTINCT d.fecha, ap.slug AS partner_slug
-        FROM affiliate_partners ap
-        CROSS JOIN (
-          SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS fecha
-        ) d
-        WHERE ap.slug != ALL($3)
-      ) d
-      LEFT JOIN (
-        SELECT occurred_at::date AS fecha, partner_slug,
-          COUNT(*)::int AS touches, COUNT(DISTINCT visitor_id)::int AS visitors
-        FROM affiliate_touches
-        WHERE occurred_at >= $1::date AND occurred_at < ($2::date + 1)
-        GROUP BY occurred_at::date, partner_slug
-      ) t ON t.fecha = d.fecha AND t.partner_slug = d.partner_slug
-      LEFT JOIN (
-        SELECT so.created_at::date AS fecha, ap2.slug AS partner_slug,
-          COUNT(*)::int AS orders,
-          COUNT(*) FILTER (WHERE so.status = 'paid')::int AS orders_paid,
-          COALESCE(SUM(so.product_price / 100) FILTER (WHERE so.status = 'paid'), 0)::numeric AS revenue
-        FROM store_orders so
-        JOIN affiliate_partners ap2 ON ap2.id = so.attributed_partner_id
-        WHERE so.created_at >= $1::date AND so.created_at < ($2::date + 1)
-        GROUP BY so.created_at::date, ap2.slug
-      ) o ON o.fecha = d.fecha AND o.partner_slug = d.partner_slug
-      WHERE COALESCE(t.touches, 0) > 0 OR COALESCE(o.orders, 0) > 0
-      ORDER BY d.fecha DESC, d.partner_slug
-      `,
-      [desde, hasta, PARTNERS_EXCLUIDOS]
-    )
-
-    // Query 3 — Product breakdown (top 20)
+    // Query 2 — Product breakdown (top 20)
     const productosRes = await client.query<AfiliadoProducto>(
       `
       SELECT so.product_name, ap.slug AS partner_slug,
@@ -201,16 +147,6 @@ export async function fetchDesempenoAfiliados(desde: string, hasta: string): Pro
       commission_estimated: Number(r.commission_estimated),
     }))
 
-    const diario: AfiliadoDiario[] = diarioRes.rows.map((r) => ({
-      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
-      partner_slug: r.partner_slug,
-      touches: Number(r.touches),
-      visitors: Number(r.visitors),
-      orders: Number(r.orders),
-      orders_paid: Number(r.orders_paid),
-      revenue: Number(r.revenue),
-    }))
-
     const productos: AfiliadoProducto[] = productosRes.rows.map((r) => ({
       product_name: r.product_name,
       partner_slug: r.partner_slug,
@@ -232,7 +168,6 @@ export async function fetchDesempenoAfiliados(desde: string, hasta: string): Pro
 
     return {
       partners,
-      diario,
       productos,
       totals: {
         touches: totalTouches,
