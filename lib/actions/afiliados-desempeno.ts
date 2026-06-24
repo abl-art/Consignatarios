@@ -82,7 +82,7 @@ export async function fetchDesempenoAfiliados(desde: string, hasta: string): Pro
         COALESCE(o.revenue_total, 0)::numeric AS revenue_total,
         CASE
           WHEN ap.commission_type = 'percent'
-            THEN COALESCE(o.revenue_paid, 0) * COALESCE(ap.commission_value, 0) / 100
+            THEN (COALESCE(o.revenue_paid, 0) / 1.21) * COALESCE(ap.commission_value, 0) / 100
           ELSE 0
         END::numeric AS commission_estimated
       FROM affiliate_partners ap
