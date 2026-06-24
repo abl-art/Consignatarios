@@ -80,14 +80,14 @@ export default function TiendaDesempenoClient({ data: initialData, desde: initDe
       {/* Header */}
       <div>
         <div className="flex items-center gap-4 mb-1">
-          <Link href="/canales"
+          <Link href="/canales/tienda"
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Canales
+            Tienda Online
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Tienda Online — Desempeño</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Desempeño</h1>
         </div>
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 mt-3">

@@ -4,11 +4,10 @@ import Link from 'next/link'
 
 const canales = [
   {
-    href: 'https://gocelular.gocuotas.com/tienda',
+    href: '/canales/tienda',
     title: 'Tienda Online',
     description: 'Ecommerce directo al consumidor con financiación GOcuotas',
     color: 'emerald',
-    external: true,
     iconPath: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z',
   },
   {
@@ -50,13 +49,10 @@ export default function CanalesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {canales.map((canal) => {
           const c = colorClasses[canal.color]
-          const Tag = canal.external ? 'a' : Link
-          const extraProps = canal.external ? { target: '_blank', rel: 'noopener noreferrer' } : {}
           return (
-            <Tag
+            <Link
               key={canal.href}
               href={canal.href}
-              {...extraProps as Record<string, string>}
               className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group"
             >
               <div className={`${c.bg} px-5 py-4 flex items-center gap-3`}>
@@ -64,14 +60,11 @@ export default function CanalesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={canal.iconPath} />
                 </svg>
                 <h2 className="text-lg font-semibold text-white">{canal.title}</h2>
-                {canal.external && (
-                  <svg className="w-4 h-4 text-white/60 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                )}
               </div>
               <div className="p-5">
                 <p className="text-sm text-gray-500">{canal.description}</p>
               </div>
-            </Tag>
+            </Link>
           )
         })}
       </div>
