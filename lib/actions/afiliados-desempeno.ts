@@ -139,8 +139,8 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       [dias]
     )
 
-    // Query 2 — Daily breakdown
-    const diarioRes = await client.query<AfiliadoDiario>(
+    // Query 2 — Daily breakdown (fecha comes as Date from pg, needs string conversion)
+    const diarioRes = await client.query<Omit<AfiliadoDiario, 'fecha'> & { fecha: Date | string }>(
       `
       SELECT
         d.fecha,
@@ -226,8 +226,11 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       [dias]
     )
 
-    const partners = partnersRes.rows.map((r) => ({
-      ...r,
+    const partners: AfiliadoStats[] = partnersRes.rows.map((r) => ({
+      partner_slug: r.partner_slug,
+      display_name: r.display_name,
+      commission_type: r.commission_type,
+      commission_value: r.commission_value ? parseFloat(String(r.commission_value)) : null,
       touches: Number(r.touches),
       visitors: Number(r.visitors),
       orders: Number(r.orders),
@@ -239,8 +242,9 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       commission_estimated: Number(r.commission_estimated),
     }))
 
-    const diario = diarioRes.rows.map((r) => ({
-      ...r,
+    const diario: AfiliadoDiario[] = diarioRes.rows.map((r) => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
+      partner_slug: r.partner_slug,
       touches: Number(r.touches),
       visitors: Number(r.visitors),
       orders: Number(r.orders),
@@ -248,16 +252,17 @@ export async function fetchDesempenoAfiliados(dias: number = 30): Promise<Desemp
       revenue: Number(r.revenue),
     }))
 
-    const productos = productosRes.rows.map((r) => ({
-      ...r,
+    const productos: AfiliadoProducto[] = productosRes.rows.map((r) => ({
+      product_name: r.product_name,
+      partner_slug: r.partner_slug,
       orders: Number(r.orders),
       paid: Number(r.paid),
       cancelled: Number(r.cancelled),
       revenue: Number(r.revenue),
     }))
 
-    const atribuciones = atribucionesRes.rows.map((r) => ({
-      ...r,
+    const atribuciones: AfiliadoAtribucion[] = atribucionesRes.rows.map((r) => ({
+      rule: r.rule,
       orders: Number(r.orders),
       paid: Number(r.paid),
     }))
