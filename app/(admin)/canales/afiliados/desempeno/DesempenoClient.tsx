@@ -124,16 +124,13 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
             Aplicar
           </button>
           <span className="text-gray-300 ml-1">|</span>
-          <button onClick={() => setFiltroPartner('')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${!filtroPartner ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            Todos
-          </button>
-          {partnerSlugs.map(slug => (
-            <button key={slug} onClick={() => setFiltroPartner(slug)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filtroPartner === slug ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {slug}
-            </button>
-          ))}
+          <select value={filtroPartner} onChange={e => setFiltroPartner(e.target.value)}
+            className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <option value="">Todos los partners</option>
+            {partnerSlugs.map(slug => (
+              <option key={slug} value={slug}>{partners.find(p => p.partner_slug === slug)?.display_name ?? slug}</option>
+            ))}
+          </select>
         </div>
       </div>
 
