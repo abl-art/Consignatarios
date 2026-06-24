@@ -138,54 +138,50 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Funnel — 2 cols */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 px-5 py-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-5">Funnel de conversión</h2>
-          {/* Funnel bars */}
-          <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-gray-700 mb-6">Funnel de conversión</h2>
+          <div className="flex flex-col items-center gap-1">
             {/* Touches */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-16 shrink-0 text-right">Touches</span>
-              <div className="flex-1 relative">
-                <div className="bg-blue-100 rounded-md h-10 w-full flex items-center px-3">
-                  <span className="text-sm font-bold text-blue-800 font-mono">{fmt(ft.touches)}</span>
-                  <span className="text-xs text-blue-600 ml-2">{fmt(ft.visitors)} visitantes únicos</span>
-                </div>
+            <div className="w-full bg-blue-100 rounded-t-xl h-14 flex items-center justify-center relative">
+              <div className="text-center">
+                <span className="text-lg font-bold text-blue-800 font-mono">{fmt(ft.touches)}</span>
+                <span className="text-xs text-blue-600 ml-2">touches</span>
               </div>
             </div>
-            {/* Arrow */}
-            <div className="flex items-center gap-3">
-              <span className="w-16 shrink-0" />
-              <div className="flex items-center gap-2 pl-2">
-                <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                <span className="text-xs font-semibold text-purple-600">{fmtPct(ft.conversion_touch_order)} generan order</span>
+            {/* Conversion label */}
+            <div className="flex items-center gap-1.5 py-0.5">
+              <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+              <span className="text-[11px] text-gray-500">{ft.touches > 0 ? fmtPct((ft.visitors / ft.touches) * 100) : '0%'} únicos</span>
+            </div>
+            {/* Visitantes */}
+            <div className="w-[85%] bg-indigo-100 h-14 flex items-center justify-center">
+              <div className="text-center">
+                <span className="text-lg font-bold text-indigo-800 font-mono">{fmt(ft.visitors)}</span>
+                <span className="text-xs text-indigo-600 ml-2">visitantes únicos</span>
               </div>
+            </div>
+            {/* Conversion label */}
+            <div className="flex items-center gap-1.5 py-0.5">
+              <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+              <span className="text-[11px] text-gray-500">{fmtPct(ft.conversion_touch_order)} generan order</span>
             </div>
             {/* Orders */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-16 shrink-0 text-right">Orders</span>
-              <div className="flex-1 relative">
-                <div className="bg-purple-100 rounded-md h-10 flex items-center px-3"
-                  style={{ width: `${Math.max(ft.touches > 0 ? (ft.orders / ft.touches) * 100 : 5, 5)}%` }}>
-                  <span className="text-sm font-bold text-purple-800 font-mono whitespace-nowrap">{fmt(ft.orders)}</span>
-                </div>
+            <div className="w-[65%] bg-purple-100 h-14 flex items-center justify-center">
+              <div className="text-center">
+                <span className="text-lg font-bold text-purple-800 font-mono">{fmt(ft.orders)}</span>
+                <span className="text-xs text-purple-600 ml-2">orders</span>
               </div>
             </div>
-            {/* Arrow */}
-            <div className="flex items-center gap-3">
-              <span className="w-16 shrink-0" />
-              <div className="flex items-center gap-2 pl-2">
-                <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                <span className="text-xs font-semibold text-emerald-600">{fmtPct(ft.conversion_order_paid)} se pagan</span>
-                {ft.orders_cancelled > 0 && <span className="text-xs text-red-400 ml-1">({fmt(ft.orders_cancelled)} canceladas)</span>}
-              </div>
+            {/* Conversion label */}
+            <div className="flex items-center gap-1.5 py-0.5">
+              <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+              <span className="text-[11px] text-gray-500">{fmtPct(ft.conversion_order_paid)} se pagan</span>
+              {ft.orders_cancelled > 0 && <span className="text-[11px] text-red-400">· {fmt(ft.orders_cancelled)} canc.</span>}
             </div>
             {/* Paid */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-16 shrink-0 text-right">Pagadas</span>
-              <div className="flex-1 relative">
-                <div className="bg-emerald-100 rounded-md h-10 flex items-center px-3"
-                  style={{ width: `${Math.max(ft.touches > 0 ? (ft.orders_paid / ft.touches) * 100 : 5, 5)}%` }}>
-                  <span className="text-sm font-bold text-emerald-800 font-mono whitespace-nowrap">{fmt(ft.orders_paid)}</span>
-                </div>
+            <div className="w-[40%] bg-emerald-100 rounded-b-xl h-14 flex items-center justify-center">
+              <div className="text-center">
+                <span className="text-lg font-bold text-emerald-800 font-mono">{fmt(ft.orders_paid)}</span>
+                <span className="text-xs text-emerald-600 ml-2">pagadas</span>
               </div>
             </div>
           </div>
@@ -213,7 +209,7 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
               <p className="text-3xl font-bold text-purple-600 font-mono">{fmtPesos(ft.commission_estimated)}</p>
             </div>
             {filtroPartner && filteredPartners[0]?.commission_value && (
-              <p className="text-xs text-gray-400">Tasa: {filteredPartners[0].commission_value}% sobre revenue pagado</p>
+              <p className="text-xs text-gray-400">Tasa: {filteredPartners[0].commission_value}% sobre neto sin IVA</p>
             )}
           </div>
           <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-3">
@@ -230,72 +226,6 @@ export default function DesempenoClient({ data: initialData, desde: initDesde, h
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Per-Partner Table */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-700">Por partner</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left">
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500">Partner</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Touches</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Visitantes</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Orders</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Pagadas</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Canc.</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Conv.%</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Revenue</th>
-                <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Comisión</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPartners.map(p => {
-                const convPct = p.touches > 0 ? (p.orders_paid / p.touches) * 100 : 0
-                return (
-                  <tr key={p.partner_slug} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-2.5">
-                      <p className="text-sm font-medium text-gray-900">{p.display_name}</p>
-                      <p className="text-xs text-gray-400">{p.partner_slug} {p.commission_value ? `· ${p.commission_value}%` : ''}</p>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(p.touches)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(p.visitors)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(p.orders)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-emerald-600">{fmt(p.orders_paid)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-red-500">{p.orders_cancelled > 0 ? fmt(p.orders_cancelled) : '-'}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                        convPct >= 5 ? 'bg-emerald-100 text-emerald-700' : convPct >= 2 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
-                      }`}>{fmtPct(convPct)}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{fmtPesos(p.revenue_paid)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-purple-600">{fmtPesos(p.commission_estimated)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            {filteredPartners.length > 1 && (
-              <tfoot>
-                <tr className="bg-gray-50 font-semibold">
-                  <td className="px-4 py-2.5 text-sm text-gray-700">Total</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(ft.touches)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(ft.visitors)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(ft.orders)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs text-emerald-600">{fmt(ft.orders_paid)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs text-red-500">{ft.orders_cancelled > 0 ? fmt(ft.orders_cancelled) : '-'}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">{fmtPct(ft.conversion_touch_paid)}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs">{fmtPesos(ft.revenue_paid)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs text-purple-600">{fmtPesos(ft.commission_estimated)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
         </div>
       </div>
 
