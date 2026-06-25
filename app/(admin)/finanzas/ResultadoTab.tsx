@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { fetchResultadoTienda, updateConfig, type ResultadoData, type ConfigResultado } from '@/lib/actions/resultado'
 import { fetchResultadoTerceros, type ResultadoTercerosData } from '@/lib/actions/resultado-terceros'
-import ResultadoTercerosTable from './ResultadoTercerosTable'
 
 function fmt(n: number): string { return n.toLocaleString('es-AR') }
 function fmtPesos(n: number): string { return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }
@@ -29,36 +28,89 @@ const PRESETS = [
   { label: monthLabel(1), desde: () => monthStart(1), hasta: () => monthEnd(1) },
 ] as const
 
-const FILAS_MAIN: { key: keyof Omit<import('@/lib/actions/resultado').ProductoResultado, 'nombre' | 'kind'>; label: string; format: 'pesos' | 'number' | 'pct' | 'multiplo' | 'usd'; bold?: boolean; separator?: boolean; note?: string }[] = [
+// Unified rows for both P&Ls
+interface FilaDef {
+  key: string
+  label: string
+  format: 'pesos' | 'number' | 'pct' | 'multiplo' | 'usd'
+  bold?: boolean
+  separator?: boolean
+  propiaOnly?: boolean   // only applies to venta propia
+  tercerosOnly?: boolean // only applies to terceros
+}
+
+const FILAS: FilaDef[] = [
   { key: 'unidades', label: 'Unidades vendidas', format: 'number' },
-  { key: 'precio_venta_neto', label: 'Precio venta neto (s/IVA)', format: 'pesos' },
-  { key: 'costo', label: 'Costo proveedor', format: 'pesos' },
-  { key: 'multiplo', label: 'Múltiplo', format: 'multiplo' },
-  { key: 'kit', label: 'Kit de Seguridad', format: 'pesos' },
-  { key: 'envio', label: 'Envío + Fulfillment', format: 'pesos' },
+  { key: 'revenue', label: 'Revenue neto (s/IVA)', format: 'pesos' },
+  { key: 'costo', label: 'Costo proveedor', format: 'pesos', propiaOnly: true },
+  { key: 'multiplo', label: 'Múltiplo', format: 'multiplo', propiaOnly: true },
+  { key: 'order_amount', label: 'Monto total orders', format: 'pesos', tercerosOnly: true },
+  { key: 'kit', label: 'Kit de Seguridad', format: 'pesos', propiaOnly: true },
+  { key: 'envio', label: 'Envío + Fulfillment', format: 'pesos', propiaOnly: true },
+  { key: 'contribucion_bruta', label: 'Contribución Bruta', format: 'pesos', bold: true, separator: true, propiaOnly: true },
   { key: 'licencias_bloqueo', label: 'Licencias de bloqueo', format: 'pesos' },
-  { key: 'contribucion_bruta', label: 'Contribución Bruta', format: 'pesos', bold: true, separator: true },
+  { key: 'sueldos', label: 'Sueldos', format: 'pesos' },
+  { key: 'otros_costo', label: 'Otros', format: 'pesos', propiaOnly: true },
   { key: 'adquirencia', label: 'Adquirencia', format: 'pesos' },
   { key: 'incobrables', label: 'Incobrables', format: 'pesos' },
-  { key: 'sueldos', label: 'Sueldos', format: 'pesos' },
-  { key: 'otros_costo', label: 'Otros', format: 'pesos' },
   { key: 'intereses', label: 'Intereses', format: 'pesos' },
-  { key: 'impuestos', label: 'Impuestos *', format: 'pesos', note: '* Incluye Ingresos Brutos + Comercio e Industria + Débitos y Créditos (1,2%)' },
+  { key: 'impuestos', label: 'Impuestos *', format: 'pesos' },
   { key: 'contribucion_neta', label: 'Contribución Neta', format: 'pesos', bold: true, separator: true },
-  { key: 'rentabilidad_costo', label: 'Rentabilidad s/costo', format: 'pct' },
-  { key: 'rentabilidad_venta', label: 'Rentabilidad s/venta', format: 'pct' },
+  { key: 'rentabilidad', label: 'Rentabilidad', format: 'pct' },
   { key: 'ganancia', label: 'Ganancia total', format: 'pesos', bold: true, separator: true },
   { key: 'ganancia_usd', label: 'Ganancia en USD', format: 'usd', bold: true },
 ]
 
-function formatCell(value: number, format: string, kind: 'main' | 'addon', key: string): string {
-  // Addons don't have kit, envio, licencias, sueldos, otros, intereses
-  if (kind === 'addon' && ['kit', 'envio', 'licencias_bloqueo', 'sueldos', 'otros_costo', 'intereses'].includes(key)) return '—'
-  if (format === 'pesos') return fmtPesos(value)
-  if (format === 'usd') return 'US$ ' + fmt(value)
-  if (format === 'pct') return fmtPct(value)
-  if (format === 'multiplo') return value > 0 ? value.toFixed(2) + 'x' : '—'
-  return fmt(value)
+function getPropiaTotal(key: string, t: ResultadoData['totals']): number | null {
+  switch (key) {
+    case 'unidades': return t.unidades
+    case 'revenue': return t.revenue_neto
+    case 'costo': return t.costo_total
+    case 'multiplo': return t.costo_total > 0 ? t.revenue_neto / t.costo_total : 0
+    case 'kit': return t.kit
+    case 'envio': return t.envio
+    case 'contribucion_bruta': return t.contribucion_bruta
+    case 'licencias_bloqueo': return t.licencias_bloqueo
+    case 'sueldos': return t.sueldos
+    case 'otros_costo': return t.otros_costo
+    case 'adquirencia': return t.adquirencia
+    case 'incobrables': return t.incobrables
+    case 'intereses': return t.intereses
+    case 'impuestos': return t.impuestos
+    case 'contribucion_neta': return t.contribucion_neta
+    case 'rentabilidad': return t.revenue_neto > 0 ? (t.contribucion_neta / t.revenue_neto) * 100 : 0
+    case 'ganancia': return t.ganancia
+    case 'ganancia_usd': return t.ganancia_usd
+    default: return null
+  }
+}
+
+function getTercerosTotal(key: string, t: ResultadoTercerosData['totals']): number | null {
+  switch (key) {
+    case 'unidades': return t.unidades
+    case 'revenue': return t.revenue_gocuotas
+    case 'order_amount': return t.order_amount_total
+    case 'licencias_bloqueo': return t.licencias_bloqueo
+    case 'sueldos': return t.sueldos
+    case 'adquirencia': return t.adquirencia
+    case 'incobrables': return t.incobrables
+    case 'intereses': return t.intereses
+    case 'impuestos': return t.impuestos
+    case 'contribucion_neta': return t.contribucion_neta
+    case 'rentabilidad': return t.revenue_gocuotas > 0 ? (t.contribucion_neta / t.revenue_gocuotas) * 100 : 0
+    case 'ganancia': return t.ganancia
+    case 'ganancia_usd': return t.ganancia_usd
+    default: return null
+  }
+}
+
+function fmtVal(val: number | null, format: string): string {
+  if (val === null) return '—'
+  if (format === 'pesos') return fmtPesos(val)
+  if (format === 'usd') return 'US$ ' + fmt(val)
+  if (format === 'pct') return fmtPct(val)
+  if (format === 'multiplo') return val > 0 ? val.toFixed(2) + 'x' : '—'
+  return fmt(val)
 }
 
 interface Props {
@@ -73,10 +125,11 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
   const [terceros, setTerceros] = useState(initialTerceros)
   const [desde, setDesde] = useState(initDesde)
   const [hasta, setHasta] = useState(initHasta)
-  const [activePreset, setActivePreset] = useState<number | null>(2) // últimos 30 días
+  const [activePreset, setActivePreset] = useState<number | null>(2)
   const [isPending, startTransition] = useTransition()
   const [showConfig, setShowConfig] = useState(false)
-  const [showModelos, setShowModelos] = useState(false)
+  const [showPropia, setShowPropia] = useState(false)
+  const [showTerceros, setShowTerceros] = useState(false)
   const [localConfig, setLocalConfig] = useState<ConfigResultado>(initialData.config)
 
   function reload(d: string, h: string, presetIdx: number | null) {
@@ -87,13 +140,8 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
     })
   }
 
-  function handlePreset(idx: number) {
-    const p = PRESETS[idx]; reload(p.desde(), p.hasta(), idx)
-  }
-
-  function handleCustomRange() {
-    if (desde && hasta) reload(desde, hasta, null)
-  }
+  function handlePreset(idx: number) { const p = PRESETS[idx]; reload(p.desde(), p.hasta(), idx) }
+  function handleCustomRange() { if (desde && hasta) reload(desde, hasta, null) }
 
   async function handleConfigChange(clave: string, valor: number) {
     setLocalConfig(prev => ({ ...prev, [clave]: valor }))
@@ -105,9 +153,17 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
   }
 
   const { productos, totals } = data
-  const mainProducts = productos.filter(p => p.kind === 'main')
-  const addonProducts = productos.filter(p => p.kind === 'addon')
-  const allProducts = [...mainProducts, ...addonProducts]
+  const allProducts = useMemo(() => {
+    const main = productos.filter(p => p.kind === 'main')
+    const addon = productos.filter(p => p.kind === 'addon')
+    return [...main, ...addon]
+  }, [productos])
+
+  const { merchants, totals: tt } = terceros
+
+  // Combined ganancia
+  const gananciaTotal = totals.ganancia + tt.ganancia
+  const gananciaUsdTotal = totals.ganancia_usd + tt.ganancia_usd
 
   return (
     <div className={`space-y-6 ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -159,16 +215,10 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
               <div key={clave}>
                 <label className="text-xs text-gray-500 block mb-1">{label}</label>
                 <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    step={suffix === '%' ? '0.1' : '1'}
+                  <input type="number" step={suffix === '%' ? '0.1' : '1'}
                     value={localConfig[clave as keyof ConfigResultado]}
-                    onChange={e => {
-                      const val = parseFloat(e.target.value)
-                      if (!isNaN(val)) handleConfigChange(clave, val)
-                    }}
-                    className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
-                  />
+                    onChange={e => { const val = parseFloat(e.target.value); if (!isNaN(val)) handleConfigChange(clave, val) }}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg font-mono" />
                   <span className="text-xs text-gray-400 shrink-0">{suffix}</span>
                 </div>
               </div>
@@ -180,81 +230,121 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p className="text-xs text-gray-500 mb-1">Unidades vendidas</p>
-          <p className="text-2xl font-bold text-gray-900 font-mono">{fmt(totals.unidades)}</p>
+          <p className="text-xs text-gray-500 mb-1">Uds. Propia + Terceros</p>
+          <p className="text-2xl font-bold text-gray-900 font-mono">{fmt(totals.unidades + tt.unidades)}</p>
+          <p className="text-xs text-gray-400 mt-1">{fmt(totals.unidades)} propia + {fmt(tt.unidades)} terceros</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p className="text-xs text-gray-500 mb-1">Revenue neto (s/IVA)</p>
-          <p className="text-2xl font-bold text-gray-900 font-mono">{fmtPesos(totals.revenue_neto)}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p className="text-xs text-gray-500 mb-1">Contribución Neta</p>
-          <p className="text-2xl font-bold text-emerald-600 font-mono">{fmtPesos(totals.contribucion_neta)}</p>
+          <p className="text-xs text-gray-500 mb-1">Revenue total</p>
+          <p className="text-2xl font-bold text-gray-900 font-mono">{fmtPesos(totals.revenue_neto + tt.revenue_gocuotas)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p className="text-xs text-gray-500 mb-1">Ganancia total</p>
-          <p className="text-2xl font-bold text-emerald-600 font-mono">{fmtPesos(totals.ganancia)}</p>
+          <p className="text-2xl font-bold text-emerald-600 font-mono">{fmtPesos(gananciaTotal)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p className="text-xs text-gray-500 mb-1">Ganancia USD</p>
+          <p className="text-2xl font-bold text-emerald-600 font-mono">US$ {fmt(gananciaUsdTotal)}</p>
         </div>
       </div>
 
-      {/* P&L Table */}
+      {/* Unified P&L Table */}
       <div className="bg-white rounded-xl border border-gray-200">
-        <button onClick={() => setShowModelos(!showModelos)}
-          className="w-full px-5 py-4 border-b border-gray-100 flex items-center justify-between hover:bg-gray-50 transition-colors">
-          <h3 className="text-sm font-semibold text-gray-700">Estado de Resultado — Venta Propia</h3>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">Estado de Resultado</h3>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">{showModelos ? 'Por modelo' : 'Total'}</span>
-            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showModelos ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <button onClick={() => setShowPropia(!showPropia)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${showPropia ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {showPropia ? 'Modelos ▾' : 'Modelos ▸'}
+            </button>
+            <button onClick={() => setShowTerceros(!showTerceros)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${showTerceros ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {showTerceros ? 'Merchants ▾' : 'Merchants ▸'}
+            </button>
           </div>
-        </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 sticky left-0 bg-gray-50 min-w-[180px]">Concepto</th>
-                {showModelos && allProducts.map((p, i) => (
-                  <th key={i} className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 min-w-[110px]">
-                    <span className="block">{p.nombre}</span>
-                    {p.kind === 'addon' && <span className="text-[10px] text-purple-500 font-normal">(addon)</span>}
+                {/* Venta Propia detail columns */}
+                {showPropia && allProducts.map((p, i) => (
+                  <th key={`p-${i}`} className="px-3 py-2.5 text-right text-xs font-medium text-blue-500 min-w-[100px]">
+                    <span className="block truncate max-w-[100px]" title={p.nombre}>{p.nombre}</span>
+                    {p.kind === 'addon' && <span className="text-[10px] text-purple-400 font-normal">(addon)</span>}
                   </th>
                 ))}
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 min-w-[120px] bg-gray-100">Total</th>
+                {/* Venta Propia total */}
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-blue-700 min-w-[120px] bg-blue-50">Vta. Propia</th>
+                {/* Terceros detail columns */}
+                {showTerceros && merchants.map(m => (
+                  <th key={m.client_id} className="px-3 py-2.5 text-right text-xs font-medium text-purple-500 min-w-[100px]">
+                    {m.merchant_name}
+                  </th>
+                ))}
+                {/* Terceros total */}
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-purple-700 min-w-[120px] bg-purple-50">Vta. Terceros</th>
               </tr>
             </thead>
             <tbody>
-              {FILAS_MAIN.map(fila => {
+              {FILAS.map(fila => {
                 const isGanancia = fila.key === 'ganancia' || fila.key === 'ganancia_usd'
+                const propiaVal = getPropiaTotal(fila.key, totals)
+                const tercerosVal = getTercerosTotal(fila.key, tt)
+                const showRow = !fila.propiaOnly || propiaVal !== null
+                if (!showRow) return null
+
                 return (
                   <tr key={fila.key} className={`border-b ${fila.separator ? 'border-gray-200' : 'border-gray-50'} ${fila.bold ? 'bg-gray-50' : ''} ${isGanancia ? 'bg-emerald-50' : ''}`}>
                     <td className={`px-4 py-2 text-xs sticky left-0 ${fila.bold ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600'} ${isGanancia ? 'font-bold text-emerald-800 bg-emerald-50' : ''}`}>
                       {fila.label}
                     </td>
-                    {showModelos && allProducts.map((p, i) => {
-                      const val = p[fila.key] as number
+                    {/* Venta Propia detail */}
+                    {showPropia && allProducts.map((p, i) => {
+                      if (fila.tercerosOnly) return <td key={`p-${i}`} className="px-3 py-2 text-right text-xs text-gray-300">—</td>
+                      const pRec = p as unknown as Record<string, number>
+                      let val: number | null = null
+                      if (fila.key === 'revenue') val = p.precio_venta_neto
+                      else if (fila.key === 'rentabilidad') val = p.rentabilidad_venta
+                      else val = pRec[fila.key] ?? null
+                      // Addon exclusions
+                      if (p.kind === 'addon' && ['kit', 'envio', 'licencias_bloqueo', 'sueldos', 'otros_costo', 'intereses', 'contribucion_bruta', 'costo', 'multiplo'].includes(fila.key)) val = null
                       return (
-                        <td key={i} className={`px-3 py-2 text-right font-mono text-xs ${fila.bold ? 'font-semibold' : ''} ${isGanancia ? 'font-bold text-emerald-700' : ''} ${val < 0 ? 'text-red-500' : ''}`}>
-                          {formatCell(val, fila.format, p.kind, fila.key)}
+                        <td key={`p-${i}`} className={`px-3 py-2 text-right font-mono text-xs ${fila.bold ? 'font-semibold' : ''} ${isGanancia ? 'font-bold text-emerald-700' : ''} ${val !== null && val < 0 ? 'text-red-500' : ''}`}>
+                          {val !== null ? fmtVal(val, fila.format) : '—'}
                         </td>
                       )
                     })}
-                    <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-gray-100 ${isGanancia ? 'text-emerald-700 font-bold' : ''}`}>
-                      {(() => {
-                        const k = fila.key
-                        if (k === 'unidades') return `${fmt(totals.unidades)} (${fmt(totals.unidades_main)} tel. + ${fmt(totals.unidades_addon)} acc.)`
-                        if (k === 'ganancia') return fmtPesos(totals.ganancia)
-                        if (k === 'ganancia_usd') return 'US$ ' + fmt(totals.ganancia_usd)
-                        if (k === 'precio_venta_neto') return fmtPesos(totals.revenue_neto)
-                        if (k === 'costo') return fmtPesos(totals.costo_total)
-                        if (k === 'multiplo') return totals.costo_total > 0 ? (totals.revenue_neto / totals.costo_total).toFixed(2) + 'x' : '—'
-                        if (k === 'rentabilidad_costo') return fmtPct(totals.costo_total > 0 ? (totals.contribucion_neta / totals.costo_total) * 100 : 0)
-                        if (k === 'rentabilidad_venta') return fmtPct(totals.revenue_neto > 0 ? (totals.contribucion_neta / totals.revenue_neto) * 100 : 0)
-                        // All other rows: use totals directly (already multiplied by units)
-                        const totalVal = (totals as Record<string, number>)[k]
-                        if (totalVal !== undefined) return fila.format === 'usd' ? 'US$ ' + fmt(totalVal) : fmtPesos(totalVal)
-                        return ''
-                      })()}
+                    {/* Venta Propia total */}
+                    <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-blue-50 ${isGanancia ? 'text-emerald-700 font-bold' : 'text-blue-900'}`}>
+                      {fila.tercerosOnly ? '—' : fmtVal(propiaVal, fila.key === 'unidades' ? 'number' : fila.format)}
+                    </td>
+                    {/* Terceros detail */}
+                    {showTerceros && merchants.map(m => {
+                      if (fila.propiaOnly) return <td key={m.client_id} className="px-3 py-2 text-right text-xs text-gray-300">—</td>
+                      const mRec = m as unknown as Record<string, number>
+                      let val: number | null = null
+                      if (fila.key === 'revenue') val = m.revenue_gocuotas / m.unidades
+                      else if (fila.key === 'order_amount') val = m.order_amount_total / m.unidades
+                      else if (fila.key === 'rentabilidad') val = m.rentabilidad_revenue
+                      else if (fila.key === 'unidades') val = m.unidades
+                      else if (fila.key === 'ganancia') val = m.ganancia
+                      else if (fila.key === 'ganancia_usd') val = m.ganancia_usd
+                      else {
+                        // Per-unit for cost rows
+                        const total = mRec[fila.key]
+                        val = total !== undefined ? total / m.unidades : null
+                      }
+                      return (
+                        <td key={m.client_id} className={`px-3 py-2 text-right font-mono text-xs ${fila.bold ? 'font-semibold' : ''} ${isGanancia ? 'font-bold text-emerald-700' : ''} ${val !== null && val < 0 ? 'text-red-500' : ''}`}>
+                          {val !== null ? fmtVal(val, fila.key === 'unidades' ? 'number' : fila.format) : '—'}
+                        </td>
+                      )
+                    })}
+                    {/* Terceros total */}
+                    <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-purple-50 ${isGanancia ? 'text-emerald-700 font-bold' : 'text-purple-900'}`}>
+                      {fila.propiaOnly ? '—' : fmtVal(tercerosVal, fila.key === 'unidades' ? 'number' : fila.format)}
                     </td>
                   </tr>
                 )
@@ -263,16 +353,13 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
           </table>
         </div>
         <div className="px-5 py-3 border-t border-gray-100">
-          <p className="text-[11px] text-gray-400">* Impuestos incluye: Ingresos Brutos ({localConfig.iibb}%) + Comercio e Industria ({localConfig.com_e_ind}%) + Débitos y Créditos (1,2%)</p>
+          <p className="text-[11px] text-gray-400">* Impuestos: IIBB ({localConfig.iibb}%) + Com e Ind ({localConfig.com_e_ind}%) + Déb/Créd (1,2%). En terceros: IIBB y Com e Ind sobre revenue GOcuotas, Déb/Créd sobre monto total orders.</p>
         </div>
       </div>
 
-      {/* P&L Terceros */}
-      <ResultadoTercerosTable data={terceros} />
-
-      {allProducts.length === 0 && terceros.merchants.length === 0 && (
+      {allProducts.length === 0 && merchants.length === 0 && (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
-          <p className="text-sm text-gray-400">Sin ventas propias en el período seleccionado</p>
+          <p className="text-sm text-gray-400">Sin ventas en el período seleccionado</p>
         </div>
       )}
     </div>
