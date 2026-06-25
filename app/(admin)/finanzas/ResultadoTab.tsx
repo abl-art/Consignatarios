@@ -318,7 +318,9 @@ export default function ResultadoTab({ data: initialData, dataTerceros: initialT
                     })}
                     {/* Venta Propia total */}
                     <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-blue-50 ${isGanancia ? 'text-emerald-700 font-bold' : 'text-blue-900'}`}>
-                      {fila.tercerosOnly ? '—' : fmtVal(propiaVal, fila.key === 'unidades' ? 'number' : fila.format)}
+                      {fila.tercerosOnly ? '—'
+                        : fila.key === 'unidades' ? `${fmt(totals.unidades)} (${fmt(totals.unidades_main)} cel. + ${fmt(totals.unidades_addon)} acc.)`
+                        : fmtVal(propiaVal, fila.format)}
                     </td>
                     {/* Terceros detail */}
                     {showTerceros && merchants.map(m => {
