@@ -27,29 +27,33 @@ const PRESETS = [
   { label: monthLabel(1), desde: () => monthStart(1), hasta: () => monthEnd(1) },
 ] as const
 
-const FILAS_MAIN: { key: keyof Omit<import('@/lib/actions/resultado').ProductoResultado, 'nombre' | 'kind'>; label: string; format: 'pesos' | 'number' | 'pct' | 'multiplo'; bold?: boolean; separator?: boolean }[] = [
+const FILAS_MAIN: { key: keyof Omit<import('@/lib/actions/resultado').ProductoResultado, 'nombre' | 'kind'>; label: string; format: 'pesos' | 'number' | 'pct' | 'multiplo' | 'usd'; bold?: boolean; separator?: boolean; note?: string }[] = [
   { key: 'unidades', label: 'Unidades vendidas', format: 'number' },
   { key: 'precio_venta_neto', label: 'Precio venta neto (s/IVA)', format: 'pesos' },
   { key: 'costo', label: 'Costo proveedor', format: 'pesos' },
   { key: 'multiplo', label: 'Múltiplo', format: 'multiplo' },
   { key: 'kit', label: 'Kit de Seguridad', format: 'pesos' },
   { key: 'envio', label: 'Envío + Fulfillment', format: 'pesos' },
+  { key: 'licencias_bloqueo', label: 'Licencias de bloqueo', format: 'pesos' },
   { key: 'contribucion_bruta', label: 'Contribución Bruta', format: 'pesos', bold: true, separator: true },
   { key: 'adquirencia', label: 'Adquirencia', format: 'pesos' },
   { key: 'incobrables', label: 'Incobrables', format: 'pesos' },
   { key: 'sueldos', label: 'Sueldos', format: 'pesos' },
   { key: 'otros_costo', label: 'Otros', format: 'pesos' },
   { key: 'intereses', label: 'Intereses', format: 'pesos' },
+  { key: 'impuestos', label: 'Impuestos *', format: 'pesos', note: '* Incluye Ingresos Brutos + Comercio e Industria + Débitos y Créditos (1,2%)' },
   { key: 'contribucion_neta', label: 'Contribución Neta', format: 'pesos', bold: true, separator: true },
   { key: 'rentabilidad_costo', label: 'Rentabilidad s/costo', format: 'pct' },
   { key: 'rentabilidad_venta', label: 'Rentabilidad s/venta', format: 'pct' },
   { key: 'ganancia', label: 'Ganancia total', format: 'pesos', bold: true, separator: true },
+  { key: 'ganancia_usd', label: 'Ganancia en USD', format: 'usd', bold: true },
 ]
 
 function formatCell(value: number, format: string, kind: 'main' | 'addon', key: string): string {
-  // Addons don't have kit, envio, sueldos, otros, intereses
-  if (kind === 'addon' && ['kit', 'envio', 'sueldos', 'otros_costo', 'intereses'].includes(key)) return '—'
+  // Addons don't have kit, envio, licencias, sueldos, otros, intereses
+  if (kind === 'addon' && ['kit', 'envio', 'licencias_bloqueo', 'sueldos', 'otros_costo', 'intereses'].includes(key)) return '—'
   if (format === 'pesos') return fmtPesos(value)
+  if (format === 'usd') return 'US$ ' + fmt(value)
   if (format === 'pct') return fmtPct(value)
   if (format === 'multiplo') return value > 0 ? value.toFixed(2) + 'x' : '—'
   return fmt(value)
@@ -131,12 +135,16 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
             {([
               { clave: 'kit_seguridad', label: 'Kit de Seguridad', suffix: '$/ud' },
               { clave: 'envio_fulfillment', label: 'Envío + Fulfillment', suffix: '$/ud' },
+              { clave: 'licencias_bloqueo', label: 'Licencias de bloqueo', suffix: '$/ud' },
               { clave: 'sueldos', label: 'Sueldos', suffix: '$/ud' },
               { clave: 'otros', label: 'Otros', suffix: '$/ud' },
               { clave: 'adquirencia', label: 'Adquirencia', suffix: '%' },
               { clave: 'incobrables', label: 'Incobrables', suffix: '%' },
+              { clave: 'iibb', label: 'Ingresos Brutos', suffix: '%' },
+              { clave: 'com_e_ind', label: 'Comercio e Industria', suffix: '%' },
               { clave: 'tna', label: 'TNA', suffix: '%' },
               { clave: 'plazo_pago_proveedor', label: 'Plazo pago proveedor', suffix: 'días' },
+              { clave: 'tipo_cambio', label: 'Tipo de cambio', suffix: 'ARS/USD' },
             ] as const).map(({ clave, label, suffix }) => (
               <div key={clave}>
                 <label className="text-xs text-gray-500 block mb-1">{label}</label>
@@ -200,7 +208,7 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
             </thead>
             <tbody>
               {FILAS_MAIN.map(fila => {
-                const isGanancia = fila.key === 'ganancia'
+                const isGanancia = fila.key === 'ganancia' || fila.key === 'ganancia_usd'
                 return (
                   <tr key={fila.key} className={`border-b ${fila.separator ? 'border-gray-200' : 'border-gray-50'} ${fila.bold ? 'bg-gray-50' : ''} ${isGanancia ? 'bg-emerald-50' : ''}`}>
                     <td className={`px-4 py-2 text-xs sticky left-0 ${fila.bold ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600'} ${isGanancia ? 'font-bold text-emerald-800 bg-emerald-50' : ''}`}>
@@ -217,6 +225,7 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
                     <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-gray-100 ${isGanancia ? 'text-emerald-700 font-bold' : ''}`}>
                       {fila.key === 'unidades' ? fmt(totals.unidades)
                         : fila.key === 'ganancia' ? fmtPesos(totals.ganancia)
+                        : fila.key === 'ganancia_usd' ? 'US$ ' + fmt(totals.ganancia_usd)
                         : fila.key === 'contribucion_bruta' ? fmtPesos(totals.contribucion_bruta)
                         : fila.key === 'contribucion_neta' ? fmtPesos(totals.contribucion_neta)
                         : fila.key === 'precio_venta_neto' ? fmtPesos(totals.revenue_neto / (totals.unidades || 1))
@@ -232,6 +241,9 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
               })}
             </tbody>
           </table>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100">
+          <p className="text-[11px] text-gray-400">* Impuestos incluye: Ingresos Brutos ({localConfig.iibb}%) + Comercio e Industria ({localConfig.com_e_ind}%) + Débitos y Créditos (1,2%)</p>
         </div>
       </div>
 

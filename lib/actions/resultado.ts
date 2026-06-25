@@ -9,12 +9,16 @@ import { revalidatePath } from 'next/cache'
 export interface ConfigResultado {
   kit_seguridad: number
   envio_fulfillment: number
+  licencias_bloqueo: number
   sueldos: number
   otros: number
   adquirencia: number    // % sobre venta neta
   incobrables: number    // % sobre venta neta
+  iibb: number           // % ingresos brutos
+  com_e_ind: number      // % comercio e industria
   tna: number            // % tasa nominal anual
   plazo_pago_proveedor: number  // días
+  tipo_cambio: number    // ARS/USD
 }
 
 export interface ProductoResultado {
@@ -29,13 +33,16 @@ export interface ProductoResultado {
   contribucion_bruta: number
   adquirencia: number
   incobrables: number
+  licencias_bloqueo: number
   sueldos: number
   otros_costo: number
   intereses: number
+  impuestos: number
   contribucion_neta: number
   rentabilidad_costo: number    // %
   rentabilidad_venta: number    // %
   ganancia: number              // neta × unidades
+  ganancia_usd: number
 }
 
 export interface ResultadoData {
@@ -44,6 +51,7 @@ export interface ResultadoData {
   totals: {
     unidades: number
     ganancia: number
+    ganancia_usd: number
     revenue_neto: number
     costo_total: number
     contribucion_bruta: number
@@ -54,18 +62,22 @@ export interface ResultadoData {
 const DEFAULT_CONFIG: ConfigResultado = {
   kit_seguridad: 7000,
   envio_fulfillment: 15000,
+  licencias_bloqueo: 7500,
   sueldos: 1250,
   otros: 1000,
   adquirencia: 0.8,
   incobrables: 6.5,
+  iibb: 4,
+  com_e_ind: 1,
   tna: 27,
   plazo_pago_proveedor: 60,
+  tipo_cambio: 1500,
 }
 
 const EMPTY_RESULT: ResultadoData = {
   productos: [],
   config: DEFAULT_CONFIG,
-  totals: { unidades: 0, ganancia: 0, revenue_neto: 0, costo_total: 0, contribucion_bruta: 0, contribucion_neta: 0 },
+  totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, contribucion_bruta: 0, contribucion_neta: 0 },
 }
 
 // ─── Config CRUD ────────────────────────────────────────────────────────────
@@ -81,12 +93,16 @@ export async function fetchConfig(): Promise<ConfigResultado> {
   return {
     kit_seguridad: map.kit_seguridad ?? DEFAULT_CONFIG.kit_seguridad,
     envio_fulfillment: map.envio_fulfillment ?? DEFAULT_CONFIG.envio_fulfillment,
+    licencias_bloqueo: map.licencias_bloqueo ?? DEFAULT_CONFIG.licencias_bloqueo,
     sueldos: map.sueldos ?? DEFAULT_CONFIG.sueldos,
     otros: map.otros ?? DEFAULT_CONFIG.otros,
     adquirencia: map.adquirencia ?? DEFAULT_CONFIG.adquirencia,
     incobrables: map.incobrables ?? DEFAULT_CONFIG.incobrables,
+    iibb: map.iibb ?? DEFAULT_CONFIG.iibb,
+    com_e_ind: map.com_e_ind ?? DEFAULT_CONFIG.com_e_ind,
     tna: map.tna ?? DEFAULT_CONFIG.tna,
     plazo_pago_proveedor: map.plazo_pago_proveedor ?? DEFAULT_CONFIG.plazo_pago_proveedor,
+    tipo_cambio: map.tipo_cambio ?? DEFAULT_CONFIG.tipo_cambio,
   }
 }
 
@@ -254,7 +270,8 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       const isMain = kind === 'main'
       const kit = isMain ? config.kit_seguridad : 0
       const envio = isMain ? config.envio_fulfillment : 0
-      const contribBruta = precioNeto - costo - kit - envio
+      const licenciasBloqueo = isMain ? config.licencias_bloqueo : 0
+      const contribBruta = precioNeto - costo - kit - envio - licenciasBloqueo
 
       const adquirencia = precioNeto * config.adquirencia / 100
       const incobrables = precioNeto * config.incobrables / 100
@@ -264,7 +281,11 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       const interestData = interestByProduct.get(nombre)
       const intereses = isMain && interestData ? interestData.total / interestData.count : 0
 
-      const contribNeta = contribBruta - adquirencia - incobrables - sueldos - otrosCosto - intereses
+      // Impuestos: IIBB + Com e Ind + Débitos y Créditos (1.2%)
+      const impuestos = precioNeto * (config.iibb + config.com_e_ind + 1.2) / 100
+
+      const contribNeta = contribBruta - adquirencia - incobrables - sueldos - otrosCosto - intereses - impuestos
+      const ganancia = Math.round(contribNeta * unidades)
 
       return {
         nombre,
@@ -275,16 +296,19 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
         multiplo: Math.round(multiplo * 100) / 100,
         kit,
         envio,
+        licencias_bloqueo: licenciasBloqueo,
         contribucion_bruta: Math.round(contribBruta),
         adquirencia: Math.round(adquirencia),
         incobrables: Math.round(incobrables),
         sueldos,
         otros_costo: otrosCosto,
         intereses: Math.round(intereses),
+        impuestos: Math.round(impuestos),
         contribucion_neta: Math.round(contribNeta),
         rentabilidad_costo: costo > 0 ? Math.round((contribNeta / costo) * 10000) / 100 : 0,
         rentabilidad_venta: precioNeto > 0 ? Math.round((contribNeta / precioNeto) * 10000) / 100 : 0,
-        ganancia: Math.round(contribNeta * unidades),
+        ganancia,
+        ganancia_usd: config.tipo_cambio > 0 ? Math.round(ganancia / config.tipo_cambio) : 0,
       }
     })
 
@@ -296,6 +320,7 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
 
     const totalUnidades = productos.reduce((s, p) => s + p.unidades, 0)
     const totalGanancia = productos.reduce((s, p) => s + p.ganancia, 0)
+    const totalGananciaUsd = productos.reduce((s, p) => s + p.ganancia_usd, 0)
     const totalRevenueNeto = productos.reduce((s, p) => s + p.precio_venta_neto * p.unidades, 0)
     const totalCosto = productos.reduce((s, p) => s + p.costo * p.unidades, 0)
     const totalCB = productos.reduce((s, p) => s + p.contribucion_bruta * p.unidades, 0)
@@ -307,6 +332,7 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       totals: {
         unidades: totalUnidades,
         ganancia: totalGanancia,
+        ganancia_usd: totalGananciaUsd,
         revenue_neto: totalRevenueNeto,
         costo_total: totalCosto,
         contribucion_bruta: totalCB,
