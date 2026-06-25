@@ -31,7 +31,7 @@ export default async function FinanzasPage({
   const resultadoHasta = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const resultadoDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
-  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros, ivaMensual, resultadoData] = await Promise.all([
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros, ivaMensual] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -47,8 +47,15 @@ export default async function FinanzasPage({
     fetchInteresesPagadosMes(),
     fetchProductos(),
     calcularIVAMensual().catch(() => [] as Awaited<ReturnType<typeof calcularIVAMensual>>),
-    fetchResultadoTienda(resultadoDesde, resultadoHasta),
   ])
+
+  // Resultado runs after to avoid exhausting the connection pool
+  let resultadoData: Awaited<ReturnType<typeof fetchResultadoTienda>>
+  try {
+    resultadoData = await fetchResultadoTienda(resultadoDesde, resultadoHasta)
+  } catch {
+    resultadoData = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, contribucion_bruta: 0, contribucion_neta: 0 } }
+  }
 
   // IVA card data
   const hoyMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
