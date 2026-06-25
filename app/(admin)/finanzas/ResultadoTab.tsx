@@ -231,18 +231,21 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
                       )
                     })}
                     <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-gray-100 ${isGanancia ? 'text-emerald-700 font-bold' : ''}`}>
-                      {fila.key === 'unidades' ? fmt(totals.unidades)
-                        : fila.key === 'ganancia' ? fmtPesos(totals.ganancia)
-                        : fila.key === 'ganancia_usd' ? 'US$ ' + fmt(totals.ganancia_usd)
-                        : fila.key === 'contribucion_bruta' ? fmtPesos(totals.contribucion_bruta)
-                        : fila.key === 'contribucion_neta' ? fmtPesos(totals.contribucion_neta)
-                        : fila.key === 'precio_venta_neto' ? fmtPesos(totals.revenue_neto / (totals.unidades || 1))
-                        : fila.key === 'costo' ? fmtPesos(totals.costo_total / (totals.unidades || 1))
-                        : fila.format === 'pct' ? fmtPct(totals.ganancia > 0 && totals.costo_total > 0
-                            ? fila.key === 'rentabilidad_costo' ? (totals.contribucion_neta / totals.costo_total) * 100
-                            : (totals.contribucion_neta / totals.revenue_neto) * 100
-                          : 0)
-                        : ''}
+                      {(() => {
+                        const k = fila.key
+                        if (k === 'unidades') return fmt(totals.unidades)
+                        if (k === 'ganancia') return fmtPesos(totals.ganancia)
+                        if (k === 'ganancia_usd') return 'US$ ' + fmt(totals.ganancia_usd)
+                        if (k === 'precio_venta_neto') return fmtPesos(totals.revenue_neto / (totals.unidades || 1))
+                        if (k === 'costo') return fmtPesos(totals.costo_total / (totals.unidades || 1))
+                        if (k === 'multiplo') return totals.costo_total > 0 ? (totals.revenue_neto / totals.costo_total).toFixed(2) + 'x' : '—'
+                        if (k === 'rentabilidad_costo') return fmtPct(totals.costo_total > 0 ? (totals.contribucion_neta / totals.costo_total) * 100 : 0)
+                        if (k === 'rentabilidad_venta') return fmtPct(totals.revenue_neto > 0 ? (totals.contribucion_neta / totals.revenue_neto) * 100 : 0)
+                        // All other rows: use totals directly (already multiplied by units)
+                        const totalVal = (totals as Record<string, number>)[k]
+                        if (totalVal !== undefined) return fila.format === 'usd' ? 'US$ ' + fmt(totalVal) : fmtPesos(totalVal)
+                        return ''
+                      })()}
                     </td>
                   </tr>
                 )

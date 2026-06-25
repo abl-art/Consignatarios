@@ -54,7 +54,16 @@ export interface ResultadoData {
     ganancia_usd: number
     revenue_neto: number
     costo_total: number
+    kit: number
+    envio: number
+    licencias_bloqueo: number
     contribucion_bruta: number
+    adquirencia: number
+    incobrables: number
+    sueldos: number
+    otros_costo: number
+    intereses: number
+    impuestos: number
     contribucion_neta: number
   }
 }
@@ -77,7 +86,7 @@ const DEFAULT_CONFIG: ConfigResultado = {
 const EMPTY_RESULT: ResultadoData = {
   productos: [],
   config: DEFAULT_CONFIG,
-  totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, contribucion_bruta: 0, contribucion_neta: 0 },
+  totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 },
 }
 
 // ─── Config CRUD ────────────────────────────────────────────────────────────
@@ -318,25 +327,29 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       return b.unidades - a.unidades
     })
 
-    const totalUnidades = productos.reduce((s, p) => s + p.unidades, 0)
-    const totalGanancia = productos.reduce((s, p) => s + p.ganancia, 0)
-    const totalGananciaUsd = productos.reduce((s, p) => s + p.ganancia_usd, 0)
-    const totalRevenueNeto = productos.reduce((s, p) => s + p.precio_venta_neto * p.unidades, 0)
-    const totalCosto = productos.reduce((s, p) => s + p.costo * p.unidades, 0)
-    const totalCB = productos.reduce((s, p) => s + p.contribucion_bruta * p.unidades, 0)
-    const totalCN = productos.reduce((s, p) => s + p.contribucion_neta * p.unidades, 0)
+    const sum = (fn: (p: ProductoResultado) => number) => productos.reduce((s, p) => s + fn(p), 0)
+    const sumU = (key: keyof ProductoResultado) => productos.reduce((s, p) => s + (p[key] as number) * p.unidades, 0)
 
     return {
       productos,
       config,
       totals: {
-        unidades: totalUnidades,
-        ganancia: totalGanancia,
-        ganancia_usd: totalGananciaUsd,
-        revenue_neto: totalRevenueNeto,
-        costo_total: totalCosto,
-        contribucion_bruta: totalCB,
-        contribucion_neta: totalCN,
+        unidades: sum(p => p.unidades),
+        ganancia: sum(p => p.ganancia),
+        ganancia_usd: sum(p => p.ganancia_usd),
+        revenue_neto: sumU('precio_venta_neto'),
+        costo_total: sumU('costo'),
+        kit: sumU('kit'),
+        envio: sumU('envio'),
+        licencias_bloqueo: sumU('licencias_bloqueo'),
+        contribucion_bruta: sumU('contribucion_bruta'),
+        adquirencia: sumU('adquirencia'),
+        incobrables: sumU('incobrables'),
+        sueldos: sumU('sueldos'),
+        otros_costo: sumU('otros_costo'),
+        intereses: sumU('intereses'),
+        impuestos: sumU('impuestos'),
+        contribucion_neta: sumU('contribucion_neta'),
       },
     }
   } finally {

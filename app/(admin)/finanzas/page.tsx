@@ -54,7 +54,7 @@ export default async function FinanzasPage({
   try {
     resultadoData = await fetchResultadoTienda(resultadoDesde, resultadoHasta)
   } catch {
-    resultadoData = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, contribucion_bruta: 0, contribucion_neta: 0 } }
+    resultadoData = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 } }
   }
 
   // IVA card data
