@@ -255,8 +255,8 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       })
     }
 
-    // Calculate average interest per product
-    const interestByProduct = new Map<string, { total: number; count: number }>()
+    // Calculate total interest per product (sum of all orders)
+    const interestByProduct = new Map<string, number>()
     for (const [, order] of orderInstallments) {
       const costo = costosMap.get(order.display_name) ?? 0
       if (costo <= 0) continue
@@ -265,13 +265,7 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
         order.installments, costo, config.plazo_pago_proveedor, config.tna, order.orderDate
       )
 
-      const existing = interestByProduct.get(order.display_name)
-      if (existing) {
-        existing.total += interes
-        existing.count++
-      } else {
-        interestByProduct.set(order.display_name, { total: interes, count: 1 })
-      }
+      interestByProduct.set(order.display_name, (interestByProduct.get(order.display_name) ?? 0) + interes)
     }
 
     // 3. Build P&L per product
@@ -296,8 +290,9 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       const sueldos = isMain ? config.sueldos : 0
       const otrosCosto = isMain ? config.otros : 0
 
-      const interestData = interestByProduct.get(nombre)
-      const intereses = isMain && interestData ? interestData.total / interestData.count : 0
+      // Intereses: total real de todas las orders de este producto
+      const interesesTotalProducto = isMain ? (interestByProduct.get(nombre) ?? 0) : 0
+      const intereses = unidades > 0 ? interesesTotalProducto / unidades : 0
 
       // Impuestos: IIBB + Com e Ind sobre revenue neto, Débitos y Créditos sobre order amount (con IVA)
       const impuestosRevenue = precioNeto * (config.iibb + config.com_e_ind) / 100
@@ -305,7 +300,9 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       const impuestos = impuestosRevenue + impuestosDebCred
 
       const contribNeta = contribBruta - adquirencia - incobrables - sueldos - otrosCosto - intereses - impuestos
-      const ganancia = Math.round(contribNeta * unidades)
+      // Ganancia: usamos el interés total real, no el promedio × unidades
+      const gananciaCalc = (contribBruta - adquirencia - incobrables - sueldos - otrosCosto - impuestos) * unidades - interesesTotalProducto
+      const ganancia = Math.round(gananciaCalc)
 
       return {
         nombre,
@@ -360,7 +357,7 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
         incobrables: sumU('incobrables'),
         sueldos: sumU('sueldos'),
         otros_costo: sumU('otros_costo'),
-        intereses: sumU('intereses'),
+        intereses: [...interestByProduct.values()].reduce((s, v) => s + v, 0),
         impuestos: sumU('impuestos'),
         contribucion_neta: sumU('contribucion_neta'),
       },
