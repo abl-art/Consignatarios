@@ -3,6 +3,7 @@ import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, f
 import { simularDeuda } from '@/lib/simular-deuda'
 import { fetchPrestamos, fetchMovimientos, getDeudaConfig, fetchInteresesPagadosMes } from '@/lib/actions/deuda'
 import { fetchResultadoTienda } from '@/lib/actions/resultado'
+import { fetchResultadoTerceros } from '@/lib/actions/resultado-terceros'
 import ResultadoTab from './ResultadoTab'
 import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
@@ -51,10 +52,16 @@ export default async function FinanzasPage({
 
   // Resultado runs after to avoid exhausting the connection pool
   let resultadoData: Awaited<ReturnType<typeof fetchResultadoTienda>>
+  let resultadoTerceros: Awaited<ReturnType<typeof fetchResultadoTerceros>>
   try {
     resultadoData = await fetchResultadoTienda(resultadoDesde, resultadoHasta)
   } catch {
     resultadoData = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, unidades_main: 0, unidades_addon: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 } }
+  }
+  try {
+    resultadoTerceros = await fetchResultadoTerceros(resultadoDesde, resultadoHasta)
+  } catch {
+    resultadoTerceros = { merchants: [], config: { ...resultadoData.config, comision_terceros: 23, liquidacion_1_pct: 50, liquidacion_1_dias: 60, liquidacion_2_pct: 50, liquidacion_2_dias: 90 }, totals: { unidades: 0, order_amount_total: 0, revenue_gocuotas: 0, licencias_bloqueo: 0, sueldos: 0, adquirencia: 0, incobrables: 0, intereses: 0, impuestos: 0, contribucion_neta: 0, ganancia: 0, ganancia_usd: 0 } }
   }
 
   // IVA card data
@@ -331,7 +338,7 @@ export default async function FinanzasPage({
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
           { id: 'simulador', label: 'Productos y Simulación', content: <SimuladorTab productos={productosFinancieros} /> },
           { id: 'precios', label: 'Lista de Precios', content: <ListaPreciosTab productos={productosFinancieros} /> },
-          { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} desde={resultadoDesde} hasta={resultadoHasta} /> },
+          { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },
         ]}
       />
     </div>

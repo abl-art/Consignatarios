@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { fetchResultadoTienda, updateConfig, type ResultadoData, type ConfigResultado } from '@/lib/actions/resultado'
+import { fetchResultadoTerceros, type ResultadoTercerosData } from '@/lib/actions/resultado-terceros'
+import ResultadoTercerosTable from './ResultadoTercerosTable'
 
 function fmt(n: number): string { return n.toLocaleString('es-AR') }
 function fmtPesos(n: number): string { return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }
@@ -61,12 +63,14 @@ function formatCell(value: number, format: string, kind: 'main' | 'addon', key: 
 
 interface Props {
   data: ResultadoData
+  dataTerceros: ResultadoTercerosData
   desde: string
   hasta: string
 }
 
-export default function ResultadoTab({ data: initialData, desde: initDesde, hasta: initHasta }: Props) {
+export default function ResultadoTab({ data: initialData, dataTerceros: initialTerceros, desde: initDesde, hasta: initHasta }: Props) {
   const [data, setData] = useState(initialData)
+  const [terceros, setTerceros] = useState(initialTerceros)
   const [desde, setDesde] = useState(initDesde)
   const [hasta, setHasta] = useState(initHasta)
   const [activePreset, setActivePreset] = useState<number | null>(2) // últimos 30 días
@@ -77,7 +81,10 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
 
   function reload(d: string, h: string, presetIdx: number | null) {
     setDesde(d); setHasta(h); setActivePreset(presetIdx)
-    startTransition(async () => { setData(await fetchResultadoTienda(d, h)) })
+    startTransition(async () => {
+      const [r, t] = await Promise.all([fetchResultadoTienda(d, h), fetchResultadoTerceros(d, h)])
+      setData(r); setTerceros(t)
+    })
   }
 
   function handlePreset(idx: number) {
@@ -91,8 +98,10 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
   async function handleConfigChange(clave: string, valor: number) {
     setLocalConfig(prev => ({ ...prev, [clave]: valor }))
     await updateConfig(clave, valor)
-    // Reload data with new config
-    startTransition(async () => { setData(await fetchResultadoTienda(desde, hasta)) })
+    startTransition(async () => {
+      const [r, t] = await Promise.all([fetchResultadoTienda(desde, hasta), fetchResultadoTerceros(desde, hasta)])
+      setData(r); setTerceros(t)
+    })
   }
 
   const { productos, totals } = data
@@ -258,7 +267,10 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
         </div>
       </div>
 
-      {allProducts.length === 0 && (
+      {/* P&L Terceros */}
+      <ResultadoTercerosTable data={terceros} />
+
+      {allProducts.length === 0 && terceros.merchants.length === 0 && (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
           <p className="text-sm text-gray-400">Sin ventas propias en el período seleccionado</p>
         </div>
