@@ -302,8 +302,7 @@ export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
         COUNT(*)::int AS ventas,
         COALESCE(SUM(CASE WHEN o.total_order_amount > 5000000 THEN o.total_order_amount / 100.0 ELSE o.total_order_amount END), 0) AS monto
       FROM gocuotas_orders o
-      JOIN store_orders so ON so.id::text = o.store_order_id
-      WHERE so.status = 'paid'
+      WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
       GROUP BY 1, 2, 3
       ORDER BY 1`

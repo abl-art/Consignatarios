@@ -191,7 +191,10 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
 
   const client = await pool.connect()
   try {
-    // 1. Sales by product (main + addon separate)
+    // IDs propios para filtrar
+    const { CLIENT_IDS_PROPIOS } = await import('@/lib/client-ids')
+
+    // 1. Sales by product (main + addon) — source: gocuotas_orders delivered
     const ventasRes = await client.query<{
       display_name: string; kind: string; units: string; avg_price: string
     }>(`
@@ -200,16 +203,19 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
         oi.kind,
         COUNT(*)::int AS units,
         AVG(oi.unit_price / 100)::numeric AS avg_price
-      FROM store_order_items oi
-      JOIN store_orders so ON so.id = oi.order_id
-      WHERE so.status = 'paid'
-        AND so.created_at >= $1::date AND so.created_at < ($2::date + 1)
+      FROM gocuotas_orders go2
+      JOIN store_orders so ON so.id::text = go2.store_order_id
+      JOIN store_order_items oi ON oi.order_id = so.id
+      WHERE go2.order_delivered_at IS NOT NULL
+        AND go2.order_discarded_at IS NULL
+        AND go2.client_id::text = ANY($3)
+        AND go2.order_created_at >= $1::date AND go2.order_created_at < ($2::date + 1)
         AND oi.display_name NOT ILIKE '%test%' AND oi.display_name NOT ILIKE '%prueba%'
       GROUP BY oi.display_name, oi.kind
       ORDER BY units DESC
-    `, [desde, hasta])
+    `, [desde, hasta, CLIENT_IDS_PROPIOS])
 
-    // 2. Interest: get installments for all paid orders in period
+    // 2. Interest: get installments for delivered orders in period
     const installmentsRes = await client.query<{
       store_order_id: string; display_name: string; installment_number: number
       due_date: Date | string; amount: string; order_date: Date | string
@@ -220,15 +226,17 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
         gi.installment_number,
         gi.installment_due_at AS due_date,
         gi.installment_amount AS amount,
-        so.created_at AS order_date
+        go2.order_created_at AS order_date
       FROM gocuotas_installments gi
       JOIN gocuotas_orders go2 ON go2.order_id = gi.order_id
       JOIN store_orders so ON so.id::text = go2.store_order_id
       JOIN store_order_items oi ON oi.order_id = so.id AND oi.kind = 'main'
-      WHERE so.status = 'paid'
-        AND so.created_at >= $1::date AND so.created_at < ($2::date + 1)
+      WHERE go2.order_delivered_at IS NOT NULL
+        AND go2.order_discarded_at IS NULL
+        AND go2.client_id::text = ANY($3)
+        AND go2.order_created_at >= $1::date AND go2.order_created_at < ($2::date + 1)
       ORDER BY go2.store_order_id, gi.installment_number
-    `, [desde, hasta])
+    `, [desde, hasta, CLIENT_IDS_PROPIOS])
 
     // Group installments by order and calculate interest per order
     const orderInstallments = new Map<string, { display_name: string; installments: InstallmentRow[]; orderDate: Date }>()
