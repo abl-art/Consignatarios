@@ -203,7 +203,6 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       FROM store_order_items oi
       JOIN store_orders so ON so.id = oi.order_id
       WHERE so.status = 'paid'
-        AND so.attributed_partner_id IS NULL
         AND so.created_at >= $1::date AND so.created_at < ($2::date + 1)
         AND oi.display_name NOT ILIKE '%test%' AND oi.display_name NOT ILIKE '%prueba%'
       GROUP BY oi.display_name, oi.kind
@@ -227,7 +226,6 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       JOIN store_orders so ON so.id::text = go2.store_order_id
       JOIN store_order_items oi ON oi.order_id = so.id AND oi.kind = 'main'
       WHERE so.status = 'paid'
-        AND so.attributed_partner_id IS NULL
         AND so.created_at >= $1::date AND so.created_at < ($2::date + 1)
       ORDER BY go2.store_order_id, gi.installment_number
     `, [desde, hasta])
