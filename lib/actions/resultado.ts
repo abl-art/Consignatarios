@@ -284,16 +284,19 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       const licenciasBloqueo = isMain ? config.licencias_bloqueo : 0
       const contribBruta = precioNeto - costo - kit - envio - licenciasBloqueo
 
-      const adquirencia = precioNeto * config.adquirencia / 100
-      const incobrables = precioNeto * config.incobrables / 100
+      // Adquirencia e incobrables sobre order amount (con IVA)
+      const adquirencia = precioVentaBruto * config.adquirencia / 100
+      const incobrables = precioVentaBruto * config.incobrables / 100
       const sueldos = isMain ? config.sueldos : 0
       const otrosCosto = isMain ? config.otros : 0
 
       const interestData = interestByProduct.get(nombre)
       const intereses = isMain && interestData ? interestData.total / interestData.count : 0
 
-      // Impuestos: IIBB + Com e Ind + Débitos y Créditos (1.2%)
-      const impuestos = precioNeto * (config.iibb + config.com_e_ind + 1.2) / 100
+      // Impuestos: IIBB + Com e Ind sobre revenue neto, Débitos y Créditos sobre order amount (con IVA)
+      const impuestosRevenue = precioNeto * (config.iibb + config.com_e_ind) / 100
+      const impuestosDebCred = precioVentaBruto * 1.2 / 100
+      const impuestos = impuestosRevenue + impuestosDebCred
 
       const contribNeta = contribBruta - adquirencia - incobrables - sueldos - otrosCosto - intereses - impuestos
       const ganancia = Math.round(contribNeta * unidades)
