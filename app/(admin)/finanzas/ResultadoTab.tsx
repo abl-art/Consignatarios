@@ -72,6 +72,7 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
   const [activePreset, setActivePreset] = useState<number | null>(2) // últimos 30 días
   const [isPending, startTransition] = useTransition()
   const [showConfig, setShowConfig] = useState(false)
+  const [showModelos, setShowModelos] = useState(false)
   const [localConfig, setLocalConfig] = useState<ConfigResultado>(initialData.config)
 
   function reload(d: string, h: string, presetIdx: number | null) {
@@ -189,21 +190,28 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
 
       {/* P&L Table */}
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700">Estado de Resultado por producto</h3>
-        </div>
+        <button onClick={() => setShowModelos(!showModelos)}
+          className="w-full px-5 py-4 border-b border-gray-100 flex items-center justify-between hover:bg-gray-50 transition-colors">
+          <h3 className="text-sm font-semibold text-gray-700">Estado de Resultado — Venta Propia</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">{showModelos ? 'Por modelo' : 'Total'}</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showModelos ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 sticky left-0 bg-gray-50 min-w-[180px]">Concepto</th>
-                {allProducts.map((p, i) => (
+                {showModelos && allProducts.map((p, i) => (
                   <th key={i} className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 min-w-[110px]">
                     <span className="block">{p.nombre}</span>
                     {p.kind === 'addon' && <span className="text-[10px] text-purple-500 font-normal">(addon)</span>}
                   </th>
                 ))}
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 min-w-[110px] bg-gray-100">Total</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 min-w-[120px] bg-gray-100">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -214,7 +222,7 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
                     <td className={`px-4 py-2 text-xs sticky left-0 ${fila.bold ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600'} ${isGanancia ? 'font-bold text-emerald-800 bg-emerald-50' : ''}`}>
                       {fila.label}
                     </td>
-                    {allProducts.map((p, i) => {
+                    {showModelos && allProducts.map((p, i) => {
                       const val = p[fila.key] as number
                       return (
                         <td key={i} className={`px-3 py-2 text-right font-mono text-xs ${fila.bold ? 'font-semibold' : ''} ${isGanancia ? 'font-bold text-emerald-700' : ''} ${val < 0 ? 'text-red-500' : ''}`}>
