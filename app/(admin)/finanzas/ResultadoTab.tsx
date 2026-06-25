@@ -236,8 +236,8 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
                         if (k === 'unidades') return fmt(totals.unidades)
                         if (k === 'ganancia') return fmtPesos(totals.ganancia)
                         if (k === 'ganancia_usd') return 'US$ ' + fmt(totals.ganancia_usd)
-                        if (k === 'precio_venta_neto') return fmtPesos(totals.revenue_neto / (totals.unidades || 1))
-                        if (k === 'costo') return fmtPesos(totals.costo_total / (totals.unidades || 1))
+                        if (k === 'precio_venta_neto') return fmtPesos(totals.revenue_neto)
+                        if (k === 'costo') return fmtPesos(totals.costo_total)
                         if (k === 'multiplo') return totals.costo_total > 0 ? (totals.revenue_neto / totals.costo_total).toFixed(2) + 'x' : '—'
                         if (k === 'rentabilidad_costo') return fmtPct(totals.costo_total > 0 ? (totals.contribucion_neta / totals.costo_total) * 100 : 0)
                         if (k === 'rentabilidad_venta') return fmtPct(totals.revenue_neto > 0 ? (totals.contribucion_neta / totals.revenue_neto) * 100 : 0)
