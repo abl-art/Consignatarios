@@ -50,6 +50,8 @@ export interface ResultadoData {
   config: ConfigResultado
   totals: {
     unidades: number
+    unidades_main: number
+    unidades_addon: number
     ganancia: number
     ganancia_usd: number
     revenue_neto: number
@@ -86,7 +88,7 @@ const DEFAULT_CONFIG: ConfigResultado = {
 const EMPTY_RESULT: ResultadoData = {
   productos: [],
   config: DEFAULT_CONFIG,
-  totals: { unidades: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 },
+  totals: { unidades: 0, unidades_main: 0, unidades_addon: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 },
 }
 
 // ─── Config CRUD ────────────────────────────────────────────────────────────
@@ -335,6 +337,8 @@ export async function fetchResultadoTienda(desde: string, hasta: string): Promis
       config,
       totals: {
         unidades: sum(p => p.unidades),
+        unidades_main: productos.filter(p => p.kind === 'main').reduce((s, p) => s + p.unidades, 0),
+        unidades_addon: productos.filter(p => p.kind === 'addon').reduce((s, p) => s + p.unidades, 0),
         ganancia: sum(p => p.ganancia),
         ganancia_usd: sum(p => p.ganancia_usd),
         revenue_neto: sumU('precio_venta_neto'),

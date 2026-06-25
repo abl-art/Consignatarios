@@ -233,7 +233,7 @@ export default function ResultadoTab({ data: initialData, desde: initDesde, hast
                     <td className={`px-3 py-2 text-right font-mono text-xs font-semibold bg-gray-100 ${isGanancia ? 'text-emerald-700 font-bold' : ''}`}>
                       {(() => {
                         const k = fila.key
-                        if (k === 'unidades') return fmt(totals.unidades)
+                        if (k === 'unidades') return `${fmt(totals.unidades)} (${fmt(totals.unidades_main)} tel. + ${fmt(totals.unidades_addon)} acc.)`
                         if (k === 'ganancia') return fmtPesos(totals.ganancia)
                         if (k === 'ganancia_usd') return 'US$ ' + fmt(totals.ganancia_usd)
                         if (k === 'precio_venta_neto') return fmtPesos(totals.revenue_neto)
