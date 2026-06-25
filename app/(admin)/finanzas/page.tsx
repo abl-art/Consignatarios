@@ -1,7 +1,9 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis } from '@/lib/actions/finanzas'
+import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis, calcularIVAMensual } from '@/lib/actions/finanzas'
 import { simularDeuda } from '@/lib/simular-deuda'
 import { fetchPrestamos, fetchMovimientos, getDeudaConfig, fetchInteresesPagadosMes } from '@/lib/actions/deuda'
+import { fetchResultadoTienda } from '@/lib/actions/resultado'
+import ResultadoTab from './ResultadoTab'
 import { CargarAsistenciaButton, CargarEgresoButton, ProyeccionButton } from './FinanzasActions'
 import FinanzasManual from './FinanzasManual'
 import FinanzasTabs from './FinanzasTabs'
@@ -26,7 +28,10 @@ export default async function FinanzasPage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const mesSeleccionado = searchParams.mes || defaultMes
 
-  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
+  const resultadoHasta = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const resultadoDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros, ivaMensual, resultadoData] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -41,7 +46,26 @@ export default async function FinanzasPage({
     getDeudaConfig(),
     fetchInteresesPagadosMes(),
     fetchProductos(),
+    calcularIVAMensual().catch(() => [] as Awaited<ReturnType<typeof calcularIVAMensual>>),
+    fetchResultadoTienda(resultadoDesde, resultadoHasta),
   ])
+
+  // IVA card data
+  const hoyMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const ivaMesActual = ivaMensual.find((m: { periodo: string }) => m.periodo === hoyMes)
+  const ivaAcumulado = ivaMensual
+    .filter((m: { periodo: string }) => m.periodo <= hoyMes)
+    .reduce((s: number, m: { saldo: number }) => s + m.saldo, 0)
+  const debitoPromedio = (() => {
+    const ultimos3 = ivaMensual
+      .filter((m: { periodo: string; debitoFiscal: number }) => m.periodo <= hoyMes && m.debitoFiscal > 0)
+      .slice(-3)
+    if (ultimos3.length === 0) return 0
+    return ultimos3.reduce((s: number, m: { debitoFiscal: number }) => s + m.debitoFiscal, 0) / ultimos3.length
+  })()
+  const mesesFinanciamiento = debitoPromedio > 0 && ivaAcumulado > 0
+    ? Math.round(ivaAcumulado / debitoPromedio * 10) / 10
+    : 0
 
   // Simular deuda sobre el flujo base
   const { flujo: allFlujo, alertas: deudaAlertas, diasEstres } = simularDeuda(allFlujoBase, prestamos, deudaConfig)
@@ -124,6 +148,35 @@ export default async function FinanzasPage({
         </div>
       </div>
 
+      {/* IVA card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+          <p className="text-xs text-violet-600 mb-0.5">Saldo IVA acumulado</p>
+          <p className={`text-xl font-bold ${ivaAcumulado >= 0 ? 'text-violet-700' : 'text-red-700'}`}>
+            {formatearMoneda(Math.abs(ivaAcumulado))}
+          </p>
+          <p className="text-xs text-violet-500 mt-0.5">{ivaAcumulado >= 0 ? 'A favor' : 'A pagar'}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Mes actual</p>
+          <div className="flex items-baseline gap-3">
+            <div>
+              <p className="text-xs text-green-600">Credito fiscal</p>
+              <p className="text-sm font-bold text-green-700">{formatearMoneda(ivaMesActual?.creditoFiscal ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-red-600">Debito fiscal</p>
+              <p className="text-sm font-bold text-red-700">{formatearMoneda(ivaMesActual?.debitoFiscal ?? 0)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Financiamiento IVA</p>
+          <p className="text-xl font-bold text-violet-700">{mesesFinanciamiento} meses</p>
+          <p className="text-xs text-gray-400 mt-0.5">Estimado a debito promedio mensual</p>
+        </div>
+      </div>
+
       {/* Cash balance chart */}
       <CashBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} />
       <DeudaBalanceChart data={flujo.map(r => ({ cash_date: r.cash_date, cash_balance: r.cash_balance }))} prestamos={prestamos} limite={deudaConfig.limite} />
@@ -182,6 +235,7 @@ export default async function FinanzasPage({
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Otr</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">V3</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">DCp</th>
+                  <th className="text-right px-0.5 py-1.5 font-semibold text-violet-600">IVA</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Neto</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Saldo</th>
                 </tr>
@@ -208,6 +262,7 @@ export default async function FinanzasPage({
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_otros)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_vta3ero)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_dev_capital)}</td>
+                    <td className={`px-0.5 py-0.5 text-right font-semibold ${row.iva > 0 ? 'text-violet-600' : row.iva < 0 ? 'text-violet-700 bg-violet-50' : ''}`}>{fmtCompact(row.iva)}</td>
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.net_flow)}</td>
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.cash_balance)}</td>
                   </tr>
@@ -269,6 +324,7 @@ export default async function FinanzasPage({
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
           { id: 'simulador', label: 'Productos y Simulación', content: <SimuladorTab productos={productosFinancieros} /> },
           { id: 'precios', label: 'Lista de Precios', content: <ListaPreciosTab productos={productosFinancieros} /> },
+          { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} desde={resultadoDesde} hasta={resultadoHasta} /> },
         ]}
       />
     </div>
