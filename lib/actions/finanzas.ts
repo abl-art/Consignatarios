@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
 import { SQL_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
+import { getPedidos, getMejorPrecio } from './compras'
+import { buscarPrecio, diaHabilSiguiente } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -416,6 +418,76 @@ function generateProjection(baseDiario: number, endDateStr: string): { cash_date
   }
 
   return rows
+}
+
+// ---------------------------------------------------------------------------
+// IVA: credito y debito fiscal mensual
+// ---------------------------------------------------------------------------
+
+export interface IVAMensual {
+  periodo: string // YYYY-MM
+  creditoFiscal: number
+  debitoFiscal: number
+  saldo: number // credito - debito (positivo = a favor)
+}
+
+export async function calcularIVAMensual(): Promise<IVAMensual[]> {
+  const pedidos = await getPedidos()
+  const precios = await getMejorPrecio()
+
+  // Credito fiscal: agrupar por mes de entregadoAt (desde junio 2026 - cambio de naturaleza juridica)
+  const IVA_DESDE = '2026-06'
+  const creditoPorMes: Record<string, number> = {}
+  for (const p of pedidos) {
+    if (!p.entregadoAt) continue
+    const mes = p.entregadoAt.slice(0, 7) // YYYY-MM
+    if (mes < IVA_DESDE) continue
+    if (!creditoPorMes[mes]) creditoPorMes[mes] = 0
+    for (const item of p.items) {
+      const precioUnit = buscarPrecio(precios, item.productoNombre)
+      creditoPorMes[mes] += item.cantidad * precioUnit * 0.21
+    }
+  }
+
+  // Debito fiscal: cuotas vencidas por mes desde GOcelular
+  const pool = getPool()
+  const debitoPorMes: Record<string, number> = {}
+  if (pool) {
+    try {
+      const client = await pool.connect()
+      try {
+        const res = await client.query<{ mes: string; debito: string }>(`
+          SELECT
+            to_char(i.installment_due_at, 'YYYY-MM') AS mes,
+            SUM(i.installment_amount - i.installment_amount / 1.21)::text AS debito
+          FROM gocuotas_installments i
+          JOIN gocuotas_orders go ON go.order_id::text = i.order_id::text
+          WHERE go.order_discarded_at IS NULL
+            AND i.installment_due_at IS NOT NULL
+            AND go.order_created_at >= '2026-06-01'
+          GROUP BY mes
+          ORDER BY mes
+        `)
+        for (const r of res.rows) {
+          debitoPorMes[r.mes] = Number(r.debito)
+        }
+      } finally {
+        client.release()
+      }
+    } catch (e) {
+      console.error('Error fetching IVA debito fiscal:', e)
+    }
+  }
+
+  // Combinar periodos
+  const allMeses = new Set([...Object.keys(creditoPorMes), ...Object.keys(debitoPorMes)])
+  const result: IVAMensual[] = []
+  for (const mes of allMeses) {
+    const credito = creditoPorMes[mes] ?? 0
+    const debito = debitoPorMes[mes] ?? 0
+    result.push({ periodo: mes, creditoFiscal: credito, debitoFiscal: debito, saldo: credito - debito })
+  }
+  return result.sort((a, b) => a.periodo.localeCompare(b.periodo))
 }
 
 // ---- Main aggregation -----------------------------------------------------

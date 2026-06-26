@@ -118,9 +118,10 @@ export function simularDeuda(
     }
   }
 
-  // Alerta de límite de línea
+  // Alerta de límite de línea (solo préstamos ya tomados y no vencidos)
+  const hoy = new Date().toISOString().slice(0, 10)
   const deudaVigente = prestamos
-    .filter(p => p.estado === 'activo')
+    .filter(p => p.estado === 'activo' && p.fecha_toma <= hoy && (!p.fecha_vencimiento || p.fecha_vencimiento > hoy))
     .reduce((sum, p) => sum + p.saldo_capital, 0)
   const usoPct = config.limite > 0 ? (deudaVigente / config.limite) * 100 : 0
   if (usoPct >= 80) {

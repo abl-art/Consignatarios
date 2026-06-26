@@ -202,7 +202,6 @@ export default async function FinanzasPage({
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Otr</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">V3</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">DCp</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-violet-600">IVA</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Neto</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Saldo</th>
                 </tr>
@@ -229,7 +228,6 @@ export default async function FinanzasPage({
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_otros)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_vta3ero)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_dev_capital)}</td>
-                    <td className={`px-0.5 py-0.5 text-right font-semibold ${row.iva > 0 ? 'text-violet-600' : row.iva < 0 ? 'text-violet-700 bg-violet-50' : ''}`}>{fmtCompact(row.iva)}</td>
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.net_flow)}</td>
                     <td className={`px-0.5 py-0.5 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.cash_balance)}</td>
                   </tr>
