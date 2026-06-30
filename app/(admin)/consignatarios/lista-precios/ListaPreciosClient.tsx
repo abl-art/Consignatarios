@@ -15,6 +15,7 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
   const [mup, setMup] = useState(mupInicial)
   const [savingMup, startSavingMup] = useTransition()
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [mostrarOcultos, setMostrarOcultos] = useState(false)
   const router = useRouter()
 
   function handleMupChange(value: number) {
@@ -80,6 +81,14 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
           <span className="text-sm text-gray-600">%</span>
         </div>
         {savingMup && <span className="text-xs text-gray-400">Guardando...</span>}
+        <div className="ml-auto">
+          <button
+            onClick={() => setMostrarOcultos(!mostrarOcultos)}
+            className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${mostrarOcultos ? 'bg-magenta-50 text-magenta-700' : 'text-gray-500 hover:bg-gray-100'}`}
+          >
+            {mostrarOcultos ? 'Ocultar inactivos' : 'Mostrar inactivos'}
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -96,7 +105,7 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {productos.map((p) => {
+            {productos.filter(p => mostrarOcultos || !p.oculto_lista_precios).map((p) => {
               const precioVenta = calcPrecioVenta(p.mejor_precio)
               const iva = calcIva(precioVenta)
               const precioConIva = precioVenta + iva
@@ -107,7 +116,7 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
                   key={p.id}
                   className={`hover:bg-gray-50 transition-colors ${oculto ? 'opacity-40' : ''}`}
                 >
-                  <td className={`px-6 py-3 font-medium text-gray-900 ${oculto ? 'line-through' : ''}`}>
+                  <td className="px-6 py-3 font-medium text-gray-900">
                     {p.nombre}
                   </td>
                   <td className="px-6 py-3 text-right text-gray-700 tabular-nums">
