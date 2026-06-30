@@ -105,7 +105,7 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {productos.filter(p => mostrarOcultos || !p.oculto_lista_precios).map((p) => {
+            {[...productos].filter(p => mostrarOcultos || !p.oculto_lista_precios).sort((a, b) => a.mejor_precio - b.mejor_precio).map((p) => {
               const precioVenta = calcPrecioVenta(p.mejor_precio)
               const iva = calcIva(precioVenta)
               const precioConIva = precioVenta + iva
