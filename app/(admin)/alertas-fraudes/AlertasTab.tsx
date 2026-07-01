@@ -49,6 +49,14 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
   const [expandedAsigMerchant, setExpandedAsigMerchant] = useState<string | null>(null)
   const [openAlert, setOpenAlert] = useState<number | null>(null)
 
+  // Filtros de fecha para sin IMEI
+  const currentDate = new Date()
+  const [sinImeiMes, setSinImeiMes] = useState<string>(String(currentDate.getMonth() + 1))
+  const [sinImeiAnio, setSinImeiAnio] = useState<string>(String(currentDate.getFullYear()))
+  const [sinImeiDesde, setSinImeiDesde] = useState('')
+  const [sinImeiHasta, setSinImeiHasta] = useState('')
+  const [sinImeiModoFecha, setSinImeiModoFecha] = useState<'mes' | 'personalizado'>('mes')
+
   function toggleAlert(n: number) { setOpenAlert(prev => prev === n ? null : n) }
 
   const sucPorMerchant = useMemo(() => {
@@ -90,10 +98,36 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
     }).sort((a, b) => b.totalOrdenes - a.totalOrdenes)
   }, [cuota1])
 
+  // Sin IMEI: filtrar ordenes por fecha, luego agrupar por merchant
+  const sinImeiFiltrado = useMemo(() => {
+    let desde: string, hasta: string
+    if (sinImeiModoFecha === 'mes' && sinImeiMes && sinImeiAnio) {
+      const m = sinImeiMes.padStart(2, '0')
+      desde = `${sinImeiAnio}-${m}-01`
+      const lastDay = new Date(Number(sinImeiAnio), Number(sinImeiMes), 0).getDate()
+      hasta = `${sinImeiAnio}-${m}-${String(lastDay).padStart(2, '0')}`
+    } else if (sinImeiModoFecha === 'personalizado') {
+      desde = sinImeiDesde
+      hasta = sinImeiHasta
+    } else {
+      desde = ''
+      hasta = ''
+    }
+
+    return sinImei.map(t => {
+      const ordenesFilt = t.ordenes.filter(o => {
+        if (desde && o.fecha < desde) return false
+        if (hasta && o.fecha > hasta) return false
+        return true
+      })
+      return { ...t, ordenes: ordenesFilt, sinImei: ordenesFilt.length, total: ordenesFilt.length }
+    }).filter(t => t.ordenes.length > 0)
+  }, [sinImei, sinImeiModoFecha, sinImeiMes, sinImeiAnio, sinImeiDesde, sinImeiHasta])
+
   // Sin IMEI agrupado por merchant
   const sinImeiPorMerchant = useMemo(() => {
     const map = new Map<string, AlertaSinImeiTienda[]>()
-    for (const t of sinImei) { const arr = map.get(t.clientId) ?? []; arr.push(t); map.set(t.clientId, arr) }
+    for (const t of sinImeiFiltrado) { const arr = map.get(t.clientId) ?? []; arr.push(t); map.set(t.clientId, arr) }
     return Array.from(map.entries()).map(([clientId, stores]) => ({
       clientId, name: merchantName(clientId),
       stores: stores.sort((a, b) => b.sinImei - a.sinImei),
@@ -101,9 +135,9 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
       totalOrdenes: stores.reduce((s, t) => s + t.total, 0),
       totalMonto: stores.reduce((s, t) => s + t.ordenes.reduce((s2, o) => s2 + o.monto, 0), 0),
     })).sort((a, b) => b.totalSinImei - a.totalSinImei)
-  }, [sinImei])
+  }, [sinImeiFiltrado])
 
-  const totalSinImei = sinImei.reduce((s, t) => s + t.sinImei, 0)
+  const totalSinImei = sinImeiFiltrado.reduce((s, t) => s + t.sinImei, 0)
 
   return (
     <div className="space-y-2">
@@ -417,7 +451,51 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
           </div>
           <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium shrink-0">{totalSinImei}</span>
         </button>
-        {openAlert === 5 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
+        {openAlert === 5 && <div className="border-t border-gray-100">
+          {/* Filtros de fecha */}
+          <div className="px-4 py-3 bg-gray-50/60 border-b border-gray-100 flex flex-wrap items-center gap-3">
+            <select value={sinImeiModoFecha} onChange={e => setSinImeiModoFecha(e.target.value as 'mes' | 'personalizado')}
+              className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white">
+              <option value="mes">Por mes</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+            {sinImeiModoFecha === 'mes' ? (
+              <>
+                <select value={sinImeiMes} onChange={e => setSinImeiMes(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white">
+                  <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+                  <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+                  <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+                  <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+                </select>
+                <select value={sinImeiAnio} onChange={e => setSinImeiAnio(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white">
+                  {Array.from({ length: 3 }, (_, i) => currentDate.getFullYear() - i).map(y => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Desde</label>
+                  <input type="date" value={sinImeiDesde} onChange={e => setSinImeiDesde(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Hasta</label>
+                  <input type="date" value={sinImeiHasta} onChange={e => setSinImeiHasta(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs" />
+                </div>
+                {(sinImeiDesde || sinImeiHasta) && (
+                  <button onClick={() => { setSinImeiDesde(''); setSinImeiHasta('') }}
+                    className="text-xs text-gray-400 hover:text-gray-600">Limpiar</button>
+                )}
+              </>
+            )}
+            <span className="ml-auto text-xs text-gray-500">{totalSinImei} ordenes · {formatearMoneda(sinImeiPorMerchant.reduce((s, m) => s + m.totalMonto, 0))}</span>
+          </div>
+          <div className="overflow-auto max-h-[500px]">
           {sinImeiPorMerchant.length === 0 ? (
             <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
           ) : (
@@ -479,7 +557,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
               </tbody>
             </table>
           )}
-        </div>}
+        </div></div>}
       </div>
       {/* ── Alerta 7: Tiempo hasta asignación IMEI ── */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

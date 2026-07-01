@@ -15,8 +15,41 @@ export default function SinImeiClient({ tiendas, ordenesConImei, merchant }: Pro
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
 
-  const totalSinImei = tiendas.reduce((s, t) => s + t.sinImei, 0)
-  const totalMonto = tiendas.reduce((s, t) => s + t.ordenes.reduce((s2, o) => s2 + o.monto, 0), 0)
+  // Filtros de fecha para sin IMEI
+  const currentDate = new Date()
+  const [sinImeiMes, setSinImeiMes] = useState<string>(String(currentDate.getMonth() + 1))
+  const [sinImeiAnio, setSinImeiAnio] = useState<string>(String(currentDate.getFullYear()))
+  const [sinImeiDesde, setSinImeiDesde] = useState('')
+  const [sinImeiHasta, setSinImeiHasta] = useState('')
+  const [sinImeiModoFecha, setSinImeiModoFecha] = useState<'mes' | 'personalizado'>('mes')
+
+  const tiendasFiltradas = useMemo(() => {
+    let desdeFiltro: string, hastaFiltro: string
+    if (sinImeiModoFecha === 'mes' && sinImeiMes && sinImeiAnio) {
+      const m = sinImeiMes.padStart(2, '0')
+      desdeFiltro = `${sinImeiAnio}-${m}-01`
+      const lastDay = new Date(Number(sinImeiAnio), Number(sinImeiMes), 0).getDate()
+      hastaFiltro = `${sinImeiAnio}-${m}-${String(lastDay).padStart(2, '0')}`
+    } else if (sinImeiModoFecha === 'personalizado') {
+      desdeFiltro = sinImeiDesde
+      hastaFiltro = sinImeiHasta
+    } else {
+      desdeFiltro = ''
+      hastaFiltro = ''
+    }
+
+    return tiendas.map(t => {
+      const ordenesFilt = t.ordenes.filter(o => {
+        if (desdeFiltro && o.fecha < desdeFiltro) return false
+        if (hastaFiltro && o.fecha > hastaFiltro) return false
+        return true
+      })
+      return { ...t, ordenes: ordenesFilt, sinImei: ordenesFilt.length, total: ordenesFilt.length }
+    }).filter(t => t.ordenes.length > 0)
+  }, [tiendas, sinImeiModoFecha, sinImeiMes, sinImeiAnio, sinImeiDesde, sinImeiHasta])
+
+  const totalSinImei = tiendasFiltradas.reduce((s, t) => s + t.sinImei, 0)
+  const totalMonto = tiendasFiltradas.reduce((s, t) => s + t.ordenes.reduce((s2, o) => s2 + o.monto, 0), 0)
 
   const ordenesFiltradas = useMemo(() => {
     let filtered = ordenesConImei
@@ -58,11 +91,57 @@ export default function SinImeiClient({ tiendas, ordenesConImei, merchant }: Pro
 
       {tab === 'sin-imei' && (
         <>
+          {/* Filtros de fecha */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <select value={sinImeiModoFecha} onChange={e => setSinImeiModoFecha(e.target.value as 'mes' | 'personalizado')}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                <option value="mes">Por mes</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+              {sinImeiModoFecha === 'mes' ? (
+                <>
+                  <select value={sinImeiMes} onChange={e => setSinImeiMes(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                    <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+                    <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+                    <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+                    <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+                  </select>
+                  <select value={sinImeiAnio} onChange={e => setSinImeiAnio(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                    {Array.from({ length: 3 }, (_, i) => currentDate.getFullYear() - i).map(y => (
+                      <option key={y} value={String(y)}>{y}</option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Desde</label>
+                    <input type="date" value={sinImeiDesde} onChange={e => setSinImeiDesde(e.target.value)}
+                      className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Hasta</label>
+                    <input type="date" value={sinImeiHasta} onChange={e => setSinImeiHasta(e.target.value)}
+                      className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                  {(sinImeiDesde || sinImeiHasta) && (
+                    <button onClick={() => { setSinImeiDesde(''); setSinImeiHasta('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>
+                  )}
+                </>
+              )}
+              <span className="ml-auto text-sm text-gray-500">{totalSinImei} ordenes · {formatearMoneda(totalMonto)}</span>
+            </div>
+          </div>
+
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-500 mb-1">Tiendas afectadas</p>
-              <p className="text-2xl font-bold text-gray-900">{tiendas.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{tiendasFiltradas.length}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-500 mb-1">Ordenes sin IMEI</p>
@@ -78,13 +157,13 @@ export default function SinImeiClient({ tiendas, ordenesConImei, merchant }: Pro
             </div>
           </div>
 
-          {tiendas.length === 0 ? (
+          {tiendasFiltradas.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-              <p className="text-green-700 text-sm font-medium">Sin ordenes pendientes de IMEI</p>
+              <p className="text-gray-400 text-sm">Sin ordenes en el periodo seleccionado</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {tiendas.map(t => (
+              {tiendasFiltradas.map(t => (
                 <div key={t.storeName} className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
                   <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
                     <h2 className="font-semibold text-gray-900 text-sm">{t.storeName}</h2>
