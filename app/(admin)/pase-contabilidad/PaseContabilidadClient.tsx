@@ -217,6 +217,7 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
                             type="checkbox"
                             checked={seleccion.has(p.id)}
                             onChange={() => toggleSeleccion(p.id)}
+                            onClick={e => e.stopPropagation()}
                             className="w-4 h-4 rounded border-gray-300 text-blue-600"
                           />
                           <div>
@@ -264,6 +265,7 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
                             type="checkbox"
                             checked={seleccion.has(p.id)}
                             onChange={() => toggleSeleccion(p.id)}
+                            onClick={e => e.stopPropagation()}
                             className="w-4 h-4 rounded border-gray-300 text-amber-600"
                           />
                           <div>
