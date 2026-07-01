@@ -31,14 +31,15 @@ export const SMARTWATCHES_CONFIG: CategoriaConfig = {
 
 export const PARLANTES_CONFIG: CategoriaConfig = {
   categoria: 'parlantes',
-  nombreUnificado: 'Parlante Xiaomi 2 Bluetooth',
+  nombreUnificado: 'Parlantes',
   variants: [
     'parlante xiaomi 2 bluetooth',
     'xiaomi speaker 2 bluetooth',
     'mi speaker 2 bluetooth',
     'parlante bluetooth mi compact speaker 2',
+    'jbl go essential',
   ],
-  keywords: ['speaker', 'parlante', 'bocina', 'altavoz'],
+  keywords: ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl'],
 }
 
 export const AURICULARES_CONFIG: CategoriaConfig = {
