@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { formatearMoneda } from '@/lib/utils'
-import { fetchReporteContabilidad, type ReporteContabilidad } from '@/lib/actions/pase-contabilidad'
+import { fetchReporteContabilidad, fetchPedidosEnTransito, guardarTransitoSeleccion, type ReporteContabilidad, type PedidoTransito } from '@/lib/actions/pase-contabilidad'
 
 interface Props {
   periodos: string[]
@@ -20,12 +20,56 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
   const [reporte, setReporte] = useState<ReporteContabilidad | null>(reporteInicial)
   const [pending, startTransition] = useTransition()
 
+  const [pedidosTransito, setPedidosTransito] = useState<PedidoTransito[]>([])
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [guardandoTransito, setGuardandoTransito] = useState(false)
+  const [transitoAbierto, setTransitoAbierto] = useState(false)
+
+  useEffect(() => {
+    if (periodo) {
+      fetchPedidosEnTransito(periodo).then(t => {
+        setPedidosTransito(t)
+        setSeleccion(new Set(t.filter(pt => pt.seleccionado).map(pt => pt.id)))
+      })
+    }
+  }, [periodo])
+
   function handleChangePeriodo(p: string) {
     setPeriodo(p)
+    setTransitoAbierto(false)
     startTransition(async () => {
       const r = await fetchReporteContabilidad(p)
       setReporte(r)
     })
+  }
+
+  function toggleSeleccion(id: string) {
+    setSeleccion(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleGuardarTransito() {
+    setGuardandoTransito(true)
+    const seleccionados = pedidosTransito
+      .filter(p => seleccion.has(p.id))
+      .map(p => ({
+        id: p.id,
+        categoria: p.categoria,
+        proveedor: p.proveedorNombre,
+        items: p.items,
+        unidades: p.unidades,
+        valuacion: p.valuacion,
+      }))
+    await guardarTransitoSeleccion(periodo, seleccionados)
+    const r = await fetchReporteContabilidad(periodo)
+    setReporte(r)
+    // Actualizar estado de seleccion en pedidos
+    setPedidosTransito(prev => prev.map(p => ({ ...p, seleccionado: seleccion.has(p.id) })))
+    setGuardandoTransito(false)
   }
 
   return (
@@ -74,8 +118,17 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {reporte.lineas.map(l => (
-                  <tr key={l.categoria} className={l.estado !== 'ok' ? 'bg-amber-50/50' : 'hover:bg-gray-50'}>
-                    <td className="px-6 py-3 font-medium text-gray-900">{l.categoria}</td>
+                  <tr key={l.categoria} className={
+                    l.categoria.includes('En transito')
+                      ? 'bg-blue-50/50 hover:bg-blue-50'
+                      : l.estado !== 'ok' ? 'bg-amber-50/50' : 'hover:bg-gray-50'
+                  }>
+                    <td className="px-6 py-3 font-medium text-gray-900">
+                      {l.categoria.includes('En transito') && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-blue-400 mr-2" />
+                      )}
+                      {l.categoria}
+                    </td>
                     <td className="px-6 py-3 text-right text-blue-600 font-bold">
                       {l.stockFinal !== null ? l.stockFinal : '—'}
                     </td>
@@ -124,6 +177,132 @@ export default function PaseContabilidadClient({ periodos, reporteInicial }: Pro
           {!reporte.completo && (
             <p className="text-xs text-gray-400 mt-2">El PDF incluira solo las categorias con datos completos.</p>
           )}
+
+          {/* Pedidos en transito y recibidos sin ingreso */}
+          {pedidosTransito.length > 0 && (() => {
+            const enTransito = pedidosTransito.filter(p => p.tipo === 'en_transito')
+            const recibidosSinIngreso = pedidosTransito.filter(p => p.tipo === 'recibido_sin_ingreso')
+            return (
+            <div className="mt-6">
+              <button
+                onClick={() => setTransitoAbierto(!transitoAbierto)}
+                className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900 mb-3"
+              >
+                <svg className={`w-4 h-4 transition-transform ${transitoAbierto ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Pedidos en transito y recibidos ({pedidosTransito.length})
+              </button>
+
+              {transitoAbierto && (
+                <div className="space-y-3">
+                  {enTransito.length > 0 && (
+                    <>
+                      <p className="text-xs text-gray-500 mb-2">
+                        <span className="font-semibold text-blue-700">En tránsito</span> — Facturados en {formatPeriodo(periodo)}, no entregados al cierre del mes.
+                      </p>
+                      {enTransito.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => toggleSeleccion(p.id)}
+                      className={`border rounded-xl p-4 cursor-pointer transition-colors ${
+                        seleccion.has(p.id)
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(p.id)}
+                            onChange={() => toggleSeleccion(p.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                          />
+                          <div>
+                            <span className="font-semibold text-gray-900 text-sm">{p.proveedorNombre}</span>
+                            <span className="text-xs text-gray-500 ml-2">{p.categoria}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-400">{new Date(p.fecha).toLocaleDateString('es-AR')}</span>
+                      </div>
+                      <div className="ml-7 space-y-1">
+                        {p.items.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                            <span>{item.productoNombre} x{item.cantidad}</span>
+                            <span>{formatearMoneda(item.subtotal)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-semibold text-gray-900 pt-1 border-t border-gray-100">
+                          <span>{p.unidades} unidades</span>
+                          <span>{formatearMoneda(p.valuacion)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                    </>
+                  )}
+
+                  {recibidosSinIngreso.length > 0 && (
+                    <>
+                      <p className="text-xs text-gray-500 mb-2 mt-4">
+                        <span className="font-semibold text-amber-700">Recibidos sin ingreso al stock</span> — Entregados antes del cierre de {formatPeriodo(periodo)}, pendientes de ingreso al stock.
+                      </p>
+                      {recibidosSinIngreso.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => toggleSeleccion(p.id)}
+                      className={`border rounded-xl p-4 cursor-pointer transition-colors ${
+                        seleccion.has(p.id)
+                          ? 'border-amber-400 bg-amber-50'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(p.id)}
+                            onChange={() => toggleSeleccion(p.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-amber-600"
+                          />
+                          <div>
+                            <span className="font-semibold text-gray-900 text-sm">{p.proveedorNombre}</span>
+                            <span className="text-xs text-gray-500 ml-2">{p.categoria}</span>
+                            <span className="text-xs text-amber-600 ml-2">(recibido)</span>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-400">{new Date(p.fecha).toLocaleDateString('es-AR')}</span>
+                      </div>
+                      <div className="ml-7 space-y-1">
+                        {p.items.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                            <span>{item.productoNombre} x{item.cantidad}</span>
+                            <span>{formatearMoneda(item.subtotal)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-semibold text-gray-900 pt-1 border-t border-gray-100">
+                          <span>{p.unidades} unidades</span>
+                          <span>{formatearMoneda(p.valuacion)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                    </>
+                  )}
+
+                  <button
+                    onClick={handleGuardarTransito}
+                    disabled={guardandoTransito}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {guardandoTransito ? 'Guardando...' : 'Confirmar seleccion'}
+                  </button>
+                </div>
+              )}
+            </div>
+            )
+          })()}
         </>
       )}
     </>
