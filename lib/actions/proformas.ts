@@ -20,11 +20,13 @@ export interface ProformaItem {
 
 export interface Proforma {
   id: string
+  nro_proforma: number | null
   nombre: string
   cliente_nombre: string
   cliente_mayorista_id: string | null
   store_id: string | null
   fecha: string
+  fecha_confirmacion: string | null
   mup: number
   estado: 'borrador' | 'confirmada'
   total_neto: number
@@ -167,15 +169,32 @@ export async function modificarProforma(id: string, data: {
 
 export async function confirmarProforma(id: string) {
   const supabase = createAdminClient()
+
+  // Get next nro_proforma (starts at 145)
+  const { data: maxRow } = await supabase
+    .from('proformas')
+    .select('nro_proforma')
+    .not('nro_proforma', 'is', null)
+    .order('nro_proforma', { ascending: false })
+    .limit(1)
+    .single()
+
+  const nextNro = Math.max((maxRow?.nro_proforma ?? 144) + 1, 145)
+
   const { error } = await supabase
     .from('proformas')
-    .update({ estado: 'confirmada' })
+    .update({
+      estado: 'confirmada',
+      nro_proforma: nextNro,
+      fecha_confirmacion: new Date().toISOString(),
+    })
     .eq('id', id)
     .eq('estado', 'borrador')
 
   if (error) return { error: error.message }
   revalidatePath('/mayoristas/proformas')
   revalidatePath('/mayoristas/asignaciones')
+  revalidatePath('/mayoristas/clientes')
   return { ok: true }
 }
 

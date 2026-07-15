@@ -13,11 +13,12 @@ export default function ClientesMayoristasPage() {
           <p className="text-sm text-gray-500">Crear y gestionar clientes mayoristas</p>
         </Link>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 opacity-60">
+        <Link href="/mayoristas/clientes/cuenta-corriente"
+          className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-3">📒</div>
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Cuenta Corriente</h2>
-          <p className="text-sm text-gray-400">Próximamente</p>
-        </div>
+          <p className="text-sm text-gray-500">Debe, haber y saldo por cliente</p>
+        </Link>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 opacity-60">
           <div className="text-3xl mb-3">💳</div>

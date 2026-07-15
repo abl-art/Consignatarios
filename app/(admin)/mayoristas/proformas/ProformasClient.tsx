@@ -444,7 +444,8 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-6 py-3 font-medium text-gray-600">Cliente</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">N°</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Total c/IVA</th>
@@ -454,7 +455,8 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                 <tbody className="divide-y divide-gray-100">
                   {proformasGuardadas.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 font-medium text-gray-900">{p.cliente_nombre || '—'}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.nro_proforma || '—'}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{p.cliente_nombre || '—'}</td>
                       <td className="px-4 py-3 text-gray-600">
                         {new Date(p.fecha).toLocaleDateString('es-AR')}
                       </td>

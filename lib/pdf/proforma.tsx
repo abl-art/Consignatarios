@@ -234,6 +234,7 @@ export interface ProformaItemPDF {
 
 export interface ProformaPDFProps {
   nombre: string
+  nroProforma: number | null
   clienteNombre: string
   clienteCuit: string
   clienteIva: string
@@ -247,7 +248,7 @@ export interface ProformaPDFProps {
 }
 
 export function ProformaPDF({
-  nombre, clienteNombre, clienteCuit, clienteIva, clienteDireccion,
+  nombre, nroProforma, clienteNombre, clienteCuit, clienteIva, clienteDireccion,
   fecha, items, total_neto, total_iva, total_con_iva, notas,
 }: ProformaPDFProps) {
   const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0)
@@ -276,9 +277,8 @@ export function ProformaPDF({
 
           {/* Derecha: datos del documento */}
           <View style={styles.headerRight}>
-            <Text style={styles.docTitle}>PROFORMA</Text>
+            <Text style={styles.docTitle}>PROFORMA{nroProforma ? ` N° ${nroProforma}` : ''}</Text>
             <Text style={styles.docDetail}>Fecha: {fecha}</Text>
-            <Text style={styles.docDetail}>Ref: {nombre || '—'}</Text>
             <Text style={styles.docDetail}>Unidades: {totalUnidades}</Text>
           </View>
         </View>

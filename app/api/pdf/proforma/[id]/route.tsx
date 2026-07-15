@@ -47,6 +47,7 @@ export async function GET(
 
   const element = ProformaPDF({
     nombre: proforma.nombre,
+    nroProforma: proforma.nro_proforma ?? null,
     clienteNombre,
     clienteCuit,
     clienteIva,
