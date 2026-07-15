@@ -109,16 +109,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     liqBorradores = count ?? 0
   } catch { /* skip */ }
 
-  // Inyectar badge de borradores en Liquidaciones
+  // Contar proformas confirmadas pendientes de asignar equipos
+  let proformasPendientes = 0
+  try {
+    const { count } = await supabase.from('proformas').select('*', { count: 'exact', head: true }).eq('estado', 'confirmada')
+    proformasPendientes = count ?? 0
+  } catch { /* skip */ }
+
+  // Inyectar badges en nav
   const navItemsConBadge = navItems.map(item => {
     if (!item.children) return item
     return {
       ...item,
-      children: item.children.map(child =>
-        child.href === '/liquidaciones' && liqBorradores > 0
-          ? { ...child, badge: liqBorradores }
-          : child
-      ),
+      children: item.children.map(child => {
+        if (child.href === '/liquidaciones' && liqBorradores > 0) return { ...child, badge: liqBorradores }
+        if (child.href === '/mayoristas/asignaciones' && proformasPendientes > 0) return { ...child, badge: proformasPendientes }
+        return child
+      }),
     }
   })
 
