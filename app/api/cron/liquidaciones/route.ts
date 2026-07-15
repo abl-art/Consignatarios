@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { generarLiquidacionesAfiliados } from '@/lib/actions/liquidaciones-afiliados'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,10 @@ export async function GET(request: Request) {
   // Verificar si ya existen liquidaciones para este mes
   const { count: existentes } = await sb.from('liquidaciones').select('*', { count: 'exact', head: true }).eq('mes', mes)
   if (existentes && existentes > 0) {
-    return NextResponse.json({ ok: true, message: `Liquidaciones de ${mes} ya existen (${existentes})`, creadas: 0 })
+    // Consignatarios ya generadas — solo intentar afiliados
+    const afiliadosResult = await generarLiquidacionesAfiliados(mes)
+    const afiliadosCreadas = afiliadosResult && 'creadas' in afiliadosResult ? afiliadosResult.creadas : 0
+    return NextResponse.json({ ok: true, message: `Liquidaciones de ${mes} ya existen (${existentes})`, creadas: 0, afiliados_creadas: afiliadosCreadas })
   }
 
   // Cargar ventas del período
@@ -71,5 +75,9 @@ export async function GET(request: Request) {
     if (!error) creadas++
   }
 
-  return NextResponse.json({ ok: true, mes, creadas })
+  // --- Liquidaciones de Afiliados ---
+  const afiliadosResult = await generarLiquidacionesAfiliados(mes)
+  const afiliadosCreadas = afiliadosResult && 'creadas' in afiliadosResult ? afiliadosResult.creadas : 0
+
+  return NextResponse.json({ ok: true, mes, creadas, afiliados_creadas: afiliadosCreadas })
 }
