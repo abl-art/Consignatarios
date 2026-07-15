@@ -30,7 +30,7 @@ export default function CuentaCorrienteClient({ clientes, proformas }: Props) {
   // Por ahora solo hay debe (proformas confirmadas), haber viene de pagos (futuro)
   let saldoAcumulado = 0
   const movimientos = proformasCliente
-    .sort((a, b) => new Date(a.fecha_confirmacion).getTime() - new Date(b.fecha_confirmacion).getTime())
+    .sort((a, b) => new Date(a.fecha_confirmacion || 0).getTime() - new Date(b.fecha_confirmacion || 0).getTime())
     .map(p => {
       saldoAcumulado += p.total_con_iva
       return {
@@ -107,7 +107,7 @@ export default function CuentaCorrienteClient({ clientes, proformas }: Props) {
                   movimientos.map(m => (
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-600">
-                        {new Date(m.fecha_confirmacion).toLocaleDateString('es-AR')}
+                        {m.fecha_confirmacion ? new Date(m.fecha_confirmacion).toLocaleDateString('es-AR') : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">
