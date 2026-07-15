@@ -1,0 +1,254 @@
+'use server'
+
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getPool } from '@/lib/db-pool'
+import { CLIENT_IDS_TERCEROS } from '@/lib/client-ids'
+import { revalidatePath } from 'next/cache'
+import { diaHabilSiguiente } from '@/lib/utils'
+
+export interface Prospecto {
+  id: string
+  nombre: string
+  contacto: string
+  asignado: string
+  sucursales: number
+  estado: 'prospecto' | 'propuesta' | 'ganado' | 'perdido'
+  prospecto_at: string
+  propuesta_at: string | null
+  ganado_at: string | null
+  perdido_at: string | null
+  created_at: string
+}
+
+export interface ProspectoStats {
+  estado: string
+  count: number
+  sucursales: number
+  tiempoPromedio: number
+}
+
+export interface TerceroAlta {
+  clientId: string
+  merchantName: string
+  tiendas: number
+  ventasCantidad: number
+  ventasMonto: number
+  ventasAyerCantidad: number
+  ventasAyerMonto: number
+}
+
+export async function fetchProspectos(): Promise<Prospecto[]> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('crm_prospectos').select('*').order('created_at', { ascending: true })
+  return (data ?? []) as Prospecto[]
+}
+
+export async function fetchProspectoStats(prospectos: Prospecto[]): Promise<ProspectoStats[]> {
+  const estados = ['prospecto', 'propuesta', 'ganado', 'perdido'] as const
+  const now = Date.now()
+
+  return estados.map(estado => {
+    const enEstado = prospectos.filter(p => p.estado === estado)
+    const count = enEstado.length
+    const sucursales = enEstado.reduce((s, p) => s + p.sucursales, 0)
+
+    const tiempos: number[] = []
+    for (const p of prospectos) {
+      let entrada: string | null = null
+      let salida: string | null = null
+
+      if (estado === 'prospecto') {
+        entrada = p.prospecto_at
+        salida = p.propuesta_at ?? p.ganado_at ?? p.perdido_at
+      } else if (estado === 'propuesta') {
+        entrada = p.propuesta_at
+        salida = p.ganado_at ?? p.perdido_at
+      } else if (estado === 'ganado') {
+        entrada = p.ganado_at
+        salida = null
+      } else if (estado === 'perdido') {
+        entrada = p.perdido_at
+        salida = null
+      }
+
+      if (!entrada) continue
+      const fin = salida ? new Date(salida).getTime() : now
+      tiempos.push((fin - new Date(entrada).getTime()) / (1000 * 60 * 60 * 24))
+    }
+
+    const tiempoPromedio = tiempos.length > 0
+      ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length * 10) / 10
+      : 0
+
+    return { estado, count, sucursales, tiempoPromedio }
+  })
+}
+
+export async function crearProspecto(nombre: string, sucursales: number, contacto: string, asignado: string): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+  const { error } = await sb.from('crm_prospectos').insert({ nombre, sucursales, contacto, asignado })
+  if (error) return { error: error.message }
+  revalidatePath('/terceros/crm')
+  return { ok: true }
+}
+
+export async function actualizarSucursales(id: string, sucursales: number): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+  const { error } = await sb.from('crm_prospectos').update({ sucursales }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/terceros/crm')
+  return { ok: true }
+}
+
+export async function actualizarContacto(id: string, contacto: string): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+  const { error } = await sb.from('crm_prospectos').update({ contacto }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/terceros/crm')
+  return { ok: true }
+}
+
+export async function actualizarAsignado(id: string, asignado: string): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+  const { error } = await sb.from('crm_prospectos').update({ asignado }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/terceros/crm')
+  return { ok: true }
+}
+
+async function crearSeguimiento(nombre: string) {
+  const sb = createAdminClient()
+  const futuro = new Date()
+  futuro.setDate(futuro.getDate() + 7)
+  const fecha = diaHabilSiguiente(futuro.getFullYear(), futuro.getMonth(), futuro.getDate())
+
+  const { data } = await sb.from('flujo_config').select('value').eq('key', 'app_todos').single()
+  const todos: Record<string, { id: string; text: string; done: boolean; prioridad?: string }[]> = data?.value ? JSON.parse(data.value) : {}
+
+  const items = todos[fecha] ?? []
+  items.push({
+    id: Date.now().toString(),
+    text: `Seguimiento prospecto: ${nombre}`,
+    done: false,
+    prioridad: 'negrita',
+  })
+  todos[fecha] = items
+
+  await sb.from('flujo_config').upsert({
+    key: 'app_todos',
+    value: JSON.stringify(todos),
+    updated_at: new Date().toISOString(),
+  })
+}
+
+export async function moverProspecto(id: string, nuevoEstado: 'prospecto' | 'propuesta' | 'ganado' | 'perdido'): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+
+  const { data: prospecto } = await sb.from('crm_prospectos').select('*').eq('id', id).single()
+  if (!prospecto) return { error: 'Prospecto no encontrado' }
+
+  const update: Record<string, unknown> = { estado: nuevoEstado }
+  const now = new Date().toISOString()
+
+  if (nuevoEstado === 'propuesta') update.propuesta_at = now
+  if (nuevoEstado === 'ganado') update.ganado_at = now
+  if (nuevoEstado === 'perdido') update.perdido_at = now
+
+  const { error } = await sb.from('crm_prospectos').update(update).eq('id', id)
+  if (error) return { error: error.message }
+
+  if (nuevoEstado === 'propuesta') {
+    await crearSeguimiento(prospecto.nombre)
+  }
+
+  revalidatePath('/terceros/crm')
+  return { ok: true }
+}
+
+export async function regenerarSeguimiento(nombreProspecto: string): Promise<{ ok: true } | { error: string }> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('crm_prospectos').select('estado').ilike('nombre', nombreProspecto).single()
+  if (!data || data.estado !== 'propuesta') return { ok: true }
+  await crearSeguimiento(nombreProspecto)
+  return { ok: true }
+}
+
+export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const ids = CLIENT_IDS_TERCEROS.filter(id => id !== '1').map(id => `'${id}'`).join(', ')
+
+  try {
+    const client = await pool.connect()
+    try {
+      const res = await client.query<{
+        client_id: string
+        tiendas: string
+        ventas_cantidad: string
+        ventas_monto: string
+        ventas_ayer_cantidad: string
+        ventas_ayer_monto: string
+      }>(`
+        WITH tiendas AS (
+          SELECT client_id,
+            COUNT(DISTINCT store_name) AS tiendas
+          FROM gocuotas_orders
+          WHERE client_id IN (${ids})
+          GROUP BY client_id
+        ),
+        ventas30 AS (
+          SELECT client_id,
+            COUNT(*)::text AS ventas_cantidad,
+            COALESCE(SUM(total_order_amount), 0)::text AS ventas_monto
+          FROM gocuotas_orders
+          WHERE client_id IN (${ids})
+            AND order_created_at >= now() - interval '30 days'
+            AND order_discarded_at IS NULL
+          GROUP BY client_id
+        ),
+        ventas_ayer AS (
+          SELECT client_id,
+            COUNT(*)::text AS ventas_ayer_cantidad,
+            COALESCE(SUM(total_order_amount), 0)::text AS ventas_ayer_monto
+          FROM gocuotas_orders
+          WHERE client_id IN (${ids})
+            AND order_created_at >= (current_date - interval '1 day')
+            AND order_created_at < current_date
+            AND order_discarded_at IS NULL
+          GROUP BY client_id
+        )
+        SELECT t.client_id, t.tiendas::text,
+          COALESCE(v.ventas_cantidad, '0') AS ventas_cantidad,
+          COALESCE(v.ventas_monto, '0') AS ventas_monto,
+          COALESCE(a.ventas_ayer_cantidad, '0') AS ventas_ayer_cantidad,
+          COALESCE(a.ventas_ayer_monto, '0') AS ventas_ayer_monto
+        FROM tiendas t
+        LEFT JOIN ventas30 v ON v.client_id = t.client_id
+        LEFT JOIN ventas_ayer a ON a.client_id = t.client_id
+        ORDER BY t.client_id
+      `)
+
+      const MERCHANT_NAMES: Record<string, string> = {
+        '5495277': 'RIIING',
+        '6033574': 'TECNO-COMPRO',
+        '6115009': 'Plus Phone',
+      }
+
+      return res.rows.map(r => ({
+        clientId: r.client_id,
+        merchantName: MERCHANT_NAMES[r.client_id] ?? `Cliente ${r.client_id}`,
+        tiendas: Number(r.tiendas),
+        ventasCantidad: Number(r.ventas_cantidad),
+        ventasMonto: Number(r.ventas_monto),
+        ventasAyerCantidad: Number(r.ventas_ayer_cantidad),
+        ventasAyerMonto: Number(r.ventas_ayer_monto),
+      }))
+    } finally {
+      client.release()
+    }
+  } catch (e) {
+    console.error('Error fetching terceros altas:', e)
+    return []
+  }
+}

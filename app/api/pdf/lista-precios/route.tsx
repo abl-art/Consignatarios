@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { getMupConfig, getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { ListaPreciosPDF } from '@/lib/pdf/lista-precios'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const [mup, productos] = await Promise.all([
     getMupConfig(),
@@ -12,6 +14,7 @@ export async function GET() {
   // Filter only visible products and calculate prices
   const productosVisibles = productos
     .filter(p => !p.oculto_lista_precios)
+    .sort((a, b) => a.mejor_precio - b.mejor_precio)
     .map(p => {
       const precio_venta_neto = Math.round(p.mejor_precio * (1 + mup / 100))
       const iva = Math.round(precio_venta_neto * 0.21)
@@ -36,6 +39,7 @@ export async function GET() {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="lista-precios-${new Date().toISOString().slice(0, 10)}.pdf"`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
     },
   })
 }

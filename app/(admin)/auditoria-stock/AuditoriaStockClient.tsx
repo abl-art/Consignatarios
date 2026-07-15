@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
-import { generarPlanilla, guardarConteo, firmarAuditoria, type AuditoriaStockPropio, type DetalleModelo } from '@/lib/actions/auditoria-stock'
+import { generarPlanilla, eliminarPlanilla, guardarConteo, firmarAuditoria, type AuditoriaStockPropio, type DetalleModelo } from '@/lib/actions/auditoria-stock'
 import FirmaCanvas from '@/components/FirmaCanvas'
 
 interface Props {
@@ -113,10 +113,21 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
                     {a.estado === 'firmada' ? 'Firmada' : a.estado === 'en_conteo' ? 'En conteo' : 'Pendiente'}
                   </span>
                   {a.estado === 'pendiente' && (
-                    <button onClick={() => setEditando(editando === a.id ? null : a.id)}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      Iniciar conteo
-                    </button>
+                    <>
+                      <button onClick={async () => {
+                        if (!confirm('¿Eliminar esta planilla?')) return
+                        const res = await eliminarPlanilla(a.id)
+                        if ('error' in res) setError(res.error)
+                        router.refresh()
+                      }}
+                        className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
+                        Eliminar
+                      </button>
+                      <button onClick={() => setEditando(editando === a.id ? null : a.id)}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Iniciar conteo
+                      </button>
+                    </>
                   )}
                   {a.estado === 'en_conteo' && (
                     <>
@@ -276,19 +287,19 @@ function ConteoTable({ auditoria, editable, onSaved }: { auditoria: AuditoriaSto
                 <td className="px-3 py-2 text-right font-semibold">{d.teorico}</td>
                 <td className="px-3 py-2 text-right">
                   {editable ? (
-                    <input type="number" min="0" value={d.real || ''} onChange={e => updateReal(i, Number(e.target.value) || 0)}
+                    <input type="number" min="0" value={d.real} onChange={e => updateReal(i, e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center" />
                   ) : (
                     <span className="font-semibold">{d.real}</span>
                   )}
                 </td>
                 <td className={`px-3 py-2 text-right font-bold ${d.diferencia < 0 ? 'text-red-700' : d.diferencia > 0 ? 'text-yellow-700' : 'text-green-700'}`}>
-                  {d.real > 0 ? (d.diferencia > 0 ? '+' : '') + d.diferencia : '—'}
+                  {(d.diferencia > 0 ? '+' : '') + d.diferencia}
                 </td>
                 <td className="px-3 py-2 text-right text-gray-500 text-xs">{d.precio_unit > 0 ? formatearMoneda(d.precio_unit) : '—'}</td>
-                <td className="px-3 py-2 text-right text-blue-700">{d.valor_real > 0 ? formatearMoneda(d.valor_real) : '—'}</td>
+                <td className="px-3 py-2 text-right text-blue-700">{formatearMoneda(d.valor_real)}</td>
                 <td className={`px-3 py-2 text-right ${d.valor_diferencia < 0 ? 'text-red-700' : d.valor_diferencia > 0 ? 'text-yellow-700' : ''}`}>
-                  {d.real > 0 ? formatearMoneda(d.valor_diferencia) : '—'}
+                  {formatearMoneda(d.valor_diferencia)}
                 </td>
               </tr>
             ))}
@@ -299,14 +310,14 @@ function ConteoTable({ auditoria, editable, onSaved }: { auditoria: AuditoriaSto
               <td className="px-3 py-2 text-right">{detalle.reduce((s, d) => s + d.disponibles, 0)}</td>
               <td className="px-3 py-2 text-right">{detalle.reduce((s, d) => s + d.pendientes, 0)}</td>
               <td className="px-3 py-2 text-right">{totalUnidadesTeorico}</td>
-              <td className="px-3 py-2 text-right">{totalUnidadesReal || '—'}</td>
+              <td className="px-3 py-2 text-right">{totalUnidadesReal}</td>
               <td className={`px-3 py-2 text-right ${(totalUnidadesReal - totalUnidadesTeorico) < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                {totalUnidadesReal > 0 ? totalUnidadesReal - totalUnidadesTeorico : '—'}
+                {totalUnidadesReal - totalUnidadesTeorico}
               </td>
               <td className="px-3 py-2"></td>
-              <td className="px-3 py-2 text-right text-blue-700">{totalValorReal > 0 ? formatearMoneda(totalValorReal) : '—'}</td>
+              <td className="px-3 py-2 text-right text-blue-700">{formatearMoneda(totalValorReal)}</td>
               <td className={`px-3 py-2 text-right ${totalValorDif < 0 ? 'text-red-700' : 'text-yellow-700'}`}>
-                {totalValorReal > 0 ? formatearMoneda(totalValorDif) : '—'}
+                {formatearMoneda(totalValorDif)}
               </td>
             </tr>
           </tfoot>

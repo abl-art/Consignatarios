@@ -1,4 +1,4 @@
-export type EstadoDispositivo = 'disponible' | 'asignado' | 'vendido' | 'devuelto'
+export type EstadoDispositivo = 'disponible' | 'asignado' | 'mayorista' | 'vendido' | 'devuelto'
 export type EstadoAuditoria = 'borrador' | 'confirmada'
 export type TipoAuditoria = 'fisica' | 'auto'
 export type TipoDiferencia = 'faltante' | 'sobrante'

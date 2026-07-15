@@ -72,3 +72,13 @@ export function primerDiaHabil(year: number, month: number): Date {
   else if (date.getDay() === 6) date.setDate(3)
   return date
 }
+
+/** Dado un dia (1-31), mes (0-based) y anio, retorna la fecha del dia habil igual o siguiente.
+ *  Si cae sabado pasa al lunes, si cae domingo pasa al lunes. */
+export function diaHabilSiguiente(year: number, month: number, day: number): string {
+  const date = new Date(year, month, day)
+  const dow = date.getDay()
+  if (dow === 6) date.setDate(date.getDate() + 2) // sabado -> lunes
+  if (dow === 0) date.setDate(date.getDate() + 1) // domingo -> lunes
+  return date.toISOString().slice(0, 10)
+}

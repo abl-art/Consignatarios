@@ -66,14 +66,14 @@ async function ensureDispositivosExist(admin: ReturnType<typeof createAdminClien
 async function notificarGocelular(
   admin: ReturnType<typeof createAdminClient>,
   imeis: string[],
-  consignatarioId: string,
+  consignatarioId: string | null,
   consignatarioNombre: string,
   action: 'assign_to_consignee' | 'return_from_consignee'
 ) {
   const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_assign_endpoint').single()
   const endpoint = config?.value
 
-  // Get store_id from consignatario
+  // Get store_id from consignatario (if applicable)
   let storeId: string | null = null
   if (consignatarioId) {
     const { data: consig } = await admin.from('consignatarios').select('store_id').eq('id', consignatarioId).single()
@@ -315,6 +315,74 @@ export async function devolverEquipo(dispositivoId: string): Promise<{ ok: true 
   revalidatePath('/inventario')
   revalidatePath('/consignatarios')
   return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Preparar asignación para venta mayorista (proforma)
+// ---------------------------------------------------------------------------
+
+export async function prepararAsignacionMayorista(input: {
+  proforma_id: string
+  dispositivos: DispositivoInfo[]
+  total_valor_costo: number
+  total_valor_venta: number
+}): Promise<{ ok: true; asignacion_id: string } | { error: string }> {
+  const admin = createAdminClient()
+
+  await ensureDispositivosExist(admin, input.dispositivos)
+
+  const imeis = input.dispositivos.map(d => d.imei)
+  const { data: dispRows } = await admin.from('dispositivos').select('id, imei').in('imei', imeis)
+  if (!dispRows || dispRows.length === 0) {
+    return { error: 'No se encontraron dispositivos con los IMEIs proporcionados' }
+  }
+
+  const dispositivo_ids = dispRows.map(d => d.id)
+  const today = new Date().toISOString().slice(0, 10)
+
+  const { data: asignacion, error: errorAsignacion } = await admin
+    .from('asignaciones')
+    .insert({
+      consignatario_id: null,
+      proforma_id: input.proforma_id,
+      fecha: today,
+      total_unidades: dispositivo_ids.length,
+      total_valor_costo: input.total_valor_costo,
+      total_valor_venta: input.total_valor_venta,
+      firmado_por: null,
+      firma_url: null,
+    })
+    .select('id')
+    .single()
+
+  if (errorAsignacion || !asignacion) {
+    return { error: errorAsignacion?.message ?? 'Error al crear la asignación' }
+  }
+
+  const items = dispositivo_ids.map(dispositivo_id => ({ asignacion_id: asignacion.id, dispositivo_id }))
+  const { error: errorItems } = await admin.from('asignacion_items').insert(items)
+
+  if (errorItems) {
+    await admin.from('asignaciones').delete().eq('id', asignacion.id)
+    return { error: errorItems.message }
+  }
+
+  // Marcar dispositivos como mayorista
+  await admin
+    .from('dispositivos')
+    .update({ estado: 'mayorista', fecha_asignacion: today })
+    .in('id', dispositivo_ids)
+
+  // Notificar a GOcelular (mismo mecanismo que consignatarios)
+  const { data: proforma } = await admin.from('proformas').select('nombre, cliente_nombre').eq('id', input.proforma_id).single()
+  const clienteLabel = proforma?.cliente_nombre || proforma?.nombre || 'Venta Mayorista'
+  notificarGocelular(admin, imeis, null, clienteLabel, 'assign_to_consignee').catch(() => {})
+
+  revalidatePath('/consignatarios/asignaciones')
+  revalidatePath('/inventario')
+  revalidatePath('/dashboard')
+
+  return { ok: true, asignacion_id: asignacion.id }
 }
 
 // ---------------------------------------------------------------------------

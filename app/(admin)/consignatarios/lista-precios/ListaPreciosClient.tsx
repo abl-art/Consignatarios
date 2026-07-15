@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
 import { actualizarMup, toggleVisibilidadListaPrecios } from '@/lib/actions/lista-precios'
@@ -14,6 +14,8 @@ interface Props {
 export default function ListaPreciosClient({ productos, mupInicial }: Props) {
   const [mup, setMup] = useState(mupInicial)
   const [savingMup, startSavingMup] = useTransition()
+
+  useEffect(() => { setMup(mupInicial) }, [mupInicial])
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [mostrarOcultos, setMostrarOcultos] = useState(false)
   const router = useRouter()

@@ -13,12 +13,6 @@ export interface TacCargado {
   created_at: string
 }
 
-export interface TacInventario {
-  tac: string
-  marca: string
-  modelo: string
-}
-
 export interface TacPendiente {
   tac: string
   marca: string
@@ -30,7 +24,7 @@ export interface TacPendiente {
 const MARCAS_EXCLUIDAS = ['samsung', 'apple']
 
 // Fetch TACs únicos de inventory_items + devices (excluyendo Samsung/Apple)
-async function fetchTacsInventario(): Promise<TacInventario[]> {
+async function fetchTacsInventario(): Promise<{ tac: string; marca: string; modelo: string }[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -178,25 +172,6 @@ export async function confirmarTacsCargados(tacs: string[]) {
   return { ok: true }
 }
 
-// Legacy: marcar directo como cargados (para sincronización inventario)
-export async function marcarTacsCargados(tacs: { tac: string; marca: string; modelo: string; origen: string }[]) {
-  if (tacs.length === 0) return { ok: true }
-  const sb = createAdminClient()
-
-  for (const t of tacs) {
-    await sb.from('tacs_cargados').upsert({
-      tac: t.tac,
-      marca: t.marca,
-      modelo: t.modelo,
-      origen: t.origen,
-      estado: 'cargado',
-    }, { onConflict: 'tac' })
-  }
-
-  revalidatePath('/gestion-tacs')
-  return { ok: true }
-}
-
 // Procesar archivo de terceros: recibe array de {imei, marca, modelo}
 // Retorna TACs nuevos que no están en tacs_cargados
 export async function procesarArchivoTerceros(items: { imei: string; marca: string; modelo: string }[]): Promise<TacPendiente[]> {
@@ -219,16 +194,3 @@ export async function procesarArchivoTerceros(items: { imei: string; marca: stri
   return pendientes
 }
 
-// Carga inicial: sincronizar inventario GOcelular → tacs_cargados
-export async function sincronizarTacsInventario() {
-  const inventario = await fetchTacsInventario()
-  const cargados = await fetchTacsCargados()
-  const cargadosSet = new Set(cargados.map(t => t.tac))
-
-  const nuevos = inventario.filter(t => !cargadosSet.has(t.tac))
-  if (nuevos.length === 0) return { ok: true, nuevos: 0 }
-
-  await marcarTacsCargados(nuevos.map(t => ({ ...t, origen: 'inventario' })))
-  revalidatePath('/gestion-tacs')
-  return { ok: true, nuevos: nuevos.length }
-}

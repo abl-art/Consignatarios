@@ -33,8 +33,8 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
 
   const hoy = new Date().toISOString().slice(0, 10)
 
-  // Vigentes = activos cuya fecha de vencimiento NO pasó (no devueltos)
-  const vigentes = prestamos.filter(p => p.estado === 'activo' && (!p.fecha_vencimiento || p.fecha_vencimiento > hoy))
+  // Vigentes = activos cuya fecha de toma ya pasó y fecha de vencimiento NO pasó
+  const vigentes = prestamos.filter(p => p.estado === 'activo' && p.fecha_toma <= hoy && (!p.fecha_vencimiento || p.fecha_vencimiento > hoy))
   // Devueltos = activos cuya fecha de vencimiento ya pasó
   const devueltos = prestamos.filter(p => p.estado === 'activo' && p.fecha_vencimiento && p.fecha_vencimiento <= hoy)
 

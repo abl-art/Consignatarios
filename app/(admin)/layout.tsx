@@ -39,6 +39,7 @@ const navItems: NavItem[] = [
       { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios', header: true },
       { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
       { href: '/consignatarios/lista-precios', label: 'Lista de Precios', icon: 'ventas' },
+      { href: '/consignatarios/proformas', label: 'Proformas', icon: 'documento' },
       { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
       { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
       { href: '/consignatarios/credenciales', label: 'Credenciales', icon: 'consignatarios' },

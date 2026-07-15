@@ -4,7 +4,7 @@ create extension if not exists "uuid-ossp";
 -- ============================================================
 -- ENUMS
 -- ============================================================
-create type estado_dispositivo as enum ('disponible', 'asignado', 'vendido', 'devuelto');
+create type estado_dispositivo as enum ('disponible', 'asignado', 'mayorista', 'vendido', 'devuelto');
 create type estado_auditoria as enum ('borrador', 'confirmada');
 create type tipo_diferencia as enum ('faltante', 'sobrante');
 create type estado_diferencia as enum ('pendiente', 'cobrado', 'resuelto');

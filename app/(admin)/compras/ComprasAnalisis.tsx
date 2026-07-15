@@ -147,10 +147,26 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
   const totalUnidades = chartData.reduce((s, d) => s + d.unidades, 0)
   const totalPesos = chartData.reduce((s, d) => s + d.pesos, 0)
 
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="mt-8">
-      <h2 className="text-lg font-bold text-gray-900 mb-1">Análisis de compras</h2>
-      <p className="text-sm text-gray-500 mb-4">Poder de negociación por proveedor y producto</p>
+    <div className="mt-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <h3 className="text-sm font-semibold text-gray-900">Análisis de compras</h3>
+        </div>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && <div className="px-5 pb-5 pt-2 border-t border-gray-200">
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -266,6 +282,7 @@ export default function ComprasAnalisis({ pedidos, productoCategorias }: Props) 
           </table>
         </div>
       )}
+    </div>}
     </div>
   )
 }

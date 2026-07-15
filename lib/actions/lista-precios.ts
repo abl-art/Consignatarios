@@ -23,24 +23,25 @@ export async function getMupConfig(): Promise<number> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('lista_precios_config')
-    .select('mup')
+    .select('mup_porcentaje')
     .eq('id', 1)
     .single()
 
   if (error || !data) return 30
-  return data.mup ?? 30
+  return data.mup_porcentaje ?? 30
 }
 
 export async function actualizarMup(porcentaje: number) {
   const supabase = createAdminClient()
   const { error } = await supabase
     .from('lista_precios_config')
-    .update({ mup: porcentaje, updated_at: new Date().toISOString() })
+    .update({ mup_porcentaje: porcentaje, updated_at: new Date().toISOString() })
     .eq('id', 1)
 
   if (error) return { error: error.message }
 
   revalidatePath('/consignatarios/lista-precios')
+  revalidatePath('/api/pdf/lista-precios')
   return { ok: true }
 }
 
