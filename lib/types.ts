@@ -148,6 +148,22 @@ export interface Diferencia {
   created_at: string
 }
 
+// Clientes Mayoristas
+export type CondicionIVA = 'monotributo' | 'inscripto'
+
+export interface ClienteMayorista {
+  id: string
+  nombre_comercial: string
+  razon_social: string | null
+  condicion_iva: CondicionIVA
+  cuit: string | null
+  telefono: string | null
+  email: string | null
+  direccion_entrega: string | null
+  transporte: string | null
+  created_at: string
+}
+
 // Deuda
 export type TipoPrestamo = 'bullet' | 'descubierto'
 export type EstadoPrestamo = 'activo' | 'cancelado'

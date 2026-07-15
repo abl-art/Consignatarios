@@ -22,6 +22,7 @@ export interface Proforma {
   id: string
   nombre: string
   cliente_nombre: string
+  cliente_mayorista_id: string | null
   store_id: string | null
   fecha: string
   mup: number
@@ -66,14 +67,15 @@ function calcularItems(
 // ---------------------------------------------------------------------------
 
 export async function crearProforma(data: {
-  nombre: string
-  cliente_nombre: string
-  store_id: string
+  cliente_mayorista_id: string
   mup: number
   notas: string
   items: { producto_id: string; producto_nombre: string; cantidad: number; precio_costo: number }[]
 }) {
   const supabase = createAdminClient()
+
+  // Get cliente name for display
+  const { data: cliente } = await supabase.from('clientes_mayoristas').select('nombre_comercial').eq('id', data.cliente_mayorista_id).single()
 
   const items = calcularItems(data.items, data.mup)
   const total_neto = items.reduce((s, i) => s + i.precio_venta_neto * i.cantidad, 0)
@@ -83,9 +85,9 @@ export async function crearProforma(data: {
   const { data: proforma, error } = await supabase
     .from('proformas')
     .insert({
-      nombre: data.nombre,
-      cliente_nombre: data.cliente_nombre,
-      store_id: data.store_id || null,
+      nombre: '',
+      cliente_nombre: cliente?.nombre_comercial || '',
+      cliente_mayorista_id: data.cliente_mayorista_id,
       mup: data.mup,
       estado: 'borrador',
       total_neto,
@@ -104,7 +106,7 @@ export async function crearProforma(data: {
 
   if (itemsError) return { error: itemsError.message }
 
-  revalidatePath('/consignatarios/proformas')
+  revalidatePath('/mayoristas/proformas')
   return { ok: true, id: proforma.id }
 }
 
@@ -113,9 +115,7 @@ export async function crearProforma(data: {
 // ---------------------------------------------------------------------------
 
 export async function modificarProforma(id: string, data: {
-  nombre: string
-  cliente_nombre: string
-  store_id: string
+  cliente_mayorista_id: string
   mup: number
   notas: string
   items: { producto_id: string; producto_nombre: string; cantidad: number; precio_costo: number }[]
@@ -126,6 +126,9 @@ export async function modificarProforma(id: string, data: {
   const { data: existing } = await supabase.from('proformas').select('estado').eq('id', id).single()
   if (!existing || existing.estado !== 'borrador') return { error: 'Solo se pueden modificar proformas en borrador' }
 
+  // Get cliente name for display
+  const { data: cliente } = await supabase.from('clientes_mayoristas').select('nombre_comercial').eq('id', data.cliente_mayorista_id).single()
+
   const items = calcularItems(data.items, data.mup)
   const total_neto = items.reduce((s, i) => s + i.precio_venta_neto * i.cantidad, 0)
   const total_iva = items.reduce((s, i) => s + i.iva * i.cantidad, 0)
@@ -134,9 +137,8 @@ export async function modificarProforma(id: string, data: {
   const { error } = await supabase
     .from('proformas')
     .update({
-      nombre: data.nombre,
-      cliente_nombre: data.cliente_nombre,
-      store_id: data.store_id || null,
+      cliente_nombre: cliente?.nombre_comercial || '',
+      cliente_mayorista_id: data.cliente_mayorista_id,
       mup: data.mup,
       total_neto,
       total_iva,
@@ -155,7 +157,7 @@ export async function modificarProforma(id: string, data: {
 
   if (itemsError) return { error: itemsError.message }
 
-  revalidatePath('/consignatarios/proformas')
+  revalidatePath('/mayoristas/proformas')
   return { ok: true }
 }
 
@@ -172,8 +174,8 @@ export async function confirmarProforma(id: string) {
     .eq('estado', 'borrador')
 
   if (error) return { error: error.message }
-  revalidatePath('/consignatarios/proformas')
-  revalidatePath('/consignatarios/asignaciones')
+  revalidatePath('/mayoristas/proformas')
+  revalidatePath('/mayoristas/asignaciones')
   return { ok: true }
 }
 
@@ -232,6 +234,6 @@ export async function eliminarProforma(id: string) {
   const supabase = createAdminClient()
   const { error } = await supabase.from('proformas').delete().eq('id', id).eq('estado', 'borrador')
   if (error) return { error: error.message }
-  revalidatePath('/consignatarios/proformas')
+  revalidatePath('/mayoristas/proformas')
   return { ok: true }
 }

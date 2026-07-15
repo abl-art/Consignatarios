@@ -4,8 +4,10 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
 import { crearProforma, modificarProforma, confirmarProforma, eliminarProforma } from '@/lib/actions/proformas'
+import { crearClienteMayorista } from '@/lib/actions/clientes-mayoristas'
 import type { ProductoConPrecio } from '@/lib/actions/lista-precios'
 import type { Proforma, ProformaConItems } from '@/lib/actions/proformas'
+import type { ClienteMayorista } from '@/lib/types'
 
 interface LineaProforma {
   producto_id: string
@@ -18,17 +20,16 @@ interface Props {
   productos: ProductoConPrecio[]
   mupInicial: number
   proformasGuardadas: Proforma[]
+  clientes: ClienteMayorista[]
 }
 
-export default function ProformasClient({ productos, mupInicial, proformasGuardadas }: Props) {
+export default function ProformasClient({ productos, mupInicial, proformasGuardadas, clientes }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'nueva' | 'historial'>('nueva')
 
   // --- Estado nueva/editar proforma ---
   const [editandoId, setEditandoId] = useState<string | null>(null)
-  const [nombre, setNombre] = useState('')
-  const [clienteNombre, setClienteNombre] = useState('')
-  const [storeId, setStoreId] = useState('')
+  const [clienteId, setClienteId] = useState('')
   const [notas, setNotas] = useState('')
   const [mup, setMup] = useState(mupInicial)
   const [lineas, setLineas] = useState<LineaProforma[]>([])
@@ -39,11 +40,13 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
 
+  // --- Nuevo cliente inline ---
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false)
+  const [creandoCliente, startCreandoCliente] = useTransition()
+
   function resetForm() {
     setEditandoId(null)
-    setNombre('')
-    setClienteNombre('')
-    setStoreId('')
+    setClienteId('')
     setNotas('')
     setMup(mupInicial)
     setLineas([])
@@ -93,15 +96,17 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   const totalConIva = totalNeto + totalIva
 
   function handleGuardar() {
+    if (!clienteId) {
+      setMensaje({ tipo: 'error', texto: 'Seleccioná un cliente' })
+      return
+    }
     if (lineas.length === 0) {
       setMensaje({ tipo: 'error', texto: 'Agregá al menos un producto' })
       return
     }
     startSaving(async () => {
       const payload = {
-        nombre: nombre || `Proforma ${new Date().toLocaleDateString('es-AR')}`,
-        cliente_nombre: clienteNombre,
-        store_id: storeId,
+        cliente_mayorista_id: clienteId,
         mup,
         notas,
         items: lineas,
@@ -123,7 +128,6 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   }
 
   async function handleEditar(proforma: Proforma) {
-    // Cargar items de la proforma
     const res = await fetch(`/api/proforma/${proforma.id}`)
     if (!res.ok) {
       setMensaje({ tipo: 'error', texto: 'Error al cargar proforma' })
@@ -132,9 +136,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
     const data: ProformaConItems = await res.json()
 
     setEditandoId(proforma.id)
-    setNombre(proforma.nombre)
-    setClienteNombre(proforma.cliente_nombre || '')
-    setStoreId(proforma.store_id || '')
+    setClienteId(proforma.cliente_mayorista_id || '')
     setMup(proforma.mup)
     setNotas(proforma.notas || '')
     setLineas(data.proforma_items.map(i => ({
@@ -153,7 +155,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
     if ('error' in result) {
       setMensaje({ tipo: 'error', texto: result.error! })
     } else {
-      setMensaje({ tipo: 'ok', texto: 'Proforma confirmada. Ya podés asignar equipos en Asignaciones > Venta Mayorista.' })
+      setMensaje({ tipo: 'ok', texto: 'Proforma confirmada. Ya podés asignar equipos en Mayoristas > Asignaciones.' })
     }
     setConfirmandoId(null)
     router.refresh()
@@ -167,9 +169,29 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
     setEliminandoId(null)
   }
 
+  function handleCrearCliente(formData: FormData) {
+    startCreandoCliente(async () => {
+      const result = await crearClienteMayorista(formData)
+      if ('ok' in result) {
+        setClienteId(result.id)
+        setMostrarNuevoCliente(false)
+        router.refresh()
+      } else {
+        setMensaje({ tipo: 'error', texto: result.error })
+      }
+    })
+  }
+
+  function handleClienteChange(value: string) {
+    if (value === '__nuevo__') {
+      setMostrarNuevoCliente(true)
+    } else {
+      setClienteId(value)
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Proformas</h1>
         <p className="text-sm text-gray-500 mt-1">Armá cotizaciones eligiendo modelos y cantidades</p>
@@ -209,37 +231,21 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
             </div>
           )}
 
-          {/* Nombre + Cliente + MUP */}
+          {/* Cliente + MUP */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-end gap-4">
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium text-gray-700 block mb-1">Nombre proforma</label>
-              <input
-                type="text"
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder={`Proforma ${new Date().toLocaleDateString('es-AR')}`}
+            <div className="flex-1 min-w-[250px]">
+              <label className="text-sm font-medium text-gray-700 block mb-1">Cliente mayorista *</label>
+              <select
+                value={clienteId}
+                onChange={e => handleClienteChange(e.target.value)}
                 className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-magenta-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium text-gray-700 block mb-1">Cliente</label>
-              <input
-                type="text"
-                value={clienteNombre}
-                onChange={e => setClienteNombre(e.target.value)}
-                placeholder="Nombre del cliente mayorista"
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-magenta-500 focus:border-transparent"
-              />
-            </div>
-            <div className="min-w-[140px]">
-              <label className="text-sm font-medium text-gray-700 block mb-1">Store ID (GOcelular)</label>
-              <input
-                type="text"
-                value={storeId}
-                onChange={e => setStoreId(e.target.value)}
-                placeholder="ID de la tienda"
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-magenta-500 focus:border-transparent"
-              />
+              >
+                <option value="">Seleccionar cliente...</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre_comercial}</option>
+                ))}
+                <option value="__nuevo__">+ Nuevo cliente</option>
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">MUP %</label>
@@ -253,6 +259,59 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
               />
             </div>
           </div>
+
+          {/* Formulario nuevo cliente inline */}
+          {mostrarNuevoCliente && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-blue-800">Nuevo cliente mayorista</h3>
+                <button onClick={() => setMostrarNuevoCliente(false)} className="text-blue-400 hover:text-blue-600 text-xs">Cancelar</button>
+              </div>
+              <form action={handleCrearCliente} className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nombre comercial *</label>
+                  <input name="nombre_comercial" required className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Razón social</label>
+                  <input name="razon_social" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Condición IVA</label>
+                  <select name="condicion_iva" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                    <option value="monotributo">Monotributo</option>
+                    <option value="inscripto">Inscripto</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">CUIT</label>
+                  <input name="cuit" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono</label>
+                  <input name="telefono" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                  <input name="email" type="email" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Dirección de entrega</label>
+                  <input name="direccion_entrega" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Transporte</label>
+                  <input name="transporte" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div className="col-span-2 flex justify-end">
+                  <button type="submit" disabled={creandoCliente}
+                    className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50">
+                    {creandoCliente ? 'Creando...' : 'Crear y seleccionar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Agregar producto */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-end gap-3">
@@ -325,11 +384,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                         <td className="px-6 py-3 text-right text-gray-500 tabular-nums">{formatearMoneda(iva)}</td>
                         <td className="px-6 py-3 text-right font-bold text-magenta-700 tabular-nums">{formatearMoneda(sub)}</td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => quitarLinea(i)}
-                            className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Quitar"
-                          >
+                          <button onClick={() => quitarLinea(i)} className="text-red-400 hover:text-red-600 transition-colors" title="Quitar">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -370,7 +425,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
           <div className="flex justify-end">
             <button
               onClick={handleGuardar}
-              disabled={saving || lineas.length === 0}
+              disabled={saving || lineas.length === 0 || !clienteId}
               className="px-6 py-2 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Guardando...' : editandoId ? 'Actualizar Proforma' : 'Guardar Proforma'}
@@ -389,8 +444,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-6 py-3 font-medium text-gray-600">Nombre</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-600">Cliente</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Total c/IVA</th>
@@ -400,8 +454,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                 <tbody className="divide-y divide-gray-100">
                   {proformasGuardadas.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 font-medium text-gray-900">{p.nombre || 'Sin nombre'}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.cliente_nombre || '—'}</td>
+                      <td className="px-6 py-3 font-medium text-gray-900">{p.cliente_nombre || '—'}</td>
                       <td className="px-4 py-3 text-gray-600">
                         {new Date(p.fecha).toLocaleDateString('es-AR')}
                       </td>
@@ -419,33 +472,22 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          <a
-                            href={`/api/pdf/proforma/${p.id}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-xs font-medium"
-                          >
+                          <a href={`/api/pdf/proforma/${p.id}`} target="_blank"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-xs font-medium">
                             PDF
                           </a>
                           {p.estado === 'borrador' && (
                             <>
-                              <button
-                                onClick={() => handleEditar(p)}
-                                className="px-2.5 py-1 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors text-xs font-medium"
-                              >
+                              <button onClick={() => handleEditar(p)}
+                                className="px-2.5 py-1 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors text-xs font-medium">
                                 Modificar
                               </button>
-                              <button
-                                onClick={() => handleConfirmar(p.id)}
-                                disabled={confirmandoId === p.id}
-                                className="px-2.5 py-1 text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition-colors text-xs font-medium disabled:opacity-50"
-                              >
+                              <button onClick={() => handleConfirmar(p.id)} disabled={confirmandoId === p.id}
+                                className="px-2.5 py-1 text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition-colors text-xs font-medium disabled:opacity-50">
                                 {confirmandoId === p.id ? '...' : 'Confirmar'}
                               </button>
-                              <button
-                                onClick={() => handleEliminar(p.id)}
-                                disabled={eliminandoId === p.id}
-                                className="px-2.5 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-xs font-medium disabled:opacity-50"
-                              >
+                              <button onClick={() => handleEliminar(p.id)} disabled={eliminandoId === p.id}
+                                className="px-2.5 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-xs font-medium disabled:opacity-50">
                                 {eliminandoId === p.id ? '...' : 'Eliminar'}
                               </button>
                             </>

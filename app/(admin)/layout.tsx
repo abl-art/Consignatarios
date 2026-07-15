@@ -38,11 +38,15 @@ const navItems: NavItem[] = [
       // Consignatarios
       { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios', header: true },
       { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { href: '/consignatarios/lista-precios', label: 'Lista de Precios', icon: 'ventas' },
-      { href: '/consignatarios/proformas', label: 'Proformas', icon: 'documento' },
       { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
       { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
       { href: '/consignatarios/credenciales', label: 'Credenciales', icon: 'consignatarios' },
+      // Mayoristas
+      { href: '/mayoristas', label: 'Mayoristas', icon: 'fabrica', header: true },
+      { href: '/mayoristas/clientes', label: 'Clientes', icon: 'consignatarios' },
+      { href: '/mayoristas/lista-precios', label: 'Lista de Precios', icon: 'ventas' },
+      { href: '/mayoristas/proformas', label: 'Proformas', icon: 'documento' },
+      { href: '/mayoristas/asignaciones', label: 'Asignaciones', icon: 'asignar' },
       { href: '/garantias', label: 'Garantías', icon: 'garantias' },
       { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
       { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
