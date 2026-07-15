@@ -73,11 +73,15 @@ async function notificarGocelular(
   const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_assign_endpoint').single()
   const endpoint = config?.value
 
-  // Get store_id from consignatario (if applicable)
+  // Get store_id: from consignatario if available, otherwise use default (ecommerce)
   let storeId: string | null = null
   if (consignatarioId) {
     const { data: consig } = await admin.from('consignatarios').select('store_id').eq('id', consignatarioId).single()
     storeId = consig?.store_id ?? null
+  }
+  if (!storeId) {
+    const { data: defaultStore } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_default_store_id').single()
+    storeId = defaultStore?.value ?? null
   }
 
   const timestamp = new Date().toISOString().replace('Z', '-03:00') // Argentina timezone
