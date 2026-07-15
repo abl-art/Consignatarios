@@ -211,3 +211,19 @@ export interface DeudaAlerta {
   uso_porcentaje?: number
   dias_estres?: number
 }
+
+// Liquidaciones Afiliados
+export type EstadoLiquidacionAfiliado = 'pendiente' | 'pagada'
+
+export interface LiquidacionAfiliado {
+  id: string
+  partner_slug: string
+  partner_name: string
+  mes: string
+  total_comisiones: number
+  monto_a_pagar: number
+  estado: EstadoLiquidacionAfiliado
+  factura_url: string | null
+  fecha_pago: string | null
+  created_at: string
+}
