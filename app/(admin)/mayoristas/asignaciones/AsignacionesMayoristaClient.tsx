@@ -59,6 +59,20 @@ export default function AsignacionesMayoristaClient({ borradores, confirmados, p
   return (
     <div className="space-y-6">
       {proformasPendientes.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl px-5 py-4 flex items-center gap-3">
+          <span className="text-2xl">📦</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {proformasPendientes.length} {proformasPendientes.length === 1 ? 'proforma pendiente' : 'proformas pendientes'} de preparar y enviar
+            </p>
+            <p className="text-xs text-amber-600">
+              {proformasPendientes.reduce((s, p) => s + p.proforma_items.reduce((s2, i) => s2 + i.cantidad, 0) - (equiposAsignadosPorProforma.get(p.id) ?? 0), 0)} equipos por asignar en total
+            </p>
+          </div>
+        </div>
+      )}
+
+      {proformasPendientes.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Proformas confirmadas — pendientes de asignar equipos</h3>
           <div className="space-y-3">
