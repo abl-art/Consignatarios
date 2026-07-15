@@ -30,7 +30,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   // --- Estado nueva/editar proforma ---
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [clienteId, setClienteId] = useState('')
-  const [notas, setNotas] = useState('Proforma válida por 7 días hábiles')
+  const [notas, setNotas] = useState('Proforma válida por 7 días hábiles. Plazo de pago: 70 días de fecha de confirmación de proforma.')
   const [mup, setMup] = useState(mupInicial)
   const [lineas, setLineas] = useState<LineaProforma[]>([])
   const [productoSeleccionado, setProductoSeleccionado] = useState('')
@@ -47,7 +47,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   function resetForm() {
     setEditandoId(null)
     setClienteId('')
-    setNotas('Proforma válida por 7 días hábiles')
+    setNotas('Proforma válida por 7 días hábiles. Plazo de pago: 70 días de fecha de confirmación de proforma.')
     setMup(mupInicial)
     setLineas([])
     setProductoSeleccionado('')
