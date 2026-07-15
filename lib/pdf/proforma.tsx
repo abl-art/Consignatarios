@@ -7,53 +7,117 @@ const styles = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
     fontSize: 10,
-    padding: 40,
+    padding: 30,
     color: '#1a1a1a',
   },
-  header: {
-    marginBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: MAGENTA,
-    paddingBottom: 10,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
-    color: MAGENTA,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginBottom: 2,
-  },
-  headerDate: {
-    fontSize: 9,
-    color: '#9ca3af',
-  },
-  infoRow: {
+  // === Header tipo factura argentina ===
+  headerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#000',
     marginBottom: 12,
   },
-  infoLabel: {
-    fontSize: 9,
-    color: '#6b7280',
+  headerLeft: {
+    flex: 1,
+    padding: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#000',
   },
-  infoValue: {
-    fontSize: 10,
+  headerCenter: {
+    width: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+  },
+  headerLetterBox: {
+    width: 40,
+    height: 40,
+    borderWidth: 2,
+    borderColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLetter: {
+    fontSize: 24,
     fontFamily: 'Helvetica-Bold',
   },
+  headerLetterSub: {
+    fontSize: 7,
+    color: '#666',
+    marginTop: 2,
+  },
+  headerRight: {
+    flex: 1,
+    padding: 10,
+  },
+  companyName: {
+    fontSize: 16,
+    fontFamily: 'Helvetica-Bold',
+    color: MAGENTA,
+    marginBottom: 2,
+  },
+  companyBrand: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  companyDetail: {
+    fontSize: 8,
+    color: '#4b5563',
+    marginBottom: 1,
+  },
+  docTitle: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 4,
+  },
+  docDetail: {
+    fontSize: 9,
+    color: '#374151',
+    marginBottom: 2,
+  },
+  // === Datos del receptor ===
+  receptorBox: {
+    borderWidth: 1,
+    borderColor: '#000',
+    padding: 10,
+    marginBottom: 12,
+  },
+  receptorTitle: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#6b7280',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  receptorRow: {
+    flexDirection: 'row',
+    marginBottom: 2,
+  },
+  receptorLabel: {
+    fontSize: 9,
+    color: '#6b7280',
+    width: 100,
+  },
+  receptorValue: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#1a1a1a',
+  },
+  // === Tabla ===
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#f3f4f6',
     padding: 6,
-    borderRadius: 4,
-    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    marginBottom: 0,
   },
   tableHeaderCell: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
+    fontSize: 8,
     textTransform: 'uppercase',
     color: '#374151',
   },
@@ -61,7 +125,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 5,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#e5e7eb',
   },
   tableRowAlt: {
     backgroundColor: '#fafafa',
@@ -71,28 +137,55 @@ const styles = StyleSheet.create({
   colPrecioUnit: { flex: 2, textAlign: 'right' },
   colIva: { flex: 2, textAlign: 'right' },
   colSubtotal: { flex: 2, textAlign: 'right' },
+  // === Totales ===
+  totalsContainer: {
+    marginTop: 0,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#d1d5db',
+  },
   totalRow: {
     flexDirection: 'row',
-    padding: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  totalRowFinal: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     backgroundColor: '#f9fafb',
-    borderTopWidth: 2,
-    borderTopColor: MAGENTA,
-    marginTop: 4,
   },
   totalLabel: {
-    flex: 6,
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 11,
+    flex: 8,
+    textAlign: 'right',
+    fontSize: 9,
+    color: '#374151',
+    paddingRight: 10,
   },
   totalValue: {
+    flex: 2,
+    textAlign: 'right',
+    fontSize: 9,
+  },
+  totalLabelBold: {
+    flex: 8,
+    textAlign: 'right',
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    paddingRight: 10,
+  },
+  totalValueBold: {
     flex: 2,
     textAlign: 'right',
     fontFamily: 'Helvetica-Bold',
     fontSize: 12,
     color: MAGENTA,
   },
+  // === Notas ===
   notas: {
-    marginTop: 16,
+    marginTop: 14,
     padding: 10,
     backgroundColor: '#f9fafb',
     borderRadius: 4,
@@ -100,22 +193,24 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   notasLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: 'Helvetica-Bold',
     color: '#6b7280',
     marginBottom: 4,
+    textTransform: 'uppercase',
   },
   notasText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#374151',
   },
+  // === Footer ===
   footer: {
     position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
+    bottom: 25,
+    left: 30,
+    right: 30,
     textAlign: 'center',
-    fontSize: 8,
+    fontSize: 7,
     color: '#9ca3af',
   },
 })
@@ -139,6 +234,10 @@ export interface ProformaItemPDF {
 
 export interface ProformaPDFProps {
   nombre: string
+  clienteNombre: string
+  clienteCuit: string
+  clienteIva: string
+  clienteDireccion: string
   fecha: string
   items: ProformaItemPDF[]
   total_neto: number
@@ -147,41 +246,79 @@ export interface ProformaPDFProps {
   notas: string | null
 }
 
-export function ProformaPDF({ nombre, fecha, items, total_neto, total_iva, total_con_iva, notas }: ProformaPDFProps) {
+export function ProformaPDF({
+  nombre, clienteNombre, clienteCuit, clienteIva, clienteDireccion,
+  fecha, items, total_neto, total_iva, total_con_iva, notas,
+}: ProformaPDFProps) {
   const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0)
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Proforma</Text>
-          <Text style={styles.headerSubtitle}>{nombre}</Text>
-          <Text style={styles.headerDate}>{fecha}</Text>
+        {/* === Header tipo factura argentina === */}
+        <View style={styles.headerContainer}>
+          {/* Izquierda: datos del emisor */}
+          <View style={styles.headerLeft}>
+            <Text style={styles.companyName}>GOcelular</Text>
+            <Text style={styles.companyBrand}>GO Servicios Digitales SAS</Text>
+            <Text style={styles.companyDetail}>CUIT: 30-71632558-6</Text>
+            <Text style={styles.companyDetail}>Domicilio: San Martin 4349, Unquillo, Córdoba</Text>
+            <Text style={styles.companyDetail}>Condición IVA: Responsable Inscripto</Text>
+          </View>
+
+          {/* Centro: letra del comprobante */}
+          <View style={styles.headerCenter}>
+            <View style={styles.headerLetterBox}>
+              <Text style={styles.headerLetter}>X</Text>
+            </View>
+            <Text style={styles.headerLetterSub}>No válido como factura</Text>
+          </View>
+
+          {/* Derecha: datos del documento */}
+          <View style={styles.headerRight}>
+            <Text style={styles.docTitle}>PROFORMA</Text>
+            <Text style={styles.docDetail}>Fecha: {fecha}</Text>
+            <Text style={styles.docDetail}>Ref: {nombre || '—'}</Text>
+            <Text style={styles.docDetail}>Unidades: {totalUnidades}</Text>
+          </View>
         </View>
 
-        {/* Info */}
-        <View style={styles.infoRow}>
-          <View>
-            <Text style={styles.infoLabel}>GOcelular</Text>
-            <Text style={styles.infoValue}>Cotización de productos</Text>
+        {/* === Datos del receptor === */}
+        <View style={styles.receptorBox}>
+          <Text style={styles.receptorTitle}>Datos del cliente</Text>
+          <View style={styles.receptorRow}>
+            <Text style={styles.receptorLabel}>Nombre / Razón social:</Text>
+            <Text style={styles.receptorValue}>{clienteNombre || '—'}</Text>
           </View>
-          <View>
-            <Text style={styles.infoLabel}>Total unidades</Text>
-            <Text style={styles.infoValue}>{totalUnidades}</Text>
-          </View>
+          {clienteCuit && (
+            <View style={styles.receptorRow}>
+              <Text style={styles.receptorLabel}>CUIT:</Text>
+              <Text style={styles.receptorValue}>{clienteCuit}</Text>
+            </View>
+          )}
+          {clienteIva && (
+            <View style={styles.receptorRow}>
+              <Text style={styles.receptorLabel}>Condición IVA:</Text>
+              <Text style={styles.receptorValue}>{clienteIva === 'inscripto' ? 'Responsable Inscripto' : 'Monotributista'}</Text>
+            </View>
+          )}
+          {clienteDireccion && (
+            <View style={styles.receptorRow}>
+              <Text style={styles.receptorLabel}>Domicilio:</Text>
+              <Text style={styles.receptorValue}>{clienteDireccion}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Table header */}
+        {/* === Tabla === */}
         <View style={styles.tableHeader}>
-          <Text style={[styles.tableHeaderCell, styles.colModelo]}>Modelo</Text>
+          <Text style={[styles.tableHeaderCell, styles.colModelo]}>Descripción</Text>
           <Text style={[styles.tableHeaderCell, styles.colCant]}>Cant.</Text>
           <Text style={[styles.tableHeaderCell, styles.colPrecioUnit]}>P. Unit. Neto</Text>
-          <Text style={[styles.tableHeaderCell, styles.colIva]}>IVA Unit.</Text>
-          <Text style={[styles.tableHeaderCell, styles.colSubtotal]}>Subtotal c/IVA</Text>
+          <Text style={[styles.tableHeaderCell, styles.colIva]}>IVA 21%</Text>
+          <Text style={[styles.tableHeaderCell, styles.colSubtotal]}>Subtotal</Text>
         </View>
 
-        {/* Items */}
         {items.map((item, index) => (
           <View
             key={`${item.producto_nombre}-${index}`}
@@ -191,31 +328,39 @@ export function ProformaPDF({ nombre, fecha, items, total_neto, total_iva, total
             <Text style={styles.colCant}>{item.cantidad}</Text>
             <Text style={styles.colPrecioUnit}>{formatARS(item.precio_venta_neto)}</Text>
             <Text style={styles.colIva}>{formatARS(item.iva)}</Text>
-            <Text style={[styles.colSubtotal, { fontFamily: 'Helvetica-Bold', color: MAGENTA }]}>
+            <Text style={[styles.colSubtotal, { fontFamily: 'Helvetica-Bold' }]}>
               {formatARS(item.subtotal_con_iva)}
             </Text>
           </View>
         ))}
 
-        {/* Totals */}
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>
-            Total — {totalUnidades} unidades (Neto: {formatARS(total_neto)} + IVA: {formatARS(total_iva)})
-          </Text>
-          <Text style={styles.totalValue}>{formatARS(total_con_iva)}</Text>
+        {/* === Totales === */}
+        <View style={styles.totalsContainer}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Subtotal Neto</Text>
+            <Text style={styles.totalValue}>{formatARS(total_neto)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>IVA 21%</Text>
+            <Text style={styles.totalValue}>{formatARS(total_iva)}</Text>
+          </View>
+          <View style={styles.totalRowFinal}>
+            <Text style={styles.totalLabelBold}>TOTAL</Text>
+            <Text style={styles.totalValueBold}>{formatARS(total_con_iva)}</Text>
+          </View>
         </View>
 
-        {/* Notas */}
+        {/* === Notas === */}
         {notas ? (
           <View style={styles.notas}>
-            <Text style={styles.notasLabel}>OBSERVACIONES</Text>
+            <Text style={styles.notasLabel}>Observaciones</Text>
             <Text style={styles.notasText}>{notas}</Text>
           </View>
         ) : null}
 
-        {/* Footer */}
+        {/* === Footer === */}
         <Text style={styles.footer}>
-          GOcelular — Proforma generada el {fecha}. Precios sujetos a cambio sin previo aviso.
+          GOcelular — GO Servicios Digitales SAS — CUIT 30-71632558-6 — Documento no válido como factura — Generado el {fecha}
         </Text>
       </Page>
     </Document>
