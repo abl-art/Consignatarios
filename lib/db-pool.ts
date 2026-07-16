@@ -47,3 +47,24 @@ export function getGocuotasPool(): Pool | null {
   }
   return gocuotasPool
 }
+
+// Singleton pool para KEYcontact CRM DB
+let keyContactPool: Pool | null = null
+
+export function getKeyContactPool(): Pool | null {
+  const url = process.env.KEYCONTACT_DB_URL
+  if (!url) return null
+
+  if (!keyContactPool) {
+    keyContactPool = new Pool({
+      connectionString: url,
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    })
+    keyContactPool.on('error', (err) => {
+      console.error('KEYcontact pool error:', err.message)
+    })
+  }
+  return keyContactPool
+}
