@@ -155,12 +155,32 @@ export default function PipelineTab({ data: initialData, owners: initialOwners }
                   </tr>
                   {expandedId === d.id && (
                     <tr key={`${d.id}-detail`} className="bg-gray-50">
-                      <td colSpan={7} className="px-5 py-3">
-                        <div className="flex gap-6 text-xs text-gray-600">
+                      <td colSpan={7} className="px-5 py-4">
+                        {/* Contact info */}
+                        <div className="flex gap-6 text-xs text-gray-600 mb-3">
                           <div><span className="font-medium text-gray-700">Contacto:</span> {d.contact_name ?? 'Sin contacto'}</div>
                           {d.contact_email && <div><span className="font-medium text-gray-700">Email:</span> {d.contact_email}</div>}
                           {d.contact_phone && <div><span className="font-medium text-gray-700">Tel:</span> {d.contact_phone}</div>}
                         </div>
+                        {/* Activities */}
+                        {d.activities.length > 0 ? (
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            <p className="text-xs font-semibold text-gray-700">Anotaciones ({d.activities.length})</p>
+                            {d.activities.map((act, i) => (
+                              <div key={i} className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 capitalize">{act.type}</span>
+                                  <span className="text-[10px] text-gray-400">{new Date(act.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                  <span className="text-[10px] text-gray-400">— {act.user_name}</span>
+                                </div>
+                                {act.subject && <p className="text-xs font-medium text-gray-700">{act.subject}</p>}
+                                {act.notes && <p className="text-xs text-gray-600">{act.notes}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">Sin anotaciones.</p>
+                        )}
                       </td>
                     </tr>
                   )}

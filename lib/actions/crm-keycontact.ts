@@ -13,6 +13,14 @@ export type Stage = {
   is_won: boolean
 }
 
+export type DealActivity = {
+  type: string
+  subject: string | null
+  notes: string | null
+  created_at: string
+  user_name: string
+}
+
 export type Deal = {
   id: string
   name: string
@@ -28,6 +36,7 @@ export type Deal = {
   contact_name: string | null
   contact_email: string | null
   contact_phone: string | null
+  activities: DealActivity[]
 }
 
 export type StageSummary = Stage & {
@@ -101,9 +110,10 @@ export async function fetchPipelineData(desde: string, hasta: string, stageSlug?
       salidas: salidasMap.get(s.id) ?? 0,
     }))
 
-    // 5. Deals
+    // 5. Deals (use DISTINCT ON to get first contact per deal, not just is_primary)
+    type DealRow = Omit<Deal, 'activities'>
     let dealsQuery = `
-      SELECT d.id, d.name, d.city, d.province, d.locations_count, d.lead_score,
+      SELECT DISTINCT ON (d.id) d.id, d.name, d.city, d.province, d.locations_count, d.lead_score,
              d.updated_at::text,
              ps.name AS stage_name, ps.slug AS stage_slug, ps.order_position,
              u.full_name AS owner_name,
@@ -111,7 +121,7 @@ export async function fetchPipelineData(desde: string, hasta: string, stageSlug?
       FROM deals d
       JOIN pipeline_stages ps ON ps.id = d.stage_id
       JOIN users u ON u.id = d.owner_id
-      LEFT JOIN deal_contacts dc ON dc.deal_id = d.id AND dc.is_primary
+      LEFT JOIN deal_contacts dc ON dc.deal_id = d.id
       LEFT JOIN contacts c ON c.id = dc.contact_id AND c.deleted_at IS NULL
       WHERE d.pipeline_id = $1
         AND d.created_at >= $2::date AND d.created_at < ($3::date + 1)`
@@ -125,11 +135,38 @@ export async function fetchPipelineData(desde: string, hasta: string, stageSlug?
       params.push(ownerId)
       dealsQuery += ` AND d.owner_id = $${params.length}::uuid`
     }
-    dealsQuery += ` ORDER BY d.created_at DESC`
+    dealsQuery += ` ORDER BY d.id, dc.is_primary DESC NULLS LAST, dc.role`
 
-    const dealsRes = await client.query<Deal>(dealsQuery, params)
+    const dealsRes = await client.query<DealRow>(dealsQuery, params)
 
-    // 6. Owners for filter dropdown
+    // Re-sort by created_at DESC (DISTINCT ON requires ORDER BY d.id first)
+    const dealRows = dealsRes.rows
+
+    // 6. Activities for all deals in result
+    const dealIds = dealRows.map(d => d.id)
+    let activitiesMap = new Map<string, DealActivity[]>()
+    if (dealIds.length > 0) {
+      const actRes = await client.query<DealActivity & { deal_id: string }>(
+        `SELECT a.deal_id, a.type, a.subject, a.notes, a.created_at::text, u.full_name AS user_name
+         FROM activities a
+         JOIN users u ON u.id = a.user_id
+         WHERE a.deal_id = ANY($1::uuid[])
+           AND a.deleted_at IS NULL
+         ORDER BY a.created_at DESC`,
+        [dealIds]
+      )
+      for (const act of actRes.rows) {
+        const list = activitiesMap.get(act.deal_id) ?? []
+        list.push({ type: act.type, subject: act.subject, notes: act.notes, created_at: act.created_at, user_name: act.user_name })
+        activitiesMap.set(act.deal_id, list)
+      }
+    }
+
+    const deals: Deal[] = dealRows
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map(d => ({ ...d, activities: activitiesMap.get(d.id) ?? [] }))
+
+    // 7. Owners for filter dropdown
     const ownersRes = await client.query<Owner>(
       `SELECT DISTINCT u.id, u.full_name
        FROM deals d JOIN users u ON u.id = d.owner_id
@@ -138,7 +175,7 @@ export async function fetchPipelineData(desde: string, hasta: string, stageSlug?
       [PIPELINE_ID]
     )
 
-    return { stages, deals: dealsRes.rows, owners: ownersRes.rows }
+    return { stages, deals, owners: ownersRes.rows }
   } finally {
     client.release()
   }
