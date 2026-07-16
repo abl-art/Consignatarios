@@ -219,22 +219,23 @@ export async function fetchConversionData(desde: string, hasta: string): Promise
     const prospectoEntradas = prospectoStage ? (entradasMap.get(prospectoStage.id) ?? prospectoStage.deals_count) : 1
     const total_rate = prospectoEntradas > 0 ? (ganadoEntradas / prospectoEntradas) * 100 : 0
 
-    // Average time per stage
+    // Average time per stage (window fn in subquery to avoid aggregate+window conflict)
     const timeRes = await client.query<{ stage_name: string; avg_days: number }>(
-      `SELECT ps.name AS stage_name,
-              COALESCE(AVG(
-                CASE WHEN sh.time_in_previous_stage_days IS NOT NULL
-                  THEN sh.time_in_previous_stage_days
-                  ELSE EXTRACT(DAY FROM sh.created_at - LAG(sh.created_at) OVER (PARTITION BY sh.deal_id ORDER BY sh.created_at))::int
-                END
-              ), 0)::int AS avg_days
-       FROM stage_history sh
-       JOIN pipeline_stages ps ON ps.id = sh.from_stage_id
-       WHERE ps.pipeline_id = $1
-         AND sh.from_stage_id IS NOT NULL
-         AND sh.created_at >= $2::date AND sh.created_at < ($3::date + 1)
-       GROUP BY ps.name, ps.order_position
-       ORDER BY ps.order_position`,
+      `SELECT stage_name, COALESCE(AVG(days_in_stage), 0)::int AS avg_days
+       FROM (
+         SELECT ps.name AS stage_name, ps.order_position,
+                COALESCE(
+                  sh.time_in_previous_stage_days,
+                  EXTRACT(DAY FROM sh.created_at - LAG(sh.created_at) OVER (PARTITION BY sh.deal_id ORDER BY sh.created_at))::int
+                ) AS days_in_stage
+         FROM stage_history sh
+         JOIN pipeline_stages ps ON ps.id = sh.from_stage_id
+         WHERE ps.pipeline_id = $1
+           AND sh.from_stage_id IS NOT NULL
+           AND sh.created_at >= $2::date AND sh.created_at < ($3::date + 1)
+       ) sub
+       GROUP BY stage_name, order_position
+       ORDER BY order_position`,
       [PIPELINE_ID, desde, hasta]
     )
 
