@@ -20,7 +20,7 @@ export default function TercerosPage() {
 
       <p className="text-sm text-gray-500 mb-8">Merchants externos que venden con la plataforma GOcuotas</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link
           href="/terceros/crm"
           className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
@@ -50,6 +50,23 @@ export default function TercerosPage() {
             <p className="text-sm text-gray-500">Terceros activos con ventas del mes y resumen de operaciones</p>
           </div>
         </Link>
+
+        <a
+          href="https://keycontact.vercel.app/inicio"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+        >
+          <div className="bg-purple-600 px-5 py-4 flex items-center gap-3">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <h2 className="text-lg font-semibold text-white">KEYcontact</h2>
+          </div>
+          <div className="p-5">
+            <p className="text-sm text-gray-500">Acceder al CRM de KEYcontact</p>
+          </div>
+        </a>
       </div>
     </div>
   )
