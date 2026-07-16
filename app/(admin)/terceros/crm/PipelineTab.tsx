@@ -32,6 +32,7 @@ export default function PipelineTab({ data: initialData, owners: initialOwners }
   const [stageFilter, setStageFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [nameFilter, setNameFilter] = useState('')
   const [isPending, startTransition] = useTransition()
 
   function reload(d: string, h: string, presetIdx: number | null, stage?: string, owner?: string) {
@@ -53,7 +54,13 @@ export default function PipelineTab({ data: initialData, owners: initialOwners }
     setOwnerFilter(id); reload(desde, hasta, activePreset, stageFilter, id)
   }
 
-  const { stages, deals } = data
+  const { stages, deals: allDeals } = data
+  const deals = nameFilter
+    ? allDeals.filter(d => d.name.toLowerCase().includes(nameFilter.toLowerCase()))
+    : allDeals
+  const avgLeadScore = allDeals.length > 0
+    ? allDeals.reduce((s, d) => s + (d.lead_score ?? 0), 0) / allDeals.filter(d => d.lead_score != null).length
+    : 0
 
   return (
     <div className={`space-y-6 ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -86,10 +93,14 @@ export default function PipelineTab({ data: initialData, owners: initialOwners }
           <option value="">Todos los owners</option>
           {initialOwners.map(o => <option key={o.id} value={o.id}>{o.full_name}</option>)}
         </select>
+        <span className="text-gray-300 ml-1">|</span>
+        <input type="text" value={nameFilter} onChange={e => setNameFilter(e.target.value)}
+          placeholder="Buscar comercio..."
+          className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg min-w-[160px]" />
       </div>
 
-      {/* Stage summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      {/* Stage summary cards + Lead Score KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {stages.map(s => (
           <div key={s.id} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs font-semibold text-gray-700 mb-2 truncate">{s.name}</p>
@@ -100,6 +111,11 @@ export default function PipelineTab({ data: initialData, owners: initialOwners }
             </div>
           </div>
         ))}
+        <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
+          <p className="text-xs font-semibold text-blue-700 mb-2">Lead Score Prom.</p>
+          <p className="text-2xl font-bold text-blue-900">{isNaN(avgLeadScore) ? '-' : avgLeadScore.toFixed(1)}</p>
+          <p className="text-xs text-blue-500 mt-2">{allDeals.filter(d => d.lead_score != null).length} deals</p>
+        </div>
       </div>
 
       {/* Deals table */}
