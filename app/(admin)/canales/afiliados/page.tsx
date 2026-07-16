@@ -20,7 +20,7 @@ export default function AfiliadosPage() {
 
       <p className="text-sm text-gray-500 mb-8">Red de afiliados y call center para venta directa al consumidor final</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link
           href="/canales/afiliados/guia"
           className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
@@ -63,6 +63,21 @@ export default function AfiliadosPage() {
           </div>
           <div className="p-5">
             <p className="text-sm text-gray-500">Liquidaciones mensuales de comisiones por afiliado</p>
+          </div>
+        </Link>
+
+        <Link
+          href="/canales/afiliados/links"
+          className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+        >
+          <div className="bg-amber-600 px-5 py-4 flex items-center gap-3">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <h2 className="text-lg font-semibold text-white">Links</h2>
+          </div>
+          <div className="p-5">
+            <p className="text-sm text-gray-500">Links para compartir a cada afiliado su portal de liquidaciones</p>
           </div>
         </Link>
       </div>

@@ -173,6 +173,27 @@ export async function obtenerLiquidacionesAfiliado(slug: string) {
 }
 
 /**
+ * Obtener todos los afiliados desde GOcelular DB (para página de links).
+ */
+export async function obtenerTodosLosAfiliados(): Promise<{ slug: string; display_name: string }[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const result = await client.query<{ slug: string; display_name: string }>(
+      `SELECT slug, display_name FROM affiliate_partners
+       WHERE slug != ALL($1)
+       ORDER BY display_name`,
+      [PARTNERS_EXCLUIDOS]
+    )
+    return result.rows
+  } finally {
+    client.release()
+  }
+}
+
+/**
  * Obtener nombre del afiliado desde GOcelular DB.
  */
 export async function obtenerNombreAfiliado(slug: string): Promise<string | null> {
