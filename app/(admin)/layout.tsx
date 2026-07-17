@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import NavIcon, { type IconName } from '@/components/NavIcon'
-import NavGroup from '@/components/NavGroup'
 import MobileMenu from '@/components/MobileMenu'
 import { contarTacsPendientes } from '@/lib/actions/tacs'
 
@@ -12,71 +11,17 @@ interface NavItem {
   icon: IconName
   external?: boolean
   badge?: boolean
-  children?: { href: string; label: string; icon: IconName; badge?: number; header?: boolean }[]
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
-  {
-    href: '/canales',
-    label: 'Canales de Comercialización',
-    icon: 'tienda',
-    children: [
-      // Tienda Online
-      { href: '/canales/tienda', label: 'Tienda Online', icon: 'tienda', header: true },
-      { href: '/canales/tienda/desempeno', label: 'Desempeño', icon: 'dashboard' },
-      // Venta a Terceros
-      { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas', header: true },
-      { href: '/terceros/crm', label: 'CRM', icon: 'consignatarios' },
-      { href: '/terceros/altas', label: 'Altas', icon: 'tienda' },
-      // Afiliados
-      { href: '/canales/afiliados', label: 'Afiliados', icon: 'consignatarios', header: true },
-      { href: '/canales/afiliados/guia', label: 'Guía Comercial', icon: 'documento' },
-      { href: '/canales/afiliados/desempeno', label: 'Desempeño', icon: 'dashboard' },
-      // Consignatarios
-      { href: '/consignatarios', label: 'Consignatarios', icon: 'consignatarios', header: true },
-      { href: '/consignatarios/dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { href: '/consignatarios/asignaciones', label: 'Asignaciones', icon: 'asignar' },
-      { href: '/consignatarios/devoluciones', label: 'Devoluciones', icon: 'sync' },
-      { href: '/consignatarios/credenciales', label: 'Credenciales', icon: 'consignatarios' },
-      { href: '/auditorias', label: 'Auditorías', icon: 'auditorias' },
-      { href: '/diferencias', label: 'Diferencias', icon: 'diferencias' },
-      { href: '/ventas', label: 'Ventas', icon: 'ventas' },
-      { href: '/liquidaciones', label: 'Liquidaciones', icon: 'liquidaciones' },
-      // Mayoristas
-      { href: '/mayoristas', label: 'Mayoristas', icon: 'fabrica', header: true },
-      { href: '/mayoristas/clientes', label: 'Clientes', icon: 'consignatarios' },
-      { href: '/mayoristas/lista-precios', label: 'Lista de Precios', icon: 'ventas' },
-      { href: '/mayoristas/proformas', label: 'Proformas', icon: 'documento' },
-      { href: '/mayoristas/asignaciones', label: 'Asignaciones', icon: 'asignar' },
-    ],
-  },
-  {
-    href: '/marketing',
-    label: 'Marketing',
-    icon: 'tienda',
-    children: [
-      { href: 'https://drive.google.com/drive/folders/1Yr4u9OjJ6r4ct90Au3_yy47RFkhWOlbC', label: 'Material Publicitario', icon: 'documento' },
-    ],
-  },
+  { href: '/canales', label: 'Canales de Comercialización', icon: 'tienda' },
+  { href: 'https://drive.google.com/drive/folders/1Yr4u9OjJ6r4ct90Au3_yy47RFkhWOlbC', label: 'Marketing', icon: 'tienda', external: true },
   { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
   { href: '/compras', label: 'Compras', icon: 'fabrica' },
-  {
-    href: '/inventario',
-    label: 'Inventario',
-    icon: 'inventario',
-    children: [
-      { href: '/inventario/celulares', label: 'Celulares', icon: 'modelos' },
-      { href: '/inventario/smartwatches', label: 'Smartwatches', icon: 'inventario' },
-      { href: '/inventario/parlantes', label: 'Parlantes', icon: 'inventario' },
-      { href: '/inventario/auriculares', label: 'Auriculares', icon: 'inventario' },
-      { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', icon: 'inventario' },
-      { href: '/auditoria-stock', label: 'Auditoría Stock', icon: 'auditorias' },
-      { href: '/pase-contabilidad', label: 'Pase a Contabilidad', icon: 'auditorias' },
-    ],
-  },
+  { href: '/inventario', label: 'Inventario', icon: 'inventario' },
   // /modelos page kept for admin access but hidden from nav - managed via Compras now
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
@@ -84,14 +29,7 @@ const navItems: NavItem[] = [
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/gestion-tacs', label: 'Gestión TACs', icon: 'modelos', badge: true },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
-  {
-    href: '/grupo-go',
-    label: 'Grupo GO',
-    icon: 'dashboard',
-    children: [
-      { href: 'https://finanzas.gocuotas.com', label: 'Finanzas', icon: 'finanzas' },
-    ],
-  },
+  { href: 'https://finanzas.gocuotas.com', label: 'Grupo GO', icon: 'dashboard', external: true },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -103,32 +41,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   let tacsPendientes = 0
   try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
 
-  let liqBorradores = 0
-  try {
-    const { count } = await supabase.from('liquidaciones').select('*', { count: 'exact', head: true }).eq('estado', 'borrador')
-    liqBorradores = count ?? 0
-  } catch { /* skip */ }
-
-  // Contar proformas confirmadas pendientes de asignar equipos
-  let proformasPendientes = 0
-  try {
-    const { count } = await supabase.from('proformas').select('*', { count: 'exact', head: true }).eq('estado', 'confirmada')
-    proformasPendientes = count ?? 0
-  } catch { /* skip */ }
-
-  // Inyectar badges en nav
-  const navItemsConBadge = navItems.map(item => {
-    if (!item.children) return item
-    return {
-      ...item,
-      children: item.children.map(child => {
-        if (child.href === '/liquidaciones' && liqBorradores > 0) return { ...child, badge: liqBorradores }
-        if (child.href === '/mayoristas/asignaciones' && proformasPendientes > 0) return { ...child, badge: proformasPendientes }
-        return child
-      }),
-    }
-  })
-
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - hidden on mobile, visible on md+ */}
@@ -138,16 +50,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="text-xs text-gray-400 block">Panel Admin</span>
         </div>
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navItemsConBadge.map((item) =>
-            item.children ? (
-              <NavGroup
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                icon={item.icon}
-                children={item.children}
-              />
-            ) : item.external ? (
+          {navItems.map((item) =>
+            item.external ? (
               <a
                 key={item.href}
                 href={item.href}
@@ -187,11 +91,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </aside>
 
       {/* Mobile menu */}
-      <MobileMenu items={navItemsConBadge.map(item => ({
+      <MobileMenu items={navItems.map(item => ({
         href: item.href,
         label: item.label,
         external: item.external,
-        children: item.children?.map(c => ({ href: c.href, label: c.label })),
       }))} />
 
       {/* Contenido */}
