@@ -9,13 +9,18 @@ export default async function CuentaCorrientePage() {
   const clientes = await getClientesMayoristas()
   const admin = createAdminClient()
 
-  // Fetch all confirmed proformas with client info
-  const { data: proformas } = await admin
-    .from('proformas')
-    .select('id, nro_proforma, cliente_mayorista_id, cliente_nombre, total_con_iva, fecha_confirmacion, estado')
-    .eq('estado', 'confirmada')
-    .not('cliente_mayorista_id', 'is', null)
-    .order('fecha_confirmacion', { ascending: false })
+  const [{ data: proformas }, { data: pagos }] = await Promise.all([
+    admin
+      .from('proformas')
+      .select('id, nro_proforma, cliente_mayorista_id, cliente_nombre, total_con_iva, fecha_confirmacion, estado')
+      .eq('estado', 'confirmada')
+      .not('cliente_mayorista_id', 'is', null)
+      .order('fecha_confirmacion', { ascending: false }),
+    admin
+      .from('pagos_mayoristas')
+      .select('id, cliente_mayorista_id, monto, fecha_cobro, tipo, cuit_emisor, created_at')
+      .order('created_at', { ascending: false }),
+  ])
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -27,6 +32,7 @@ export default async function CuentaCorrientePage() {
       <CuentaCorrienteClient
         clientes={clientes}
         proformas={(proformas ?? []) as { id: string; nro_proforma: number | null; cliente_mayorista_id: string; cliente_nombre: string; total_con_iva: number; fecha_confirmacion: string; estado: string }[]}
+        pagos={(pagos ?? []) as { id: string; cliente_mayorista_id: string; monto: number; fecha_cobro: string; tipo: string; cuit_emisor: string; created_at: string }[]}
       />
     </div>
   )
