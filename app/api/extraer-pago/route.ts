@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         }
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6-20250725',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
       messages: [
         {
@@ -70,7 +70,9 @@ Si no podés extraer un campo, poné null. La confianza es tu nivel de certeza g
       ],
     })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    let text = response.content[0].type === 'text' ? response.content[0].text : ''
+    // Strip markdown code fences if present
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
     const parsed = JSON.parse(text)
 
     return NextResponse.json(parsed)
