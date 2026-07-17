@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         }
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6-20250725',
       max_tokens: 500,
       messages: [
         {
@@ -75,6 +75,7 @@ Si no podés extraer un campo, poné null. La confianza es tu nivel de certeza g
 
     return NextResponse.json(parsed)
   } catch (err: unknown) {
+    console.error('Error en /api/extraer-pago:', err)
     const message = err instanceof Error ? err.message : 'Error desconocido'
     return NextResponse.json({ error: message }, { status: 500 })
   }
