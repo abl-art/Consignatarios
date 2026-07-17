@@ -161,7 +161,40 @@ export interface ClienteMayorista {
   email: string | null
   direccion_entrega: string | null
   transporte: string | null
+  limite_cuenta_corriente: number | null
   created_at: string
+}
+
+export interface PagoMayorista {
+  id: string
+  cliente_mayorista_id: string
+  monto: number
+  fecha_cobro: string
+  cuit_emisor: string
+  tipo: 'echeq' | 'transferencia' | 'efectivo' | 'orden_pago'
+  comprobante_url: string | null
+  confianza_extraccion: number | null
+  created_at: string
+}
+
+export interface ExtraccionPago {
+  monto: number | null
+  fecha_cobro: string | null
+  cuit_emisor: string | null
+  confianza: number
+  tipo_detectado: 'echeq' | 'transferencia' | 'efectivo' | 'orden_pago' | null
+}
+
+export interface ExposicionRiesgo {
+  cliente_id: string
+  nombre_comercial: string
+  limite_cc: number | null
+  deuda: number
+  pagos_acreditados: number
+  pendiente_cobro: number
+  saldo: number
+  porcentaje_utilizacion: number | null
+  estado: 'verde' | 'amarillo' | 'rojo' | 'bloqueado'
 }
 
 // Deuda
