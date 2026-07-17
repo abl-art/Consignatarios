@@ -16,6 +16,25 @@ export async function POST(request: NextRequest) {
     const base64 = Buffer.from(bytes).toString('base64')
 
     const mimeType = file.type || 'image/jpeg'
+    const isPdf = mimeType === 'application/pdf'
+
+    const fileContent = isPdf
+      ? {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: base64,
+          },
+        }
+      : {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: base64,
+          },
+        }
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -24,17 +43,10 @@ export async function POST(request: NextRequest) {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                data: base64,
-              },
-            },
+            fileContent,
             {
               type: 'text',
-              text: `Analizá esta imagen de un comprobante de pago argentino (puede ser un echeq, cheque, orden de pago, o transferencia bancaria).
+              text: `Analizá este comprobante de pago argentino (puede ser un echeq, cheque, orden de pago, o transferencia bancaria).
 
 Extraé los siguientes datos:
 1. Monto (número, sin símbolo de moneda)
