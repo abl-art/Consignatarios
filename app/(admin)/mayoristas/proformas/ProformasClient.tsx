@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
@@ -191,10 +192,15 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/canales/mayoristas" className="text-gray-400 hover:text-gray-600 text-sm">← Mayoristas</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      </div>
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Proformas</h1>
-        <p className="text-sm text-gray-500 mt-1">Armá cotizaciones eligiendo modelos y cantidades</p>
+        <p className="text-sm text-gray-500 mb-1">Armá cotizaciones eligiendo modelos y cantidades</p>
       </div>
 
       {/* Tabs */}
@@ -343,7 +349,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
             <button
               onClick={agregarLinea}
               disabled={!productoSeleccionado}
-              className="px-4 py-1.5 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Agregar
             </button>
@@ -426,7 +432,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
             <button
               onClick={handleGuardar}
               disabled={saving || lineas.length === 0 || !clienteId}
-              className="px-6 py-2 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Guardando...' : editandoId ? 'Actualizar Proforma' : 'Guardar Proforma'}
             </button>
@@ -475,7 +481,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
                           <a href={`/api/pdf/proforma/${p.id}`} target="_blank"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors text-xs font-medium">
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs font-medium">
                             PDF
                           </a>
                           {p.estado === 'borrador' && (

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
 import type { Diferencia, Consignatario } from '@/lib/types'
@@ -73,8 +74,13 @@ export default async function DiferenciasPage({
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/consignatarios" className="text-gray-400 hover:text-gray-600 text-sm">← Consignatarios</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Diferencias</h1>
-      <p className="text-sm text-gray-500 mb-8">Faltantes y sobrantes detectados en auditorías</p>
+      <p className="text-sm text-gray-500 mb-6">Faltantes y sobrantes detectados en auditorías</p>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

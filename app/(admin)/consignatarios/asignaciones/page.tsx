@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AsignacionesConsignatarios from './AsignacionesConsignatarios'
 
@@ -32,6 +33,11 @@ export default async function AsignacionesPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/consignatarios" className="text-gray-400 hover:text-gray-600 text-sm">← Consignatarios</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Asignaciones</h1>
       <p className="text-sm text-gray-500 mb-6">Borradores pendientes de entrega y asignaciones confirmadas</p>
 

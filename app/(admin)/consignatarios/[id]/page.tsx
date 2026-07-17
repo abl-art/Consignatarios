@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
@@ -35,6 +36,11 @@ export default async function ConsignatarioDetallePage({ params }: { params: { i
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/consignatarios" className="text-gray-400 hover:text-gray-600 text-sm">← Consignatarios</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      </div>
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{consignatario.nombre}</h1>

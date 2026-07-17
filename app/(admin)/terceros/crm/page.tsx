@@ -21,19 +21,14 @@ export default async function CRMPage() {
   ])
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          href="/terceros"
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Terceros
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">CRM — Pipeline GOcelulares</h1>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/terceros" className="text-gray-400 hover:text-gray-600 text-sm">← Terceros</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
       </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">CRM — Pipeline GOcelulares</h1>
+      <p className="text-sm text-gray-500 mb-6">Pipeline de ventas por canal</p>
 
       <FinanzasTabs tabs={[
         {

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { Consignatario, DispositivoConModelo } from '@/lib/types'
 import NuevaAuditoriaForm from './NuevaAuditoriaForm'
@@ -31,12 +32,15 @@ export default async function NuevaAuditoriaPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Nueva auditoría</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Escaneá los dispositivos presentes y confirmá o guardá como borrador.
-        </p>
+      <div className="flex items-center gap-3 mb-1">
+        <Link href="/auditorias" className="text-gray-400 hover:text-gray-600 text-sm">← Auditorías</Link>
+        <span className="text-gray-300 text-sm">/</span>
+        <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
       </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Nueva auditoría</h1>
+      <p className="text-sm text-gray-500 mb-6">
+        Escaneá los dispositivos presentes y confirmá o guardá como borrador.
+      </p>
 
       <NuevaAuditoriaForm
         consignatarios={consignatarios ?? []}
