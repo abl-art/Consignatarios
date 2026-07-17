@@ -8,6 +8,7 @@ interface FlujoDiario {
   in_pendiente: number
   in_vencida: number
   in_asistencia: number
+  in_mayoristas: number
   in_proyectado: number
   out_celulares: number
   out_licencias: number
@@ -32,7 +33,7 @@ function addDays(dateStr: string, days: number): string {
 function recalcNetFlow(row: FlujoDiario): number {
   return (
     row.in_adelantado + row.in_en_termino + row.in_atrasado + row.in_pendiente +
-    row.in_asistencia + row.in_proyectado +
+    row.in_asistencia + row.in_mayoristas + row.in_proyectado +
     row.out_celulares + row.out_licencias + row.out_descartables +
     row.out_sueldos + row.out_envios + row.out_interes +
     row.out_otros + row.out_vta3ero + row.out_dev_capital
@@ -56,7 +57,7 @@ export function simularDeuda(
       row = {
         cash_date: date,
         in_adelantado: 0, in_en_termino: 0, in_atrasado: 0, in_pendiente: 0,
-        in_vencida: 0, in_asistencia: 0, in_proyectado: 0,
+        in_vencida: 0, in_asistencia: 0, in_mayoristas: 0, in_proyectado: 0,
         out_celulares: 0, out_licencias: 0, out_descartables: 0,
         out_sueldos: 0, out_envios: 0, out_interes: 0, out_otros: 0,
         out_vta3ero: 0, out_dev_capital: 0, net_flow: 0, cash_balance: 0,

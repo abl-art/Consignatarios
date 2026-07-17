@@ -39,14 +39,11 @@ export default function ClientesMayoristasPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {cards.map((card) => {
           const c = colorClasses[card.color]
-          const Tag = card.disabled ? 'div' : Link
           return (
-            <Tag
+            <Link
               key={card.title}
-              href={card.disabled ? undefined as unknown as string : card.href}
-              className={`bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow group ${
-                card.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'
-              }`}
+              href={card.href}
+              className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow group hover:shadow-lg"
             >
               <div className={`${c.bg} px-5 py-4 flex items-center gap-3`}>
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,13 +53,8 @@ export default function ClientesMayoristasPage() {
               </div>
               <div className="p-5">
                 <p className="text-sm text-gray-500 mb-4">{card.description}</p>
-                {card.disabled && (
-                  <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-400`}>
-                    Próximamente
-                  </span>
-                )}
               </div>
-            </Tag>
+            </Link>
           )
         })}
       </div>
