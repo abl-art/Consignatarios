@@ -19,6 +19,7 @@ interface FlujoDiario {
   in_pendiente: number
   in_vencida: number
   in_asistencia: number
+  in_mayoristas: number
   in_proyectado: number
   out_celulares: number
   out_licencias: number
@@ -165,6 +166,7 @@ function emptyRow(cash_date: string): FlujoDiario {
     in_pendiente: 0,
     in_vencida: 0,
     in_asistencia: 0,
+    in_mayoristas: 0,
     in_proyectado: 0,
     out_celulares: 0,
     out_licencias: 0,
@@ -488,6 +490,26 @@ export async function calcularIVAMensual(): Promise<IVAMensual[]> {
     result.push({ periodo: mes, creditoFiscal: credito, debitoFiscal: debito, saldo: credito - debito })
   }
   return result.sort((a, b) => a.periodo.localeCompare(b.periodo))
+}
+
+async function fetchPagosMayoristasParaFlujo(): Promise<{ cash_date: string; in_mayoristas: number }[]> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('pagos_mayoristas')
+    .select('fecha_cobro, monto')
+
+  if (error || !data) return []
+
+  const byDate = new Map<string, number>()
+  for (const row of data) {
+    const date = row.fecha_cobro
+    byDate.set(date, (byDate.get(date) || 0) + row.monto)
+  }
+
+  return Array.from(byDate.entries()).map(([cash_date, in_mayoristas]) => ({
+    cash_date,
+    in_mayoristas,
+  }))
 }
 
 // ---- Main aggregation -----------------------------------------------------

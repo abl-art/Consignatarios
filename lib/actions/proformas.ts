@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { verificarLimiteCC } from './pagos-mayoristas'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -169,6 +170,20 @@ export async function modificarProforma(id: string, data: {
 
 export async function confirmarProforma(id: string) {
   const supabase = createAdminClient()
+
+  // Check credit limit before confirming
+  const { data: proforma } = await supabase
+    .from('proformas')
+    .select('cliente_mayorista_id, total_con_iva')
+    .eq('id', id)
+    .single()
+
+  if (proforma?.cliente_mayorista_id) {
+    const check = await verificarLimiteCC(proforma.cliente_mayorista_id, proforma.total_con_iva)
+    if (!check.permitido) {
+      return { error: check.mensaje }
+    }
+  }
 
   // Get next nro_proforma (starts at 145)
   const { data: maxRow } = await supabase
