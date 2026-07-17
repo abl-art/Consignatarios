@@ -32,9 +32,9 @@ export default async function InventarioPage() {
   const totalStock = categorias.reduce((s, c) => s + c.stock, 0)
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Inventario</h1>
-      <p className="text-sm text-gray-500 mb-8">Stock disponible por categoría — {totalStock} unidades totales</p>
+      <p className="text-sm text-gray-500 mb-6">Stock disponible por categoría — {totalStock} unidades totales</p>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {categorias.map(cat => (

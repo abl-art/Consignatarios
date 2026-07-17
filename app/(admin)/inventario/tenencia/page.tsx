@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diasDesde, clasificarAntiguedad, formatearMoneda, buscarPrecio } from '@/lib/utils'
 import { getMejorPrecio } from '@/lib/actions/compras'
@@ -86,7 +87,10 @@ export default async function TenenciaPage() {
   const totalVentaGeneral = consigArray.reduce((s, c) => s + c.valorTotal, 0)
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="mb-1">
+        <Link href="/inventario" className="text-gray-400 hover:text-gray-600 text-sm">← Inventario</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Tenencia por consignatario</h1>
       <p className="text-sm text-gray-500 mb-6">Equipos actualmente asignados, agrupados por consignatario y modelo</p>
 

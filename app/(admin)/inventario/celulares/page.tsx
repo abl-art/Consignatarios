@@ -54,7 +54,10 @@ export default async function CelularesPage() {
   ]
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="mb-1">
+        <Link href="/inventario" className="text-gray-400 hover:text-gray-600 text-sm">← Inventario</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Celulares</h1>
       <p className="text-sm text-gray-500 mb-6">Inventario de celulares</p>
 

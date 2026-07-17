@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import Link from 'next/link'
 import { getPool } from '@/lib/db-pool'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import { buscarPrecio } from '@/lib/utils'
@@ -138,7 +139,10 @@ export default async function TenenciaPropiaPage() {
   const { rows, unmatched, error } = await loadStockPropio(preciosNewsan)
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="mb-1">
+        <Link href="/inventario" className="text-gray-400 hover:text-gray-600 text-sm">← Inventario</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Tenencia propia — stock GOcelular</h1>
       <p className="text-sm text-gray-500 mb-6">
         Resumen por modelo del inventario propio de GOcelular, con ordenes pendientes de asignacion.

@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchAccesorioData, PARLANTES_CONFIG } from '@/lib/actions/accesorios-ventas'
 import AccesoriosVentasChart from '@/components/inventario/AccesoriosVentasChart'
@@ -9,7 +10,10 @@ export default async function ParlantesPage() {
   const { kpis, ventasDiarias, cierres, error } = await fetchAccesorioData(PARLANTES_CONFIG)
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="mb-1">
+        <Link href="/inventario" className="text-gray-400 hover:text-gray-600 text-sm">← Inventario</Link>
+      </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Parlantes</h1>
       <p className="text-sm text-gray-500 mb-6">
         Stock disponible sincronizado con GOcelulares.
