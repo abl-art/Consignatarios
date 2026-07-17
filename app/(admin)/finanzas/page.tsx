@@ -192,6 +192,7 @@ export default async function FinanzasPage({
                   <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Atr</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Pend</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Asist</th>
+                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">May</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-blue-500">Proy</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Cel</th>
                   <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Lic</th>
@@ -218,6 +219,7 @@ export default async function FinanzasPage({
                     <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_atrasado)}</td>
                     <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_pendiente)}</td>
                     <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_asistencia)}</td>
+                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_mayoristas)}</td>
                     <td className="px-0.5 py-0.5 text-right text-blue-600">{fmtCompact(row.in_proyectado)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_celulares)}</td>
                     <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_licencias)}</td>

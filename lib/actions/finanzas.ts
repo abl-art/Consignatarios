@@ -515,12 +515,13 @@ async function fetchPagosMayoristasParaFlujo(): Promise<{ cash_date: string; in_
 // ---- Main aggregation -----------------------------------------------------
 
 export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
-  const [income, vta3ero, asistencias, egresos, baseDiario] = await Promise.all([
+  const [income, vta3ero, asistencias, egresos, baseDiario, pagosMay] = await Promise.all([
     fetchIncomeFromGocelular(),
     fetchVta3eroFromGocuotas(),
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
     getProyeccionDiaria(),
+    fetchPagosMayoristasParaFlujo(),
   ])
 
   const map = new Map<string, FlujoDiario>()
@@ -553,6 +554,12 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
     row.out_vta3ero += r.out_vta3ero
   }
 
+  // Merge pagos mayoristas
+  for (const r of pagosMay) {
+    const row = getOrCreate(map, r.cash_date)
+    row.in_mayoristas += r.in_mayoristas
+  }
+
   // Generate and merge projections (7 months forward from today)
   const today = new Date()
   const projEnd = new Date(today.getFullYear(), today.getMonth() + 7, 0)
@@ -577,6 +584,7 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
       row.in_atrasado +
       row.in_pendiente +
       row.in_asistencia +
+      row.in_mayoristas +
       row.in_proyectado +
       row.out_celulares +
       row.out_licencias +
