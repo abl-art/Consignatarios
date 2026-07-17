@@ -4,21 +4,10 @@ import Link from 'next/link'
 
 export default function TiendaPage() {
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          href="/canales"
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Canales
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Tienda Online</h1>
-      </div>
-
-      <p className="text-sm text-gray-500 mb-8">Ecommerce directo al consumidor con financiación GOcuotas</p>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1 mt-2">Tienda Online</h1>
+      <p className="text-sm text-gray-500 mb-6">Ecommerce directo al consumidor con financiación GOcuotas</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <a

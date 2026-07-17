@@ -64,11 +64,13 @@ export default async function ConsignatariosPage() {
   }, {})
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Consignatarios</h1>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">← Canales</Link>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1 mt-2">Consignatarios</h1>
+      <p className="text-sm text-gray-500 mb-6">Stock en consignación en locales de terceros</p>
 
       {/* Formulario nuevo consignatario */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
           Nuevo consignatario
         </h2>
@@ -129,7 +131,7 @@ export default async function ConsignatariosPage() {
           {/* Fila 5: botón */}
           <div className="col-span-2 flex justify-end">
             <button type="submit"
-              className="px-5 py-2 bg-magenta-600 text-white text-sm font-medium rounded-lg hover:bg-magenta-700">
+              className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700">
               Crear consignatario
             </button>
           </div>

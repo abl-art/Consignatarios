@@ -50,9 +50,9 @@ const colorClasses: Record<string, { bg: string; badge: string }> = {
 
 export default function CanalesPage() {
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Canales de Comercialización</h1>
-      <p className="text-sm text-gray-500 mb-8">Todos los canales de venta de GOcelular</p>
+      <p className="text-sm text-gray-500 mb-6">Canales de comercialización</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {canales.map((canal) => {
