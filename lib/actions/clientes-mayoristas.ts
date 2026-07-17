@@ -31,6 +31,7 @@ export async function crearClienteMayorista(formData: FormData): Promise<{ ok: t
       email: (formData.get('email') as string)?.trim() || null,
       direccion_entrega: (formData.get('direccion_entrega') as string)?.trim() || null,
       transporte: (formData.get('transporte') as string)?.trim() || null,
+      limite_cuenta_corriente: formData.get('limite_cuenta_corriente') ? Number(formData.get('limite_cuenta_corriente')) : null,
     })
     .select('id')
     .single()
@@ -40,4 +41,22 @@ export async function crearClienteMayorista(formData: FormData): Promise<{ ok: t
   revalidatePath('/mayoristas/clientes')
   revalidatePath('/mayoristas/proformas')
   return { ok: true, id: data.id }
+}
+
+export async function actualizarClienteMayorista(
+  id: string,
+  campos: Partial<Omit<ClienteMayorista, 'id' | 'created_at'>>
+): Promise<{ ok: true } | { error: string }> {
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('clientes_mayoristas')
+    .update(campos)
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/mayoristas/clientes')
+  revalidatePath('/mayoristas/proformas')
+  revalidatePath('/mayoristas/clientes/pagos')
+  return { ok: true }
 }
