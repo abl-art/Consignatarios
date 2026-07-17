@@ -5,7 +5,7 @@ import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 
 const SMARTWATCHES_KW = ['pulsera', 'band', 'watch', 'smartwatch', 'reloj']
 const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
-const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz']
+const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl']
 
 export default async function InventarioPage() {
   const [stockCelulares, addons, modelosOcultos] = await Promise.all([
