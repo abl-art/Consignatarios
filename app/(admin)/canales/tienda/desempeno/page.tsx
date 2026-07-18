@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 import { fetchTiendaDesempeno } from '@/lib/actions/tienda-desempeno'
 import TiendaDesempenoClient from './TiendaDesempenoClient'
 

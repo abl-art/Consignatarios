@@ -62,7 +62,12 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
   const pool = getPool()
   if (!pool) return EMPTY_DATA
 
-  const client = await pool.connect()
+  let client
+  try {
+    client = await pool.connect()
+  } catch {
+    return EMPTY_DATA
+  }
   try {
     // Query 1 — Touches + visitors per channel
     const touchesRes = await client.query<{ canal: string; touches: string; visitors: string }>(
@@ -77,28 +82,27 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
       [desde, hasta]
     )
 
-    // Query 2 — Orders + paid per channel (via first touch visitor_id)
+    // Query 2 — Orders + paid per channel (via LATERAL first touch lookup)
     const ordersRes = await client.query<{ canal: string; orders: string; paid: string; cancelled: string; revenue: string }>(
-      `WITH first_touch AS (
-        SELECT DISTINCT ON (visitor_id)
-          visitor_id,
-          ${CANAL_CASE} AS canal
-        FROM affiliate_touches
-        WHERE partner_slug IS NULL
-          AND occurred_at >= $1::date AND occurred_at < ($2::date + 1)
-        ORDER BY visitor_id, occurred_at ASC
-      )
-      SELECT
-        ft.canal,
+      `SELECT
+        COALESCE(ft.canal, 'Orgánico / Directo') AS canal,
         COUNT(DISTINCT so.id)::int AS orders,
         COUNT(DISTINCT so.id) FILTER (WHERE so.status = 'paid')::int AS paid,
         COUNT(DISTINCT so.id) FILTER (WHERE so.status = 'cancelled')::int AS cancelled,
         COALESCE(SUM(so.product_price / 100) FILTER (WHERE so.status = 'paid'), 0)::numeric AS revenue
-      FROM first_touch ft
-      JOIN store_orders so ON so.visitor_id = ft.visitor_id
-        AND so.attributed_partner_id IS NULL
+      FROM store_orders so
+      LEFT JOIN LATERAL (
+        SELECT ${CANAL_CASE} AS canal
+        FROM affiliate_touches
+        WHERE visitor_id = so.visitor_id
+          AND partner_slug IS NULL
+          AND occurred_at >= $1::date AND occurred_at < ($2::date + 1)
+        ORDER BY occurred_at ASC
+        LIMIT 1
+      ) ft ON true
+      WHERE so.attributed_partner_id IS NULL
         AND so.created_at >= $1::date AND so.created_at < ($2::date + 1)
-      GROUP BY ft.canal
+      GROUP BY canal
       ORDER BY orders DESC`,
       [desde, hasta]
     )
@@ -166,6 +170,9 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
         conversion_touch_paid: totalTouches > 0 ? (totalPaid / totalTouches) * 100 : 0,
       },
     }
+  } catch (err) {
+    console.error('fetchTiendaDesempeno error:', err)
+    return EMPTY_DATA
   } finally {
     client.release()
   }
