@@ -69,6 +69,9 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
     return EMPTY_DATA
   }
   try {
+    // Limit individual query time to avoid blocking the function
+    await client.query("SET statement_timeout = '25s'")
+
     // Query 1 — Touches + visitors per channel
     const touchesRes = await client.query<{ canal: string; touches: string; visitors: string }>(
       `SELECT ${CANAL_CASE} AS canal,

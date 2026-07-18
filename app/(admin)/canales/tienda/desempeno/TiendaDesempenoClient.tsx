@@ -33,7 +33,7 @@ export default function TiendaDesempenoClient({ data: initialData, desde: initDe
   const [data, setData] = useState(initialData)
   const [desde, setDesde] = useState(initDesde)
   const [hasta, setHasta] = useState(initHasta)
-  const [activePreset, setActivePreset] = useState<number | null>(1)
+  const [activePreset, setActivePreset] = useState<number | null>(0)
   const [isPending, startTransition] = useTransition()
   const [filtroCanal, setFiltroCanal] = useState<string>('')
 
