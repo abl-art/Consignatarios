@@ -70,7 +70,7 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
   }
   try {
     // Limit individual query time to avoid blocking the function
-    await client.query("SET statement_timeout = '25s'")
+    try { await client.query("SET statement_timeout = '25s'") } catch { /* pooler may reject SET */ }
 
     // Query 1 — Touches + visitors per channel
     const touchesRes = await client.query<{ canal: string; touches: string; visitors: string }>(
