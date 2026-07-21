@@ -134,13 +134,13 @@ export default async function FinanzasPage({
           <p className="text-xs text-gray-500 mt-1">PPP Mora: <span className="font-bold text-red-700">{cuotasStats.ppp_mora} días</span></p>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-0.5">Contracargos (cuota 1)</p>
+          <p className="text-xs text-gray-500 mb-0.5">Incobrables</p>
           <div className="flex items-baseline gap-2">
             <p className="text-xl font-bold text-red-700">{cuotasStats.pct_contracargos.toFixed(1)}%</p>
             <p className="text-xs text-gray-400">{cuotasStats.contracargos.toLocaleString('es-AR')} cuotas</p>
           </div>
           <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
-          <p className="text-xs text-red-500 mt-1">Incobrable</p>
+          <p className="text-xs text-red-500 mt-1">Contracargos + mora 120+ días</p>
         </div>
       </div>
 

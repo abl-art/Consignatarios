@@ -260,3 +260,36 @@ export interface LiquidacionAfiliado {
   fecha_pago: string | null
   created_at: string
 }
+
+// Facturas Envíos (Andreani)
+export type EstadoEnvioDetalle = 'conciliado' | 'sobrante' | 'ya_pagado'
+
+export interface FacturaEnvio {
+  id: string
+  nro_legal: string
+  fecha_comprobante: string
+  fecha_desde: string
+  fecha_hasta: string
+  total_envios: number
+  total_facturado: number
+  envios_conciliados: number
+  envios_sobrantes: number
+  monto_sobrante: number
+  envios_duplicados: number
+  monto_duplicado: number
+  created_at: string
+}
+
+export interface FacturaEnvioDetalle {
+  id: string
+  factura_id: string
+  nro_envio: string
+  fecha_envio: string
+  concepto: string
+  importe: number
+  localidad_destino: string | null
+  cp_destino: string | null
+  sucursal_destino: string | null
+  estado: EstadoEnvioDetalle
+  created_at: string
+}

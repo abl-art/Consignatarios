@@ -231,40 +231,99 @@ export interface ContracargosData {
   monto_total_ventas: number
   porcentaje: number
   cantidad: number
+  ordenes_afectadas: number
 }
 
 export async function fetchContracargos(): Promise<ContracargosData> {
-  const pool = getPool()
-  if (!pool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0 }
+  const gocuotasPool = getGocuotasPool()
+  const gocelularPool = getPool()
+  if (!gocuotasPool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 }
 
-  const client = await pool.connect()
+  const gocuotasClient = await gocuotasPool.connect()
   try {
-    const res = await client.query<{
-      monto_contracargos: string
-      monto_total: string
-      cantidad: string
-    }>(`
-      SELECT
-        COALESCE(SUM(CASE WHEN i.installment_number = 1 AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at::date < CURRENT_DATE
-          THEN i.installment_amount ELSE 0 END), 0) AS monto_contracargos,
-        COALESCE(SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE
-          THEN i.installment_amount ELSE 0 END), 0) AS monto_total,
-        COUNT(*) FILTER (WHERE i.installment_number = 1 AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at::date < CURRENT_DATE) AS cantidad
-      FROM gocuotas_installments i
-      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
-      WHERE o.order_delivered_at IS NOT NULL
-        AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${SQL_IDS_TODOS})
-    `)
-    const r = res.rows[0]
-    const contracargos = Number(r.monto_contracargos)
-    const total = Number(r.monto_total)
-    return {
-      monto_contracargos: contracargos,
-      monto_total_ventas: total,
-      porcentaje: total > 0 ? Math.round((contracargos / total) * 10000) / 100 : 0,
-      cantidad: Number(r.cantidad),
+    // Get GOcelular store IDs from GOcuotas
+    const storesRes = await gocuotasClient.query<{ id: string }>(
+      "SELECT id FROM stores WHERE LOWER(name) LIKE '%gocelular%'"
+    )
+    const storeIds = storesRes.rows.map(r => Number(r.id))
+    if (storeIds.length === 0) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 }
+
+    const placeholders = storeIds.map((_, i) => '$' + (i + 1)).join(',')
+
+    // 1. Get chargeback counts
+    const cbRes = await gocuotasClient.query<{ ordenes: string; cantidad: string; monto_cb: string }>(
+      `SELECT COUNT(DISTINCT o.id) AS ordenes, COUNT(c.id) AS cantidad, SUM(c.amount_in_cents) AS monto_cb
+       FROM chargebacks c
+       JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
+       JOIN orders o ON i.order_id = o.id
+       WHERE o.store_id IN (${placeholders})`,
+      storeIds
+    )
+
+    // 2. Get total order amounts for affected orders
+    const moRes = await gocuotasClient.query<{ monto: string }>(
+      `SELECT COALESCE(SUM(o.amount_in_cents), 0) AS monto
+       FROM orders o
+       WHERE o.id IN (
+         SELECT DISTINCT o2.id FROM chargebacks c
+         JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
+         JOIN orders o2 ON i.order_id = o2.id
+         WHERE o2.store_id IN (${placeholders})
+       )`,
+      storeIds
+    )
+
+    const r = cbRes.rows[0]
+    const montoOrdenes = Number(moRes.rows[0]?.monto || 0) / 100
+
+    // 3. Get total ventas from GOcelular DB for % calculation
+    let montoTotalVentas = montoOrdenes
+    if (gocelularPool) {
+      const gocelClient = await gocelularPool.connect()
+      try {
+        const ventasRes = await gocelClient.query<{ total: string }>(`
+          SELECT COALESCE(SUM(go.total_order_amount), 0) AS total
+          FROM gocuotas_orders go
+          WHERE go.order_delivered_at IS NOT NULL
+            AND go.order_discarded_at IS NULL
+            AND go.client_id::text IN (${SQL_IDS_TODOS})
+        `)
+        montoTotalVentas = Number(ventasRes.rows[0].total)
+      } finally {
+        gocelClient.release()
+      }
     }
+
+    return {
+      monto_contracargos: montoOrdenes,
+      monto_total_ventas: montoTotalVentas,
+      porcentaje: montoTotalVentas > 0 ? Math.round((montoOrdenes / montoTotalVentas) * 10000) / 100 : 0,
+      cantidad: Number(r.cantidad || 0),
+      ordenes_afectadas: Number(r.ordenes || 0),
+    }
+  } finally {
+    gocuotasClient.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Order IDs con contracargo (para marcar como incobrable en Vintage/DPD)
+// ---------------------------------------------------------------------------
+
+export async function fetchOrderIdsConContracargo(): Promise<string[]> {
+  const gocuotasPool = getGocuotasPool()
+  if (!gocuotasPool) return []
+
+  const client = await gocuotasPool.connect()
+  try {
+    const res = await client.query<{ order_id: string }>(
+      `SELECT DISTINCT o.id AS order_id
+       FROM chargebacks c
+       JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
+       JOIN orders o ON i.order_id = o.id
+       WHERE o.store_id IN (SELECT id FROM stores WHERE LOWER(name) LIKE '%gocelular%')`
+    )
+    return res.rows.map(r => String(r.order_id))
   } finally {
     client.release()
   }

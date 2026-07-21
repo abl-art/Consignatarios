@@ -3,18 +3,20 @@ export const fetchCache = 'force-no-store'
 
 import Link from 'next/link'
 import { getProveedores, getProductos, getPedidos, getLineasDisponibles, getLastSyncCheques } from '@/lib/actions/compras'
+import { getFacturasEnvios } from '@/lib/actions/envios'
 import PlazoEntrega from './PlazoEntrega'
 import ComprasAnalisis from './ComprasAnalisis'
 import LineasDisponiblesChart from './LineasDisponiblesChart'
 import TransitoModelos from './TransitoModelos'
 
 export default async function ComprasPage() {
-  const [proveedores, productos, pedidos, lineas, lastSync] = await Promise.all([
+  const [proveedores, productos, pedidos, lineas, lastSync, facturasEnvios] = await Promise.all([
     getProveedores(),
     getProductos(),
     getPedidos(),
     getLineasDisponibles(),
     getLastSyncCheques(),
+    getFacturasEnvios(),
   ])
 
   const pedidosEnTransito = pedidos.filter(p => p.estado === 'enviado' && !p.entregadoAt)
@@ -81,12 +83,22 @@ export default async function ComprasPage() {
       color: 'blue',
       iconPath: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
     },
+    {
+      href: '/compras/envios',
+      title: 'Envíos',
+      description: 'Control de facturación de Andreani y conciliación de envíos',
+      count: facturasEnvios.length,
+      countLabel: 'facturas cargadas',
+      color: 'orange',
+      iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    },
   ]
 
   const colorClasses: Record<string, { bg: string; text: string; border: string; badge: string }> = {
     indigo: { bg: 'bg-indigo-600', text: 'text-indigo-600', border: 'border-indigo-200', badge: 'bg-indigo-100 text-indigo-700' },
     emerald: { bg: 'bg-emerald-600', text: 'text-emerald-600', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
     blue: { bg: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
+    orange: { bg: 'bg-orange-600', text: 'text-orange-600', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
   }
 
   return (
@@ -94,7 +106,7 @@ export default async function ComprasPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Compras</h1>
       <p className="text-sm text-gray-500 mb-8">Gestión de proveedores, productos y pedidos de compra</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card) => {
           const c = colorClasses[card.color]
           return (

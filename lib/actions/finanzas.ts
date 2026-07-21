@@ -630,6 +630,11 @@ export async function fetchCuotasStats(): Promise<{
   const pool = getPool()
   if (!pool) return empty
 
+  // Get order IDs with real chargebacks
+  const { fetchOrderIdsConContracargo } = await import('@/lib/gocelular')
+  const cbOrderIds = await fetchOrderIdsConContracargo()
+  const cbOrderIdsList = cbOrderIds.length > 0 ? cbOrderIds.map(id => `'${id}'`).join(',') : "'0'"
+
   const client = await pool.connect()
   try {
     const res = await client.query<{
@@ -652,13 +657,17 @@ export async function fetchCuotasStats(): Promise<{
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date)::int AS adelantado,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date)::int AS en_termino,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)::int AS atrasado,
-        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number > 1)::int AS mora,
-        COUNT(*) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number = 1)::int AS contracargos,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date), 0) AS monto_adelantado,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date), 0) AS monto_en_termino,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0) AS monto_atrasado,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number > 1), 0) AS monto_mora,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number = 1), 0) AS monto_contracargos,
+        COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120)::int AS mora,
+        (COUNT(*) FILTER (WHERE o.order_id::text IN (${cbOrderIdsList}))
+         + COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= 120)
+        )::int AS contracargos,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date), 0) AS monto_adelantado,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date), 0) AS monto_en_termino,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0) AS monto_atrasado,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120), 0) AS monto_mora,
+        (COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text IN (${cbOrderIdsList})), 0)
+         + COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= 120), 0)
+        ) AS monto_contracargos,
         COALESCE(
           SUM(
             (i.installment_collected_at::date - i.installment_due_at::date) * i.installment_amount
@@ -670,9 +679,9 @@ export async function fetchCuotasStats(): Promise<{
         COALESCE(
           SUM(
             (CURRENT_DATE - i.installment_due_at::date) * i.installment_amount
-          ) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number > 1)
+          ) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120)
           /
-          NULLIF(SUM(i.installment_amount) FILTER (WHERE i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_number > 1), 0),
+          NULLIF(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120), 0),
           0
         ) AS ppp_mora
       FROM gocuotas_installments i
@@ -691,6 +700,36 @@ export async function fetchCuotasStats(): Promise<{
     const mora = Number(row.mora)
     const contracargos = Number(row.contracargos)
 
+    // Get real chargeback order amounts from GOcuotas (monto total de la orden, no cuotas)
+    const { fetchContracargos } = await import('@/lib/gocelular')
+    const cbData = await fetchContracargos()
+    const montoCBOrdenes = cbData.monto_contracargos // already in pesos, monto total de órdenes con CB
+    const monto120Plus = Number(row.monto_contracargos) - (
+      // monto_contracargos from SQL has both CB cuotas + 120+ cuotas
+      // We need to subtract CB cuotas and keep only 120+ cuotas, then add real CB order amount
+      0 // we'll recalculate below
+    )
+
+    // monto_contracargos from SQL = CB cuotas amount + 120+ non-CB cuotas amount
+    // We need: real CB order amount (from GOcuotas) + 120+ non-CB cuotas amount
+    // The 120+ part is already correct in the SQL, we just need to extract it
+    // Query the 120+ part separately
+    const mora120Res = await client.query<{ monto: string }>(`
+      SELECT COALESCE(SUM(i.installment_amount), 0) AS monto
+      FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN (${SQL_IDS_TODOS})
+        AND o.order_id::text NOT IN (${cbOrderIdsList})
+        AND i.installment_collected_at IS NULL
+        AND i.installment_discarded_at IS NULL
+        AND i.installment_due_at::date < CURRENT_DATE
+        AND (CURRENT_DATE - i.installment_due_at::date) >= 120
+    `)
+    const montoMora120 = Number(mora120Res.rows[0].monto)
+    const montoIncobrableTotal = montoCBOrdenes + montoMora120
+
     const pct = (n: number) => (total > 0 ? Math.round((n / total) * 10000) / 100 : 0)
 
     return {
@@ -704,7 +743,7 @@ export async function fetchCuotasStats(): Promise<{
       monto_en_termino: Number(row.monto_en_termino),
       monto_atrasado: Number(row.monto_atrasado),
       monto_mora: Number(row.monto_mora),
-      monto_contracargos: Number(row.monto_contracargos),
+      monto_contracargos: montoIncobrableTotal,
       ppp_recupero: Math.round(Number(row.ppp_recupero)),
       ppp_mora: Math.round(Number(row.ppp_mora)),
     }
@@ -1105,6 +1144,11 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
   const pool = getPool()
   if (!pool) return []
 
+  // Get order IDs with chargebacks to mark as incobrable
+  const { fetchOrderIdsConContracargo } = await import('@/lib/gocelular')
+  const cbOrderIds = await fetchOrderIdsConContracargo()
+  const cbOrderIdsList = cbOrderIds.length > 0 ? cbOrderIds.map(id => `'${id}'`).join(',') : "'0'"
+
   const client = await pool.connect()
   try {
     const res = await client.query<{
@@ -1134,7 +1178,8 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
             WHEN i.installment_collected_at IS NOT NULL
               THEN (i.installment_collected_at::date - i.installment_due_at::date)
             ELSE NULL
-          END AS days_late_paid
+          END AS days_late_paid,
+          CASE WHEN o.order_id::text IN (${cbOrderIdsList}) THEN true ELSE false END AS tiene_contracargo
         FROM gocuotas_installments i
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
@@ -1146,6 +1191,7 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
           origination_month,
           amount,
           CASE
+            WHEN tiene_contracargo THEN 'INCOBRABLE_120_PLUS'
             WHEN collected_date IS NOT NULL AND collected_date <= due_date THEN 'COBRADA_EN_TERMINO'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 1 AND 29 THEN 'RECUPERO_1_29'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 30 AND 59 THEN 'RECUPERO_30_59'
