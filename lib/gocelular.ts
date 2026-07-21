@@ -625,33 +625,51 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
 
 export interface BloqueadosVsMoraData {
   bloqueados: number
+  enTransicion: number
   ordenesMora: number
-  diferencia: number
+  sinBloquear: number
 }
 
 export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
   const pool = getPool()
-  if (!pool) return { bloqueados: 0, ordenesMora: 0, diferencia: 0 }
+  if (!pool) return { bloqueados: 0, enTransicion: 0, ordenesMora: 0, sinBloquear: 0 }
 
   const client = await pool.connect()
   try {
-    const res = await client.query<{ bloqueados: string; ordenes_mora: string }>(`
+    const res = await client.query<{ bloqueados: string; en_transicion: string; ordenes_mora: string }>(`
+      WITH mora AS (
+        SELECT DISTINCT d.imei, d.trustonic_status::text AS status
+        FROM devices d
+        JOIN gocuotas_orders o ON o.order_id = d.order_id
+        JOIN gocuotas_installments i ON i.order_id::text = o.order_id
+        WHERE i.installment_collected_at IS NULL
+          AND i.installment_discarded_at IS NULL
+          AND o.order_discarded_at IS NULL
+          AND i.installment_due_at < NOW() - INTERVAL '4 days'
+          AND (d.is_test_device = false OR d.is_test_device IS NULL)
+      )
       SELECT
-        (SELECT COUNT(*) FROM devices
-         WHERE trustonic_status::text = 'locked'
-           AND (is_test_device = false OR is_test_device IS NULL)
-        )::text AS bloqueados,
-        (SELECT COUNT(DISTINCT o.order_id) FROM gocuotas_orders o
-         JOIN gocuotas_installments i ON i.order_id::text = o.order_id
-         WHERE i.installment_collected_at IS NULL
-           AND i.installment_discarded_at IS NULL
-           AND o.order_discarded_at IS NULL
-           AND i.installment_due_at < NOW() - INTERVAL '4 days'
-        )::text AS ordenes_mora
+        (SELECT COUNT(*) FROM mora WHERE status = 'locked')::text AS bloqueados,
+        (SELECT COUNT(*) FROM mora m2
+         WHERE m2.status != 'locked'
+           AND EXISTS (
+             SELECT 1 FROM device_actions_log dal
+             WHERE dal.device_imei = m2.imei
+               AND dal.action_type::text = 'lock'
+               AND dal.result::text = 'success'
+           )
+        )::text AS en_transicion,
+        (SELECT COUNT(*) FROM mora)::text AS ordenes_mora
     `)
     const bloqueados = Number(res.rows[0].bloqueados)
+    const enTransicion = Number(res.rows[0].en_transicion)
     const ordenesMora = Number(res.rows[0].ordenes_mora)
-    return { bloqueados, ordenesMora, diferencia: ordenesMora - bloqueados }
+    return {
+      bloqueados,
+      enTransicion,
+      ordenesMora,
+      sinBloquear: ordenesMora - bloqueados - enTransicion,
+    }
   } finally {
     client.release()
   }

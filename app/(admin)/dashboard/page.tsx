@@ -22,7 +22,7 @@ export default async function DashboardPage() {
     getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
     fetchTrustonicStats(),
-    fetchBloqueadosVsMora().catch(() => ({ bloqueados: 0, ordenesMora: 0, diferencia: 0 })),
+    fetchBloqueadosVsMora().catch(() => ({ bloqueados: 0, enTransicion: 0, ordenesMora: 0, sinBloquear: 0 })),
     fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
     fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 })),
   ])
@@ -125,24 +125,29 @@ export default async function DashboardPage() {
       </div>
 
       {/* Bloqueados vs Mora */}
-      <div className={`rounded-xl border p-5 mt-4 ${bloqueadosVsMora.diferencia > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+      <div className={`rounded-xl border p-5 mt-4 ${bloqueadosVsMora.sinBloquear > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
         <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;4 días)</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
-            <p className="text-xs text-gray-500 mb-1">Dispositivos bloqueados</p>
+            <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
             <p className="text-2xl font-bold text-red-700">{bloqueadosVsMora.bloqueados.toLocaleString('es-AR')}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Órdenes con cuotas atrasadas &gt;4d</p>
-            <p className="text-2xl font-bold text-amber-700">{bloqueadosVsMora.ordenesMora.toLocaleString('es-AR')}</p>
+            <p className="text-xs text-gray-500 mb-1">En transición</p>
+            <p className="text-2xl font-bold text-amber-600">{bloqueadosVsMora.enTransicion.toLocaleString('es-AR')}</p>
+            <p className="text-[10px] text-gray-400">lock enviado, pendiente de conexión</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Diferencia (mora − bloqueados)</p>
-            <p className={`text-2xl font-bold ${bloqueadosVsMora.diferencia > 0 ? 'text-red-700' : bloqueadosVsMora.diferencia === 0 ? 'text-green-700' : 'text-green-700'}`}>
-              {bloqueadosVsMora.diferencia > 0 ? '+' : ''}{bloqueadosVsMora.diferencia.toLocaleString('es-AR')}
+            <p className="text-xs text-gray-500 mb-1">Mora &gt;4d</p>
+            <p className="text-2xl font-bold text-gray-700">{bloqueadosVsMora.ordenesMora.toLocaleString('es-AR')}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Sin bloquear</p>
+            <p className={`text-2xl font-bold ${bloqueadosVsMora.sinBloquear > 0 ? 'text-red-700' : 'text-green-700'}`}>
+              {bloqueadosVsMora.sinBloquear.toLocaleString('es-AR')}
             </p>
-            {bloqueadosVsMora.diferencia > 0 && (
-              <p className="text-[10px] text-red-500 mt-0.5">{bloqueadosVsMora.diferencia} órdenes en mora sin bloqueo</p>
+            {bloqueadosVsMora.sinBloquear > 0 && (
+              <p className="text-[10px] text-red-500 mt-0.5">sin acción de bloqueo</p>
             )}
           </div>
         </div>
