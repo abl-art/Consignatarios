@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/gestion-tacs', label: 'Gestión TACs', icon: 'modelos', badge: true },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
-  { href: 'https://finanzas.gocuotas.com', label: 'Grupo GO', icon: 'dashboard', external: true },
+  { href: '/grupo-go', label: 'Grupo GO', icon: 'dashboard' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
