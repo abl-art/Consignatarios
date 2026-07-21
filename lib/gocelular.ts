@@ -626,17 +626,19 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
 export interface BloqueadosVsMoraData {
   bloqueados: number
   enTransicion: number
+  idle: number
+  readyForUse: number
   ordenesMora: number
   sinBloquear: number
 }
 
 export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
   const pool = getPool()
-  if (!pool) return { bloqueados: 0, enTransicion: 0, ordenesMora: 0, sinBloquear: 0 }
+  if (!pool) return { bloqueados: 0, enTransicion: 0, idle: 0, readyForUse: 0, ordenesMora: 0, sinBloquear: 0 }
 
   const client = await pool.connect()
   try {
-    const res = await client.query<{ bloqueados: string; en_transicion: string; ordenes_mora: string }>(`
+    const res = await client.query<{ bloqueados: string; en_transicion: string; idle: string; ready_for_use: string; ordenes_mora: string }>(`
       WITH mora AS (
         SELECT DISTINCT d.imei, d.trustonic_status::text AS status
         FROM devices d
@@ -651,7 +653,7 @@ export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
       SELECT
         (SELECT COUNT(*) FROM mora WHERE status = 'locked')::text AS bloqueados,
         (SELECT COUNT(*) FROM mora m2
-         WHERE m2.status != 'locked'
+         WHERE m2.status NOT IN ('locked', 'idle', 'ready_for_use')
            AND EXISTS (
              SELECT 1 FROM device_actions_log dal
              WHERE dal.device_imei = m2.imei
@@ -659,16 +661,22 @@ export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
                AND dal.result::text = 'success'
            )
         )::text AS en_transicion,
+        (SELECT COUNT(*) FROM mora WHERE status = 'idle')::text AS idle,
+        (SELECT COUNT(*) FROM mora WHERE status = 'ready_for_use')::text AS ready_for_use,
         (SELECT COUNT(*) FROM mora)::text AS ordenes_mora
     `)
     const bloqueados = Number(res.rows[0].bloqueados)
     const enTransicion = Number(res.rows[0].en_transicion)
+    const idle = Number(res.rows[0].idle)
+    const readyForUse = Number(res.rows[0].ready_for_use)
     const ordenesMora = Number(res.rows[0].ordenes_mora)
     return {
       bloqueados,
       enTransicion,
+      idle,
+      readyForUse,
       ordenesMora,
-      sinBloquear: ordenesMora - bloqueados - enTransicion,
+      sinBloquear: ordenesMora - bloqueados - enTransicion - idle - readyForUse,
     }
   } finally {
     client.release()
