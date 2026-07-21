@@ -126,14 +126,14 @@ export default async function DashboardPage() {
 
       {/* Bloqueados vs Mora */}
       <div className={`rounded-xl border p-5 mt-4 ${bloqueadosVsMora.diferencia > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;3 días)</h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;4 días)</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Dispositivos bloqueados</p>
             <p className="text-2xl font-bold text-red-700">{bloqueadosVsMora.bloqueados.toLocaleString('es-AR')}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Órdenes con cuotas atrasadas &gt;3d</p>
+            <p className="text-xs text-gray-500 mb-1">Órdenes con cuotas atrasadas &gt;4d</p>
             <p className="text-2xl font-bold text-amber-700">{bloqueadosVsMora.ordenesMora.toLocaleString('es-AR')}</p>
           </div>
           <div>

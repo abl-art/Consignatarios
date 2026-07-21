@@ -646,7 +646,7 @@ export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
          WHERE i.installment_collected_at IS NULL
            AND i.installment_discarded_at IS NULL
            AND o.order_discarded_at IS NULL
-           AND i.installment_due_at < NOW() - INTERVAL '3 days'
+           AND i.installment_due_at < NOW() - INTERVAL '4 days'
         )::text AS ordenes_mora
     `)
     const bloqueados = Number(res.rows[0].bloqueados)
