@@ -39,7 +39,12 @@ export default function TiendaDesempenoClient({ data: initialData, desde: initDe
 
   function reload(d: string, h: string, presetIdx: number | null) {
     setDesde(d); setHasta(h); setActivePreset(presetIdx)
-    startTransition(async () => { setData(await fetchTiendaDesempeno(d, h)) })
+    startTransition(async () => {
+      try {
+        const result = await fetchTiendaDesempeno(d, h)
+        if (result?.totals) setData(result)
+      } catch { /* server action failed — keep previous data */ }
+    })
   }
 
   function handlePreset(idx: number) {

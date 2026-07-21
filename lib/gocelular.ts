@@ -619,6 +619,44 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Bloqueados vs Órdenes con cuotas atrasadas >3 días
+// ---------------------------------------------------------------------------
+
+export interface BloqueadosVsMoraData {
+  bloqueados: number
+  ordenesMora: number
+  diferencia: number
+}
+
+export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
+  const pool = getPool()
+  if (!pool) return { bloqueados: 0, ordenesMora: 0, diferencia: 0 }
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ bloqueados: string; ordenes_mora: string }>(`
+      SELECT
+        (SELECT COUNT(*) FROM devices
+         WHERE trustonic_status::text = 'locked'
+           AND (is_test_device = false OR is_test_device IS NULL)
+        )::text AS bloqueados,
+        (SELECT COUNT(DISTINCT o.order_id) FROM gocuotas_orders o
+         JOIN gocuotas_installments i ON i.order_id::text = o.order_id
+         WHERE i.installment_collected_at IS NULL
+           AND i.installment_discarded_at IS NULL
+           AND o.order_discarded_at IS NULL
+           AND i.installment_due_at < NOW() - INTERVAL '3 days'
+        )::text AS ordenes_mora
+    `)
+    const bloqueados = Number(res.rows[0].bloqueados)
+    const ordenesMora = Number(res.rows[0].ordenes_mora)
+    return { bloqueados, ordenesMora, diferencia: ordenesMora - bloqueados }
+  } finally {
+    client.release()
+  }
+}
+
 export interface ConversionDiaria {
   fecha: string // YYYY-MM-DD
   total: number

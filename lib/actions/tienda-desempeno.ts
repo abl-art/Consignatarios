@@ -70,7 +70,7 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
   }
   try {
     // Limit individual query time to avoid blocking the function
-    try { await client.query("SET statement_timeout = '25s'") } catch { /* pooler may reject SET */ }
+    try { await client.query("SET statement_timeout = '55s'") } catch { /* pooler may reject SET */ }
 
     // Query 1 — Touches + visitors per channel
     const touchesRes = await client.query<{ canal: string; touches: string; visitors: string }>(
@@ -99,7 +99,6 @@ export async function fetchTiendaDesempeno(desde: string, hasta: string): Promis
         FROM affiliate_touches
         WHERE visitor_id = so.visitor_id
           AND partner_slug IS NULL
-          AND occurred_at >= $1::date AND occurred_at < ($2::date + 1)
         ORDER BY occurred_at ASC
         LIMIT 1
       ) ft ON true
