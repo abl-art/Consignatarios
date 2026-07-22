@@ -679,6 +679,43 @@ export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Ventas por marca (para gráfico de torta)
+// ---------------------------------------------------------------------------
+
+export interface VentasPorMarca {
+  marca: string
+  ventas: number
+}
+
+export async function fetchVentasPorMarca(desde: string, hasta: string): Promise<VentasPorMarca[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ marca: string; ventas: string }>(
+      `SELECT
+        SPLIT_PART(so.product_name, ' ', 1) AS marca,
+        COUNT(*)::text AS ventas
+      FROM gocuotas_orders o
+      JOIN store_orders so ON so.gocuotas_order_id = o.order_id
+      WHERE o.order_delivered_at IS NOT NULL
+        AND o.order_discarded_at IS NULL
+        AND o.client_id::text IN (${SQL_IDS_PROPIOS})
+        AND so.product_name IS NOT NULL
+        AND o.order_created_at >= $1::date
+        AND o.order_created_at < ($2::date + 1)
+      GROUP BY marca
+      ORDER BY ventas DESC`,
+      [desde, hasta]
+    )
+    return res.rows.map(r => ({ marca: r.marca, ventas: Number(r.ventas) }))
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Bloqueados vs Órdenes con cuotas atrasadas >3 días
 // ---------------------------------------------------------------------------
 

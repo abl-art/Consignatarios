@@ -2,16 +2,21 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchTiempoEntrega, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ConversionChart from './ConversionChart'
 import GeografiaVentas from './GeografiaVentas'
+import QueVendemos from './QueVendemos'
 
 export default async function DashboardPage() {
   const supabase = createClient()
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, tiempoEntrega] = await Promise.all([
+  const daysAgo7 = new Date(); daysAgo7.setDate(daysAgo7.getDate() - 7)
+  const desde7d = daysAgo7.toISOString().slice(0, 10)
+  const hoy = new Date().toISOString().slice(0, 10)
+
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -24,6 +29,7 @@ export default async function DashboardPage() {
     fetchTrustonicStats(),
     fetchBloqueadosVsMora().catch(() => ({ bloqueados: 0, enTransicion: 0, idle: 0, readyForUse: 0, ordenesMora: 0, sinBloquear: 0 })),
     fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
+    fetchVentasPorMarca(desde7d, hoy).catch(() => []),
     fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 })),
   ])
 
@@ -54,8 +60,8 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard360</h1>
       <p className="text-sm text-gray-500 mb-6">Vista general de GOcelular</p>
 
-      {/* Ventas del día + Tiempo de Entrega + Donde vendemos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Ventas del día + Tiempo de Entrega + Donde vendemos + Qué vendemos */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <VentasDelDia />
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Tiempo promedio de entrega</h2>
@@ -80,6 +86,7 @@ export default async function DashboardPage() {
           </div>
         </div>
         <GeografiaVentas data={geografia} />
+        <QueVendemos initialData={ventasMarca} />
       </div>
 
       {/* Contracargos + Stock */}
