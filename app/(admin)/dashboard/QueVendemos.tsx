@@ -58,9 +58,15 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
 }
 
+function labelPosition(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
+  const midAngle = (startAngle + endAngle) / 2
+  const labelR = r * 0.6
+  return polarToCartesian(cx, cy, labelR, midAngle)
+}
+
 export default function QueVendemos({ initialData }: { initialData: VentasPorMarca[] }) {
   const [data, setData] = useState(initialData)
-  const [activePreset, setActivePreset] = useState(1) // default 7 días
+  const [activePreset, setActivePreset] = useState(1)
   const [isPending, startTransition] = useTransition()
 
   function handlePreset(idx: number) {
@@ -76,6 +82,10 @@ export default function QueVendemos({ initialData }: { initialData: VentasPorMar
 
   const slices = buildSlices(data)
   const total = data.reduce((s, d) => s + d.ventas, 0)
+  const SIZE = 200
+  const CX = SIZE / 2
+  const CY = SIZE / 2
+  const R = 90
 
   return (
     <div className={`bg-white rounded-xl border border-gray-200 p-5 ${isPending ? 'opacity-50' : ''}`}>
@@ -98,28 +108,38 @@ export default function QueVendemos({ initialData }: { initialData: VentasPorMar
       {slices.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-8">Sin datos</p>
       ) : (
-        <div className="flex items-center gap-4">
-          {/* Pie chart */}
-          <div className="shrink-0">
-            <svg width="120" height="120" viewBox="0 0 120 120">
-              {slices.length === 1 ? (
-                <circle cx="60" cy="60" r="55" fill={slices[0].color} />
-              ) : (
-                slices.map((s) => (
-                  <path key={s.marca} d={describeArc(60, 60, 55, s.startAngle, s.endAngle)} fill={s.color} />
-                ))
-              )}
-            </svg>
-          </div>
+        <div className="flex flex-col items-center">
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+            {slices.length === 1 ? (
+              <>
+                <circle cx={CX} cy={CY} r={R} fill={slices[0].color} />
+                <text x={CX} y={CY} textAnchor="middle" dominantBaseline="central"
+                  className="fill-white text-sm font-bold">{slices[0].pct.toFixed(0)}%</text>
+              </>
+            ) : (
+              slices.map((s) => {
+                const pos = labelPosition(CX, CY, R, s.startAngle, s.endAngle)
+                const showLabel = s.pct >= 5
+                return (
+                  <g key={s.marca}>
+                    <path d={describeArc(CX, CY, R, s.startAngle, s.endAngle)} fill={s.color} />
+                    {showLabel && (
+                      <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
+                        className="fill-white font-bold" style={{ fontSize: s.pct >= 15 ? 14 : 11 }}>
+                        {s.pct.toFixed(0)}%
+                      </text>
+                    )}
+                  </g>
+                )
+              })
+            )}
+          </svg>
 
-          {/* Legend */}
-          <div className="flex-1 space-y-1.5 min-w-0">
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3">
             {slices.map((s) => (
-              <div key={s.marca} className="flex items-center gap-2">
+              <div key={s.marca} className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="text-xs text-gray-700 truncate flex-1">{s.marca}</span>
-                <span className="text-xs font-bold text-gray-900 shrink-0">{s.ventas}</span>
-                <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right">{s.pct.toFixed(1)}%</span>
+                <span className="text-xs text-gray-700">{s.marca}</span>
               </div>
             ))}
           </div>
