@@ -21,11 +21,11 @@ export default function GeografiaVentas({ data }: { data: GeografiaData }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {/* Top 5 Provincias */}
+        {/* Top 8 Provincias */}
         <div>
-          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Top 5 Provincias</h3>
+          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Top 8 Provincias</h3>
           <div className="space-y-1.5">
-            {provincias.slice(0, 5).map((p, i) => (
+            {provincias.slice(0, 8).map((p, i) => (
               <div key={p.provincia} className="flex items-center gap-2">
                 <span className={`text-xs font-bold w-4 text-right ${i < 3 ? 'text-magenta-700' : 'text-gray-400'}`}>{i + 1}</span>
                 <div className="flex-1 min-w-0">
@@ -42,11 +42,11 @@ export default function GeografiaVentas({ data }: { data: GeografiaData }) {
           </div>
         </div>
 
-        {/* Top 5 Ciudades */}
+        {/* Top 8 Ciudades */}
         <div>
-          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Top 5 Ciudades</h3>
+          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Top 8 Ciudades</h3>
           <div className="space-y-1.5">
-            {ciudades.slice(0, 5).map((c, i) => (
+            {ciudades.slice(0, 8).map((c, i) => (
               <div key={c.ciudad} className="flex items-center gap-2">
                 <span className={`text-xs font-bold w-4 text-right ${i < 3 ? 'text-blue-700' : 'text-gray-400'}`}>{i + 1}</span>
                 <div className="flex-1 min-w-0">
