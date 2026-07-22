@@ -60,7 +60,7 @@ export async function fetchVentasGeografia(): Promise<GeografiaData> {
              AND so.shipping_city IS NOT NULL AND TRIM(so.shipping_city) != ''
            GROUP BY 1, 2
          ) sub
-         GROUP BY 1, 2 ORDER BY SUM(qty) DESC LIMIT 5`
+         GROUP BY 1, 2 ORDER BY SUM(qty) DESC LIMIT 8`
       ),
       // Retiros en sucursal
       client.query<{ total: string; sucursal: string }>(
