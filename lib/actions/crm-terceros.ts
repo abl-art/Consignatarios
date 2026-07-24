@@ -37,6 +37,20 @@ export interface TerceroAlta {
   ventasAyerMonto: number
 }
 
+export interface VentaDiariaTercero {
+  clientId: string
+  merchantName: string
+  fecha: string
+  cantidad: number
+  monto: number
+}
+
+const MERCHANT_NAMES: Record<string, string> = {
+  '5495277': 'RIIING',
+  '6033574': 'TECNO-COMPRO',
+  '6115009': 'Plus Phone',
+}
+
 export async function fetchProspectos(): Promise<Prospecto[]> {
   const sb = createAdminClient()
   const { data } = await sb.from('crm_prospectos').select('*').order('created_at', { ascending: true })
@@ -229,12 +243,6 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
         ORDER BY t.client_id
       `)
 
-      const MERCHANT_NAMES: Record<string, string> = {
-        '5495277': 'RIIING',
-        '6033574': 'TECNO-COMPRO',
-        '6115009': 'Plus Phone',
-      }
-
       return res.rows.map(r => ({
         clientId: r.client_id,
         merchantName: MERCHANT_NAMES[r.client_id] ?? `Cliente ${r.client_id}`,
@@ -249,6 +257,49 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
     }
   } catch (e) {
     console.error('Error fetching terceros altas:', e)
+    return []
+  }
+}
+
+export async function fetchTercerosVentasDiarias(): Promise<VentaDiariaTercero[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const ids = CLIENT_IDS_TERCEROS.filter(id => id !== '1').map(id => `'${id}'`).join(', ')
+
+  try {
+    const client = await pool.connect()
+    try {
+      const res = await client.query<{
+        client_id: string
+        fecha: string
+        cantidad: string
+        monto: string
+      }>(`
+        SELECT client_id,
+          order_created_at::date::text AS fecha,
+          COUNT(*)::text AS cantidad,
+          COALESCE(SUM(total_order_amount), 0)::text AS monto
+        FROM gocuotas_orders
+        WHERE client_id IN (${ids})
+          AND order_discarded_at IS NULL
+          AND order_created_at >= now() - interval '90 days'
+        GROUP BY client_id, order_created_at::date
+        ORDER BY fecha
+      `)
+
+      return res.rows.map(r => ({
+        clientId: r.client_id,
+        merchantName: MERCHANT_NAMES[r.client_id] ?? `Cliente ${r.client_id}`,
+        fecha: r.fecha,
+        cantidad: Number(r.cantidad),
+        monto: Number(r.monto),
+      }))
+    } finally {
+      client.release()
+    }
+  } catch (e) {
+    console.error('Error fetching terceros ventas diarias:', e)
     return []
   }
 }
