@@ -2,8 +2,10 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
-import { getMejorPrecio } from '@/lib/actions/compras'
+import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { getMejorPrecio, getInventarioByCategoria } from '@/lib/actions/compras'
+import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
+import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import ConversionChart from './ConversionChart'
 import GeografiaVentas from './GeografiaVentas'
@@ -16,7 +18,7 @@ export default async function DashboardPage() {
   const desde7d = daysAgo7.toISOString().slice(0, 10)
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, addons, modelosOcultos] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -31,7 +33,32 @@ export default async function DashboardPage() {
     fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
     fetchVentasPorMarca(desde7d, hoy).catch(() => []),
     fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 })),
+    fetchAddonStock().catch(() => []),
+    getModelosOcultos().catch(() => []),
   ])
+
+  // Stock por categoría
+  const SMARTWATCHES_KW = ['pulsera', 'band', 'watch', 'smartwatch', 'reloj']
+  const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
+  const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl']
+
+  const stockSmartwatch = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
+  const stockAuriculares = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
+  const stockParlantes = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
+
+  let stockKits = 0
+  try {
+    const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
+    stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
+  } catch { /* ignore */ }
+
+  const categorias = [
+    { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
+    { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
+    { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
+    { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
+    { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, color: 'text-amber-700', bg: 'bg-amber-50' },
+  ]
 
   // Valorización tenencia propia
   let valorPropio = 0
@@ -130,6 +157,17 @@ export default async function DashboardPage() {
               <p className="text-xs text-gray-500 mb-1">Total</p>
               <p className="text-xl font-bold text-gray-900">{(stockPropio) + (stockConsignatarios ?? 0)}</p>
               <p className="text-xs text-green-700 font-medium mt-0.5">{formatearMoneda(valorPropio + valorConsig)}</p>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 mt-4 pt-3">
+            <p className="text-xs text-gray-500 mb-2">Por producto</p>
+            <div className="grid grid-cols-5 gap-2">
+              {categorias.map(cat => (
+                <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-2 text-center hover:shadow-md transition-shadow`}>
+                  <p className={`text-lg font-bold ${cat.color}`}>{cat.stock}</p>
+                  <p className="text-[10px] text-gray-500">{cat.label}</p>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
