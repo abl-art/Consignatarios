@@ -4,7 +4,7 @@
 
 export const CLIENT_IDS_PROPIOS = ['2026134', '2461631']
 
-export const CLIENT_IDS_TERCEROS = ['1', '5495277', '6033574', '6115009']
+export const CLIENT_IDS_TERCEROS = ['1', '5495277', '6033574', '6115009', '6284199', '6277174']
 
 // Todos los client IDs (propios + terceros) — para queries que necesitan el universo completo
 export const CLIENT_IDS_TODOS = [...CLIENT_IDS_PROPIOS, ...CLIENT_IDS_TERCEROS]

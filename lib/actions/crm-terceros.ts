@@ -49,6 +49,8 @@ const MERCHANT_NAMES: Record<string, string> = {
   '5495277': 'RIIING',
   '6033574': 'TECNO-COMPRO',
   '6115009': 'Plus Phone',
+  '6284199': 'Hendel',
+  '6277174': 'Xoxo',
 }
 
 export async function fetchProspectos(): Promise<Prospecto[]> {
