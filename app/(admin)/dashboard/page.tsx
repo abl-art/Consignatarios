@@ -42,23 +42,25 @@ export default async function DashboardPage() {
   const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
   const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl']
 
-  const stockSmartwatch = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
-  const stockAuriculares = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
-  const stockParlantes = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
+  const smartwatchItems = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k)))
+  const auricularesItems = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k)))
+  const parlantesItems = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k)))
+
+  const stockSmartwatch = smartwatchItems.reduce((s, a) => s + a.stock, 0)
+  const stockAuriculares = auricularesItems.reduce((s, a) => s + a.stock, 0)
+  const stockParlantes = parlantesItems.reduce((s, a) => s + a.stock, 0)
+
+  const valorSmartwatch = smartwatchItems.reduce((s, a) => s + a.stock * a.price, 0)
+  const valorAuriculares = auricularesItems.reduce((s, a) => s + a.stock * a.price, 0)
+  const valorParlantes = parlantesItems.reduce((s, a) => s + a.stock * a.price, 0)
 
   let stockKits = 0
+  let valorKits = 0
   try {
     const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
     stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
+    valorKits = kitsItems.reduce((s, r) => s + r.valuacion, 0)
   } catch { /* ignore */ }
-
-  const categorias = [
-    { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
-    { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
-    { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
-    { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
-    { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, color: 'text-amber-700', bg: 'bg-amber-50' },
-  ]
 
   // Valorización tenencia propia
   let valorPropio = 0
@@ -142,33 +144,20 @@ export default async function DashboardPage() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Tenencia propia</p>
-              <p className="text-xl font-bold text-blue-700">{stockPropio}</p>
-              <p className="text-xs text-blue-600 mt-0.5">{formatearMoneda(valorPropio)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">En consignatarios</p>
-              <p className="text-xl font-bold text-amber-700">{stockConsignatarios ?? 0}</p>
-              <p className="text-xs text-amber-600 mt-0.5">{formatearMoneda(valorConsig)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Total</p>
-              <p className="text-xl font-bold text-gray-900">{(stockPropio) + (stockConsignatarios ?? 0)}</p>
-              <p className="text-xs text-green-700 font-medium mt-0.5">{formatearMoneda(valorPropio + valorConsig)}</p>
-            </div>
-          </div>
-          <div className="border-t border-gray-100 mt-4 pt-3">
-            <p className="text-xs text-gray-500 mb-2">Por producto</p>
-            <div className="grid grid-cols-5 gap-2">
-              {categorias.map(cat => (
-                <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-2 text-center hover:shadow-md transition-shadow`}>
-                  <p className={`text-lg font-bold ${cat.color}`}>{cat.stock}</p>
-                  <p className="text-[10px] text-gray-500">{cat.label}</p>
-                </Link>
-              ))}
-            </div>
+          <div className="grid grid-cols-5 gap-2">
+            {[
+              { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, valor: valorPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
+              { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, valor: valorSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
+              { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, valor: valorParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
+              { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, valor: valorAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
+              { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, valor: valorKits, color: 'text-amber-700', bg: 'bg-amber-50' },
+            ].map(cat => (
+              <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-3 text-center hover:shadow-md transition-shadow`}>
+                <p className={`text-xl font-bold ${cat.color}`}>{cat.stock}</p>
+                <p className="text-[10px] text-gray-500">{cat.label}</p>
+                <p className={`text-[10px] ${cat.color} mt-0.5`}>{formatearMoneda(cat.valor)}</p>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
