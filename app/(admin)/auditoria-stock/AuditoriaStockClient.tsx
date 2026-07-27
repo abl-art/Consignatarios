@@ -81,7 +81,7 @@ export default function AuditoriaStockClient({ auditorias }: Props) {
           </button>
         </div>
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-        <p className="text-xs text-gray-400 mt-2">Se genera con el stock del último día del mes seleccionado, neto de pendientes de asignar.</p>
+        <p className="text-xs text-gray-400 mt-2">Se genera con el stock disponible en sistema al momento de la generación.</p>
       </div>
 
       {/* Historial de auditorías */}
@@ -268,8 +268,6 @@ function ConteoTable({ auditoria, editable, onSaved }: { auditoria: AuditoriaSto
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-2 font-medium text-gray-600">Modelo</th>
-              <th className="text-right px-3 py-2 font-medium text-gray-600">Disp.</th>
-              <th className="text-right px-3 py-2 font-medium text-gray-600">Pend.</th>
               <th className="text-right px-3 py-2 font-medium text-gray-600">Teórico</th>
               <th className="text-right px-3 py-2 font-medium text-gray-600">Real</th>
               <th className="text-right px-3 py-2 font-medium text-gray-600">Dif.</th>
@@ -282,8 +280,6 @@ function ConteoTable({ auditoria, editable, onSaved }: { auditoria: AuditoriaSto
             {detalle.map((d, i) => (
               <tr key={d.modelo} className={d.diferencia < 0 ? 'bg-red-50' : d.diferencia > 0 ? 'bg-yellow-50' : ''}>
                 <td className="px-4 py-2 text-gray-900 font-medium text-xs">{d.modelo}</td>
-                <td className="px-3 py-2 text-right text-gray-600">{d.disponibles}</td>
-                <td className="px-3 py-2 text-right text-gray-500">{d.pendientes}</td>
                 <td className="px-3 py-2 text-right font-semibold">{d.teorico}</td>
                 <td className="px-3 py-2 text-right">
                   {editable ? (
@@ -307,8 +303,6 @@ function ConteoTable({ auditoria, editable, onSaved }: { auditoria: AuditoriaSto
           <tfoot className="border-t-2 border-gray-300 bg-gray-50">
             <tr className="font-bold">
               <td className="px-4 py-2">TOTAL</td>
-              <td className="px-3 py-2 text-right">{detalle.reduce((s, d) => s + d.disponibles, 0)}</td>
-              <td className="px-3 py-2 text-right">{detalle.reduce((s, d) => s + d.pendientes, 0)}</td>
               <td className="px-3 py-2 text-right">{totalUnidadesTeorico}</td>
               <td className="px-3 py-2 text-right">{totalUnidadesReal}</td>
               <td className={`px-3 py-2 text-right ${(totalUnidadesReal - totalUnidadesTeorico) < 0 ? 'text-red-700' : 'text-green-700'}`}>

@@ -8,9 +8,7 @@ import { buscarPrecio } from '@/lib/utils'
 
 export interface DetalleModelo {
   modelo: string
-  disponibles: number
-  pendientes: number
-  teorico: number // disponibles - pendientes
+  teorico: number // stock disponible en sistema
   real: number // conteo manual
   diferencia: number // real - teorico
   precio_unit: number
@@ -63,7 +61,7 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
   if (!pool) return { error: 'GOCELULAR_DB_URL no configurada' }
   const client = await pool.connect()
   try {
-    // Disponibles
+    // Stock disponible por modelo
     const dispRes = await client.query<{ model_name: string; qty: string }>(
       `SELECT COALESCE(dm.name, ii.model_code) AS model_name, COUNT(*)::text AS qty
        FROM inventory_items ii
@@ -73,94 +71,14 @@ export async function generarPlanilla(mesAnio: string): Promise<{ ok: true; id: 
        ORDER BY model_name`
     )
 
-    // Pendientes de asignar: TODAS las ventas aprobadas sin dispositivo, sin importar el mes
-    const pendRes = await client.query<{ product_name: string; pendientes: string }>(
-      `SELECT so.product_name, COUNT(*)::text AS pendientes
-       FROM store_orders so
-       JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
-       WHERE go.order_status = 'approved'
-         AND go.order_discarded_at IS NULL
-         AND go.created_at <= ($1::date + interval '1 day')
-         AND NOT EXISTS (SELECT 1 FROM devices d WHERE d.order_id = go.order_id)
-       GROUP BY so.product_name`,
-      [fechaCorte]
-    )
-
-    // Match pendientes a modelos: normaliza nombre a brand-modelo-storage
-    const noise = ['celular', 'telefono', 'libre', 'dual', 'sim', 'lte', '5g', '4g']
-    const matchKey = (name: string): string => {
-      let s = name.toLowerCase()
-      s = s.replace(/\bmotorola\s+moto\b/, 'moto').replace(/\bmotorola\b/, 'moto')
-      s = s.replace(/[\/\-\(\),]/g, ' ').replace(/gb/gi, '').replace(/\s+/g, ' ').trim()
-      // Storage: mayor número >= 32
-      const allNums = [...s.matchAll(/\b(\d+)\b/g)].map(m => Number(m[1]))
-      const storage = allNums.filter(n => n >= 32 && n <= 1024).sort((a, b) => b - a)[0]?.toString() ?? ''
-      // Samsung: solo código de modelo (A07, A15, S24, etc.) + storage
-      if (s.includes('samsung')) {
-        const modelCode = s.split(' ').find(t => /^[asmz]\d{1,3}$/i.test(t)) ?? ''
-        return `samsung-${modelCode}-${storage}`
-      }
-      // Otros: nombre completo del modelo sin noise ni RAM
-      const tokens = s.split(' ').filter(t => t.length > 0 && !noise.includes(t))
-      const modelParts: string[] = []
-      let seenStorage = false
-      for (let i = 0; i < tokens.length; i++) {
-        const t = tokens[i]
-        if (/^\d+$/.test(t)) {
-          const n = Number(t)
-          if (n >= 32 && n <= 1024) {
-            seenStorage = true
-          } else if (n >= 2 && n <= 16) {
-            const next = tokens[i + 1]
-            if (seenStorage) continue
-            if (next && /^\d+$/.test(next) && Number(next) >= 32) continue
-            modelParts.push(t)
-          } else if (!seenStorage) {
-            modelParts.push(t)
-          }
-        } else {
-          if (!seenStorage) modelParts.push(t)
-        }
-      }
-      return `${modelParts.join('-')}-${storage}`
-    }
-
-    // Agrupar disponibles por matchKey (junta variantes del mismo modelo)
-    const gruposDisp: Record<string, { nombre: string; qty: number }> = {}
-    for (const r of dispRes.rows) {
-      const key = matchKey(r.model_name)
-      if (!gruposDisp[key]) {
-        gruposDisp[key] = { nombre: r.model_name, qty: 0 }
-      }
-      gruposDisp[key].qty += Number(r.qty)
-    }
-
-    // Agrupar pendientes por matchKey
-    const gruposPend: Record<string, { nombre: string; qty: number }> = {}
-    for (const p of pendRes.rows) {
-      const key = matchKey(p.product_name)
-      if (!gruposPend[key]) {
-        gruposPend[key] = { nombre: p.product_name, qty: 0 }
-      }
-      gruposPend[key].qty += Number(p.pendientes)
-    }
-
-    // Armar detalle unificado
-    const allKeys = new Set([...Object.keys(gruposDisp), ...Object.keys(gruposPend)])
+    // Armar detalle: teórico = disponibles (sin descontar pendientes)
     const detalle: DetalleModelo[] = []
-    for (const key of allKeys) {
-      const disp = gruposDisp[key]
-      const pend = gruposPend[key]
-      const disponibles = disp?.qty ?? 0
-      const pendientes = pend?.qty ?? 0
-      const teorico = Math.max(0, disponibles - pendientes)
-      const nombre = disp?.nombre ?? pend!.nombre
-      const precioUnit = buscarPrecio(precios, nombre)
-      if (disponibles === 0 && pendientes === 0) continue
+    for (const r of dispRes.rows) {
+      const teorico = Number(r.qty)
+      if (teorico === 0) continue
+      const precioUnit = buscarPrecio(precios, r.model_name)
       detalle.push({
-        modelo: nombre,
-        disponibles,
-        pendientes,
+        modelo: r.model_name,
         teorico,
         real: 0,
         diferencia: 0,
