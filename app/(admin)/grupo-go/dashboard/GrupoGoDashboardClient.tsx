@@ -9,6 +9,10 @@ function formatearMoneda(n: number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 }
 
+function formatearUSD(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
 function formatearNumero(n: number) {
   return new Intl.NumberFormat('es-AR').format(n)
 }
@@ -66,10 +70,13 @@ export default function GrupoGoDashboardClient({
     router.push(`/grupo-go/dashboard?${sp.toString()}`)
   }
 
+  const anioActual = `${hoy.getFullYear()}-01-01`
+
   const isAyer = desde === fmt(ayer) && hasta === fmt(ayer)
   const is30d = desde === fmt(hace30) && !hasta
-  const isCustom = !isAyer && !is30d && (desde || hasta)
+  const isAnio = desde === anioActual && !hasta
   const isTodo = !desde && !hasta
+  const isCustom = !isAyer && !is30d && !isAnio && !isTodo
 
   const totalCantidad = data.total_cantidad
   const totalMonto = data.total_monto
@@ -93,6 +100,14 @@ export default function GrupoGoDashboardClient({
           }`}
         >
           Últimos 30 días
+        </button>
+        <button
+          onClick={() => navigate({ desde: anioActual })}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${
+            isAnio ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Año en curso
         </button>
         <button
           onClick={() => navigate({})}
@@ -138,10 +153,12 @@ export default function GrupoGoDashboardClient({
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <p className="text-xs text-gray-500 uppercase tracking-wide">Monto total</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">{formatearMoneda(totalMonto)}</p>
+          <p className="text-sm text-gray-400 mt-1">{formatearUSD(Math.round(totalMonto / data.tipo_cambio))}</p>
         </div>
         <div className="bg-white border border-green-200 rounded-xl p-5">
           <p className="text-xs text-green-600 uppercase tracking-wide">Facturación neta</p>
           <p className="text-2xl font-bold text-green-700 mt-2">{formatearMoneda(data.facturacion)}</p>
+          <p className="text-sm text-green-500 mt-1">{formatearUSD(Math.round(data.facturacion / data.tipo_cambio))}</p>
         </div>
         <div className="bg-white border border-blue-200 rounded-xl p-5">
           <p className="text-xs text-blue-600 uppercase tracking-wide">Usuarios registrados</p>

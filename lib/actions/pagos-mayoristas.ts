@@ -117,7 +117,8 @@ export async function getExposicionRiesgo(): Promise<ExposicionRiesgo[]> {
 
     const saldo = deuda - pagos_acreditados - pendiente_cobro
     const limite = c.limite_cuenta_corriente
-    const pct = limite && limite > 0 ? (saldo / limite) * 100 : null
+    const consumido = deuda - pagos_acreditados
+    const pct = limite && limite > 0 ? (consumido / limite) * 100 : null
 
     let estado: ExposicionRiesgo['estado'] = 'verde'
     if (pct !== null) {

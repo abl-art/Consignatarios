@@ -16,6 +16,7 @@ export interface GrupoGoData {
   facturacion: number
   usuarios_registrados: number
   usuarios_activados: number
+  tipo_cambio: number
 }
 
 const MODELOS = [
@@ -29,7 +30,7 @@ const MODELOS = [
 ]
 
 export async function fetchGrupoGoOperaciones(desde?: string, hasta?: string): Promise<GrupoGoData> {
-  const empty: GrupoGoData = { modelos: [], total_cantidad: 0, total_monto: 0, facturacion: 0, usuarios_registrados: 0, usuarios_activados: 0 }
+  const empty: GrupoGoData = { modelos: [], total_cantidad: 0, total_monto: 0, facturacion: 0, usuarios_registrados: 0, usuarios_activados: 0, tipo_cambio: 1500 }
   const pool = getGocuotasPool()
   if (!pool) return empty
 
@@ -239,7 +240,12 @@ export async function fetchGrupoGoOperaciones(desde?: string, hasta?: string): P
     const total_cantidad = modelos.reduce((s, m) => s + m.cantidad, 0)
     const total_monto = modelos.reduce((s, m) => s + m.monto, 0)
 
-    return { modelos, total_cantidad, total_monto, facturacion, usuarios_registrados, usuarios_activados }
+    // Tipo de cambio from config_resultado
+    const { fetchConfig } = await import('@/lib/actions/resultado')
+    const config = await fetchConfig()
+    const tipo_cambio = config.tipo_cambio
+
+    return { modelos, total_cantidad, total_monto, facturacion, usuarios_registrados, usuarios_activados, tipo_cambio }
   } finally {
     client.release()
   }

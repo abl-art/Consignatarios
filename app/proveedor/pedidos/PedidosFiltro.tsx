@@ -5,6 +5,7 @@ import { formatearMoneda } from '@/lib/utils'
 
 interface PedidoItem {
   productoNombre: string
+  productoCodigo?: string
   cantidad: number
   precio: number
 }
@@ -143,6 +144,7 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-200">
+                              <th className="text-left py-1.5 font-medium text-gray-500">Codigo</th>
                               <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
                               <th className="text-center py-1.5 font-medium text-gray-500">Cant.</th>
                               <th className="text-right py-1.5 font-medium text-gray-500">Precio unit.</th>
@@ -152,6 +154,7 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
                           <tbody>
                             {p.items.map((item, idx) => (
                               <tr key={idx} className="border-b border-gray-100">
+                                <td className="py-1.5 text-gray-500 font-mono text-[11px]">{item.productoCodigo || '-'}</td>
                                 <td className="py-1.5 text-gray-800">{item.productoNombre}</td>
                                 <td className="py-1.5 text-center text-gray-600">{item.cantidad}</td>
                                 <td className="py-1.5 text-right text-gray-600">{formatearMoneda(item.precio)}</td>
@@ -160,9 +163,9 @@ export default function PedidosFiltro({ pedidos }: { pedidos: Pedido[] }) {
                             ))}
                           </tbody>
                           <tfoot>
-                            <tr><td colSpan={3} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
-                            <tr><td colSpan={3} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
-                            <tr><td colSpan={3} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalNeto * 1.21)}</td></tr>
+                            <tr><td colSpan={4} className="pt-2 text-right text-gray-500">Neto:</td><td className="pt-2 text-right text-gray-700">{formatearMoneda(totalNeto)}</td></tr>
+                            <tr><td colSpan={4} className="text-right text-gray-400">IVA 21%:</td><td className="text-right text-gray-400">{formatearMoneda(totalNeto * 0.21)}</td></tr>
+                            <tr><td colSpan={4} className="text-right font-bold text-blue-700">Total:</td><td className="text-right font-bold text-blue-700">{formatearMoneda(totalNeto * 1.21)}</td></tr>
                           </tfoot>
                         </table>
                       </td>

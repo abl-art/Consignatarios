@@ -428,6 +428,30 @@ function RiesgoTab({ exposicion }: { exposicion: ExposicionRiesgo[] }) {
               ))
             )}
           </tbody>
+          {filtered.length > 0 && (
+            <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+              <tr>
+                <td className="px-4 py-2.5 font-bold text-gray-900 text-sm">Totales</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm font-bold text-gray-600">
+                  {formatearMoneda(filtered.reduce((s, e) => s + (e.limite_cc || 0), 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm font-bold text-red-700">
+                  {formatearMoneda(filtered.reduce((s, e) => s + e.deuda, 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm font-bold text-green-700">
+                  {formatearMoneda(filtered.reduce((s, e) => s + e.pagos_acreditados, 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm font-bold text-blue-600">
+                  {formatearMoneda(filtered.reduce((s, e) => s + e.pendiente_cobro, 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm font-bold text-gray-900">
+                  {formatearMoneda(filtered.reduce((s, e) => s + e.saldo, 0))}
+                </td>
+                <td className="px-4 py-2.5" />
+                <td className="px-4 py-2.5" />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

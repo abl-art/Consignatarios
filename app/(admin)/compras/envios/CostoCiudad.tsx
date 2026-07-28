@@ -1,12 +1,18 @@
-import { getCostoPorCiudad, getProvinciasDisponibles } from '@/lib/actions/envios'
+import { getCostoPorCiudad, getProvinciasDisponibles, getFacturasEnvios } from '@/lib/actions/envios'
 import { formatearMoneda } from '@/lib/utils'
 import ProvinciaFilter from './ProvinciaFilter'
 
 export default async function CostoCiudad({ provincia }: { provincia?: string }) {
-  const [datos, provincias] = await Promise.all([
+  const [datos, provincias, facturas] = await Promise.all([
     getCostoPorCiudad(provincia),
     getProvinciasDisponibles(),
+    getFacturasEnvios(),
   ])
+
+  // Costo por envío: total facturado / total envíos de todas las facturas
+  const totalFacturado = facturas.reduce((s, f) => s + f.total_facturado, 0)
+  const totalEnviosFacturas = facturas.reduce((s, f) => s + f.total_envios, 0)
+  const costoPromedioEnvio = totalEnviosFacturas > 0 ? Math.round(totalFacturado / totalEnviosFacturas) : 0
 
   // Get all unique months across all cities
   const allMeses = [...new Set(datos.flatMap(d => d.meses.map(m => m.mes)))].sort()
@@ -53,30 +59,19 @@ export default async function CostoCiudad({ provincia }: { provincia?: string })
         </div>
       ) : (
         <>
-          {/* Resumen global */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {resumenMensual.map(r => (
-              <div key={r.mes} className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">{formatMes(r.mes)}</p>
-                <p className="text-xl font-bold text-gray-900 mt-1">{formatearMoneda(r.promedio)}</p>
-                <p className="text-xs text-gray-500 mt-1">{r.envios} envíos · {formatearMoneda(r.costo)}</p>
-              </div>
-            ))}
-            {variacionGlobal !== null && (
-              <div className={`bg-white border rounded-xl p-4 ${variacionGlobal > 0 ? 'border-red-200' : 'border-green-200'}`}>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Variación mensual</p>
-                <p className={`text-xl font-bold mt-1 ${variacionGlobal > 0 ? 'text-red-600' : 'text-green-700'}`}>
-                  {variacionGlobal > 0 ? '+' : ''}{variacionGlobal}%
-                </p>
-                <p className="text-xs text-gray-500 mt-1">costo promedio por envío</p>
-              </div>
-            )}
+          {/* Costo por envío */}
+          <div className="bg-white border border-orange-200 rounded-xl p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-orange-600 uppercase tracking-wide">Costo promedio por envío</p>
+              <p className="text-3xl font-bold text-orange-700 mt-1">{formatearMoneda(costoPromedioEnvio)}</p>
+              <p className="text-xs text-gray-400 mt-1">Total facturado sin IVA / cantidad de envíos</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">{totalEnviosFacturas.toLocaleString('es-AR')} envíos</p>
+              <p className="text-sm font-semibold text-gray-700">{formatearMoneda(totalFacturado)} facturado</p>
+              <p className="text-xs text-gray-400 mt-1">{facturas.length} factura{facturas.length !== 1 ? 's' : ''} cargada{facturas.length !== 1 ? 's' : ''}</p>
+            </div>
           </div>
-
-          {/* Nota sobre seguro */}
-          <p className="text-xs text-gray-400">
-            Costos de distribución sin seguro (seguro fijo: {formatearMoneda(2800)} por envío)
-          </p>
 
           {/* Tabla por provincia */}
           <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">

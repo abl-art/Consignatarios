@@ -28,14 +28,9 @@ type Periodo = 'hoy' | 'ayer' | '7d' | '30d' | 'mes' | 'custom'
 const COLORES = ['#E91E7B', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444']
 const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
-// YYYY-MM-DD en horario local (toISOString devolvería UTC y correría el día)
-function fechaLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 function getDateRange(periodo: Periodo): { desde: string; hasta: string } {
   const hoy = new Date()
-  const hasta = fechaLocal(hoy)
+  const hasta = hoy.toISOString().slice(0, 10)
 
   if (periodo === 'hoy') {
     return { desde: hasta, hasta }
@@ -43,18 +38,18 @@ function getDateRange(periodo: Periodo): { desde: string; hasta: string } {
   if (periodo === 'ayer') {
     const ayer = new Date(hoy)
     ayer.setDate(ayer.getDate() - 1)
-    const d = fechaLocal(ayer)
+    const d = ayer.toISOString().slice(0, 10)
     return { desde: d, hasta: d }
   }
   if (periodo === '7d') {
     const d = new Date(hoy)
     d.setDate(d.getDate() - 7)
-    return { desde: fechaLocal(d), hasta }
+    return { desde: d.toISOString().slice(0, 10), hasta }
   }
   if (periodo === '30d') {
     const d = new Date(hoy)
     d.setDate(d.getDate() - 30)
-    return { desde: fechaLocal(d), hasta }
+    return { desde: d.toISOString().slice(0, 10), hasta }
   }
   if (periodo === 'mes') {
     return { desde: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`, hasta }

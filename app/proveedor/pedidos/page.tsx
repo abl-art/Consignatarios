@@ -33,6 +33,7 @@ export default async function ProveedorPedidosPage({
       ingresoStockAt: p.ingresoStockAt,
       items: p.items.map(i => ({
         productoNombre: i.productoNombre,
+        productoCodigo: i.productoCodigo,
         cantidad: i.cantidad,
         precio: i.precio,
       })),
