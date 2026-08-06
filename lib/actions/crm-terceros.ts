@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool } from '@/lib/db-pool'
-import { CLIENT_IDS_TERCEROS } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { diaHabilSiguiente } from '@/lib/utils'
 
@@ -45,13 +45,7 @@ export interface VentaDiariaTercero {
   monto: number
 }
 
-const MERCHANT_NAMES: Record<string, string> = {
-  '5495277': 'RIIING',
-  '6033574': 'TECNO-COMPRO',
-  '6115009': 'Plus Phone',
-  '6284199': 'Hendel',
-  '6277174': 'Xoxo',
-}
+// Merchant names se obtienen dinámicamente de gocuotas_stores
 
 export async function fetchProspectos(): Promise<Prospecto[]> {
   const sb = createAdminClient()
@@ -193,24 +187,32 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
   const pool = getPool()
   if (!pool) return []
 
-  const ids = CLIENT_IDS_TERCEROS.filter(id => id !== '1').map(id => `'${id}'`).join(', ')
+  const excl = [...CLIENT_IDS_PROPIOS, '1'].map(id => `'${id}'`).join(', ')
 
   try {
     const client = await pool.connect()
     try {
       const res = await client.query<{
         client_id: string
+        merchant_name: string | null
         tiendas: string
         ventas_cantidad: string
         ventas_monto: string
         ventas_ayer_cantidad: string
         ventas_ayer_monto: string
       }>(`
-        WITH tiendas AS (
+        WITH nombres AS (
+          SELECT DISTINCT ON (client_id) client_id, merchant_name
+          FROM gocuotas_stores
+          WHERE client_id NOT IN (${excl})
+            AND merchant_name IS NOT NULL
+          ORDER BY client_id, updated_at DESC
+        ),
+        tiendas AS (
           SELECT client_id,
             COUNT(DISTINCT store_name) AS tiendas
           FROM gocuotas_orders
-          WHERE client_id IN (${ids})
+          WHERE client_id NOT IN (${excl})
           GROUP BY client_id
         ),
         ventas30 AS (
@@ -218,7 +220,7 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
             COUNT(*)::text AS ventas_cantidad,
             COALESCE(SUM(total_order_amount), 0)::text AS ventas_monto
           FROM gocuotas_orders
-          WHERE client_id IN (${ids})
+          WHERE client_id NOT IN (${excl})
             AND order_created_at >= now() - interval '30 days'
             AND order_discarded_at IS NULL
           GROUP BY client_id
@@ -228,18 +230,19 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
             COUNT(*)::text AS ventas_ayer_cantidad,
             COALESCE(SUM(total_order_amount), 0)::text AS ventas_ayer_monto
           FROM gocuotas_orders
-          WHERE client_id IN (${ids})
+          WHERE client_id NOT IN (${excl})
             AND order_created_at >= (current_date - interval '1 day')
             AND order_created_at < current_date
             AND order_discarded_at IS NULL
           GROUP BY client_id
         )
-        SELECT t.client_id, t.tiendas::text,
+        SELECT t.client_id, n.merchant_name, t.tiendas::text,
           COALESCE(v.ventas_cantidad, '0') AS ventas_cantidad,
           COALESCE(v.ventas_monto, '0') AS ventas_monto,
           COALESCE(a.ventas_ayer_cantidad, '0') AS ventas_ayer_cantidad,
           COALESCE(a.ventas_ayer_monto, '0') AS ventas_ayer_monto
         FROM tiendas t
+        LEFT JOIN nombres n ON n.client_id = t.client_id
         LEFT JOIN ventas30 v ON v.client_id = t.client_id
         LEFT JOIN ventas_ayer a ON a.client_id = t.client_id
         ORDER BY t.client_id
@@ -247,7 +250,7 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
 
       return res.rows.map(r => ({
         clientId: r.client_id,
-        merchantName: MERCHANT_NAMES[r.client_id] ?? `Cliente ${r.client_id}`,
+        merchantName: r.merchant_name ?? `Cliente ${r.client_id}`,
         tiendas: Number(r.tiendas),
         ventasCantidad: Number(r.ventas_cantidad),
         ventasMonto: Number(r.ventas_monto),
@@ -267,32 +270,41 @@ export async function fetchTercerosVentasDiarias(): Promise<VentaDiariaTercero[]
   const pool = getPool()
   if (!pool) return []
 
-  const ids = CLIENT_IDS_TERCEROS.filter(id => id !== '1').map(id => `'${id}'`).join(', ')
+  const excl = [...CLIENT_IDS_PROPIOS, '1'].map(id => `'${id}'`).join(', ')
 
   try {
     const client = await pool.connect()
     try {
       const res = await client.query<{
         client_id: string
+        merchant_name: string | null
         fecha: string
         cantidad: string
         monto: string
       }>(`
-        SELECT client_id,
-          order_created_at::date::text AS fecha,
+        WITH nombres AS (
+          SELECT DISTINCT ON (client_id) client_id, merchant_name
+          FROM gocuotas_stores
+          WHERE client_id NOT IN (${excl})
+            AND merchant_name IS NOT NULL
+          ORDER BY client_id, updated_at DESC
+        )
+        SELECT o.client_id, n.merchant_name,
+          o.order_created_at::date::text AS fecha,
           COUNT(*)::text AS cantidad,
-          COALESCE(SUM(total_order_amount), 0)::text AS monto
-        FROM gocuotas_orders
-        WHERE client_id IN (${ids})
-          AND order_discarded_at IS NULL
-          AND order_created_at >= now() - interval '90 days'
-        GROUP BY client_id, order_created_at::date
+          COALESCE(SUM(o.total_order_amount), 0)::text AS monto
+        FROM gocuotas_orders o
+        LEFT JOIN nombres n ON n.client_id = o.client_id
+        WHERE o.client_id NOT IN (${excl})
+          AND o.order_discarded_at IS NULL
+          AND o.order_created_at >= now() - interval '90 days'
+        GROUP BY o.client_id, n.merchant_name, o.order_created_at::date
         ORDER BY fecha
       `)
 
       return res.rows.map(r => ({
         clientId: r.client_id,
-        merchantName: MERCHANT_NAMES[r.client_id] ?? `Cliente ${r.client_id}`,
+        merchantName: r.merchant_name ?? `Cliente ${r.client_id}`,
         fecha: r.fecha,
         cantidad: Number(r.cantidad),
         monto: Number(r.monto),
