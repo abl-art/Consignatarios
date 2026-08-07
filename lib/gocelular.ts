@@ -846,7 +846,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
     const [celRes, accRes] = await Promise.all([
       client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; total: string }>(
         `SELECT
-          COALESCE(ii.sku, '—') AS sku,
+          COALESCE(ii.model_code, '—') AS sku,
           COALESCE(dm.name, ii.model_code) AS nombre,
           COUNT(*) FILTER (WHERE ii.physical_location = 'andreani_wh')::text AS wh_andreani,
           COUNT(*) FILTER (WHERE ii.physical_location = 'local')::text AS wh_gocuotas,
@@ -854,8 +854,8 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         FROM inventory_items ii
         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
         WHERE ii.status = 'available'
-        GROUP BY ii.sku, COALESCE(dm.name, ii.model_code)
-        ORDER BY COALESCE(dm.name, ii.model_code), ii.sku`
+        GROUP BY ii.model_code, COALESCE(dm.name, ii.model_code)
+        ORDER BY COALESCE(dm.name, ii.model_code)`
       ),
       client.query<{ sku: string; nombre: string; stock: string }>(
         `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock
