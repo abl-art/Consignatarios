@@ -860,7 +860,8 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
       client.query<{ sku: string; nombre: string; stock: string }>(
         `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock
          FROM store_products
-         WHERE is_addon = true AND status = 'active'
+         WHERE is_addon = true
+           AND (status = 'active' OR sku ILIKE 'KS-%')
            AND display_name NOT ILIKE '%E2E%'
          ORDER BY display_name`
       ),
