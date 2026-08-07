@@ -91,26 +91,30 @@ export default function EnviosClient() {
     setLoading(true)
     setError(null)
 
-    const res = await conciliarFacturaEnvios(rows)
+    try {
+      const res = await conciliarFacturaEnvios(rows)
 
-    if ('error' in res && res.error) {
-      setError(res.error)
+      if ('error' in res && res.error) {
+        setError(res.error)
+        return
+      }
+
+      if ('ok' in res) {
+        setResult({
+          conciliados: res.conciliados ?? 0,
+          sobrantes: res.sobrantes ?? 0,
+          montoSobrante: res.montoSobrante ?? 0,
+        })
+        setRows(null)
+        setParseInfo(null)
+        if (fileRef.current) fileRef.current.value = ''
+        router.refresh()
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al conciliar la factura')
+    } finally {
       setLoading(false)
-      return
     }
-
-    if ('ok' in res) {
-      setResult({
-        conciliados: res.conciliados ?? 0,
-        sobrantes: res.sobrantes ?? 0,
-        montoSobrante: res.montoSobrante ?? 0,
-      })
-      setRows(null)
-      setParseInfo(null)
-      if (fileRef.current) fileRef.current.value = ''
-      router.refresh()
-    }
-    setLoading(false)
   }
 
   return (
