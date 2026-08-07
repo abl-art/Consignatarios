@@ -884,8 +884,8 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
       rows.push({
         sku: r.sku,
         nombre: r.nombre,
-        whAndreani: 0,
-        whGocuotas: Number(r.stock),
+        whAndreani: Number(r.stock),
+        whGocuotas: 0,
         total: Number(r.stock),
         tipo: 'accesorio',
       })
