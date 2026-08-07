@@ -843,7 +843,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
 
   const client = await pool.connect()
   try {
-    const [celRes, accRes] = await Promise.all([
+    const [celRes, accRes, abastRes, pedidoRes] = await Promise.all([
       client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; total: string }>(
         `SELECT
           COALESCE(ii.model_code, '—') AS sku,
@@ -865,7 +865,40 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
            AND display_name NOT ILIKE '%E2E%'
          ORDER BY display_name`
       ),
+      // Qty ingested to Andreani per addon SKU
+      client.query<{ payload: { abastecimiento?: { lineas?: Array<{ articulo?: { codigo?: string }; cantidadPedida?: number }> } } }>(
+        `SELECT payload FROM andreani_wh_transactions
+         WHERE tipo = 'abastecimiento' AND estado = 'accepted'`
+      ),
+      // Qty dispatched from Andreani per addon SKU
+      client.query<{ payload: { pedido?: { lineas?: Array<{ articulo?: { codigo?: string; cantidad?: number } }> } } }>(
+        `SELECT payload FROM andreani_wh_transactions
+         WHERE tipo = 'pedido' AND estado = 'accepted'`
+      ),
     ])
+
+    // Build set of addon SKUs
+    const addonSkus = new Set(accRes.rows.map(r => r.sku))
+
+    // Calculate Andreani stock per addon SKU: ingested - dispatched
+    const ingested: Record<string, number> = {}
+    for (const r of abastRes.rows) {
+      for (const l of r.payload?.abastecimiento?.lineas ?? []) {
+        const code = l.articulo?.codigo
+        if (code && addonSkus.has(code)) {
+          ingested[code] = (ingested[code] ?? 0) + (l.cantidadPedida ?? 0)
+        }
+      }
+    }
+    const dispatched: Record<string, number> = {}
+    for (const r of pedidoRes.rows) {
+      for (const l of r.payload?.pedido?.lineas ?? []) {
+        const code = l.articulo?.codigo
+        if (code && addonSkus.has(code)) {
+          dispatched[code] = (dispatched[code] ?? 0) + (l.articulo?.cantidad ?? 1)
+        }
+      }
+    }
 
     const rows: StockWarehouseRow[] = []
 
@@ -881,12 +914,15 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
     }
 
     for (const r of accRes.rows) {
+      const totalStock = Number(r.stock)
+      const enAndreani = Math.max(0, (ingested[r.sku] ?? 0) - (dispatched[r.sku] ?? 0))
+      const enGocuotas = Math.max(0, totalStock - enAndreani)
       rows.push({
         sku: r.sku,
         nombre: r.nombre,
-        whAndreani: Number(r.stock),
-        whGocuotas: 0,
-        total: Number(r.stock),
+        whAndreani: enAndreani,
+        whGocuotas: enGocuotas,
+        total: totalStock,
         tipo: 'accesorio',
       })
     }
