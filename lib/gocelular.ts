@@ -824,6 +824,78 @@ export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
 // Addon / Accesorios stock (store_products con is_addon = true)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Stock por warehouse (SKU + physical_location)
+// ---------------------------------------------------------------------------
+
+export interface StockWarehouseRow {
+  sku: string
+  nombre: string
+  whAndreani: number
+  whGocuotas: number
+  total: number
+  tipo: 'celular' | 'accesorio'
+}
+
+export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const [celRes, accRes] = await Promise.all([
+      client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; total: string }>(
+        `SELECT
+          COALESCE(ii.sku, '—') AS sku,
+          COALESCE(dm.name, ii.model_code) AS nombre,
+          COUNT(*) FILTER (WHERE ii.physical_location = 'andreani_wh')::text AS wh_andreani,
+          COUNT(*) FILTER (WHERE ii.physical_location = 'local')::text AS wh_gocuotas,
+          COUNT(*)::text AS total
+        FROM inventory_items ii
+        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+        WHERE ii.status = 'available'
+        GROUP BY ii.sku, COALESCE(dm.name, ii.model_code)
+        ORDER BY COALESCE(dm.name, ii.model_code), ii.sku`
+      ),
+      client.query<{ sku: string; nombre: string; stock: string }>(
+        `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock
+         FROM store_products
+         WHERE is_addon = true AND status = 'active'
+           AND display_name NOT ILIKE '%E2E%'
+         ORDER BY display_name`
+      ),
+    ])
+
+    const rows: StockWarehouseRow[] = []
+
+    for (const r of celRes.rows) {
+      rows.push({
+        sku: r.sku,
+        nombre: r.nombre,
+        whAndreani: Number(r.wh_andreani),
+        whGocuotas: Number(r.wh_gocuotas),
+        total: Number(r.total),
+        tipo: 'celular',
+      })
+    }
+
+    for (const r of accRes.rows) {
+      rows.push({
+        sku: r.sku,
+        nombre: r.nombre,
+        whAndreani: 0,
+        whGocuotas: Number(r.stock),
+        total: Number(r.stock),
+        tipo: 'accesorio',
+      })
+    }
+
+    return rows
+  } finally {
+    client.release()
+  }
+}
+
 export interface AddonStock {
   id: string
   displayName: string
