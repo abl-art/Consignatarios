@@ -1,21 +1,29 @@
 import Link from 'next/link'
-import { fetchGrupoGoOperaciones, fetchGrupoGoChart } from '@/lib/actions/grupo-go'
+import { fetchGrupoGoOperaciones, fetchGrupoGoChart, fetchTopClientes } from '@/lib/actions/grupo-go'
 import GrupoGoDashboardClient from './GrupoGoDashboardClient'
 import GrupoGoChart from './GrupoGoChart'
+import TopClientesTable from './TopClientesTable'
 
 export default async function GrupoGoDashboardPage({
   searchParams,
 }: {
-  searchParams: { desde?: string; hasta?: string }
+  searchParams: { desde?: string; hasta?: string; cdesde?: string; chasta?: string }
 }) {
   // Default to current year start
   const defaultDesde = `${new Date().getFullYear()}-01-01`
   const desde = searchParams.desde ?? defaultDesde
   const hasta = searchParams.hasta
 
-  const [data, chartData] = await Promise.all([
+  // Tabla de clientes: default últimos 30 días
+  const hace30 = new Date()
+  hace30.setDate(hace30.getDate() - 30)
+  const cdesde = searchParams.cdesde ?? hace30.toISOString().slice(0, 10)
+  const chasta = searchParams.chasta
+
+  const [data, chartData, topClientes] = await Promise.all([
     fetchGrupoGoOperaciones(desde, hasta),
     fetchGrupoGoChart(desde, hasta),
+    fetchTopClientes(cdesde, chasta),
   ])
 
   return (
@@ -25,6 +33,10 @@ export default async function GrupoGoDashboardPage({
       <p className="text-sm text-gray-500 mb-6">Operaciones por modelo de negocio</p>
 
       <GrupoGoDashboardClient data={data} desde={desde} hasta={hasta} chartData={chartData} />
+
+      <div className="mt-8">
+        <TopClientesTable rows={topClientes} cdesde={cdesde} chasta={chasta} />
+      </div>
     </div>
   )
 }

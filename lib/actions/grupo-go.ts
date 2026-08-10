@@ -252,6 +252,79 @@ export async function fetchGrupoGoOperaciones(desde?: string, hasta?: string): P
 }
 
 // ---------------------------------------------------------------------------
+// Transaccionalidad por cliente: top 50 client_id de orders (GOcuotas)
+// ---------------------------------------------------------------------------
+
+export interface ClienteTransaccional {
+  client_id: number
+  client_name: string
+  transacciones: number
+  comision: number
+  ticket_promedio: number
+  cuotas_promedio: number
+  dias_pago: number | null
+}
+
+export async function fetchTopClientes(desde?: string, hasta?: string): Promise<ClienteTransaccional[]> {
+  const pool = getGocuotasPool()
+  if (!pool) return []
+
+  // Cap duro: nunca consultar más atrás de 12 meses
+  const limite = new Date()
+  limite.setMonth(limite.getMonth() - 12)
+  const limiteStr = limite.toISOString().slice(0, 10)
+  const desdeFinal = desde && desde > limiteStr ? desde : limiteStr
+
+  const client = await pool.connect()
+  try {
+    const params: string[] = [desdeFinal]
+    let dateFilter = ' AND o.delivered_at >= $1::timestamp'
+    if (hasta) {
+      params.push(hasta + ' 23:59:59')
+      dateFilter += ` AND o.delivered_at <= $${params.length}::timestamp`
+    }
+
+    const res = await client.query<{
+      client_id: string
+      client_name: string
+      transacciones: string
+      comision: string
+      ticket_promedio: string
+      cuotas_promedio: string
+      dias_pago: number | null
+    }>(
+      `SELECT o.client_id,
+              COALESCE(NULLIF(TRIM(u.business_name), ''), u.name) AS client_name,
+              COUNT(*) AS transacciones,
+              COALESCE(SUM(o.commission_amount_in_cents), 0) / 100.0 AS comision,
+              COALESCE(AVG(o.amount_in_cents), 0) / 100.0 AS ticket_promedio,
+              COALESCE(AVG(o.number_of_installments), 0) AS cuotas_promedio,
+              u.business_days_to_expense_payment AS dias_pago
+       FROM orders o
+       JOIN users u ON u.id = o.client_id
+       WHERE o.delivered_at IS NOT NULL
+         AND o.discarded_at IS NULL${dateFilter}
+       GROUP BY o.client_id, 2, u.business_days_to_expense_payment
+       ORDER BY transacciones DESC
+       LIMIT 50`,
+      params
+    )
+
+    return res.rows.map(r => ({
+      client_id: Number(r.client_id),
+      client_name: r.client_name || `Cliente ${r.client_id}`,
+      transacciones: Number(r.transacciones),
+      comision: Number(r.comision),
+      ticket_promedio: Number(r.ticket_promedio),
+      cuotas_promedio: Number(r.cuotas_promedio),
+      dias_pago: r.dias_pago === null ? null : Number(r.dias_pago),
+    }))
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Chart data: monthly series per model
 // ---------------------------------------------------------------------------
 
