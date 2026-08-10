@@ -18,7 +18,7 @@ export default async function CuentaCorrientePage() {
       .order('fecha_confirmacion', { ascending: false }),
     admin
       .from('pagos_mayoristas')
-      .select('id, cliente_mayorista_id, monto, fecha_cobro, tipo, cuit_emisor, created_at')
+      .select('id, cliente_mayorista_id, monto, fecha_cobro, tipo, cuit_emisor, nro_cheque, created_at')
       .order('created_at', { ascending: false }),
   ])
 

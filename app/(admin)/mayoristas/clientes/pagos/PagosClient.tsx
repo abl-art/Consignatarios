@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { formatearMoneda } from '@/lib/utils'
-import { asentarPago } from '@/lib/actions/pagos-mayoristas'
+import { asentarPago, asentarPagosBulk } from '@/lib/actions/pagos-mayoristas'
+import { parseEcheqs } from '@/lib/parse-echeqs'
 import type { ClienteMayorista, ExtraccionPago, ExposicionRiesgo } from '@/lib/types'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 const tabs = [
   { id: 'asentar', label: 'Asentar Pago' },
+  { id: 'echeqs', label: 'Carga Echeqs' },
   { id: 'riesgo', label: 'Exposición al Riesgo' },
 ] as const
 
@@ -38,6 +40,9 @@ export default function PagosClient({ clientes, exposicion }: Props) {
 
       <div className={active === 'asentar' ? '' : 'hidden'}>
         <AsentarPagoTab clientes={clientes} />
+      </div>
+      <div className={active === 'echeqs' ? '' : 'hidden'}>
+        <CargaEcheqsTab clientes={clientes} />
       </div>
       <div className={active === 'riesgo' ? '' : 'hidden'}>
         <RiesgoTab exposicion={exposicion} />
@@ -324,6 +329,156 @@ function AsentarPagoTab({ clientes }: { clientes: ClienteMayorista[] }) {
         >
           {saving ? 'Asentando...' : 'Asentar Pago'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================================================
+// Carga Echeqs Tab
+// ==========================================================================
+
+function CargaEcheqsTab({ clientes }: { clientes: ClienteMayorista[] }) {
+  const [texto, setTexto] = useState('')
+  const [clienteId, setClienteId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
+  const { cheques, errores } = useMemo(() => parseEcheqs(texto), [texto])
+  const total = cheques.reduce((s, c) => s + c.monto, 0)
+
+  const fmtFecha = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+
+  async function guardar() {
+    if (!clienteId || cheques.length === 0) return
+    setSaving(true)
+    setMensaje(null)
+    try {
+      const result = await asentarPagosBulk({
+        cliente_mayorista_id: clienteId,
+        pagos: cheques.map(c => ({
+          monto: c.monto,
+          fecha_cobro: c.fecha_cobro,
+          cuit_emisor: c.cuit_emisor,
+          nro_cheque: c.nro_cheque,
+          emisor: c.emisor,
+        })),
+      })
+      if ('error' in result) {
+        setMensaje({ tipo: 'error', texto: result.error! })
+      } else {
+        setMensaje({ tipo: 'ok', texto: `${result.cantidad} echeqs asentados por ${formatearMoneda(total)}` })
+        setTexto('')
+        setClienteId('')
+      }
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error al asentar los echeqs' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Pegado de texto */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Pegar echeqs</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Pegá el texto tal cual te llega: número, código, emisor, CUIT, fecha de emisión, fecha de cobro y monto de cada cheque.
+          </p>
+        </div>
+        <textarea
+          value={texto}
+          onChange={e => setTexto(e.target.value)}
+          rows={14}
+          placeholder={'30095246\nJXON1Q65ZJP2Z64\nEnrique Eduardo Olea\n20 38509655 1\n07/08/26\n05/11/26\n$ 452.866,75\n...'}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+        />
+        {errores.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-1">
+            {errores.map((e, i) => (
+              <p key={i} className="text-xs text-yellow-700">⚠ {e}</p>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Vista previa */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700">
+          Vista previa {cheques.length > 0 && `— ${cheques.length} cheques`}
+        </h3>
+
+        {cheques.length === 0 ? (
+          <p className="text-sm text-gray-400 py-8 text-center">Los cheques detectados van a aparecer acá</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-xs">
+                <thead className="border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-2 py-2 font-medium text-gray-500">Nro</th>
+                    <th className="text-left px-2 py-2 font-medium text-gray-500">Emisor</th>
+                    <th className="text-left px-2 py-2 font-medium text-gray-500">CUIT</th>
+                    <th className="text-right px-2 py-2 font-medium text-gray-500">Cobro</th>
+                    <th className="text-right px-2 py-2 font-medium text-gray-500">Monto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {cheques.map(c => (
+                    <tr key={c.codigo}>
+                      <td className="px-2 py-2 tabular-nums text-gray-700">{c.nro_cheque}</td>
+                      <td className="px-2 py-2 text-gray-900">{c.emisor}</td>
+                      <td className="px-2 py-2 tabular-nums text-gray-500">{c.cuit_emisor}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-gray-700">{fmtFecha(c.fecha_cobro)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums font-medium text-gray-900">{formatearMoneda(c.monto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-gray-300">
+                  <tr className="font-bold">
+                    <td colSpan={4} className="px-2 py-2 text-gray-900">Total</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-gray-900">{formatearMoneda(total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Cliente que endosa *</label>
+              <select
+                value={clienteId}
+                onChange={e => setClienteId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              >
+                <option value="">Seleccionar...</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre_comercial} {c.cuit ? `(${c.cuit})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {mensaje && (
+              <div className={`p-3 rounded-lg text-sm ${mensaje.tipo === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {mensaje.texto}
+              </div>
+            )}
+
+            <button
+              onClick={guardar}
+              disabled={saving || !clienteId || cheques.length === 0}
+              className="w-full py-2.5 bg-gray-900 text-white font-medium rounded-lg text-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? 'Asentando...' : `Asentar ${cheques.length} echeqs por ${formatearMoneda(total)}`}
+            </button>
+          </>
+        )}
+        {mensaje && cheques.length === 0 && (
+          <div className={`p-3 rounded-lg text-sm ${mensaje.tipo === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {mensaje.texto}
+          </div>
+        )}
       </div>
     </div>
   )

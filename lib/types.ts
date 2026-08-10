@@ -174,6 +174,8 @@ export interface PagoMayorista {
   tipo: 'echeq' | 'transferencia' | 'efectivo' | 'orden_pago'
   comprobante_url: string | null
   confianza_extraccion: number | null
+  nro_cheque: string | null
+  emisor: string | null
   created_at: string
 }
 

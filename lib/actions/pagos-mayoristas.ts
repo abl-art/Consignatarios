@@ -37,6 +37,42 @@ export async function asentarPago(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Asentar echeqs en lote (carga rápida desde texto pegado)
+// ---------------------------------------------------------------------------
+
+export async function asentarPagosBulk(input: {
+  cliente_mayorista_id: string
+  pagos: {
+    monto: number
+    fecha_cobro: string
+    cuit_emisor: string
+    nro_cheque: string | null
+    emisor: string | null
+  }[]
+}) {
+  if (input.pagos.length === 0) return { error: 'No hay cheques para asentar' }
+  const supabase = createAdminClient()
+
+  const { error } = await supabase.from('pagos_mayoristas').insert(
+    input.pagos.map(p => ({
+      cliente_mayorista_id: input.cliente_mayorista_id,
+      monto: p.monto,
+      fecha_cobro: p.fecha_cobro,
+      cuit_emisor: p.cuit_emisor,
+      tipo: 'echeq' as const,
+      nro_cheque: p.nro_cheque,
+      emisor: p.emisor,
+    }))
+  )
+
+  if (error) return { error: error.message }
+  revalidatePath('/mayoristas/clientes/pagos')
+  revalidatePath('/mayoristas/clientes/cuenta-corriente')
+  revalidatePath('/finanzas')
+  return { ok: true, cantidad: input.pagos.length }
+}
+
+// ---------------------------------------------------------------------------
 // Obtener pagos de un cliente
 // ---------------------------------------------------------------------------
 

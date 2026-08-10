@@ -21,6 +21,7 @@ interface PagoCC {
   fecha_cobro: string
   tipo: string
   cuit_emisor: string
+  nro_cheque?: string | null
   created_at: string
 }
 
@@ -62,7 +63,7 @@ export default function CuentaCorrienteClient({ clientes, proformas, pagos = [] 
     ...pagosCliente.map(p => ({
       id: p.id,
       fecha: p.created_at,
-      concepto: `Pago ${p.tipo} (${p.cuit_emisor})`,
+      concepto: `Pago ${p.tipo}${p.nro_cheque ? ` N° ${p.nro_cheque}` : ''} (${p.cuit_emisor})`,
       tipo: 'haber' as const,
       monto: p.monto,
     })),
