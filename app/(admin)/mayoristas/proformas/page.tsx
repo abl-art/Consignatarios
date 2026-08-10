@@ -14,7 +14,7 @@ export default async function ProformasPage() {
   ])
   return (
     <ProformasClient
-      productos={productos.filter(p => !p.oculto_lista_precios)}
+      productos={productos}
       mupInicial={mup}
       proformasGuardadas={proformas}
       clientes={clientes}
