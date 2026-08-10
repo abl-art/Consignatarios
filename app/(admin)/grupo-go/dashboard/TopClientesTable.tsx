@@ -59,13 +59,14 @@ export default function TopClientesTable({
     }`
 
   const totalTrans = rows.reduce((s, r) => s + r.transacciones, 0)
+  const totalMonto = rows.reduce((s, r) => s + r.monto, 0)
   const totalComision = rows.reduce((s, r) => s + r.comision, 0)
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold text-gray-900">Transaccionalidad por cliente</h2>
-        <p className="text-sm text-gray-500">Top 50 clientes de GOcuotas por cantidad de operaciones (máximo últimos 12 meses)</p>
+        <p className="text-sm text-gray-500">Top 50 clientes de GOcuotas por monto transaccionado (máximo últimos 12 meses)</p>
       </div>
 
       {/* Píldoras de filtro */}
@@ -118,6 +119,7 @@ export default function TopClientesTable({
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Client ID</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Monto</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Transacciones</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Comisión ($)</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Ticket promedio</th>
@@ -128,7 +130,7 @@ export default function TopClientesTable({
           <tbody className="divide-y divide-gray-100">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                   Sin operaciones en el período seleccionado
                 </td>
               </tr>
@@ -142,7 +144,8 @@ export default function TopClientesTable({
                     <span className="font-medium text-gray-900">{r.client_name}</span>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900 tabular-nums">{formatearNumero(r.transacciones)}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900 tabular-nums">{formatearMoneda(r.monto)}</td>
+                <td className="px-4 py-2.5 text-right text-gray-900 tabular-nums">{formatearNumero(r.transacciones)}</td>
                 <td className="px-4 py-2.5 text-right text-gray-900 tabular-nums">{formatearMoneda(r.comision)}</td>
                 <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">{formatearMoneda(r.ticket_promedio)}</td>
                 <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">{r.cuotas_promedio.toFixed(1)}</td>
@@ -154,6 +157,7 @@ export default function TopClientesTable({
             <tfoot className="border-t-2 border-gray-300 bg-gray-50">
               <tr className="font-bold">
                 <td className="px-4 py-3 text-gray-900" colSpan={2}>Total top 50</td>
+                <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{formatearMoneda(totalMonto)}</td>
                 <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{formatearNumero(totalTrans)}</td>
                 <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{formatearMoneda(totalComision)}</td>
                 <td className="px-4 py-3 text-right text-gray-700 tabular-nums">

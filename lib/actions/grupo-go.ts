@@ -258,6 +258,7 @@ export async function fetchGrupoGoOperaciones(desde?: string, hasta?: string): P
 export interface ClienteTransaccional {
   client_id: number
   client_name: string
+  monto: number
   transacciones: number
   comision: number
   ticket_promedio: number
@@ -287,6 +288,7 @@ export async function fetchTopClientes(desde?: string, hasta?: string): Promise<
     const res = await client.query<{
       client_id: string
       client_name: string
+      monto: string
       transacciones: string
       comision: string
       ticket_promedio: string
@@ -295,6 +297,7 @@ export async function fetchTopClientes(desde?: string, hasta?: string): Promise<
     }>(
       `SELECT o.client_id,
               COALESCE(NULLIF(TRIM(u.business_name), ''), u.name) AS client_name,
+              COALESCE(SUM(o.amount_in_cents), 0) / 100.0 AS monto,
               COUNT(*) AS transacciones,
               COALESCE(SUM(o.commission_amount_in_cents), 0) / 100.0 AS comision,
               COALESCE(AVG(o.amount_in_cents), 0) / 100.0 AS ticket_promedio,
@@ -305,7 +308,7 @@ export async function fetchTopClientes(desde?: string, hasta?: string): Promise<
        WHERE o.delivered_at IS NOT NULL
          AND o.discarded_at IS NULL${dateFilter}
        GROUP BY o.client_id, 2, u.business_days_to_expense_payment
-       ORDER BY transacciones DESC
+       ORDER BY monto DESC
        LIMIT 50`,
       params
     )
@@ -313,6 +316,7 @@ export async function fetchTopClientes(desde?: string, hasta?: string): Promise<
     return res.rows.map(r => ({
       client_id: Number(r.client_id),
       client_name: r.client_name || `Cliente ${r.client_id}`,
+      monto: Number(r.monto),
       transacciones: Number(r.transacciones),
       comision: Number(r.comision),
       ticket_promedio: Number(r.ticket_promedio),
