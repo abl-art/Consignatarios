@@ -202,11 +202,11 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
         ventas_ayer_monto: string
       }>(`
         WITH nombres AS (
-          SELECT DISTINCT ON (client_id) client_id, merchant_name
+          SELECT DISTINCT ON (client_id) client_id,
+            COALESCE(merchant_name, NULLIF(split_part(store_name, ' - ', 1), '')) AS merchant_name
           FROM gocuotas_stores
           WHERE client_id NOT IN (${excl})
-            AND merchant_name IS NOT NULL
-          ORDER BY client_id, updated_at DESC
+          ORDER BY client_id, (merchant_name IS NULL), updated_at DESC
         ),
         tiendas AS (
           SELECT client_id,
@@ -283,11 +283,11 @@ export async function fetchTercerosVentasDiarias(): Promise<VentaDiariaTercero[]
         monto: string
       }>(`
         WITH nombres AS (
-          SELECT DISTINCT ON (client_id) client_id, merchant_name
+          SELECT DISTINCT ON (client_id) client_id,
+            COALESCE(merchant_name, NULLIF(split_part(store_name, ' - ', 1), '')) AS merchant_name
           FROM gocuotas_stores
           WHERE client_id NOT IN (${excl})
-            AND merchant_name IS NOT NULL
-          ORDER BY client_id, updated_at DESC
+          ORDER BY client_id, (merchant_name IS NULL), updated_at DESC
         )
         SELECT o.client_id, n.merchant_name,
           o.order_created_at::date::text AS fecha,
