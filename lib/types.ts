@@ -163,6 +163,7 @@ export interface ClienteMayorista {
   transporte: string | null
   limite_cuenta_corriente: number | null
   plazo_dias: number
+  gocuotas_store_id: string | null
   entrega_nombre: string | null
   entrega_dni: string | null
   entrega_telefono: string | null

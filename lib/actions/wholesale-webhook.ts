@@ -43,8 +43,8 @@ interface WholesalePayload {
 
 // Vincula el IMEI consignado con su store: inventory_items.consigned_to_store_id (uuid) referencia
 // gocuotas_stores.id (uuid) — el gocuotas_store_id "numerico" que usa el resto del sistema (y que
-// llega en proforma.store_id) vive en gocuotas_stores, por eso hace falta el LEFT JOIN para poder
-// comparar contra el storeId de la venta (ambos como texto). Verificado contra la base real
+// llega en cliente.gocuotas_store_id) vive en gocuotas_stores, por eso hace falta el LEFT JOIN para
+// poder comparar contra el storeId de la venta (ambos como texto). Verificado contra la base real
 // 2026-08-12: la columna NO se llama store_id ni consigned_store_id.
 async function cargarCatalogoVenta(storeId: string, imeis: string[]): Promise<CatalogoVenta | null> {
   const pool = getPool()
@@ -172,7 +172,15 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
     return { estado: 'validacion_fallida', errores: ['La proforma no tiene un cliente mayorista asociado (o el cliente no existe)'] }
   }
 
-  const storeId = proforma.store_id ?? ''
+  // El gocuotas_store_id vive en el CLIENTE (no en la proforma): cada cliente mayorista vende
+  // siempre a través del mismo local de GOcelular (decisión del controller, fix-review 2026-08-12).
+  const storeId = cliente.gocuotas_store_id ?? ''
+  if (!storeId) {
+    return {
+      estado: 'validacion_fallida',
+      errores: ['El cliente no tiene configurado el gocuotas_store_id — cargalo en la ficha del cliente'],
+    }
+  }
 
   // 2. IMEIs (stock_local): asignaciones de la proforma -> asignacion_items -> dispositivos.imei
   let imeis: string[] | null = null
@@ -247,7 +255,7 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
         stockErrors.push(`Stock insuficiente en el warehouse para "${nombreModelo}": pedido ${pedido}, disponible ${disponible}`)
       }
     }
-    if (stockErrors.length > 0) return { estado: 'validacion_fallida', errores: stockErrors }
+    if (stockErrors.length > 0) return { estado: 'validacion_fallida', errores: stockErrors, warnings: catalogoWarnings }
 
     lineas = resoluciones.map(r => ({
       line_reference: nextRef(),
@@ -324,7 +332,11 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
 // Persistencia
 // ---------------------------------------------------------------------------
 
-async function persistir(proformaId: string, gocelular: GocelularVentaEstado) {
+// Devuelve true si el UPDATE quedó guardado (tras el reintento, si hizo falta). El único llamador
+// que necesita chequear el resultado es el persist pre-POST en informarVentaGocelular (si ese no
+// se guardó, no hay que enviar — ver comentario ahí); el resto de los llamadores post-envío
+// mantienen el comportamiento tolerante de siempre (best-effort, solo console.error).
+async function persistir(proformaId: string, gocelular: GocelularVentaEstado): Promise<boolean> {
   const supabase = createAdminClient()
   let { error } = await supabase.from('proformas').update({ gocelular }).eq('id', proformaId)
   if (error) {
@@ -336,6 +348,7 @@ async function persistir(proformaId: string, gocelular: GocelularVentaEstado) {
   }
   revalidatePath('/mayoristas/proformas')
   revalidatePath('/mayoristas/asignaciones')
+  return !error
 }
 
 // ---------------------------------------------------------------------------
@@ -390,8 +403,21 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
       }
       rawBody = JSON.stringify(built.payload)
       // Persistir el payload ANTES del POST: si el proceso muere aca, el proximo intento reusa
-      // este mismo body en vez de regenerar uno distinto.
-      await persistir(proformaId, { estado: 'no_enviado', payloadEnviado: rawBody, warnings: built.warnings })
+      // este mismo body en vez de regenerar uno distinto. Si este guardado falla (incluso tras el
+      // reintento interno de persistir), NO hay que enviar: un intento posterior reconstruiria el
+      // payload con timestamp fresco y dispararia el 409 proforma_conflict espurio que este
+      // mecanismo existe para evitar. Mejor abortar y quedar en error_reintentable.
+      const guardado = await persistir(proformaId, { estado: 'no_enviado', payloadEnviado: rawBody, warnings: built.warnings })
+      if (!guardado) {
+        const guardadoFallback = await persistir(proformaId, {
+          estado: 'error_reintentable',
+          errores: ['No pude guardar el estado antes de enviar — reintentá'],
+        })
+        if (!guardadoFallback) {
+          console.error(`informarVentaGocelular: no pude persistir el payload ni el estado de error para la proforma ${proformaId} — aborto el envío sin dejar rastro en gocelular`)
+        }
+        return { ok: false, estado: 'error_reintentable' }
+      }
     }
 
     // 6. Enviar

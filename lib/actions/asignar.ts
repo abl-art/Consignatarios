@@ -394,7 +394,7 @@ export async function prepararAsignacionMayorista(input: {
     const totalPedido = ((proformaOrigen.proforma_items ?? []) as { cantidad: number }[]).reduce((s, i) => s + i.cantidad, 0)
     const { data: asigs } = await admin.from('asignaciones').select('total_unidades').eq('proforma_id', input.proforma_id)
     const totalAsignado = (asigs ?? []).reduce((s, a) => s + a.total_unidades, 0)
-    if (totalPedido > 0 && totalAsignado >= totalPedido) {
+    if (totalPedido > 0 && totalAsignado === totalPedido) {
       const { informarVentaGocelular } = await import('@/lib/actions/wholesale-webhook')
       informarVentaGocelular(input.proforma_id).catch((e) => console.error('Error informando venta a GOcelular:', e))
     }
