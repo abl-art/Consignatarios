@@ -38,6 +38,29 @@ export interface PurchaseResult {
   retryable: boolean
 }
 
+export type WholesaleResponseBody = {
+  sale_id?: string
+  proforma_number?: string
+  result?: string
+  fa_status?: string
+  imeis_processed?: number
+  request_id?: string
+  dispatch?: { id: string; numero_orden_externa: string }
+  warnings?: string[]
+  error?: string
+  details?: unknown
+  code?: string
+  retryable?: boolean
+  errors?: unknown[]
+}
+
+export interface WholesaleResult {
+  ok: boolean
+  status: number
+  body: WholesaleResponseBody | null
+  retryable: boolean
+}
+
 export function signWebhook(secret: string, timestampIso: string, rawBody: string): string {
   return crypto.createHmac('sha256', secret).update(`${timestampIso}.${rawBody}`).digest('hex')
 }
@@ -84,6 +107,40 @@ export async function sendPurchaseWebhook(payload: PurchasePayload): Promise<Pur
 
       if (res.status === 200) return { ok: true, status: 200, body, retryable: false }
 
+      const retryable = res.status >= 500
+      last = { ok: false, status: res.status, body, retryable }
+      if (!retryable) return last
+    } catch {
+      // Timeout o red caida ("sin respuesta" segun retry policy de GOcelular): reintentable
+      last = { ok: false, status: 0, body: null, retryable: true }
+    }
+    if (attempt < 3) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
+  }
+  return last
+}
+
+const WHOLESALE_URL = 'https://gocelular.gocuotas.com/api/webhooks/gocelular/wholesale'
+
+export async function sendWholesaleWebhook(rawBody: string): Promise<WholesaleResult> {
+  const secret = process.env.GOCELULAR_WEBHOOK_SECRET
+  const url = process.env.GOCELULAR_WHOLESALE_URL || WHOLESALE_URL
+  if (!secret) return { ok: false, status: 0, body: { code: 'secret_no_configurado' }, retryable: false }
+  if (Buffer.byteLength(rawBody, 'utf8') > 1_000_000) {
+    return { ok: false, status: 0, body: { code: 'payload_too_large_local' }, retryable: false }
+  }
+  let last: WholesaleResult = { ok: false, status: 0, body: null, retryable: true }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const ts = buildTimestamp()
+    const sig = signWebhook(secret, ts, rawBody)
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Gocelular-Signature': sig, 'X-Gocelular-Timestamp': ts },
+        body: rawBody,
+        signal: AbortSignal.timeout(10000),
+      })
+      const body = (await res.json().catch(() => null)) as WholesaleResponseBody | null
+      if (res.status === 200) return { ok: true, status: 200, body, retryable: false }
       const retryable = res.status >= 500
       last = { ok: false, status: res.status, body, retryable }
       if (!retryable) return last
