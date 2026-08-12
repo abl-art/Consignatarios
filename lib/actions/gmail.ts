@@ -6,9 +6,10 @@ import { guardarTodos } from '@/app/(admin)/notas/actions'
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-export type VistaMails = 'inbox' | 'pedidos' | 'cristian'
+export type VistaMails = 'inbox' | 'pedidos' | 'cristian' | 'soporte'
 
 const CRISTIAN = 'cristian@gocuotas.com'
+const SOPORTE_GOCELULAR = 'gocuotasprod@cloud.trustonic.com'
 
 export interface MailResumen {
   id: string
@@ -110,9 +111,17 @@ export async function ocultarMailApp(id: string): Promise<{ ok?: boolean; error?
 
 function buildQuery(vista: VistaMails, busqueda?: string): string {
   const partes: string[] = []
-  if (vista === 'inbox') partes.push('in:inbox')
+  if (vista === 'inbox') {
+    // Bandeja limpia: el soporte Trustonic va a su propia vista, y de
+    // Basecamp solo quedan asignaciones/menciones (fuera los digests)
+    partes.push('in:inbox')
+    partes.push(`-from:${SOPORTE_GOCELULAR}`)
+    partes.push('-(from:app.basecamp.com {subject:"latest activity" subject:"here are your tasks"})')
+  }
   if (vista === 'pedidos') partes.push('in:sent subject:"Pedido GOcelular"')
   if (vista === 'cristian') partes.push(`(from:${CRISTIAN} OR cc:${CRISTIAN} OR to:${CRISTIAN})`)
+  // Incluye tambien los ya borrados (papelera) para poder analizar quejas
+  if (vista === 'soporte') partes.push(`in:anywhere from:${SOPORTE_GOCELULAR}`)
   if (busqueda?.trim()) partes.push(busqueda.trim())
   return partes.join(' ')
 }

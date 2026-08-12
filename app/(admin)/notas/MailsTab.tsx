@@ -13,9 +13,10 @@ import {
 } from '@/lib/actions/gmail'
 
 const VISTAS: { id: VistaMails; label: string; desc: string }[] = [
-  { id: 'inbox', label: 'Bandeja', desc: 'Bandeja de entrada de Gmail' },
+  { id: 'inbox', label: 'Bandeja', desc: 'Bandeja de entrada (sin soporte Trustonic ni digests de Basecamp)' },
   { id: 'pedidos', label: 'Pedidos', desc: 'Pedidos enviados a proveedores desde el gestor' },
   { id: 'cristian', label: 'Cristian', desc: 'Mails de cristian@gocuotas.com o donde está copiado' },
+  { id: 'soporte', label: 'Soporte GOcelular', desc: 'Mails de gocuotasprod@cloud.trustonic.com (incluye los ya borrados)' },
 ]
 
 function fmtFecha(rfc: string): string {
