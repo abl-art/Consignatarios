@@ -1,15 +1,21 @@
 'use server'
 
 import { getGoogleAccessToken } from '@/lib/google'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { guardarTodos } from '@/app/(admin)/notas/actions'
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
+
+export type VistaMails = 'inbox' | 'pedidos' | 'cristian'
+
+const CRISTIAN = 'cristian@gocuotas.com'
 
 export interface MailResumen {
   id: string
   threadId: string
   remitente: string
   remitenteEmail: string
+  para: string
   asunto: string
   fecha: string
   snippet: string
@@ -76,31 +82,73 @@ async function gmailFetch(token: string, path: string, init?: RequestInit) {
 const NO_CONECTADO =
   'Gmail no está autorizado. Reconectá tu cuenta de Google desde Notas (● Google conectado — reconectar) para dar el permiso de lectura.'
 
-export async function listarInbox(pageToken?: string): Promise<{
+// IDs ocultados solo en la app (en Gmail quedan intactos)
+async function getOcultos(): Promise<Set<string>> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('flujo_config').select('value').eq('key', 'mails_ocultos_app').single()
+  if (!data?.value) return new Set()
+  try {
+    return new Set(JSON.parse(data.value) as string[])
+  } catch {
+    return new Set()
+  }
+}
+
+// Oculta el mail solo en esta seccion — no toca nada en Gmail
+export async function ocultarMailApp(id: string): Promise<{ ok?: boolean; error?: string }> {
+  const sb = createAdminClient()
+  const ocultos = Array.from(await getOcultos())
+  ocultos.push(id)
+  const { error } = await sb.from('flujo_config').upsert({
+    key: 'mails_ocultos_app',
+    value: JSON.stringify(ocultos.slice(-2000)),
+    updated_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+function buildQuery(vista: VistaMails, busqueda?: string): string {
+  const partes: string[] = []
+  if (vista === 'inbox') partes.push('in:inbox')
+  if (vista === 'pedidos') partes.push('in:sent subject:"Pedido GOcelular"')
+  if (vista === 'cristian') partes.push(`(from:${CRISTIAN} OR cc:${CRISTIAN} OR to:${CRISTIAN})`)
+  if (busqueda?.trim()) partes.push(busqueda.trim())
+  return partes.join(' ')
+}
+
+export async function listarMails(input?: {
+  vista?: VistaMails
+  busqueda?: string
+  pageToken?: string
+}): Promise<{
   mails?: MailResumen[]
   nextPageToken?: string
   error?: string
 }> {
+  const vista = input?.vista ?? 'inbox'
   const token = await getGoogleAccessToken()
   if (!token) return { error: NO_CONECTADO }
 
-  const params = new URLSearchParams({ labelIds: 'INBOX', maxResults: '30' })
-  if (pageToken) params.set('pageToken', pageToken)
+  const params = new URLSearchParams({ maxResults: '30', q: buildQuery(vista, input?.busqueda) })
+  if (input?.pageToken) params.set('pageToken', input.pageToken)
 
-  const listRes = await gmailFetch(token, `/messages?${params}`)
+  const [listRes, ocultos] = await Promise.all([gmailFetch(token, `/messages?${params}`), getOcultos()])
   if (!listRes.ok) {
     if (listRes.status === 403 || listRes.status === 401) return { error: NO_CONECTADO }
     return { error: `Gmail respondió ${listRes.status}` }
   }
   const list = await listRes.json()
-  const ids: { id: string; threadId: string }[] = list.messages ?? []
-  if (ids.length === 0) return { mails: [], nextPageToken: undefined }
+  const ids: { id: string; threadId: string }[] = (list.messages ?? []).filter(
+    (m: { id: string }) => !ocultos.has(m.id)
+  )
+  if (ids.length === 0) return { mails: [], nextPageToken: list.nextPageToken }
 
   const mails = await Promise.all(
     ids.map(async ({ id, threadId }): Promise<MailResumen | null> => {
       const res = await gmailFetch(
         token,
-        `/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`
+        `/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`
       )
       if (!res.ok) return null
       const msg = await res.json()
@@ -111,6 +159,7 @@ export async function listarInbox(pageToken?: string): Promise<{
         threadId,
         remitente: nombre,
         remitenteEmail: email,
+        para: header(headers, 'To'),
         asunto: header(headers, 'Subject') || '(sin asunto)',
         fecha: header(headers, 'Date'),
         snippet: msg.snippet ?? '',
@@ -119,7 +168,15 @@ export async function listarInbox(pageToken?: string): Promise<{
     })
   )
 
-  return { mails: mails.filter((m): m is MailResumen => m !== null), nextPageToken: list.nextPageToken }
+  // No leidos primero; dentro de cada grupo, mas recientes arriba
+  const ordenados = mails
+    .filter((m): m is MailResumen => m !== null)
+    .sort((a, b) => {
+      if (a.noLeido !== b.noLeido) return a.noLeido ? -1 : 1
+      return new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    })
+
+  return { mails: ordenados, nextPageToken: list.nextPageToken }
 }
 
 export async function leerMail(id: string): Promise<{ mail?: MailDetalle; error?: string }> {
