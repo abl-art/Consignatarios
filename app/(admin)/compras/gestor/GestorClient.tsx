@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
 import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido } from '@/lib/actions/compras'
+import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
 
 interface Proveedor {
   id: string
@@ -178,6 +179,8 @@ export default function GestorClient({
 
   // Send modal
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
+  const [emailEnviando, setEmailEnviando] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   const categoriasUsadas = Array.from(new Set([...productos.map((p) => p.categoria), 'Kits de Seguridad']))
 
@@ -362,6 +365,7 @@ export default function GestorClient({
   function enviarNota(notaId: string) {
     const nota = notas.find((n) => n.id === notaId)
     if (!nota) return
+    setEmailError(null)
     setSendModal({ nota })
   }
 
@@ -394,11 +398,29 @@ export default function GestorClient({
     marcarEnviada(nota.id, 'whatsapp')
   }
 
-  function openEmail(nota: NotaPedido) {
-    const subject = encodeURIComponent(`Nota de Pedido - GOcelular - ${nota.fecha}`)
-    const body = encodeURIComponent(buildMessage(nota))
-    window.location.href = `mailto:${nota.proveedor.email || ''}?subject=${subject}&body=${body}`
-    marcarEnviada(nota.id, 'email')
+  // Envio directo por Gmail (sin precios) al email cargado en el proveedor
+  async function enviarPorEmail(nota: NotaPedido) {
+    setEmailEnviando(true)
+    setEmailError(null)
+    try {
+      const result = await enviarPedidoEmail({
+        proveedorEmail: nota.proveedor.email || '',
+        proveedorNombre: nota.proveedor.nombre,
+        fecha: nota.fecha,
+        items: nota.items.map(i => ({
+          codigo: i.producto.codigo,
+          nombre: i.producto.nombre,
+          cantidad: i.cantidad,
+        })),
+      })
+      if (result.ok) {
+        await marcarEnviada(nota.id, 'email')
+      } else {
+        setEmailError(result.error ?? 'Error al enviar el email')
+      }
+    } finally {
+      setEmailEnviando(false)
+    }
   }
 
   function openPrintPreview(nota: NotaPedido) {
@@ -1438,17 +1460,23 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                 </div>
               </button>
               <button
-                onClick={() => openEmail(sendModal.nota)}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                onClick={() => enviarPorEmail(sendModal.nota)}
+                disabled={emailEnviando || !sendModal.nota.proveedor.email}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-60 transition-colors"
               >
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 <div className="text-left">
-                  <p className="font-medium text-blue-800 text-sm">Email</p>
+                  <p className="font-medium text-blue-800 text-sm">
+                    {emailEnviando ? 'Enviando...' : 'Email directo (sin precios)'}
+                  </p>
                   <p className="text-xs text-blue-600">{sendModal.nota.proveedor.email || 'Sin email'}</p>
                 </div>
               </button>
+              {emailError && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{emailError}</p>
+              )}
             </div>
             <div className="mt-4 text-right">
               <button
