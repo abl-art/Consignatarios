@@ -172,6 +172,32 @@ function buildQuery(vista: VistaMails, busqueda?: string): string {
   return partes.join(' ')
 }
 
+// Conteo por vista para el sidebar: no leidos en cada una, salvo
+// Importantes que cuenta el total (leidos o no)
+export async function getConteosVistas(): Promise<Record<string, number>> {
+  const token = await getGoogleAccessToken()
+  if (!token) return {}
+
+  const queries: { vista: string; q: string }[] = [
+    { vista: 'inbox', q: buildQuery('inbox') },
+    { vista: 'importantes', q: buildQuery('importantes') },
+    { vista: 'basecamp', q: `${buildQuery('basecamp')} is:unread` },
+    { vista: 'cristian', q: `${buildQuery('cristian')} is:unread` },
+    { vista: 'soporte', q: `${buildQuery('soporte')} is:unread` },
+  ]
+
+  const resultados = await Promise.all(
+    queries.map(async ({ vista, q }) => {
+      const res = await gmailFetch(token, `/messages?${new URLSearchParams({ maxResults: '1', q })}`)
+      if (!res.ok) return { vista, n: 0 }
+      const data = await res.json()
+      return { vista, n: Number(data.resultSizeEstimate ?? 0) }
+    })
+  )
+
+  return Object.fromEntries(resultados.map(r => [r.vista, r.n]))
+}
+
 // Archiva en Gmail los cierres de lote SPS de Payway (no sirven).
 // Se dispara al abrir la bandeja; batchModify saca la etiqueta INBOX.
 export async function archivarSpsAutomatico(): Promise<{ archivados: number }> {

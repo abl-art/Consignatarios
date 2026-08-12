@@ -14,6 +14,7 @@ import {
   enviarMailNuevo,
   responderMail,
   getContactos,
+  getConteosVistas,
   type MailResumen,
   type MailDetalle,
   type VistaMails,
@@ -63,6 +64,35 @@ function ordenar(mails: MailResumen[]): MailResumen[] {
   })
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// Cita del mail original para armar la cadena al responder
+function armarCita(mail: MailDetalle): string {
+  const original = mail.html
+    ? mail.html.replace(/<script[\s\S]*?<\/script>/gi, '')
+    : escapeHtml(mail.texto ?? '').replace(/\n/g, '<br>')
+  const fecha = new Date(mail.fecha)
+  const fechaStr = isNaN(fecha.getTime())
+    ? mail.fecha
+    : fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) +
+      ' a las ' +
+      fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  return (
+    '<br><br><div style="color:#555;font-size:13px">El ' +
+    fechaStr +
+    ', ' +
+    escapeHtml(mail.remitente) +
+    ' &lt;' +
+    escapeHtml(mail.remitenteEmail) +
+    '&gt; escribió:</div>' +
+    '<blockquote style="border-left:2px solid #ccc;margin:8px 0 0 0;padding-left:12px;color:#555">' +
+    original +
+    '</blockquote>'
+  )
+}
+
 function extraerEmails(raw: string): string[] {
   return raw
     .split(',')
@@ -88,6 +118,14 @@ export default function MailsTab({ active }: { active: boolean }) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [descargando, setDescargando] = useState<string | null>(null)
   const [importantes, setImportantes] = useState<Set<string>>(new Set())
+  const [conteos, setConteos] = useState<Record<string, number>>({})
+  const [fmt, setFmt] = useState<{ bold: boolean; underline: boolean; list: boolean; color: string; size: string }>({
+    bold: false,
+    underline: false,
+    list: false,
+    color: '',
+    size: '',
+  })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestSeq = useRef(0)
   const spsListo = useRef(false)
@@ -137,6 +175,12 @@ export default function MailsTab({ active }: { active: boolean }) {
     []
   )
 
+  const actualizarConteos = useCallback(() => {
+    getConteosVistas()
+      .then(setConteos)
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (active && !cargado && !loading) {
       if (!spsListo.current) {
@@ -144,9 +188,47 @@ export default function MailsTab({ active }: { active: boolean }) {
         archivarSpsAutomatico().catch(() => {})
       }
       cargar({ vista, busqueda })
+      actualizarConteos()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
+
+  // Prellenar el editor: cadena citada al responder, vacio en correo nuevo
+  useEffect(() => {
+    const el = editorRef.current
+    if (!compose || !el) return
+    el.innerHTML = compose.tipo === 'responder' ? armarCita(compose.mail) : ''
+    el.focus()
+    // Caret al principio, antes de la cita
+    const sel = window.getSelection()
+    if (sel && el.firstChild) {
+      const range = document.createRange()
+      range.setStart(el, 0)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }, [compose])
+
+  // Estado de formato activo en el editor (negrita, subrayado, etc.)
+  useEffect(() => {
+    if (!compose) return
+    const handler = () => {
+      try {
+        setFmt({
+          bold: document.queryCommandState('bold'),
+          underline: document.queryCommandState('underline'),
+          list: document.queryCommandState('insertUnorderedList'),
+          color: document.queryCommandValue('foreColor'),
+          size: document.queryCommandValue('fontSize'),
+        })
+      } catch {
+        // queryCommand puede fallar en algunos contextos: ignorar
+      }
+    }
+    document.addEventListener('selectionchange', handler)
+    return () => document.removeEventListener('selectionchange', handler)
+  }, [compose])
 
   // Busqueda mientras se escribe (debounce 450ms)
   useEffect(() => {
@@ -168,6 +250,7 @@ export default function MailsTab({ active }: { active: boolean }) {
     setMails([])
     setNextToken(undefined)
     cargar({ vista: v, busqueda })
+    actualizarConteos()
   }
 
   async function abrir(m: MailResumen) {
@@ -341,6 +424,26 @@ export default function MailsTab({ active }: { active: boolean }) {
   function formato(cmd: string, valor?: string) {
     editorRef.current?.focus()
     document.execCommand(cmd, false, valor)
+    // Refrescar los indicadores de formato activo
+    try {
+      setFmt({
+        bold: document.queryCommandState('bold'),
+        underline: document.queryCommandState('underline'),
+        list: document.queryCommandState('insertUnorderedList'),
+        color: document.queryCommandValue('foreColor'),
+        size: document.queryCommandValue('fontSize'),
+      })
+    } catch {
+      // ignorar
+    }
+  }
+
+  // Compara el color activo (viene como rgb) contra un hex de la paleta
+  function colorActivo(hex: string): boolean {
+    if (!fmt.color) return false
+    const h = hex.replace('#', '')
+    const rgb = `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`
+    return fmt.color === rgb || fmt.color.toLowerCase() === hex.toLowerCase()
   }
 
   async function agregarAdjuntosCompose(e: React.ChangeEvent<HTMLInputElement>) {
@@ -416,20 +519,32 @@ export default function MailsTab({ active }: { active: boolean }) {
         >
           + Nuevo correo
         </button>
-        {VISTAS.map(v => (
-          <button
-            key={v.id}
-            onClick={() => cambiarVista(v.id)}
-            title={v.desc}
-            className={`w-full text-left px-3 py-2 text-sm font-medium border-l-2 transition-colors ${
-              vista === v.id
-                ? 'border-magenta-600 text-magenta-600 bg-magenta-50/50'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            {v.id === 'importantes' ? '★ Importantes' : v.label}
-          </button>
-        ))}
+        {VISTAS.map(v => {
+          const n = conteos[v.id] ?? 0
+          return (
+            <button
+              key={v.id}
+              onClick={() => cambiarVista(v.id)}
+              title={v.desc + (v.id === 'importantes' ? ' — total' : n > 0 ? ' — sin leer' : '')}
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium border-l-2 transition-colors ${
+                vista === v.id
+                  ? 'border-magenta-600 text-magenta-600 bg-magenta-50/50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span className="truncate">{v.id === 'importantes' ? '★ Importantes' : v.label}</span>
+              {n > 0 && (
+                <span
+                  className={`shrink-0 min-w-[20px] text-center px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                    v.id === 'importantes' ? 'bg-amber-100 text-amber-700' : 'bg-magenta-100 text-magenta-700'
+                  }`}
+                >
+                  {n > 99 ? '99+' : n}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Contenido */}
@@ -448,7 +563,10 @@ export default function MailsTab({ active }: { active: boolean }) {
             </button>
           )}
           <button
-            onClick={() => cargar({ vista, busqueda })}
+            onClick={() => {
+              cargar({ vista, busqueda })
+              actualizarConteos()
+            }}
             disabled={loading}
             className="px-4 py-2 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
@@ -707,33 +825,74 @@ export default function MailsTab({ active }: { active: boolean }) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
               />
 
-              {/* Barra de formato */}
+              {/* Barra de formato — mouseDown con preventDefault para no perder
+                  la seleccion del editor (arregla viñetas y demas comandos) */}
               <div className="flex items-center gap-1 flex-wrap border border-gray-200 rounded-t-lg px-2 py-1.5 bg-gray-50">
-                <button onClick={() => formato('bold')} title="Negrita" className="px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-200 rounded">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => formato('bold')}
+                  title="Negrita"
+                  className={`px-2 py-1 text-sm font-bold rounded ${
+                    fmt.bold ? 'bg-magenta-100 text-magenta-700' : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   B
                 </button>
-                <button onClick={() => formato('underline')} title="Subrayado" className="px-2 py-1 text-sm underline text-gray-700 hover:bg-gray-200 rounded">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => formato('underline')}
+                  title="Subrayado"
+                  className={`px-2 py-1 text-sm underline rounded ${
+                    fmt.underline ? 'bg-magenta-100 text-magenta-700' : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   U
                 </button>
                 <span className="w-px h-5 bg-gray-300 mx-1" />
                 {COLORES.map(c => (
                   <button
                     key={c}
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => formato('foreColor', c)}
                     title="Color de letra"
-                    className="w-5 h-5 rounded-full border border-gray-300 hover:scale-110 transition-transform"
+                    className={`w-5 h-5 rounded-full border hover:scale-110 transition-transform ${
+                      colorActivo(c) ? 'ring-2 ring-magenta-400 ring-offset-1 border-white' : 'border-gray-300'
+                    }`}
                     style={{ backgroundColor: c }}
                   />
                 ))}
                 <span className="w-px h-5 bg-gray-300 mx-1" />
-                <button onClick={() => formato('insertUnorderedList')} title="Viñetas" className="px-2 py-1 text-sm text-gray-700 hover:bg-gray-200 rounded">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => formato('insertUnorderedList')}
+                  title="Viñetas"
+                  className={`px-2 py-1 text-sm rounded ${
+                    fmt.list ? 'bg-magenta-100 text-magenta-700' : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   • Lista
                 </button>
                 <span className="w-px h-5 bg-gray-300 mx-1" />
-                <button onClick={() => formato('fontSize', '3')} title="Tamaño normal" className="px-2 py-1 text-xs text-gray-700 hover:bg-gray-200 rounded">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => formato('fontSize', '3')}
+                  title="Tamaño normal"
+                  className={`px-2 py-1 text-xs rounded ${
+                    fmt.size === '' || fmt.size === '3'
+                      ? 'bg-magenta-100 text-magenta-700'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   Aa
                 </button>
-                <button onClick={() => formato('fontSize', '5')} title="Tamaño grande" className="px-2 py-1 text-base text-gray-700 hover:bg-gray-200 rounded">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => formato('fontSize', '5')}
+                  title="Tamaño grande"
+                  className={`px-2 py-1 text-base rounded ${
+                    fmt.size === '5' ? 'bg-magenta-100 text-magenta-700' : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   Aa
                 </button>
               </div>
