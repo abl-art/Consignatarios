@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, fetchNotasGuardadas, guardarNotasEventos, fetchNotasEventos } from './actions'
+import MailsTab from './MailsTab'
 
 interface Todo {
   id: string
@@ -104,7 +105,7 @@ async function saveWithRetry(
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export default function NotasClient({ initialTodos, initialNotas, initialGuardadas, initialNotasEventos }: Props) {
-  const [tab, setTab] = useState<'todo' | 'notas' | 'guardadas'>('todo')
+  const [tab, setTab] = useState<'todo' | 'notas' | 'guardadas' | 'mails'>('todo')
   // Shared state lives here — survives tab switches (no remount = no data loss)
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [notasContent, setNotasContent] = useState(initialNotas)
@@ -182,9 +183,9 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       <p className="text-sm text-gray-500 mb-4">Tu espacio de trabajo personal</p>
 
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-        {(['todo', 'notas', 'guardadas'] as const).map(t => (
+        {(['todo', 'notas', 'guardadas', 'mails'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
-            {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : `Guardadas (${guardadas.length})`}
+            {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : t === 'guardadas' ? `Guardadas (${guardadas.length})` : 'Mails'}
           </button>
         ))}
       </div>
@@ -198,6 +199,9 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       </div>
       <div style={{ display: tab === 'guardadas' ? 'block' : 'none' }}>
         <GuardadasTab guardadas={guardadas} updateGuardadas={updateGuardadas} />
+      </div>
+      <div style={{ display: tab === 'mails' ? 'block' : 'none' }}>
+        <MailsTab active={tab === 'mails'} />
       </div>
     </div>
   )
