@@ -137,52 +137,11 @@ export default function WarehouseAndreani() {
 
   return (
     <div>
-      {/* Filtro de fechas */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {RANGOS.map(r => (
-          <button
-            key={r.id}
-            onClick={() => setRango(r.id)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-              rango === r.id
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-        {rango === 'custom' && (
-          <div className="flex items-center gap-2 ml-1">
-            <input
-              type="date"
-              value={customDesde}
-              onChange={e => setCustomDesde(e.target.value)}
-              className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
-            />
-            <span className="text-xs text-gray-400">—</span>
-            <input
-              type="date"
-              value={customHasta}
-              onChange={e => setCustomHasta(e.target.value)}
-              className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
-            />
-            <button
-              onClick={() => cargar('custom', customDesde, customHasta)}
-              disabled={!customDesde || !customHasta}
-              className="px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50"
-            >
-              Aplicar
-            </button>
-          </div>
-        )}
-      </div>
-
-      {loading && (
+      {loading && !report && (
         <div className="text-sm text-gray-400 py-12 text-center">Cargando datos del warehouse...</div>
       )}
 
-      {!loading && report && (
+      {report && (
         <>
           {/* Snapshot en tiempo real */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
@@ -256,6 +215,51 @@ export default function WarehouseAndreani() {
             </div>
           </div>
 
+          {/* Filtro de fechas: aplica al pipeline, tiempos y gráfico */}
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            {RANGOS.map(r => (
+              <button
+                key={r.id}
+                onClick={() => setRango(r.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  rango === r.id
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+            {rango === 'custom' && (
+              <div className="flex items-center gap-2 ml-1">
+                <input
+                  type="date"
+                  value={customDesde}
+                  onChange={e => setCustomDesde(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
+                />
+                <span className="text-xs text-gray-400">—</span>
+                <input
+                  type="date"
+                  value={customHasta}
+                  onChange={e => setCustomHasta(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
+                />
+                <button
+                  onClick={() => cargar('custom', customDesde, customHasta)}
+                  disabled={!customDesde || !customHasta}
+                  className="px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Aplicar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="text-sm text-gray-400 py-12 text-center">Cargando período...</div>
+          ) : (
+            <>
           {/* Pipeline de estados */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-1">
@@ -371,6 +375,8 @@ export default function WarehouseAndreani() {
               </div>
             )}
           </div>
+            </>
+          )}
         </>
       )}
     </div>
