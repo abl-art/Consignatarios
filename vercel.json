@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/limpiar-mails",
-      "schedule": "0 9,15,21 * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
