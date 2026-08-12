@@ -192,7 +192,19 @@ interface PedidoItem {
   cantidad: number
 }
 
-interface Pedido {
+export interface GocelularEstado {
+  estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
+  purchaseId?: string
+  requestId?: string
+  enviadoAt?: string
+  batches?: { type: string; lines: number; units: number }[]
+  pendingAliases?: { lineReference: string; sku: string }[]
+  errores?: string[]
+  warnings?: string[]
+  codigoError?: string
+}
+
+export interface Pedido {
   id: string
   proveedorId: string
   proveedorNombre: string
@@ -207,6 +219,8 @@ interface Pedido {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
+  destino?: 'andreani_wh' | 'local'   // default andreani_wh si falta (pedidos viejos)
+  gocelular?: GocelularEstado
 }
 
 export async function getPedidos(): Promise<Pedido[]> {
@@ -272,7 +286,15 @@ export async function subirImeiPedido(pedidoId: string, imeiData: string) {
   if (!data) return { error: 'Pedido no encontrado' }
   const pedido = JSON.parse(data.value) as Pedido
   pedido.imeiFile = imeiData
-  return guardarPedido(pedido)
+  const res = await guardarPedido(pedido)
+  if ('error' in res && res.error) return res
+
+  // Disparo automatico del webhook de compras (la subida nunca se bloquea por esto)
+  if (pedido.gocelular?.estado !== 'informado') {
+    const { informarCompraGocelular } = await import('@/lib/actions/purchase-webhook')
+    await informarCompraGocelular(pedidoId).catch(() => {})
+  }
+  return res
 }
 
 export async function eliminarPedido(pedidoId: string) {
