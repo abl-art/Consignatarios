@@ -53,6 +53,7 @@ interface NotaPedido {
   estado: 'borrador' | 'confirmado' | 'enviado'
   categoria?: string
   fecha: string
+  destino?: 'andreani_wh' | 'local'
 }
 
 type Tab = 'catalogo' | 'pedido' | 'notas' | 'confirmados'
@@ -72,6 +73,18 @@ interface PedidoGuardado {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
+  destino?: 'andreani_wh' | 'local'
+  gocelular?: {
+    estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
+    purchaseId?: string
+    requestId?: string
+    enviadoAt?: string
+    batches?: { type: string; lines: number; units: number }[]
+    pendingAliases?: { lineReference: string; sku: string }[]
+    errores?: string[]
+    warnings?: string[]
+    codigoError?: string
+  }
 }
 
 export default function GestorClient({
@@ -112,8 +125,10 @@ export default function GestorClient({
       })),
       estado: p.estado,
       fecha: p.fecha,
+      destino: p.destino,
     }))
   )
+  const [destinoSeleccionado, setDestinoSeleccionado] = useState<'andreani_wh' | 'local'>('andreani_wh')
   // cantidadesPorProv: { "prodId-provId": number }
   const [cantidadesPorProv, setCantidadesPorProv] = useState<Record<string, number>>({})
 
@@ -165,6 +180,14 @@ export default function GestorClient({
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
 
   const categoriasUsadas = Array.from(new Set([...productos.map((p) => p.categoria), 'Kits de Seguridad']))
+
+  // Categoria por producto (para determinar si un pedido tiene celulares o solo addons).
+  // Mismo default que el server (informarCompraGocelular): sin categoria conocida => 'Celulares'.
+  const categoriaPorProducto = useMemo(() => {
+    const map = new Map<string, string>()
+    productos.forEach((p) => map.set(p.id, p.categoria))
+    return map
+  }, [productos])
 
   const filtrados = useMemo(() => {
     let result = productos
@@ -300,6 +323,7 @@ export default function GestorClient({
       estado: 'borrador' as const,
       categoria: filtroCategoria || 'Celulares',
       fecha,
+      destino: destinoSeleccionado,
     }))
 
     // Save each to DB
@@ -318,6 +342,7 @@ export default function GestorClient({
         estado: 'borrador',
         categoria: nota.categoria,
         fecha,
+        destino: nota.destino,
       })
     }
 
@@ -825,6 +850,20 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                 </div>
               </div>
 
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">Destino:</label>
+                  <select
+                    value={destinoSeleccionado}
+                    onChange={e => setDestinoSeleccionado(e.target.value as 'andreani_wh' | 'local')}
+                    className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
+                  >
+                    <option value="andreani_wh">Warehouse Andreani</option>
+                    <option value="local">Local</option>
+                  </select>
+                </div>
+              </div>
+
               <button
                 onClick={generarNotas}
                 className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
@@ -910,7 +949,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                         id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
                                         proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
                                         items: updated.items.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
-                                        estado: 'borrador', fecha: nota.fecha,
+                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino,
                                       })
                                     }}
                                     className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
@@ -938,7 +977,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                         id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
                                         proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
                                         items: updated.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
-                                        estado: 'borrador', fecha: nota.fecha,
+                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino,
                                       })
                                     }}
                                     className="text-xs text-red-400 hover:text-red-600"
@@ -1329,6 +1368,13 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                 {/* IMEI upload/download */}
                                 <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
 
+                                {/* Estado de sincronizacion con GOcelular */}
+                                <GocelularChip
+                                  pedidoId={p.id}
+                                  gocelular={p.gocelular}
+                                  soloAddons={p.items.every(i => (categoriaPorProducto.get(i.productoId) ?? 'Celulares') !== 'Celulares')}
+                                />
+
                                 {/* Modificar / Cancelar pedido */}
                                 <div className="mt-4 pt-3 border-t border-gray-200 flex justify-between">
                                   <button
@@ -1487,6 +1533,84 @@ function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedid
           </label>
         </div>
       </div>
+    </div>
+  )
+}
+
+function GocelularChip({ pedidoId, gocelular, soloAddons }: {
+  pedidoId: string
+  gocelular?: PedidoGuardado['gocelular']
+  soloAddons: boolean
+}) {
+  const router = useRouter()
+  const [enviando, setEnviando] = useState(false)
+  const [expandido, setExpandido] = useState(false)
+
+  async function disparar() {
+    setEnviando(true)
+    const { informarCompraGocelular } = await import('@/lib/actions/purchase-webhook')
+    await informarCompraGocelular(pedidoId)
+    setEnviando(false)
+    router.refresh()
+  }
+
+  const estado = gocelular?.estado ?? 'no_enviado'
+  const chips: Record<string, { label: string; cls: string }> = {
+    no_enviado: { label: 'GOcelular: sin informar', cls: 'bg-gray-100 text-gray-500 border-gray-300' },
+    validacion_fallida: { label: 'GOcelular: validación fallida', cls: 'bg-red-50 text-red-700 border-red-200' },
+    error_reintentable: { label: 'GOcelular: error de envío', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    rechazado: { label: 'GOcelular: rechazado', cls: 'bg-red-50 text-red-700 border-red-200' },
+    informado: { label: 'GOcelular: informado ✓', cls: 'bg-green-50 text-green-700 border-green-200' },
+  }
+  const c = chips[estado]
+  const tieneDetalle = (gocelular?.errores?.length ?? 0) > 0 || (gocelular?.pendingAliases?.length ?? 0) > 0 || estado === 'informado'
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => tieneDetalle && setExpandido(!expandido)}
+          className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${c.cls} ${tieneDetalle ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          {c.label}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
+        </button>
+        {estado === 'no_enviado' && soloAddons && (
+          <button onClick={disparar} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Informar a GOcelular'}
+          </button>
+        )}
+        {estado === 'validacion_fallida' && (
+          <button onClick={disparar} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Revalidar y enviar'}
+          </button>
+        )}
+        {estado === 'error_reintentable' && (
+          <button onClick={disparar} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Reintentar'}
+          </button>
+        )}
+      </div>
+      {expandido && gocelular && (
+        <div className="mt-1.5 text-[11px] space-y-0.5">
+          {estado === 'informado' && (
+            <p className="text-green-700">
+              purchase_id: <span className="font-mono">{gocelular.purchaseId}</span>
+              {gocelular.enviadoAt && ` · ${new Date(gocelular.enviadoAt).toLocaleString('es-AR')}`}
+              {gocelular.batches?.map(b => ` · ${b.units} ${b.type === 'device' ? 'celulares' : 'accesorios'}`).join('')}
+            </p>
+          )}
+          {(gocelular.errores ?? []).map((e, i) => <p key={i} className="text-red-600">• {e}</p>)}
+          {(gocelular.pendingAliases ?? []).length > 0 && (
+            <p className="text-amber-600">
+              SKUs pendientes de alias (GOcelular los resuelve, no requiere acción): {gocelular.pendingAliases!.map(a => a.sku).join(', ')}
+            </p>
+          )}
+          {(gocelular.warnings ?? []).map((w, i) => <p key={i} className="text-amber-600">• {w}</p>)}
+        </div>
+      )}
     </div>
   )
 }
