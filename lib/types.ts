@@ -177,6 +177,26 @@ export interface ClienteMayorista {
   created_at: string
 }
 
+// Campos entrega_* obligatorios para poder informar una venta con origen 'andreani_wh' (todos
+// salvo entrega_piso_depto). Vive acá (no duplicado en cada componente) porque lo consumen tanto
+// la ficha de cliente (listado/ClientesListado.tsx) como el listado de proformas (validación previa
+// a confirmar) — misma fuente de verdad.
+export const CAMPOS_ENTREGA_REQUERIDOS: (keyof ClienteMayorista)[] = [
+  'entrega_nombre',
+  'entrega_dni',
+  'entrega_telefono',
+  'entrega_email',
+  'entrega_calle',
+  'entrega_numero',
+  'entrega_localidad',
+  'entrega_cp',
+  'entrega_provincia',
+]
+
+export function datosEntregaIncompletos(c: Pick<ClienteMayorista, (typeof CAMPOS_ENTREGA_REQUERIDOS)[number]>): boolean {
+  return CAMPOS_ENTREGA_REQUERIDOS.some((k) => !c[k])
+}
+
 export interface PagoMayorista {
   id: string
   cliente_mayorista_id: string

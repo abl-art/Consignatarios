@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation'
 import { formatearMoneda } from '@/lib/utils'
 import { crearProforma, modificarProforma, confirmarProforma, eliminarProforma } from '@/lib/actions/proformas'
 import { crearClienteMayorista } from '@/lib/actions/clientes-mayoristas'
+import { informarVentaGocelular } from '@/lib/actions/wholesale-webhook'
 import type { ProductoConPrecio } from '@/lib/actions/lista-precios'
 import type { Proforma, ProformaConItems } from '@/lib/actions/proformas'
 import type { ClienteMayorista } from '@/lib/types'
+import { datosEntregaIncompletos } from '@/lib/types'
 
 interface LineaProforma {
   producto_id: string
@@ -33,6 +35,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
   const [clienteId, setClienteId] = useState('')
   const [notas, setNotas] = useState('Proforma válida por 7 días hábiles. Plazo de pago: 70 días de fecha de confirmación de proforma.')
   const [mup, setMup] = useState(mupInicial)
+  const [origen, setOrigen] = useState<'stock_local' | 'andreani_wh'>('stock_local')
   const [lineas, setLineas] = useState<LineaProforma[]>([])
   const [productoSeleccionado, setProductoSeleccionado] = useState('')
   const [cantidad, setCantidad] = useState(1)
@@ -50,6 +53,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
     setClienteId('')
     setNotas('Proforma válida por 7 días hábiles. Plazo de pago: 70 días de fecha de confirmación de proforma.')
     setMup(mupInicial)
+    setOrigen('stock_local')
     setLineas([])
     setProductoSeleccionado('')
     setCantidad(1)
@@ -111,6 +115,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
         mup,
         notas,
         items: lineas,
+        origen,
       }
 
       const result = editandoId
@@ -140,6 +145,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
     setClienteId(proforma.cliente_mayorista_id || '')
     setMup(proforma.mup)
     setNotas(proforma.notas || '')
+    setOrigen(proforma.origen)
     setLineas(data.proforma_items.map(i => ({
       producto_id: i.producto_id,
       producto_nombre: i.producto_nombre,
@@ -263,6 +269,19 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                 onChange={e => setMup(Number(e.target.value))}
                 className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-magenta-500 focus:border-transparent"
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Origen</label>
+              <select
+                value={origen}
+                onChange={e => setOrigen(e.target.value as 'stock_local' | 'andreani_wh')}
+                disabled={!!editandoId}
+                title={editandoId ? 'El origen no se puede cambiar al modificar una proforma existente' : undefined}
+                className="w-44 px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-magenta-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <option value="stock_local">Stock local</option>
+                <option value="andreani_wh">Warehouse Andreani</option>
+              </select>
             </div>
           </div>
 
@@ -453,6 +472,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                     <th className="text-left px-4 py-3 font-medium text-gray-600">N°</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Fecha</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Origen</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                     <th className="text-right px-6 py-3 font-medium text-gray-600">Total c/IVA</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Acciones</th>
@@ -467,6 +487,15 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                         {new Date(p.fecha).toLocaleDateString('es-AR')}
                       </td>
                       <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${
+                          p.origen === 'andreani_wh'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                        }`}>
+                          {p.origen === 'andreani_wh' ? 'WH Andreani' : 'Stock local'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
                         <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
                           p.estado === 'confirmada'
                             ? 'bg-green-100 text-green-700'
@@ -474,6 +503,9 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                         }`}>
                           {p.estado === 'confirmada' ? 'Confirmada' : 'Borrador'}
                         </span>
+                        {p.estado === 'confirmada' && (
+                          <GocelularChip proformaId={p.id} gocelular={p.gocelular} />
+                        )}
                       </td>
                       <td className="px-6 py-3 text-right font-bold text-magenta-700 tabular-nums">
                         {formatearMoneda(p.total_con_iva)}
@@ -501,6 +533,15 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                             </>
                           )}
                         </div>
+                        {p.estado === 'borrador' && p.origen === 'andreani_wh' && (() => {
+                          const cliente = clientes.find(c => c.id === p.cliente_mayorista_id)
+                          const incompleto = !cliente || datosEntregaIncompletos(cliente)
+                          return incompleto ? (
+                            <p className="mt-1 text-[11px] text-amber-600">
+                              ⚠ Faltan datos de entrega del cliente para warehouse
+                            </p>
+                          ) : null
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -508,6 +549,96 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
               </table>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GocelularChip — estado de la venta informada a GOcelular (patrón visual copiado de
+// GocelularChip en app/(admin)/compras/gestor/GestorClient.tsx, adaptado a los campos de
+// GocelularVentaEstado: sale_id, fa_status, dispatch, warnings/errores).
+// ---------------------------------------------------------------------------
+
+const FA_STATUS_LABELS: Record<string, string> = {
+  pending: 'FA pendiente',
+  processing: 'FA en proceso',
+  pending_authorization: 'FA esperando autorización',
+  emitted: 'FA emitida ✓',
+  failed: 'FA falló',
+}
+
+function GocelularChip({ proformaId, gocelular }: {
+  proformaId: string
+  gocelular: Proforma['gocelular']
+}) {
+  const router = useRouter()
+  const [enviando, setEnviando] = useState(false)
+  const [expandido, setExpandido] = useState(false)
+
+  async function disparar(opts?: { replay?: boolean }) {
+    setEnviando(true)
+    try {
+      await informarVentaGocelular(proformaId, opts)
+    } catch {
+      // el estado persistido en la proforma (via router.refresh) mostrara el error si lo hubo
+    } finally {
+      setEnviando(false)
+      router.refresh()
+    }
+  }
+
+  const estado = gocelular?.estado ?? 'no_enviado'
+  const chips: Record<string, { label: string; cls: string }> = {
+    no_enviado: { label: 'GOcelular: sin informar', cls: 'bg-gray-100 text-gray-500 border-gray-300' },
+    validacion_fallida: { label: 'GOcelular: validación fallida', cls: 'bg-red-50 text-red-700 border-red-200' },
+    error_reintentable: { label: 'GOcelular: error de envío', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    rechazado: { label: 'GOcelular: rechazado', cls: 'bg-red-50 text-red-700 border-red-200' },
+    informado: { label: 'GOcelular: informado ✓', cls: 'bg-green-50 text-green-700 border-green-200' },
+  }
+  const c = chips[estado]
+  const tieneDetalle = (gocelular?.errores?.length ?? 0) > 0 || (gocelular?.warnings?.length ?? 0) > 0 || estado === 'informado'
+
+  const puedeReintentar =
+    estado === 'validacion_fallida' ||
+    estado === 'error_reintentable' ||
+    (estado === 'rechazado' && gocelular?.codigoError !== 'proforma_conflict' && gocelular?.codigoError !== 'addon_fulfillment_unavailable')
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        <button
+          onClick={() => tieneDetalle && setExpandido(!expandido)}
+          className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${c.cls} ${tieneDetalle ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          {c.label}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
+        </button>
+        {puedeReintentar && (
+          <button onClick={() => disparar()} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Reintentar'}
+          </button>
+        )}
+        {estado === 'informado' && (
+          <button onClick={() => disparar({ replay: true })} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 disabled:opacity-50">
+            {enviando ? 'Actualizando...' : 'Actualizar estado FA'}
+          </button>
+        )}
+      </div>
+      {expandido && gocelular && (
+        <div className="mt-1.5 text-[11px] space-y-0.5 max-h-40 overflow-y-auto text-left">
+          {estado === 'informado' && (
+            <p className="text-green-700">
+              {gocelular.saleId && <>sale_id: <span className="font-mono">{gocelular.saleId}</span></>}
+              {gocelular.faStatus && ` · ${FA_STATUS_LABELS[gocelular.faStatus] ?? gocelular.faStatus}`}
+              {gocelular.numeroOrdenExterna && ` · orden: ${gocelular.numeroOrdenExterna}`}
+              {gocelular.enviadoAt && ` · ${new Date(gocelular.enviadoAt).toLocaleString('es-AR')}`}
+            </p>
+          )}
+          {(gocelular.errores ?? []).map((e, i) => <p key={`${i}-${e.slice(0, 40)}`} className="text-red-600">• {e}</p>)}
+          {(gocelular.warnings ?? []).map((w, i) => <p key={`${i}-${w.slice(0, 40)}`} className="text-amber-600">• {w}</p>)}
         </div>
       )}
     </div>

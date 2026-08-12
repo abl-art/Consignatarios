@@ -89,6 +89,7 @@ export async function crearProforma(data: {
   mup: number
   notas: string
   items: { producto_id: string; producto_nombre: string; cantidad: number; precio_costo: number }[]
+  origen?: 'stock_local' | 'andreani_wh'
 }) {
   const supabase = createAdminClient()
 
@@ -112,6 +113,7 @@ export async function crearProforma(data: {
       total_iva,
       total_con_iva,
       notas: data.notas || null,
+      origen: data.origen || 'stock_local',
     })
     .select('id')
     .single()
