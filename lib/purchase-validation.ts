@@ -5,6 +5,7 @@ export interface CatalogoGocelular {
   deviceSkusActivos: Set<string>
   deviceSkusInactivos: Set<string>
   addonSkus: Set<string>
+  addonSkusInactivos: Set<string>
   imeisExistentes: Set<string>
 }
 
@@ -66,7 +67,9 @@ export function validarCompra(
       else unidades += l.quantity
       if (!l.unit_cost) errores.push(`Línea ${ref}: los accesorios requieren costo unitario`)
       if (l.imeis && l.imeis.length > 0) errores.push(`Línea ${ref}: los accesorios no llevan IMEIs`)
-      if (!catalogo.addonSkus.has(l.sku)) {
+      if (catalogo.addonSkusInactivos.has(l.sku)) {
+        errores.push(`El SKU ${l.sku} existe en GOcelular pero está inactivo — rechazaría la compra completa`)
+      } else if (!catalogo.addonSkus.has(l.sku)) {
         warnings.push(`El SKU ${l.sku} no está en el catálogo de accesorios de GOcelular — quedará como alias pendiente (lo resuelven ellos, no bloquea)`)
       }
     }
@@ -76,7 +79,8 @@ export function validarCompra(
         errores.push(`Línea ${ref}: el costo "${l.unit_cost}" no tiene el formato requerido (decimal con punto, ej. 185000.00)`)
       } else {
         const costo = parseFloat(l.unit_cost)
-        const cant = l.item_type === 'device' ? (l.imeis?.length ?? 0) : (l.quantity ?? 0)
+        const cant = Math.max(0, l.item_type === 'device' ? (l.imeis?.length ?? 0) : (l.quantity ?? 0))
+        // Tope $100M por linea: aplica al unit_cost (interpretacion literal de la doc GOcelular; pendiente confirmar si aplica al total de linea)
         if (costo > 100_000_000) errores.push(`Línea ${ref}: el costo unitario supera el tope de $100.000.000 por línea`)
         montoTotal += costo * cant
       }

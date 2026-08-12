@@ -10,6 +10,7 @@ const catalogo: CatalogoGocelular = {
   deviceSkusActivos: new Set(['PB970105AR']),
   deviceSkusInactivos: new Set(['SKU-VIEJO']),
   addonSkus: new Set(['KS-MOTO-G06']),
+  addonSkusInactivos: new Set(['KS-VIEJO']),
   imeisExistentes: new Set(),
 }
 
@@ -87,5 +88,28 @@ describe('validarCompra', () => {
     const cat = { ...catalogo, imeisExistentes: new Set([IMEI_A]) }
     const r = validarCompra('ACME SA', [lineaDevice, { ...lineaAddon, unit_cost: undefined }], cat)
     expect(r.errores.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('addon SKU inactivo es error (rechazaria la compra completa)', () => {
+    const r = validarCompra('MIRGOR SA', [{ ...lineaAddon, sku: 'KS-VIEJO' }], catalogo)
+    expect(r.errores.some(e => e.includes('KS-VIEJO'))).toBe(true)
+  })
+
+  it('unit_cost exactamente 100000000 NO es error (boundary)', () => {
+    const r = validarCompra('MIRGOR SA', [{ ...lineaAddon, unit_cost: '100000000.00' }], catalogo)
+    expect(r.errores.some(e => e.includes('100.000.000'))).toBe(false)
+  })
+
+  it('unit_cost 100000000.01 es error (boundary)', () => {
+    const r = validarCompra('MIRGOR SA', [{ ...lineaAddon, unit_cost: '100000000.01' }], catalogo)
+    expect(r.errores.some(e => e.includes('100.000.000'))).toBe(true)
+  })
+
+  it('monto agregado >500M es error (una linea addon qty 5000 * 100001.00 = 500.005M)', () => {
+    const granMonto: PurchaseLine = { ...lineaAddon, quantity: 5000, unit_cost: '100001.00' }
+    const r = validarCompra('MIRGOR SA', [granMonto], catalogo)
+    expect(r.errores.some(e => e.includes('500.000.000'))).toBe(true)
+    // Verify it only has the aggregate error, not the unit cost error or qty error
+    expect(r.errores.length).toBe(1)
   })
 })
