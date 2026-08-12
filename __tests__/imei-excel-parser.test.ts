@@ -112,4 +112,16 @@ describe('parseImeiExcel', () => {
     expect(r.lines[0].imeis).toHaveLength(1)
     expect(r.lines[0].imeis).toEqual([IMEI_A])
   })
+
+  it('parsea un CSV plano codificado en base64 (lo que sube el navegador via FileReader)', () => {
+    const csv = `sku;ean;imei\nPB970105AR;7790894902032;${IMEI_A}\n`
+    const b64 = Buffer.from(csv).toString('base64')
+    expect(b64.length).toBeGreaterThanOrEqual(50) // heuristica esBase64Xlsx
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores).toEqual([])
+    expect(r.lines).toHaveLength(1)
+    expect(r.lines[0].sku).toBe('PB970105AR')
+    expect(r.lines[0].imeis).toEqual([IMEI_A])
+    expect(r.lines[0].ean).toBe('7790894902032')
+  })
 })

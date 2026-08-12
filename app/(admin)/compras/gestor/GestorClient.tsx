@@ -1509,10 +1509,13 @@ function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedid
       reader.onload = () => resolve((reader.result as string).split(',')[1])
       reader.readAsDataURL(file)
     })
-    await subirImeiPedido(pedidoId, base64)
-    setLocalData(base64)
-    setUploading(false)
-    router.refresh()
+    try {
+      await subirImeiPedido(pedidoId, base64)
+      setLocalData(base64)
+      router.refresh()
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -1597,12 +1600,18 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
             {enviando ? 'Enviando...' : 'Reintentar'}
           </button>
         )}
+        {estado === 'rechazado' && gocelular?.codigoError !== 'purchase_conflict' && (
+          <button onClick={disparar} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Reintentar'}
+          </button>
+        )}
       </div>
       {expandido && gocelular && (
         <div className="mt-1.5 text-[11px] space-y-0.5 max-h-40 overflow-y-auto">
           {estado === 'informado' && (
             <p className="text-green-700">
-              purchase_id: <span className="font-mono">{gocelular.purchaseId}</span>
+              {gocelular.purchaseId && <>purchase_id: <span className="font-mono">{gocelular.purchaseId}</span></>}
               {gocelular.enviadoAt && ` · ${new Date(gocelular.enviadoAt).toLocaleString('es-AR')}`}
               {gocelular.batches?.map(b => ` · ${b.units} ${b.type === 'device' ? 'celulares' : 'accesorios'}`).join('')}
             </p>

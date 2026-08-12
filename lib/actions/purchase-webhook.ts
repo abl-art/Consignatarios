@@ -250,13 +250,13 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       return { ok: true, estado: 'informado' }
     }
 
-    if (res.retryable || res.status === 0) {
+    if ((res.retryable || res.status === 0) && res.body?.code !== 'payload_too_large_local') {
       await persistir(pedidoId, {
         estado: 'error_reintentable',
         codigoError: res.body?.code,
         errores: [res.body?.code === 'secret_no_configurado'
           ? 'Falta configurar GOCELULAR_WEBHOOK_SECRET'
-          : `GOcelular no respondió (HTTP ${res.status}) tras 3 intentos — reintentá en unos minutos`],
+          : `GOcelular no respondió (HTTP ${res.status}) tras 4 intentos — reintentá en unos minutos`],
         warnings: val.warnings,
       })
       return { ok: false, estado: 'error_reintentable' }
@@ -274,6 +274,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       sku_inactivo: 'Algún SKU existe pero está inactivo en GOcelular',
       imeis_invalid: 'GOcelular rechazó IMEIs (no se guardó nada — corregir y reintentar con el mismo pedido)',
       purchase_conflict: 'Este pedido ya fue informado con otros datos — coordinar corrección manual con GOcelular',
+      payload_too_large_local: 'El payload supera 1 MB — dividí la compra en pedidos más chicos',
     }
     await persistir(pedidoId, {
       estado: 'rechazado',

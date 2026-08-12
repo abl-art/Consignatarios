@@ -60,6 +60,10 @@ export async function sendPurchaseWebhook(payload: PurchasePayload): Promise<Pur
   // Serializar UNA sola vez: el raw body firmado es el que viaja, byte a byte.
   const rawBody = JSON.stringify(payload)
 
+  if (Buffer.byteLength(rawBody, 'utf8') > 1_000_000) {
+    return { ok: false, status: 0, body: { code: 'payload_too_large_local' }, retryable: false }
+  }
+
   let last: PurchaseResult = { ok: false, status: 0, body: null, retryable: true }
   for (let attempt = 0; attempt < 4; attempt++) {
     // Headers de auth frescos en cada intento; body identico.
@@ -74,7 +78,7 @@ export async function sendPurchaseWebhook(payload: PurchasePayload): Promise<Pur
           'X-Gocelular-Timestamp': ts,
         },
         body: rawBody,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(10000),
       })
       const body = (await res.json().catch(() => null)) as PurchaseResponseBody | null
 

@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { getProductos, getProveedores, getPrecios, getPedidos } from '@/lib/actions/compras'
 import { getForecastEvents, getComprasDias } from '@/lib/actions/finanzas'

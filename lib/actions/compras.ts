@@ -292,7 +292,7 @@ export async function subirImeiPedido(pedidoId: string, imeiData: string) {
   // Disparo automatico del webhook de compras (la subida nunca se bloquea por esto)
   if (pedido.gocelular?.estado !== 'informado') {
     const { informarCompraGocelular } = await import('@/lib/actions/purchase-webhook')
-    await informarCompraGocelular(pedidoId).catch(() => {})
+    await informarCompraGocelular(pedidoId).catch((e) => console.error('Error informando compra a GOcelular:', e))
   }
   return res
 }
