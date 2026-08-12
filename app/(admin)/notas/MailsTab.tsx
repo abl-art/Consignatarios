@@ -12,15 +12,19 @@ import {
   marcarImportante,
   marcarNoLeido,
   enviarMailNuevo,
+  responderMail,
+  getContactos,
   type MailResumen,
   type MailDetalle,
   type VistaMails,
   type AdjuntoInfo,
   type AdjuntoNuevo,
+  type Contacto,
 } from '@/lib/actions/gmail'
 
 const VISTAS: { id: VistaMails; label: string; desc: string }[] = [
   { id: 'inbox', label: 'Bandeja', desc: 'Mails sin leer — al leerlos desaparecen (el buscador rastrea toda la bandeja)' },
+  { id: 'importantes', label: 'Importantes', desc: 'Mails marcados con ★ (para trackear después)' },
   { id: 'basecamp', label: 'Basecamp', desc: 'Asignaciones, menciones y conversaciones de Basecamp' },
   { id: 'cristian', label: 'Cristian', desc: 'Mails donde el remitente es cristian@gocuotas.com' },
   { id: 'soporte', label: 'Soporte GOcelular', desc: 'Mails de gocuotasprod@cloud.trustonic.com (incluye borrados)' },
@@ -30,13 +34,19 @@ const VISTAS: { id: VistaMails; label: string; desc: string }[] = [
 
 const VISTAS_ENVIADOS: VistaMails[] = ['pedidos', 'enviados']
 const MAX_ADJUNTOS_MB = 3
+const COLORES = ['#111827', '#dc2626', '#2563eb', '#16a34a', '#E91E7B']
+
+type ComposeModo =
+  | { tipo: 'nuevo' }
+  | { tipo: 'responder'; mail: MailDetalle; todos: boolean }
 
 function fmtFecha(rfc: string): string {
   const d = new Date(rfc)
   if (isNaN(d.getTime())) return ''
   const hoy = new Date()
-  const esHoy = d.toDateString() === hoy.toDateString()
-  if (esHoy) return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === hoy.toDateString()) {
+    return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  }
   return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 }
 
@@ -51,6 +61,16 @@ function ordenar(mails: MailResumen[]): MailResumen[] {
     if (a.noLeido !== b.noLeido) return a.noLeido ? -1 : 1
     return new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
   })
+}
+
+function extraerEmails(raw: string): string[] {
+  return raw
+    .split(',')
+    .map(p => {
+      const m = p.match(/<([^>]+)>/)
+      return (m ? m[1] : p).trim().toLowerCase()
+    })
+    .filter(e => e.includes('@'))
 }
 
 export default function MailsTab({ active }: { active: boolean }) {
@@ -72,14 +92,19 @@ export default function MailsTab({ active }: { active: boolean }) {
   const requestSeq = useRef(0)
   const spsListo = useRef(false)
 
-  // Nuevo correo
-  const [composeOpen, setComposeOpen] = useState(false)
+  // Nuevo correo / responder
+  const [compose, setCompose] = useState<ComposeModo | null>(null)
   const [composePara, setComposePara] = useState('')
+  const [composeCc, setComposeCc] = useState('')
   const [composeAsunto, setComposeAsunto] = useState('')
-  const [composeCuerpo, setComposeCuerpo] = useState('')
   const [composeAdjuntos, setComposeAdjuntos] = useState<AdjuntoNuevo[]>([])
   const [composeEnviando, setComposeEnviando] = useState(false)
   const [composeError, setComposeError] = useState<string | null>(null)
+  const [contactos, setContactos] = useState<Contacto[]>([])
+  const [miEmail, setMiEmail] = useState('')
+  const [sugerencias, setSugerencias] = useState<Contacto[]>([])
+  const editorRef = useRef<HTMLDivElement>(null)
+  const contactosPedidos = useRef(false)
 
   const mostrarAviso = (texto: string) => {
     setAviso(texto)
@@ -166,7 +191,7 @@ export default function MailsTab({ active }: { active: boolean }) {
     if (detalle && vista === 'inbox' && !busqueda && !detalleNoLeido) {
       setMails(prev => prev.filter(m => m.id !== detalle.id))
     } else if (detalle) {
-      setMails(prev => prev.map(m => (m.id === detalle.id ? { ...m, noLeido: detalleNoLeido } : m)))
+      setMails(prev => ordenar(prev.map(m => (m.id === detalle.id ? { ...m, noLeido: detalleNoLeido } : m))))
     }
     setDetalle(null)
   }
@@ -204,7 +229,7 @@ export default function MailsTab({ active }: { active: boolean }) {
       return
     }
     setImportantes(prev => new Set(prev).add(id))
-    mostrarAviso('Marcado como importante y destacado en Gmail')
+    mostrarAviso('Marcado como importante — lo encontrás en la pestaña Importantes')
   }
 
   async function aNoLeido(id: string) {
@@ -215,7 +240,7 @@ export default function MailsTab({ active }: { active: boolean }) {
     }
     if (detalle?.id === id) setDetalleNoLeido(true)
     setMails(prev => ordenar(prev.map(m => (m.id === id ? { ...m, noLeido: true } : m))))
-    mostrarAviso('Marcado como no leído')
+    mostrarAviso('Marcado como no leído — vuelve a la Bandeja')
   }
 
   async function bajarAdjunto(mensajeId: string, adj: AdjuntoInfo) {
@@ -241,6 +266,83 @@ export default function MailsTab({ active }: { active: boolean }) {
     }
   }
 
+  // ── Compose ──────────────────────────────────────────────────────────────
+
+  function cargarContactos() {
+    if (contactosPedidos.current) return
+    contactosPedidos.current = true
+    getContactos()
+      .then(res => {
+        setContactos(res.contactos)
+        setMiEmail(res.miEmail)
+      })
+      .catch(() => {})
+  }
+
+  function abrirComposeNuevo() {
+    cargarContactos()
+    setCompose({ tipo: 'nuevo' })
+    setComposePara('')
+    setComposeCc('')
+    setComposeAsunto('')
+    setComposeAdjuntos([])
+    setComposeError(null)
+  }
+
+  function abrirResponder(mail: MailDetalle, todos: boolean) {
+    cargarContactos()
+    const propios = new Set([miEmail.toLowerCase()])
+    let para = mail.remitenteEmail
+    let cc = ''
+    if (todos) {
+      const otros = [...extraerEmails(mail.para), ...([] as string[])].filter(
+        e => !propios.has(e) && e !== mail.remitenteEmail.toLowerCase()
+      )
+      para = [mail.remitenteEmail, ...otros].join(', ')
+      cc = extraerEmails(mail.cc)
+        .filter(e => !propios.has(e))
+        .join(', ')
+    }
+    setCompose({ tipo: 'responder', mail, todos })
+    setComposePara(para)
+    setComposeCc(cc)
+    setComposeAsunto(mail.asunto.toLowerCase().startsWith('re:') ? mail.asunto : `Re: ${mail.asunto}`)
+    setComposeAdjuntos([])
+    setComposeError(null)
+  }
+
+  function cerrarCompose() {
+    setCompose(null)
+    setSugerencias([])
+  }
+
+  // Autocompletado: filtra contactos por el ultimo destinatario que se escribe
+  function actualizarPara(valor: string) {
+    setComposePara(valor)
+    const ultimo = valor.split(',').pop()?.trim().toLowerCase() ?? ''
+    if (ultimo.length < 2) {
+      setSugerencias([])
+      return
+    }
+    setSugerencias(
+      contactos
+        .filter(c => c.email.includes(ultimo) || c.nombre.toLowerCase().includes(ultimo))
+        .slice(0, 6)
+    )
+  }
+
+  function elegirSugerencia(c: Contacto) {
+    const partes = composePara.split(',')
+    partes[partes.length - 1] = ` ${c.email}`
+    setComposePara(partes.join(',').replace(/^\s+/, '') + ', ')
+    setSugerencias([])
+  }
+
+  function formato(cmd: string, valor?: string) {
+    editorRef.current?.focus()
+    document.execCommand(cmd, false, valor)
+  }
+
   async function agregarAdjuntosCompose(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     setComposeError(null)
@@ -264,16 +366,8 @@ export default function MailsTab({ active }: { active: boolean }) {
     e.target.value = ''
   }
 
-  function cerrarCompose() {
-    setComposeOpen(false)
-    setComposePara('')
-    setComposeAsunto('')
-    setComposeCuerpo('')
-    setComposeAdjuntos([])
-    setComposeError(null)
-  }
-
   async function enviarCompose() {
+    const cuerpo = editorRef.current?.innerHTML ?? ''
     if (!composePara.includes('@') || !composeAsunto.trim()) {
       setComposeError('Completá destinatario y asunto')
       return
@@ -281,18 +375,29 @@ export default function MailsTab({ active }: { active: boolean }) {
     setComposeEnviando(true)
     setComposeError(null)
     try {
-      const res = await enviarMailNuevo({
-        para: composePara.trim(),
-        asunto: composeAsunto.trim(),
-        cuerpo: composeCuerpo,
-        adjuntos: composeAdjuntos,
-      })
+      const res =
+        compose?.tipo === 'responder'
+          ? await responderMail({
+              threadId: compose.mail.threadId,
+              messageIdHeader: compose.mail.messageIdHeader,
+              para: composePara.trim().replace(/,\s*$/, ''),
+              cc: composeCc.trim().replace(/,\s*$/, '') || undefined,
+              asunto: composeAsunto.trim(),
+              cuerpo,
+              adjuntos: composeAdjuntos,
+            })
+          : await enviarMailNuevo({
+              para: composePara.trim().replace(/,\s*$/, ''),
+              asunto: composeAsunto.trim(),
+              cuerpo,
+              adjuntos: composeAdjuntos,
+            })
       if (res.error) {
         setComposeError(res.error)
         return
       }
       cerrarCompose()
-      mostrarAviso('Correo enviado')
+      mostrarAviso(compose?.tipo === 'responder' ? 'Respuesta enviada' : 'Correo enviado')
     } finally {
       setComposeEnviando(false)
     }
@@ -306,7 +411,7 @@ export default function MailsTab({ active }: { active: boolean }) {
       {/* Sidebar estilo finanzas */}
       <div className="w-44 shrink-0 border-r border-gray-200 pr-2">
         <button
-          onClick={() => setComposeOpen(true)}
+          onClick={abrirComposeNuevo}
           className="w-full mb-3 px-3 py-2 text-sm font-semibold bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors"
         >
           + Nuevo correo
@@ -322,7 +427,7 @@ export default function MailsTab({ active }: { active: boolean }) {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
-            {v.label}
+            {v.id === 'importantes' ? '★ Importantes' : v.label}
           </button>
         ))}
       </div>
@@ -374,29 +479,26 @@ export default function MailsTab({ active }: { active: boolean }) {
             {mails.map(m => (
               <div
                 key={m.id}
-                className={`flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer group ${
+                className={`flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer ${
                   m.noLeido ? 'bg-magenta-50/30' : ''
                 }`}
                 onClick={() => abrir(m)}
               >
                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.noLeido ? 'bg-magenta-600' : 'bg-transparent'}`} />
-                <div className="w-44 shrink-0 truncate">
+                <div className="w-40 shrink-0 truncate">
                   <span className={`text-sm ${m.noLeido ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
                     {esEnviados ? `Para: ${m.para}` : m.remitente}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 truncate">
-                  {importantes.has(m.id) && <span className="text-amber-500 mr-1">★</span>}
+                  {(importantes.has(m.id) || vista === 'importantes') && <span className="text-amber-500 mr-1">★</span>}
                   <span className={`text-sm ${m.noLeido ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
                     {m.asunto}
                   </span>
-                  <span className="text-xs text-gray-400 ml-2">{m.snippet.slice(0, 70)}</span>
+                  <span className="text-xs text-gray-400 ml-2 hidden md:inline">{m.snippet.slice(0, 60)}</span>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0 w-14 text-right">{fmtFecha(m.fecha)}</span>
-                <div
-                  className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={e => e.stopPropagation()}
-                >
+                <span className="text-xs text-gray-400 shrink-0 w-12 text-right">{fmtFecha(m.fecha)}</span>
+                <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                   <button
                     title="Pasar a pendientes"
                     onClick={() => aPendiente(m)}
@@ -405,7 +507,7 @@ export default function MailsTab({ active }: { active: boolean }) {
                     Pendiente
                   </button>
                   <button
-                    title="Marcar como importante (destacado en Gmail)"
+                    title="Marcar como importante (pestaña Importantes)"
                     onClick={() => aImportante(m.id)}
                     className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
                   >
@@ -413,7 +515,7 @@ export default function MailsTab({ active }: { active: boolean }) {
                   </button>
                   {!m.noLeido && (
                     <button
-                      title="Marcar como no leído"
+                      title="Marcar como no leído (vuelve a la Bandeja)"
                       onClick={() => aNoLeido(m.id)}
                       className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                     >
@@ -479,7 +581,7 @@ export default function MailsTab({ active }: { active: boolean }) {
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {detalle.html ? (
-                    <iframe sandbox="" srcDoc={detalle.html} className="w-full h-[50vh] border-0" title="Contenido del mail" />
+                    <iframe sandbox="" srcDoc={detalle.html} className="w-full h-[48vh] border-0" title="Contenido del mail" />
                   ) : (
                     <pre className="text-sm text-gray-800 whitespace-pre-wrap p-5 font-sans">
                       {detalle.texto || '(sin contenido)'}
@@ -505,10 +607,22 @@ export default function MailsTab({ active }: { active: boolean }) {
                 )}
                 <div className="px-5 py-3 border-t border-gray-200 flex flex-wrap gap-2 justify-end">
                   <button
+                    onClick={() => abrirResponder(detalle, false)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-magenta-600 text-white rounded-lg hover:bg-magenta-700"
+                  >
+                    Responder
+                  </button>
+                  <button
+                    onClick={() => abrirResponder(detalle, true)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-magenta-100 text-magenta-700 rounded-lg hover:bg-magenta-200"
+                  >
+                    Responder a todos
+                  </button>
+                  <button
                     onClick={() => aPendiente(detalle)}
                     className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"
                   >
-                    Pasar a pendientes
+                    Pendiente
                   </button>
                   <button
                     onClick={() => aImportante(detalle.id)}
@@ -521,7 +635,7 @@ export default function MailsTab({ active }: { active: boolean }) {
                     disabled={detalleNoLeido}
                     className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
                   >
-                    {detalleNoLeido ? 'Quedó no leído' : 'Marcar no leído'}
+                    {detalleNoLeido ? 'Quedó no leído' : 'No leído'}
                   </button>
                   <button
                     onClick={() => accion(detalle.id, ocultarMailApp)}
@@ -542,22 +656,49 @@ export default function MailsTab({ active }: { active: boolean }) {
         </div>
       )}
 
-      {/* Nuevo correo */}
-      {composeOpen && (
+      {/* Nuevo correo / responder */}
+      {compose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Nuevo correo</h3>
+              <h3 className="font-semibold text-gray-900">
+                {compose.tipo === 'nuevo' ? 'Nuevo correo' : compose.todos ? 'Responder a todos' : 'Responder'}
+              </h3>
               <button onClick={cerrarCompose} className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
             </div>
             <div className="p-5 space-y-3 overflow-y-auto">
-              <input
-                type="email"
-                value={composePara}
-                onChange={e => setComposePara(e.target.value)}
-                placeholder="Para (email del destinatario)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={composePara}
+                  onChange={e => actualizarPara(e.target.value)}
+                  placeholder="Para (escribí un nombre o email; varios separados por coma)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
+                />
+                {sugerencias.length > 0 && (
+                  <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {sugerencias.map(c => (
+                      <button
+                        key={c.email}
+                        onClick={() => elegirSugerencia(c)}
+                        className="w-full text-left px-3 py-2 hover:bg-magenta-50 text-sm"
+                      >
+                        <span className="font-medium text-gray-900">{c.nombre}</span>
+                        {c.nombre !== c.email && <span className="text-xs text-gray-500 ml-2">{c.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {compose.tipo === 'responder' && compose.todos && (
+                <input
+                  type="text"
+                  value={composeCc}
+                  onChange={e => setComposeCc(e.target.value)}
+                  placeholder="CC"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
+                />
+              )}
               <input
                 type="text"
                 value={composeAsunto}
@@ -565,13 +706,44 @@ export default function MailsTab({ active }: { active: boolean }) {
                 placeholder="Asunto"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
               />
-              <textarea
-                value={composeCuerpo}
-                onChange={e => setComposeCuerpo(e.target.value)}
-                placeholder="Escribí el mensaje..."
-                rows={8}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400 resize-y"
+
+              {/* Barra de formato */}
+              <div className="flex items-center gap-1 flex-wrap border border-gray-200 rounded-t-lg px-2 py-1.5 bg-gray-50">
+                <button onClick={() => formato('bold')} title="Negrita" className="px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-200 rounded">
+                  B
+                </button>
+                <button onClick={() => formato('underline')} title="Subrayado" className="px-2 py-1 text-sm underline text-gray-700 hover:bg-gray-200 rounded">
+                  U
+                </button>
+                <span className="w-px h-5 bg-gray-300 mx-1" />
+                {COLORES.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => formato('foreColor', c)}
+                    title="Color de letra"
+                    className="w-5 h-5 rounded-full border border-gray-300 hover:scale-110 transition-transform"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+                <span className="w-px h-5 bg-gray-300 mx-1" />
+                <button onClick={() => formato('insertUnorderedList')} title="Viñetas" className="px-2 py-1 text-sm text-gray-700 hover:bg-gray-200 rounded">
+                  • Lista
+                </button>
+                <span className="w-px h-5 bg-gray-300 mx-1" />
+                <button onClick={() => formato('fontSize', '3')} title="Tamaño normal" className="px-2 py-1 text-xs text-gray-700 hover:bg-gray-200 rounded">
+                  Aa
+                </button>
+                <button onClick={() => formato('fontSize', '5')} title="Tamaño grande" className="px-2 py-1 text-base text-gray-700 hover:bg-gray-200 rounded">
+                  Aa
+                </button>
+              </div>
+              <div
+                ref={editorRef}
+                contentEditable
+                className="w-full min-h-[180px] px-3 py-2 border border-t-0 border-gray-200 rounded-b-lg text-sm focus:outline-none focus:border-magenta-400 -mt-3"
+                style={{ marginTop: '-12px' }}
               />
+
               <div className="flex items-center gap-3 flex-wrap">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-700">
                   <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -6,7 +6,7 @@ import { guardarTodos } from '@/app/(admin)/notas/actions'
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-export type VistaMails = 'inbox' | 'basecamp' | 'cristian' | 'soporte' | 'pedidos' | 'enviados'
+export type VistaMails = 'inbox' | 'importantes' | 'basecamp' | 'cristian' | 'soporte' | 'pedidos' | 'enviados'
 
 const CRISTIAN = 'cristian@gocuotas.com'
 const SOPORTE_GOCELULAR = 'gocuotasprod@cloud.trustonic.com'
@@ -37,11 +37,14 @@ export interface AdjuntoInfo {
 
 export interface MailDetalle {
   id: string
+  threadId: string
   remitente: string
   remitenteEmail: string
   para: string
+  cc: string
   asunto: string
   fecha: string
+  messageIdHeader: string
   html: string | null
   texto: string | null
   adjuntos: AdjuntoInfo[]
@@ -155,6 +158,8 @@ function buildQuery(vista: VistaMails, busqueda?: string): string {
       partes.push(`-(${SPS_QUERY})`)
     }
   }
+  // Los marcados con la estrella desde la app o desde Gmail
+  if (vista === 'importantes') partes.push('is:starred')
   // Solo asignaciones, menciones y conversaciones (sin digests)
   if (vista === 'basecamp') partes.push(`from:${BASECAMP} -${BASECAMP_DIGESTS}`)
   // Solo donde Cristian es el remitente (si esta copiado va a la bandeja)
@@ -266,11 +271,14 @@ export async function leerMail(id: string): Promise<{ mail?: MailDetalle; error?
   return {
     mail: {
       id,
+      threadId: msg.threadId ?? '',
       remitente: nombre,
       remitenteEmail: email,
       para: header(headers, 'To'),
+      cc: header(headers, 'Cc'),
       asunto: header(headers, 'Subject') || '(sin asunto)',
       fecha: header(headers, 'Date'),
+      messageIdHeader: header(headers, 'Message-ID'),
       html,
       texto,
       adjuntos: extraerAdjuntos(msg.payload ?? {}),
@@ -343,7 +351,60 @@ export interface AdjuntoNuevo {
   base64: string
 }
 
-// Envia un correo nuevo desde la cuenta conectada, con adjuntos opcionales
+function armarMime(opts: {
+  para: string
+  cc?: string
+  asunto: string
+  html: string
+  adjuntos: AdjuntoNuevo[]
+  inReplyTo?: string
+}): string {
+  const headers = [`To: ${opts.para}`]
+  if (opts.cc) headers.push(`Cc: ${opts.cc}`)
+  headers.push(`Subject: =?UTF-8?B?${Buffer.from(opts.asunto).toString('base64')}?=`)
+  if (opts.inReplyTo) {
+    headers.push(`In-Reply-To: ${opts.inReplyTo}`)
+    headers.push(`References: ${opts.inReplyTo}`)
+  }
+  headers.push('MIME-Version: 1.0')
+
+  if (opts.adjuntos.length === 0) {
+    return [
+      ...headers,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(opts.html).toString('base64'),
+    ].join('\r\n')
+  }
+
+  const boundary = `----gocelular${Date.now()}`
+  const partes = [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(opts.html).toString('base64'),
+  ]
+  for (const adj of opts.adjuntos) {
+    partes.push(
+      `--${boundary}`,
+      `Content-Type: ${adj.mimeType}; name="${adj.filename}"`,
+      `Content-Disposition: attachment; filename="${adj.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      adj.base64
+    )
+  }
+  partes.push(`--${boundary}--`)
+  return partes.join('\r\n')
+}
+
+// Envia un correo nuevo desde la cuenta conectada. El cuerpo es HTML
+// (viene del editor con formato); adjuntos opcionales.
 export async function enviarMailNuevo(input: {
   para: string
   asunto: string
@@ -356,47 +417,8 @@ export async function enviarMailNuevo(input: {
   const token = await getGoogleAccessToken()
   if (!token) return { error: NO_CONECTADO }
 
-  const html = cuerpo.replace(/\n/g, '<br>')
-  const subjectB64 = Buffer.from(asunto).toString('base64')
-
-  let mime: string
-  if (adjuntos.length === 0) {
-    mime = [
-      `To: ${para}`,
-      `Subject: =?UTF-8?B?${subjectB64}?=`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(html).toString('base64'),
-    ].join('\r\n')
-  } else {
-    const boundary = `----gocelular${Date.now()}`
-    const partes = [
-      `To: ${para}`,
-      `Subject: =?UTF-8?B?${subjectB64}?=`,
-      'MIME-Version: 1.0',
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
-      '',
-      `--${boundary}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(html).toString('base64'),
-    ]
-    for (const adj of adjuntos) {
-      partes.push(
-        `--${boundary}`,
-        `Content-Type: ${adj.mimeType}; name="${adj.filename}"`,
-        `Content-Disposition: attachment; filename="${adj.filename}"`,
-        'Content-Transfer-Encoding: base64',
-        '',
-        adj.base64
-      )
-    }
-    partes.push(`--${boundary}--`)
-    mime = partes.join('\r\n')
-  }
+  const html = cuerpo.includes('<') ? cuerpo : cuerpo.replace(/\n/g, '<br>')
+  const mime = armarMime({ para, asunto, html, adjuntos })
 
   const res = await gmailFetch(token, `/messages/send`, {
     method: 'POST',
@@ -407,6 +429,118 @@ export async function enviarMailNuevo(input: {
     return { error: `Gmail respondió ${res.status}: ${detail.slice(0, 150)}` }
   }
   return { ok: true }
+}
+
+// Responde un mail manteniendo el hilo (threadId + In-Reply-To)
+export async function responderMail(input: {
+  threadId: string
+  messageIdHeader: string
+  para: string
+  cc?: string
+  asunto: string
+  cuerpo: string
+  adjuntos?: AdjuntoNuevo[]
+}): Promise<{ ok?: boolean; error?: string }> {
+  const { threadId, messageIdHeader, para, cc, asunto, cuerpo, adjuntos = [] } = input
+  if (!para.includes('@')) return { error: 'Destinatario inválido' }
+
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+
+  const html = cuerpo.includes('<') ? cuerpo : cuerpo.replace(/\n/g, '<br>')
+  const mime = armarMime({ para, cc, asunto, html, adjuntos, inReplyTo: messageIdHeader || undefined })
+
+  const res = await gmailFetch(token, `/messages/send`, {
+    method: 'POST',
+    body: JSON.stringify({ raw: Buffer.from(mime).toString('base64url'), threadId }),
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    return { error: `Gmail respondió ${res.status}: ${detail.slice(0, 150)}` }
+  }
+  return { ok: true }
+}
+
+export interface Contacto {
+  nombre: string
+  email: string
+}
+
+// Contactos derivados del propio historial (destinatarios de enviados y
+// remitentes del inbox) — sin pedir permisos extra de Google. Cache 24h.
+export async function getContactos(): Promise<{ contactos: Contacto[]; miEmail: string }> {
+  const sb = createAdminClient()
+  const CACHE_KEY = 'gmail_contactos_cache'
+
+  const { data: cacheRow } = await sb.from('flujo_config').select('value').eq('key', CACHE_KEY).single()
+  if (cacheRow?.value) {
+    try {
+      const cache = JSON.parse(cacheRow.value)
+      if (Date.now() - new Date(cache.actualizadoAt).getTime() < 24 * 3600 * 1000) {
+        return { contactos: cache.contactos, miEmail: cache.miEmail }
+      }
+    } catch {
+      // recalcular
+    }
+  }
+
+  const token = await getGoogleAccessToken()
+  if (!token) return { contactos: [], miEmail: '' }
+
+  const perfilRes = await gmailFetch(token, '/profile')
+  const miEmail: string = perfilRes.ok ? (await perfilRes.json()).emailAddress ?? '' : ''
+
+  const frecuencia = new Map<string, { nombre: string; email: string; usos: number }>()
+  const registrar = (raw: string) => {
+    for (const parte of raw.split(',')) {
+      const { nombre, email } = parseFrom(parte.trim())
+      const key = email.toLowerCase()
+      if (!key.includes('@') || key === miEmail.toLowerCase()) continue
+      const e = frecuencia.get(key)
+      if (e) {
+        e.usos++
+        if (nombre !== email && e.nombre === e.email) e.nombre = nombre
+      } else {
+        frecuencia.set(key, { nombre, email: key, usos: 1 })
+      }
+    }
+  }
+
+  for (const q of ['in:sent', 'in:inbox']) {
+    const listRes = await gmailFetch(token, `/messages?${new URLSearchParams({ maxResults: '100', q })}`)
+    if (!listRes.ok) continue
+    const ids: { id: string }[] = (await listRes.json()).messages ?? []
+    for (let i = 0; i < ids.length; i += 20) {
+      const batch = await Promise.all(
+        ids.slice(i, i + 20).map(async ({ id }) => {
+          const res = await gmailFetch(
+            token,
+            `/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc`
+          )
+          if (!res.ok) return null
+          const msg = await res.json()
+          const headers: GmailHeader[] = msg.payload?.headers ?? []
+          return q === 'in:sent'
+            ? `${header(headers, 'To')},${header(headers, 'Cc')}`
+            : header(headers, 'From')
+        })
+      )
+      for (const raw of batch) if (raw) registrar(raw)
+    }
+  }
+
+  const contactos = Array.from(frecuencia.values())
+    .sort((a, b) => b.usos - a.usos)
+    .slice(0, 300)
+    .map(({ nombre, email }) => ({ nombre, email }))
+
+  await sb.from('flujo_config').upsert({
+    key: CACHE_KEY,
+    value: JSON.stringify({ contactos, miEmail, actualizadoAt: new Date().toISOString() }),
+    updated_at: new Date().toISOString(),
+  })
+
+  return { contactos, miEmail }
 }
 
 // Crea un pendiente en el ToDo de hoy (o del lunes si es fin de semana)
