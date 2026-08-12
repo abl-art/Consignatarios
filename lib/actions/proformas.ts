@@ -225,6 +225,19 @@ export async function confirmarProforma(id: string) {
   revalidatePath('/mayoristas/proformas')
   revalidatePath('/mayoristas/asignaciones')
   revalidatePath('/mayoristas/clientes')
+
+  // Disparo automático del webhook de venta mayorista para warehouse Andreani — no bloqueante,
+  // la confirmación ya quedó guardada aunque esto falle. stock_local se dispara aparte, al
+  // completarse la asignación de IMEIs (ver prepararAsignacionMayorista en asignar.ts).
+  // Select separado de `origen` (en vez de sumarlo al select de más arriba): si la migración de
+  // Task 1 todavía no corrió, esta columna no existe — que falle acá no debe tumbar el chequeo
+  // de límite de cuenta corriente de arriba, que sí sigue funcionando hoy.
+  const { data: proformaOrigen } = await supabase.from('proformas').select('origen').eq('id', id).single()
+  if (proformaOrigen?.origen === 'andreani_wh') {
+    const { informarVentaGocelular } = await import('@/lib/actions/wholesale-webhook')
+    await informarVentaGocelular(id).catch((e) => console.error('Error informando venta a GOcelular:', e))
+  }
+
   return { ok: true }
 }
 

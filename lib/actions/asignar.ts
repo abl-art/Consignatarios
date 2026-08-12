@@ -382,6 +382,24 @@ export async function prepararAsignacionMayorista(input: {
   const clienteLabel = proforma?.cliente_nombre || proforma?.nombre || 'Venta Mayorista'
   notificarGocelular(admin, imeis, null, clienteLabel, 'assign_to_consignee').catch(() => {})
 
+  // Disparo del webhook de venta mayorista (stock_local): se dispara cuando la asignación de
+  // IMEIs de la proforma queda completa (suma de todas sus asignaciones = unidades pedidas).
+  // No bloqueante, mismo criterio que notificarGocelular arriba.
+  const { data: proformaOrigen } = await admin
+    .from('proformas')
+    .select('origen, proforma_items(cantidad)')
+    .eq('id', input.proforma_id)
+    .single()
+  if (proformaOrigen?.origen === 'stock_local') {
+    const totalPedido = ((proformaOrigen.proforma_items ?? []) as { cantidad: number }[]).reduce((s, i) => s + i.cantidad, 0)
+    const { data: asigs } = await admin.from('asignaciones').select('total_unidades').eq('proforma_id', input.proforma_id)
+    const totalAsignado = (asigs ?? []).reduce((s, a) => s + a.total_unidades, 0)
+    if (totalPedido > 0 && totalAsignado >= totalPedido) {
+      const { informarVentaGocelular } = await import('@/lib/actions/wholesale-webhook')
+      informarVentaGocelular(input.proforma_id).catch((e) => console.error('Error informando venta a GOcelular:', e))
+    }
+  }
+
   revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/inventario')
   revalidatePath('/dashboard')
