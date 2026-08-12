@@ -63,11 +63,12 @@ export async function registrarEntregaKits(token: string, items: EntregaItem[], 
       plazo: KIT_PLAZO,
       cantidad: i.cantidad,
     })),
+    // Queda "en transito al WH de Andreani" hasta que se marque recibido
+    // en el gestor de pedidos (entregadoAt)
     estado: 'enviado' as const,
     categoria: 'Kits de Seguridad',
     fecha: now.toLocaleDateString('es-AR'),
     confirmadoAt: now.toISOString(),
-    entregadoAt: now.toISOString(),
     // Excel de la entrega (base64): se descarga desde el gestor de pedidos
     // para informarlo a GOcelular / Andreani
     ...(excelBase64 ? { imeiFile: excelBase64 } : {}),

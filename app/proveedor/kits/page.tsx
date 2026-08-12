@@ -1,14 +1,14 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { getInventarioByCategoria, getProductos } from '@/lib/actions/compras'
-import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
+import { getProductos, getPedidos } from '@/lib/actions/compras'
 import { syncKitsGocelular } from '@/lib/actions/sync-kits'
 import { getPreciosKitsMil200 } from '@/lib/actions/proveedor-kits'
 import { fetchKitsStockAndreani, type KitStockAndreani } from '@/lib/gocelular-kits'
 import EntregaForm from './EntregaForm'
 
 const VALID_TOKEN = 'kits2026go'
+const UMBRAL_REPONER = 100
 
 export default async function ProveedorKitsPage({
   searchParams,
@@ -28,10 +28,9 @@ export default async function ProveedorKitsPage({
     // DB de GOcelular no disponible: se muestra la pagina sin stock
   }
 
-  const [items, allProductos, modelosOcultos, preciosMil200] = await Promise.all([
-    getInventarioByCategoria('Kits de Seguridad'),
+  const [allProductos, pedidos, preciosMil200] = await Promise.all([
     getProductos(),
-    getModelosOcultos(),
+    getPedidos(),
     getPreciosKitsMil200(),
   ])
 
@@ -40,13 +39,18 @@ export default async function ProveedorKitsPage({
     .filter(p => p.categoria === 'Kits de Seguridad' && !p.oculto)
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
-  const ocultos = new Set(modelosOcultos.map(m => m.toLowerCase()))
-  const itemsFiltrados = items.filter(r => !ocultos.has(r.modelo.toLowerCase()))
+  // Entregas confirmadas pero todavia no recibidas en el WH de Andreani
+  const enTransito: Record<string, number> = {}
+  for (const p of pedidos) {
+    if (p.categoria !== 'Kits de Seguridad') continue
+    if (p.estado !== 'enviado' || p.entregadoAt) continue
+    for (const item of p.items) {
+      enTransito[item.productoCodigo] = (enTransito[item.productoCodigo] ?? 0) + item.cantidad
+    }
+  }
 
-  const totalCompras = itemsFiltrados.reduce((s, r) => s + r.compras, 0)
-  const totalVentas = itemsFiltrados.reduce((s, r) => s + r.ventas, 0)
-  const totalDisponible = itemsFiltrados.reduce((s, r) => s + r.disponible, 0)
   const totalAndreani = kits.reduce((s, k) => s + (stockAndreani[k.codigo]?.stockAndreani ?? 0), 0)
+  const totalTransito = kits.reduce((s, k) => s + (enTransito[k.codigo] ?? 0), 0)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -63,110 +67,72 @@ export default async function ProveedorKitsPage({
       </div>
 
       <div className="max-w-5xl mx-auto p-6">
-        {/* Resumen */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">Stock en Andreani</p>
-            <p className="text-2xl font-bold text-purple-700">{totalAndreani}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">Kits comprados</p>
-            <p className="text-2xl font-bold text-blue-700">{totalCompras}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">Kits vendidos</p>
-            <p className="text-2xl font-bold text-amber-700">{totalVentas}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">Kits disponibles</p>
-            <p className={`text-2xl font-bold ${totalDisponible < 0 ? 'text-red-700' : 'text-green-700'}`}>{totalDisponible}</p>
-          </div>
-        </div>
-
-        {/* Kits GOcelular con stock en Andreani */}
+        {/* Kits GOcelular: en transito + stock Andreani */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
             <h2 className="text-sm font-semibold text-gray-700">Kits del catálogo GOcelular</h2>
           </div>
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">SKU</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">Kit</th>
-                <th className="text-right px-4 py-3 font-medium text-purple-700 bg-purple-50">Stock Andreani</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Stock total GOcelular</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {kits.map(k => {
-                const st = stockAndreani[k.codigo]
-                return (
-                  <tr key={k.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-mono text-xs text-gray-500">{k.codigo}</td>
-                    <td className="px-5 py-3 font-medium text-gray-900">{k.nombre}</td>
-                    <td className="px-4 py-3 text-right font-bold text-purple-700 bg-purple-50/50">
-                      {st ? st.stockAndreani : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">{st ? st.stockTotal : '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot className="bg-gray-50 border-t border-gray-200">
-              <tr className="font-semibold">
-                <td className="px-5 py-3" />
-                <td className="px-5 py-3 text-gray-900">Total</td>
-                <td className="px-4 py-3 text-right text-purple-700 bg-purple-50/50">{totalAndreani}</td>
-                <td className="px-4 py-3 text-right text-gray-700">
-                  {kits.reduce((s, k) => s + (stockAndreani[k.codigo]?.stockTotal ?? 0), 0)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        {/* Historico de compras/ventas por modelo */}
-        {itemsFiltrados.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
-              <h2 className="text-sm font-semibold text-gray-700">Histórico de entregas y ventas</h2>
-            </div>
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-5 py-3 font-medium text-gray-600">Modelo</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Compras</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Ventas</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Kits disp.</th>
+                  <th className="text-left px-5 py-3 font-medium text-gray-600">SKU</th>
+                  <th className="text-left px-5 py-3 font-medium text-gray-600">Kit</th>
+                  <th className="text-right px-4 py-3 font-medium text-blue-700 bg-blue-50">En tránsito al WH</th>
+                  <th className="text-right px-4 py-3 font-medium text-purple-700 bg-purple-50">Stock Andreani</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {itemsFiltrados.map((r) => (
-                  <tr key={r.modelo} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{r.modelo}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-blue-700">{r.compras}</td>
-                    <td className="px-4 py-3 text-right text-amber-700">{r.ventas}</td>
-                    <td className={`px-4 py-3 text-right font-bold ${r.disponible < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {r.disponible}
-                    </td>
-                  </tr>
-                ))}
+                {kits.map(k => {
+                  const andreani = stockAndreani[k.codigo]?.stockAndreani ?? 0
+                  const transito = enTransito[k.codigo] ?? 0
+                  const reponer = andreani + transito < UMBRAL_REPONER
+                  return (
+                    <tr key={k.id} className={`hover:bg-gray-50 ${reponer ? 'bg-red-50/50' : ''}`}>
+                      <td className="px-5 py-3 font-mono text-xs text-gray-500">{k.codigo}</td>
+                      <td className="px-5 py-3 font-medium text-gray-900">{k.nombre}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-blue-700 bg-blue-50/50">
+                        {transito > 0 ? transito : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-700 bg-purple-50/50">
+                        {andreani}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {reponer ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-700">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Reponer
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                            OK
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot className="bg-gray-50 border-t border-gray-200">
                 <tr className="font-semibold">
+                  <td className="px-5 py-3" />
                   <td className="px-5 py-3 text-gray-900">Total</td>
-                  <td className="px-4 py-3 text-right text-blue-700">{totalCompras}</td>
-                  <td className="px-4 py-3 text-right text-amber-700">{totalVentas}</td>
-                  <td className={`px-4 py-3 text-right ${totalDisponible < 0 ? 'text-red-700' : 'text-green-700'}`}>{totalDisponible}</td>
+                  <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/50">{totalTransito}</td>
+                  <td className="px-4 py-3 text-right text-purple-700 bg-purple-50/50">{totalAndreani}</td>
+                  <td className="px-4 py-3" />
                 </tr>
               </tfoot>
             </table>
           </div>
-        )}
+        </div>
 
-        <p className="text-xs text-gray-400 mt-4 mb-6">
-          * &quot;Stock Andreani&quot; = kits ingresados al warehouse de Andreani menos los despachados.
-          Los kits del catálogo se sincronizan automáticamente desde GOcelular.
+        <p className="text-xs text-gray-400 mb-6">
+          * &quot;En tránsito al WH&quot; = entregas confirmadas pendientes de ingreso en Andreani.
+          &quot;Stock Andreani&quot; = kits ingresados al warehouse menos los despachados.
+          &quot;Reponer&quot; = stock Andreani + en tránsito menor a {UMBRAL_REPONER} unidades.
         </p>
 
         {/* Formulario de entrega */}

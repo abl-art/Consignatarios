@@ -137,9 +137,9 @@ export default function EntregaForm({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
+        className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
       >
-        Registrar entrega de kits
+        <span className="text-lg leading-none">+</span> Registrar Entrega
       </button>
     )
   }
