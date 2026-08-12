@@ -6,6 +6,7 @@ import AsignacionesMayoristaClient from './AsignacionesMayoristaClient'
 import type { DispositivoConModelo } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export default async function AsignacionesMayoristaPage() {
   const admin = createAdminClient()

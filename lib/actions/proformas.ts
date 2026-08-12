@@ -8,6 +8,19 @@ import { verificarLimiteCC } from './pagos-mayoristas'
 // Types
 // ---------------------------------------------------------------------------
 
+export interface GocelularVentaEstado {
+  estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
+  saleId?: string
+  faStatus?: string
+  dispatchId?: string
+  numeroOrdenExterna?: string
+  enviadoAt?: string
+  warnings?: string[]
+  errores?: string[]
+  codigoError?: string
+  payloadEnviado?: string
+}
+
 export interface ProformaItem {
   id?: string
   producto_id: string
@@ -25,7 +38,6 @@ export interface Proforma {
   nombre: string
   cliente_nombre: string
   cliente_mayorista_id: string | null
-  store_id: string | null
   fecha: string
   fecha_confirmacion: string | null
   mup: number
@@ -34,6 +46,8 @@ export interface Proforma {
   total_iva: number
   total_con_iva: number
   notas: string | null
+  origen: 'stock_local' | 'andreani_wh'
+  gocelular: GocelularVentaEstado | null
   created_at: string
 }
 
@@ -74,6 +88,7 @@ export async function crearProforma(data: {
   mup: number
   notas: string
   items: { producto_id: string; producto_nombre: string; cantidad: number; precio_costo: number }[]
+  origen?: 'stock_local' | 'andreani_wh'
 }) {
   const supabase = createAdminClient()
 
@@ -97,6 +112,7 @@ export async function crearProforma(data: {
       total_iva,
       total_con_iva,
       notas: data.notas || null,
+      origen: data.origen || 'stock_local',
     })
     .select('id')
     .single()
@@ -210,6 +226,19 @@ export async function confirmarProforma(id: string) {
   revalidatePath('/mayoristas/proformas')
   revalidatePath('/mayoristas/asignaciones')
   revalidatePath('/mayoristas/clientes')
+
+  // Disparo automático del webhook de venta mayorista para warehouse Andreani — no bloqueante,
+  // la confirmación ya quedó guardada aunque esto falle. stock_local se dispara aparte, al
+  // completarse la asignación de IMEIs (ver prepararAsignacionMayorista en asignar.ts).
+  // Select separado de `origen` (en vez de sumarlo al select de más arriba): si la migración de
+  // Task 1 todavía no corrió, esta columna no existe — que falle acá no debe tumbar el chequeo
+  // de límite de cuenta corriente de arriba, que sí sigue funcionando hoy.
+  const { data: proformaOrigen } = await supabase.from('proformas').select('origen').eq('id', id).single()
+  if (proformaOrigen?.origen === 'andreani_wh') {
+    const { informarVentaGocelular } = await import('@/lib/actions/wholesale-webhook')
+    await informarVentaGocelular(id).catch((e) => console.error('Error informando venta a GOcelular:', e))
+  }
+
   return { ok: true }
 }
 
