@@ -25,8 +25,9 @@ async function cargarCatalogo(imeis: string[]): Promise<CatalogoGocelular | null
       client.query<{ name: string }>(`SELECT name FROM suppliers WHERE active = true`),
       client.query<{ sku: string }>(`SELECT sku FROM device_model_skus WHERE active = true`),
       client.query<{ sku: string }>(`SELECT sku FROM device_model_skus WHERE active = false`),
-      client.query<{ sku: string }>(`SELECT sku FROM store_products WHERE is_addon = true AND sku IS NOT NULL AND status = 'active'`),
-      client.query<{ sku: string }>(`SELECT sku FROM store_products WHERE is_addon = true AND sku IS NOT NULL AND status <> 'active'`),
+      // draft cuenta como valido para compras (solo oculta de la tienda) — confirmado con GOcelular 2026-08-12
+      client.query<{ sku: string }>(`SELECT sku FROM store_products WHERE is_addon = true AND sku IS NOT NULL AND status IN ('active', 'draft')`),
+      client.query<{ sku: string }>(`SELECT sku FROM store_products WHERE is_addon = true AND sku IS NOT NULL AND status NOT IN ('active', 'draft')`),
       imeis.length > 0
         ? client.query<{ imei: string }>(`SELECT imei FROM inventory_items WHERE imei = ANY($1)`, [imeis])
         : Promise.resolve({ rows: [] as { imei: string }[] }),
@@ -87,6 +88,10 @@ async function cargarSkusYNombres(): Promise<{ skusConocidos: Set<string>; skuTo
 
 const tieneCostoValido = (i: PedidoItem): boolean =>
   typeof i.precio === 'number' && Number.isFinite(i.precio) && i.precio > 0
+
+// Para addons el costo es obligatorio y $0 es legitimo (kits bonificados)
+const tieneCostoAddon = (i: PedidoItem): boolean =>
+  typeof i.precio === 'number' && Number.isFinite(i.precio) && i.precio >= 0
 
 // Mapeo best-effort del costo de devices: SKU del Excel -> nombre de modelo GOcelular -> item
 // del pedido. Recibe los items ya clasificados como device por el caller (no re-deriva la
@@ -205,7 +210,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         quantity: item.cantidad,
         // Sin costo valido (null/undefined/0/no-numerico) se omite el campo: validarCompra
         // produce el error de validacion "requieren costo unitario" en vez de crashear.
-        ...(tieneCostoValido(item) ? { unit_cost: item.precio.toFixed(2) } : {}),
+        ...(tieneCostoAddon(item) ? { unit_cost: item.precio.toFixed(2) } : {}),
         description: item.productoNombre.slice(0, 256),
       })
     }
