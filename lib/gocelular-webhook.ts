@@ -61,7 +61,7 @@ export async function sendPurchaseWebhook(payload: PurchasePayload): Promise<Pur
   const rawBody = JSON.stringify(payload)
 
   let last: PurchaseResult = { ok: false, status: 0, body: null, retryable: true }
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     // Headers de auth frescos en cada intento; body identico.
     const ts = buildTimestamp()
     const sig = signWebhook(secret, ts, rawBody)
@@ -80,13 +80,14 @@ export async function sendPurchaseWebhook(payload: PurchasePayload): Promise<Pur
 
       if (res.status === 200) return { ok: true, status: 200, body, retryable: false }
 
-      const retryable = res.status >= 500 || res.status === 503
+      const retryable = res.status >= 500
       last = { ok: false, status: res.status, body, retryable }
       if (!retryable) return last
     } catch {
+      // Timeout o red caida ("sin respuesta" segun retry policy de GOcelular): reintentable
       last = { ok: false, status: 0, body: null, retryable: true }
     }
-    if (attempt < 2) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
+    if (attempt < 3) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
   }
   return last
 }
