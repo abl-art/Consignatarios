@@ -1655,15 +1655,19 @@ export interface TiempoEntregaData {
   promedio30d: number
   mediana30d: number
   envios30d: number
+  // Orden confirmada → entregado por Andreani (delivered_at)
+  promedioEntrega30d: number
+  medianaEntrega30d: number
+  entregas30d: number
 }
 
 export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
   const pool = getPool()
-  if (!pool) return { promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 }
+  if (!pool) return { promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0, promedioEntrega30d: 0, medianaEntrega30d: 0, entregas30d: 0 }
 
   const client = await pool.connect()
   try {
-    const [allRes, recentRes] = await Promise.all([
+    const [allRes, recentRes, entregaRes] = await Promise.all([
       client.query<{ prom: string; mediana: string; total: string }>(
         `SELECT
           ROUND(AVG(EXTRACT(EPOCH FROM (s.created_at - go.order_created_at)) / 86400)::numeric, 1)::text AS prom,
@@ -1691,9 +1695,25 @@ export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
           AND s.created_at > go.order_created_at
           AND go.order_created_at >= CURRENT_DATE - 30`
       ),
+      // Orden confirmada → entregado (delivered_at de Andreani), últimos 30 días
+      client.query<{ prom: string; mediana: string; total: string }>(
+        `SELECT
+          ROUND(AVG(EXTRACT(EPOCH FROM (s.delivered_at - go.order_created_at)) / 86400)::numeric, 1)::text AS prom,
+          ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (s.delivered_at - go.order_created_at)) / 86400)::numeric, 1)::text AS mediana,
+          COUNT(*)::text AS total
+        FROM shipments s
+        JOIN store_orders so ON so.id = s.store_order_id
+        JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+        WHERE s.delivered_at IS NOT NULL
+          AND go.order_discarded_at IS NULL
+          AND go.order_created_at IS NOT NULL
+          AND s.delivered_at > go.order_created_at
+          AND go.order_created_at >= CURRENT_DATE - 30`
+      ),
     ])
     const all = allRes.rows[0]
     const recent = recentRes.rows[0]
+    const entrega = entregaRes.rows[0]
     return {
       promedioDias: Number(all.prom),
       medianaDias: Number(all.mediana),
@@ -1701,6 +1721,9 @@ export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
       promedio30d: Number(recent.prom),
       mediana30d: Number(recent.mediana),
       envios30d: Number(recent.total),
+      promedioEntrega30d: Number(entrega.prom ?? 0),
+      medianaEntrega30d: Number(entrega.mediana ?? 0),
+      entregas30d: Number(entrega.total),
     }
   } finally {
     client.release()

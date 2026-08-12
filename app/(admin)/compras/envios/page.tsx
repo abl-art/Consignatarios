@@ -4,6 +4,7 @@ import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
 import CostoCiudad from './CostoCiudad'
+import WarehouseAndreani from './WarehouseAndreani'
 
 export default async function EnviosPage({
   searchParams,
@@ -87,6 +88,11 @@ export default async function EnviosPage({
           id: 'costos',
           label: 'Costo por Ciudad',
           content: <CostoCiudad provincia={searchParams.provincia} />,
+        },
+        {
+          id: 'warehouse',
+          label: 'Warehouse Andreani',
+          content: <WarehouseAndreani />,
         },
       ]} />
     </div>

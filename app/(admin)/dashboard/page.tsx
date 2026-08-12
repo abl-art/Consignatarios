@@ -32,7 +32,7 @@ export default async function DashboardPage() {
     fetchBloqueadosVsMora().catch(() => ({ bloqueados: 0, enTransicion: 0, idle: 0, readyForUse: 0, ordenesMora: 0, sinBloquear: 0 })),
     fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
     fetchVentasPorMarca(desde7d, hoy).catch(() => []),
-    fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0 })),
+    fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0, promedioEntrega30d: 0, medianaEntrega30d: 0, entregas30d: 0 })),
     fetchAddonStock().catch(() => []),
     getModelosOcultos().catch(() => []),
   ])
@@ -93,24 +93,25 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <VentasDelDia />
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Tiempo promedio de entrega</h2>
-          <p className="text-[10px] text-gray-400 -mt-2 mb-4">Orden confirmada → tracking Andreani</p>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Tiempo promedio de entrega</h2>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-gray-500 mb-1">Últimos 30 días</p>
+              <p className="text-xs text-gray-500 mb-1">Orden confirmada → entregado</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-gray-900">{tiempoEntrega.mediana30d}</p>
+                <p className="text-3xl font-bold text-gray-900">{tiempoEntrega.promedioEntrega30d}</p>
                 <p className="text-sm text-gray-500">días</p>
               </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">mediana · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                promedio 30d · mediana {tiempoEntrega.medianaEntrega30d} · {tiempoEntrega.entregas30d.toLocaleString('es-AR')} entregas
+              </p>
             </div>
             <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs text-gray-500 mb-1">Histórico</p>
+              <p className="text-xs text-gray-500 mb-1">Orden confirmada → tracking Andreani</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-xl font-bold text-gray-700">{tiempoEntrega.medianaDias}</p>
+                <p className="text-xl font-bold text-gray-700">{tiempoEntrega.mediana30d}</p>
                 <p className="text-sm text-gray-500">días</p>
               </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">mediana · {tiempoEntrega.totalEnvios.toLocaleString('es-AR')} envíos</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
             </div>
           </div>
         </div>
