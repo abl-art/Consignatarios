@@ -1,23 +1,35 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   listarMails,
   leerMail,
   eliminarMail,
   ocultarMailApp,
   pasarAPendiente,
+  archivarSpsAutomatico,
+  descargarAdjunto,
+  marcarImportante,
+  marcarNoLeido,
+  enviarMailNuevo,
   type MailResumen,
   type MailDetalle,
   type VistaMails,
+  type AdjuntoInfo,
+  type AdjuntoNuevo,
 } from '@/lib/actions/gmail'
 
 const VISTAS: { id: VistaMails; label: string; desc: string }[] = [
-  { id: 'inbox', label: 'Bandeja', desc: 'Bandeja de entrada (sin soporte Trustonic ni digests de Basecamp)' },
+  { id: 'inbox', label: 'Bandeja', desc: 'Mails sin leer — al leerlos desaparecen (el buscador rastrea toda la bandeja)' },
+  { id: 'basecamp', label: 'Basecamp', desc: 'Asignaciones, menciones y conversaciones de Basecamp' },
+  { id: 'cristian', label: 'Cristian', desc: 'Mails donde el remitente es cristian@gocuotas.com' },
+  { id: 'soporte', label: 'Soporte GOcelular', desc: 'Mails de gocuotasprod@cloud.trustonic.com (incluye borrados)' },
   { id: 'pedidos', label: 'Pedidos', desc: 'Pedidos enviados a proveedores desde el gestor' },
-  { id: 'cristian', label: 'Cristian', desc: 'Mails de cristian@gocuotas.com o donde está copiado' },
-  { id: 'soporte', label: 'Soporte GOcelular', desc: 'Mails de gocuotasprod@cloud.trustonic.com (incluye los ya borrados)' },
+  { id: 'enviados', label: 'Enviados', desc: 'Todos los mails enviados' },
 ]
+
+const VISTAS_ENVIADOS: VistaMails[] = ['pedidos', 'enviados']
+const MAX_ADJUNTOS_MB = 3
 
 function fmtFecha(rfc: string): string {
   const d = new Date(rfc)
@@ -26,6 +38,12 @@ function fmtFecha(rfc: string): string {
   const esHoy = d.toDateString() === hoy.toDateString()
   if (esHoy) return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
   return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function ordenar(mails: MailResumen[]): MailResumen[] {
@@ -38,7 +56,6 @@ function ordenar(mails: MailResumen[]): MailResumen[] {
 export default function MailsTab({ active }: { active: boolean }) {
   const [vista, setVista] = useState<VistaMails>('inbox')
   const [busqueda, setBusqueda] = useState('')
-  const [busquedaActiva, setBusquedaActiva] = useState('')
   const [mails, setMails] = useState<MailResumen[]>([])
   const [nextToken, setNextToken] = useState<string | undefined>()
   const [loading, setLoading] = useState(false)
@@ -46,59 +63,92 @@ export default function MailsTab({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [detalle, setDetalle] = useState<MailDetalle | null>(null)
   const [detalleLoading, setDetalleLoading] = useState(false)
+  const [detalleNoLeido, setDetalleNoLeido] = useState(false)
   const [accionando, setAccionando] = useState<Set<string>>(new Set())
-  const [avisoPendiente, setAvisoPendiente] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [descargando, setDescargando] = useState<string | null>(null)
+  const [importantes, setImportantes] = useState<Set<string>>(new Set())
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestSeq = useRef(0)
+  const spsListo = useRef(false)
+
+  // Nuevo correo
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [composePara, setComposePara] = useState('')
+  const [composeAsunto, setComposeAsunto] = useState('')
+  const [composeCuerpo, setComposeCuerpo] = useState('')
+  const [composeAdjuntos, setComposeAdjuntos] = useState<AdjuntoNuevo[]>([])
+  const [composeEnviando, setComposeEnviando] = useState(false)
+  const [composeError, setComposeError] = useState<string | null>(null)
+
+  const mostrarAviso = (texto: string) => {
+    setAviso(texto)
+    setTimeout(() => setAviso(null), 2500)
+  }
 
   const cargar = useCallback(
-    async (opts?: { vista?: VistaMails; busqueda?: string; pageToken?: string; append?: boolean }) => {
-      const v = opts?.vista ?? vista
-      const b = opts?.busqueda ?? busquedaActiva
+    async (opts: { vista: VistaMails; busqueda: string; pageToken?: string; append?: boolean }) => {
+      const seq = ++requestSeq.current
       setLoading(true)
       setError(null)
       try {
-        const res = await listarMails({ vista: v, busqueda: b || undefined, pageToken: opts?.pageToken })
+        const res = await listarMails({
+          vista: opts.vista,
+          busqueda: opts.busqueda || undefined,
+          pageToken: opts.pageToken,
+        })
+        if (seq !== requestSeq.current) return
         if (res.error) {
           setError(res.error)
           return
         }
-        setMails(prev => ordenar(opts?.append ? [...prev, ...(res.mails ?? [])] : res.mails ?? []))
+        setMails(prev => ordenar(opts.append ? [...prev, ...(res.mails ?? [])] : res.mails ?? []))
         setNextToken(res.nextPageToken)
         setCargado(true)
       } finally {
-        setLoading(false)
+        if (seq === requestSeq.current) setLoading(false)
       }
     },
-    [vista, busquedaActiva]
+    []
   )
 
   useEffect(() => {
-    if (active && !cargado && !loading) cargar()
-  }, [active, cargado, loading, cargar])
+    if (active && !cargado && !loading) {
+      if (!spsListo.current) {
+        spsListo.current = true
+        archivarSpsAutomatico().catch(() => {})
+      }
+      cargar({ vista, busqueda })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+
+  // Busqueda mientras se escribe (debounce 450ms)
+  useEffect(() => {
+    if (!cargado) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setMails([])
+      setNextToken(undefined)
+      cargar({ vista, busqueda })
+    }, 450)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda])
 
   function cambiarVista(v: VistaMails) {
     setVista(v)
     setMails([])
     setNextToken(undefined)
-    cargar({ vista: v })
-  }
-
-  function buscar() {
-    setBusquedaActiva(busqueda)
-    setMails([])
-    setNextToken(undefined)
-    cargar({ busqueda })
-  }
-
-  function limpiarBusqueda() {
-    setBusqueda('')
-    setBusquedaActiva('')
-    setMails([])
-    cargar({ busqueda: '' })
+    cargar({ vista: v, busqueda })
   }
 
   async function abrir(m: MailResumen) {
     setDetalleLoading(true)
     setDetalle(null)
+    setDetalleNoLeido(false)
     try {
       const res = await leerMail(m.id)
       if (res.error) {
@@ -106,10 +156,19 @@ export default function MailsTab({ active }: { active: boolean }) {
         return
       }
       setDetalle(res.mail ?? null)
-      setMails(prev => prev.map(x => (x.id === m.id ? { ...x, noLeido: false } : x)))
     } finally {
       setDetalleLoading(false)
     }
+  }
+
+  // Al cerrar un mail leido en la Bandeja (sin busqueda), desaparece
+  function cerrarDetalle() {
+    if (detalle && vista === 'inbox' && !busqueda && !detalleNoLeido) {
+      setMails(prev => prev.filter(m => m.id !== detalle.id))
+    } else if (detalle) {
+      setMails(prev => prev.map(m => (m.id === detalle.id ? { ...m, noLeido: detalleNoLeido } : m)))
+    }
+    setDetalle(null)
   }
 
   async function accion(id: string, fn: (id: string) => Promise<{ ok?: boolean; error?: string }>) {
@@ -134,27 +193,133 @@ export default function MailsTab({ active }: { active: boolean }) {
   async function aPendiente(m: MailResumen | MailDetalle) {
     const texto = `📧 ${m.remitente}: ${m.asunto}`
     const res = await pasarAPendiente(texto)
+    if (res.error) setError(res.error)
+    else mostrarAviso(`Agregado a pendientes: ${m.asunto}`)
+  }
+
+  async function aImportante(id: string) {
+    const res = await marcarImportante(id)
     if (res.error) {
       setError(res.error)
       return
     }
-    setAvisoPendiente(m.asunto)
-    setTimeout(() => setAvisoPendiente(null), 2500)
+    setImportantes(prev => new Set(prev).add(id))
+    mostrarAviso('Marcado como importante y destacado en Gmail')
+  }
+
+  async function aNoLeido(id: string) {
+    const res = await marcarNoLeido(id)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    if (detalle?.id === id) setDetalleNoLeido(true)
+    setMails(prev => ordenar(prev.map(m => (m.id === id ? { ...m, noLeido: true } : m))))
+    mostrarAviso('Marcado como no leído')
+  }
+
+  async function bajarAdjunto(mensajeId: string, adj: AdjuntoInfo) {
+    setDescargando(adj.attachmentId)
+    try {
+      const res = await descargarAdjunto(mensajeId, adj.attachmentId)
+      if (res.error || !res.base64) {
+        setError(res.error ?? 'No se pudo descargar el adjunto')
+        return
+      }
+      const byteChars = atob(res.base64)
+      const bytes = new Uint8Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i)
+      const blob = new Blob([bytes], { type: adj.mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = adj.filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDescargando(null)
+    }
+  }
+
+  async function agregarAdjuntosCompose(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    setComposeError(null)
+    const nuevos: AdjuntoNuevo[] = []
+    let totalBytes = composeAdjuntos.reduce((s, a) => s + a.base64.length * 0.75, 0)
+    for (const f of files) {
+      totalBytes += f.size
+      if (totalBytes > MAX_ADJUNTOS_MB * 1024 * 1024) {
+        setComposeError(`Los adjuntos superan el límite de ${MAX_ADJUNTOS_MB} MB en total`)
+        break
+      }
+      const buf = await f.arrayBuffer()
+      let b64 = ''
+      const bytes = new Uint8Array(buf)
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        b64 += String.fromCharCode(...Array.from(bytes.subarray(i, i + 0x8000)))
+      }
+      nuevos.push({ filename: f.name, mimeType: f.type || 'application/octet-stream', base64: btoa(b64) })
+    }
+    setComposeAdjuntos(prev => [...prev, ...nuevos])
+    e.target.value = ''
+  }
+
+  function cerrarCompose() {
+    setComposeOpen(false)
+    setComposePara('')
+    setComposeAsunto('')
+    setComposeCuerpo('')
+    setComposeAdjuntos([])
+    setComposeError(null)
+  }
+
+  async function enviarCompose() {
+    if (!composePara.includes('@') || !composeAsunto.trim()) {
+      setComposeError('Completá destinatario y asunto')
+      return
+    }
+    setComposeEnviando(true)
+    setComposeError(null)
+    try {
+      const res = await enviarMailNuevo({
+        para: composePara.trim(),
+        asunto: composeAsunto.trim(),
+        cuerpo: composeCuerpo,
+        adjuntos: composeAdjuntos,
+      })
+      if (res.error) {
+        setComposeError(res.error)
+        return
+      }
+      cerrarCompose()
+      mostrarAviso('Correo enviado')
+    } finally {
+      setComposeEnviando(false)
+    }
   }
 
   const vistaActual = VISTAS.find(v => v.id === vista)!
+  const esEnviados = VISTAS_ENVIADOS.includes(vista)
 
   return (
-    <div className="flex gap-4 items-start">
-      {/* Sidebar */}
-      <div className="w-36 shrink-0 space-y-1">
+    <div className="flex gap-5 items-start">
+      {/* Sidebar estilo finanzas */}
+      <div className="w-44 shrink-0 border-r border-gray-200 pr-2">
+        <button
+          onClick={() => setComposeOpen(true)}
+          className="w-full mb-3 px-3 py-2 text-sm font-semibold bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 transition-colors"
+        >
+          + Nuevo correo
+        </button>
         {VISTAS.map(v => (
           <button
             key={v.id}
             onClick={() => cambiarVista(v.id)}
             title={v.desc}
-            className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              vista === v.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+            className={`w-full text-left px-3 py-2 text-sm font-medium border-l-2 transition-colors ${
+              vista === v.id
+                ? 'border-magenta-600 text-magenta-600 bg-magenta-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
             {v.label}
@@ -165,59 +330,42 @@ export default function MailsTab({ active }: { active: boolean }) {
       {/* Contenido */}
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="flex items-center gap-1 flex-1 min-w-[220px]">
-            <input
-              type="text"
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && buscar()}
-              placeholder={`Buscar en ${vista === 'inbox' ? 'toda la bandeja de entrada' : vistaActual.label.toLowerCase()}...`}
-              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-            />
-            <button
-              onClick={buscar}
-              disabled={loading}
-              className="px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
-            >
-              Buscar
+          <input
+            type="text"
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder={vista === 'inbox' ? 'Buscar en toda la bandeja de entrada...' : `Buscar en ${vistaActual.label.toLowerCase()}...`}
+            className="flex-1 min-w-[220px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
+          />
+          {busqueda && (
+            <button onClick={() => setBusqueda('')} className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+              Limpiar
             </button>
-            {busquedaActiva && (
-              <button onClick={limpiarBusqueda} className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
-                Limpiar
-              </button>
-            )}
-          </div>
+          )}
           <button
-            onClick={() => cargar()}
+            onClick={() => cargar({ vista, busqueda })}
             disabled={loading}
-            className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 py-2 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Cargando...' : 'Actualizar'}
           </button>
         </div>
 
-        <p className="text-xs text-gray-400 mb-3">
-          {vistaActual.desc}
-          {vista === 'inbox' && ' — no leídos primero. Ocultar solo lo saca de acá (en Gmail queda igual); Eliminar manda a la papelera de Gmail.'}
-        </p>
+        <p className="text-xs text-gray-400 mb-3">{vistaActual.desc}</p>
 
-        {avisoPendiente && (
-          <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
-            Agregado a pendientes de hoy: {avisoPendiente}
-          </p>
+        {aviso && (
+          <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{aviso}</p>
         )}
 
         {error && (
           <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>
         )}
 
-        {!cargado && loading && (
-          <p className="text-sm text-gray-400 py-10 text-center">Cargando mails...</p>
-        )}
+        {!cargado && loading && <p className="text-sm text-gray-400 py-10 text-center">Cargando mails...</p>}
 
         {cargado && mails.length === 0 && !loading && (
           <p className="text-sm text-gray-400 py-10 text-center">
-            {busquedaActiva ? 'Sin resultados para la búsqueda' : 'No hay mails acá 🎉'}
+            {busqueda ? 'Sin resultados para la búsqueda' : vista === 'inbox' ? 'Bandeja vacía, objetivo cumplido 🎉' : 'No hay mails acá'}
           </p>
         )}
 
@@ -227,21 +375,22 @@ export default function MailsTab({ active }: { active: boolean }) {
               <div
                 key={m.id}
                 className={`flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer group ${
-                  m.noLeido ? 'bg-blue-50/40' : ''
+                  m.noLeido ? 'bg-magenta-50/30' : ''
                 }`}
                 onClick={() => abrir(m)}
               >
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.noLeido ? 'bg-blue-500' : 'bg-transparent'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.noLeido ? 'bg-magenta-600' : 'bg-transparent'}`} />
                 <div className="w-44 shrink-0 truncate">
                   <span className={`text-sm ${m.noLeido ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
-                    {vista === 'pedidos' ? `Para: ${m.para}` : m.remitente}
+                    {esEnviados ? `Para: ${m.para}` : m.remitente}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 truncate">
+                  {importantes.has(m.id) && <span className="text-amber-500 mr-1">★</span>}
                   <span className={`text-sm ${m.noLeido ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
                     {m.asunto}
                   </span>
-                  <span className="text-xs text-gray-400 ml-2">{m.snippet.slice(0, 80)}</span>
+                  <span className="text-xs text-gray-400 ml-2">{m.snippet.slice(0, 70)}</span>
                 </div>
                 <span className="text-xs text-gray-400 shrink-0 w-14 text-right">{fmtFecha(m.fecha)}</span>
                 <div
@@ -255,6 +404,22 @@ export default function MailsTab({ active }: { active: boolean }) {
                   >
                     Pendiente
                   </button>
+                  <button
+                    title="Marcar como importante (destacado en Gmail)"
+                    onClick={() => aImportante(m.id)}
+                    className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
+                  >
+                    ★
+                  </button>
+                  {!m.noLeido && (
+                    <button
+                      title="Marcar como no leído"
+                      onClick={() => aNoLeido(m.id)}
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    >
+                      No leído
+                    </button>
+                  )}
                   <button
                     title="Ocultar de esta sección (en Gmail queda igual)"
                     onClick={() => accion(m.id, ocultarMailApp)}
@@ -280,7 +445,7 @@ export default function MailsTab({ active }: { active: boolean }) {
         {nextToken && (
           <div className="text-center mt-4">
             <button
-              onClick={() => cargar({ pageToken: nextToken, append: true })}
+              onClick={() => cargar({ vista, busqueda, pageToken: nextToken, append: true })}
               disabled={loading}
               className="px-4 py-2 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
@@ -292,7 +457,7 @@ export default function MailsTab({ active }: { active: boolean }) {
 
       {/* Detalle del mail */}
       {(detalle || detalleLoading) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetalle(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={cerrarDetalle}>
           <div
             className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}
@@ -308,28 +473,55 @@ export default function MailsTab({ active }: { active: boolean }) {
                       {detalle.remitente} &lt;{detalle.remitenteEmail}&gt; · {fmtFecha(detalle.fecha)}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setDetalle(null)}
-                    className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0"
-                  >
+                  <button onClick={cerrarDetalle} className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0">
                     ×
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {detalle.html ? (
-                    <iframe sandbox="" srcDoc={detalle.html} className="w-full h-[55vh] border-0" title="Contenido del mail" />
+                    <iframe sandbox="" srcDoc={detalle.html} className="w-full h-[50vh] border-0" title="Contenido del mail" />
                   ) : (
                     <pre className="text-sm text-gray-800 whitespace-pre-wrap p-5 font-sans">
                       {detalle.texto || '(sin contenido)'}
                     </pre>
                   )}
                 </div>
-                <div className="px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+                {detalle.adjuntos.length > 0 && (
+                  <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap gap-2">
+                    {detalle.adjuntos.map(adj => (
+                      <button
+                        key={adj.attachmentId}
+                        onClick={() => bajarAdjunto(detalle.id, adj)}
+                        disabled={descargando === adj.attachmentId}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 text-gray-700"
+                      >
+                        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        {descargando === adj.attachmentId ? 'Descargando...' : `${adj.filename} (${fmtBytes(adj.sizeBytes)})`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="px-5 py-3 border-t border-gray-200 flex flex-wrap gap-2 justify-end">
                   <button
                     onClick={() => aPendiente(detalle)}
                     className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"
                   >
                     Pasar a pendientes
+                  </button>
+                  <button
+                    onClick={() => aImportante(detalle.id)}
+                    className="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200"
+                  >
+                    ★ Importante
+                  </button>
+                  <button
+                    onClick={() => aNoLeido(detalle.id)}
+                    disabled={detalleNoLeido}
+                    className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+                  >
+                    {detalleNoLeido ? 'Quedó no leído' : 'Marcar no leído'}
                   </button>
                   <button
                     onClick={() => accion(detalle.id, ocultarMailApp)}
@@ -346,6 +538,76 @@ export default function MailsTab({ active }: { active: boolean }) {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Nuevo correo */}
+      {composeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Nuevo correo</h3>
+              <button onClick={cerrarCompose} className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+            </div>
+            <div className="p-5 space-y-3 overflow-y-auto">
+              <input
+                type="email"
+                value={composePara}
+                onChange={e => setComposePara(e.target.value)}
+                placeholder="Para (email del destinatario)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
+              />
+              <input
+                type="text"
+                value={composeAsunto}
+                onChange={e => setComposeAsunto(e.target.value)}
+                placeholder="Asunto"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400"
+              />
+              <textarea
+                value={composeCuerpo}
+                onChange={e => setComposeCuerpo(e.target.value)}
+                placeholder="Escribí el mensaje..."
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-magenta-400 resize-y"
+              />
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-700">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                  Adjuntar archivos
+                  <input type="file" multiple onChange={agregarAdjuntosCompose} className="hidden" />
+                </label>
+                {composeAdjuntos.map((a, i) => (
+                  <span key={i} className="inline-flex items-center gap-2 px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-full text-gray-700">
+                    {a.filename}
+                    <button
+                      onClick={() => setComposeAdjuntos(prev => prev.filter((_, j) => j !== i))}
+                      className="text-gray-400 hover:text-gray-700 font-bold"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              {composeError && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{composeError}</p>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+              <button onClick={cerrarCompose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancelar
+              </button>
+              <button
+                onClick={enviarCompose}
+                disabled={composeEnviando}
+                className="px-5 py-2 text-sm font-semibold bg-magenta-600 text-white rounded-lg hover:bg-magenta-700 disabled:opacity-50"
+              >
+                {composeEnviando ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

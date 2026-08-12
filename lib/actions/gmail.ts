@@ -6,10 +6,15 @@ import { guardarTodos } from '@/app/(admin)/notas/actions'
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-export type VistaMails = 'inbox' | 'pedidos' | 'cristian' | 'soporte'
+export type VistaMails = 'inbox' | 'basecamp' | 'cristian' | 'soporte' | 'pedidos' | 'enviados'
 
 const CRISTIAN = 'cristian@gocuotas.com'
 const SOPORTE_GOCELULAR = 'gocuotasprod@cloud.trustonic.com'
+const BASECAMP = 'app.basecamp.com'
+// Digests de Basecamp que no son asignaciones ni conversaciones
+const BASECAMP_DIGESTS = '{subject:"latest activity" subject:"here are your tasks"}'
+// Cierres de lote SPS de Payway: se archivan solos, no sirven
+const SPS_QUERY = 'from:ayuda-ventasonline@payway.com.ar subject:"SPS - Resultado Cierre Lote"'
 
 export interface MailResumen {
   id: string
@@ -23,6 +28,13 @@ export interface MailResumen {
   noLeido: boolean
 }
 
+export interface AdjuntoInfo {
+  attachmentId: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export interface MailDetalle {
   id: string
   remitente: string
@@ -32,6 +44,7 @@ export interface MailDetalle {
   fecha: string
   html: string | null
   texto: string | null
+  adjuntos: AdjuntoInfo[]
 }
 
 interface GmailHeader {
@@ -41,8 +54,26 @@ interface GmailHeader {
 
 interface GmailPart {
   mimeType?: string
-  body?: { data?: string }
+  filename?: string
+  body?: { data?: string; attachmentId?: string; size?: number }
   parts?: GmailPart[]
+}
+
+function extraerAdjuntos(part: GmailPart): AdjuntoInfo[] {
+  const out: AdjuntoInfo[] = []
+  const walk = (p: GmailPart) => {
+    if (p.filename && p.body?.attachmentId) {
+      out.push({
+        attachmentId: p.body.attachmentId,
+        filename: p.filename,
+        mimeType: p.mimeType ?? 'application/octet-stream',
+        sizeBytes: p.body.size ?? 0,
+      })
+    }
+    for (const child of p.parts ?? []) walk(child)
+  }
+  walk(part)
+  return out
 }
 
 function parseFrom(from: string): { nombre: string; email: string } {
@@ -112,18 +143,45 @@ export async function ocultarMailApp(id: string): Promise<{ ok?: boolean; error?
 function buildQuery(vista: VistaMails, busqueda?: string): string {
   const partes: string[] = []
   if (vista === 'inbox') {
-    // Bandeja limpia: el soporte Trustonic va a su propia vista, y de
-    // Basecamp solo quedan asignaciones/menciones (fuera los digests)
-    partes.push('in:inbox')
-    partes.push(`-from:${SOPORTE_GOCELULAR}`)
-    partes.push('-(from:app.basecamp.com {subject:"latest activity" subject:"here are your tasks"})')
+    if (busqueda?.trim()) {
+      // Con busqueda se rastrea TODA la bandeja de entrada (leidos incluidos)
+      partes.push('in:inbox')
+    } else {
+      // Sin busqueda: solo no leidos (inbox zero). Soporte Trustonic y
+      // Basecamp tienen su propia vista; los cierres SPS se archivan solos
+      partes.push('in:inbox is:unread')
+      partes.push(`-from:${SOPORTE_GOCELULAR}`)
+      partes.push(`-from:${BASECAMP}`)
+      partes.push(`-(${SPS_QUERY})`)
+    }
   }
-  if (vista === 'pedidos') partes.push('in:sent subject:"Pedido GOcelular"')
-  if (vista === 'cristian') partes.push(`(from:${CRISTIAN} OR cc:${CRISTIAN} OR to:${CRISTIAN})`)
+  // Solo asignaciones, menciones y conversaciones (sin digests)
+  if (vista === 'basecamp') partes.push(`from:${BASECAMP} -${BASECAMP_DIGESTS}`)
+  // Solo donde Cristian es el remitente (si esta copiado va a la bandeja)
+  if (vista === 'cristian') partes.push(`from:${CRISTIAN}`)
   // Incluye tambien los ya borrados (papelera) para poder analizar quejas
   if (vista === 'soporte') partes.push(`in:anywhere from:${SOPORTE_GOCELULAR}`)
+  if (vista === 'pedidos') partes.push('in:sent subject:"Pedido GOcelular"')
+  if (vista === 'enviados') partes.push('in:sent')
   if (busqueda?.trim()) partes.push(busqueda.trim())
   return partes.join(' ')
+}
+
+// Archiva en Gmail los cierres de lote SPS de Payway (no sirven).
+// Se dispara al abrir la bandeja; batchModify saca la etiqueta INBOX.
+export async function archivarSpsAutomatico(): Promise<{ archivados: number }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { archivados: 0 }
+  const params = new URLSearchParams({ maxResults: '100', q: `in:inbox ${SPS_QUERY}` })
+  const res = await gmailFetch(token, `/messages?${params}`)
+  if (!res.ok) return { archivados: 0 }
+  const ids: string[] = ((await res.json()).messages ?? []).map((m: { id: string }) => m.id)
+  if (ids.length === 0) return { archivados: 0 }
+  await gmailFetch(token, `/messages/batchModify`, {
+    method: 'POST',
+    body: JSON.stringify({ ids, removeLabelIds: ['INBOX'] }),
+  })
+  return { archivados: ids.length }
 }
 
 export async function listarMails(input?: {
@@ -215,8 +273,23 @@ export async function leerMail(id: string): Promise<{ mail?: MailDetalle; error?
       fecha: header(headers, 'Date'),
       html,
       texto,
+      adjuntos: extraerAdjuntos(msg.payload ?? {}),
     },
   }
+}
+
+// Devuelve el contenido del adjunto en base64 para descargarlo en el cliente
+export async function descargarAdjunto(
+  mensajeId: string,
+  attachmentId: string
+): Promise<{ base64?: string; error?: string }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+  const res = await gmailFetch(token, `/messages/${mensajeId}/attachments/${attachmentId}`)
+  if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  const data = await res.json()
+  // Gmail devuelve base64url; se normaliza a base64 estandar
+  return { base64: Buffer.from(data.data ?? '', 'base64url').toString('base64') }
 }
 
 // A papelera (recuperable 30 días) — nunca borrado permanente
@@ -237,6 +310,102 @@ export async function archivarMail(id: string): Promise<{ ok?: boolean; error?: 
     body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
   })
   if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  return { ok: true }
+}
+
+// Destaca y marca importante en Gmail
+export async function marcarImportante(id: string): Promise<{ ok?: boolean; error?: string }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+  const res = await gmailFetch(token, `/messages/${id}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: ['IMPORTANT', 'STARRED'] }),
+  })
+  if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  return { ok: true }
+}
+
+// Vuelve a marcar como no leido (reaparece en la bandeja)
+export async function marcarNoLeido(id: string): Promise<{ ok?: boolean; error?: string }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+  const res = await gmailFetch(token, `/messages/${id}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: ['UNREAD'] }),
+  })
+  if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  return { ok: true }
+}
+
+export interface AdjuntoNuevo {
+  filename: string
+  mimeType: string
+  base64: string
+}
+
+// Envia un correo nuevo desde la cuenta conectada, con adjuntos opcionales
+export async function enviarMailNuevo(input: {
+  para: string
+  asunto: string
+  cuerpo: string
+  adjuntos?: AdjuntoNuevo[]
+}): Promise<{ ok?: boolean; error?: string }> {
+  const { para, asunto, cuerpo, adjuntos = [] } = input
+  if (!para.includes('@')) return { error: 'Destinatario inválido' }
+
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+
+  const html = cuerpo.replace(/\n/g, '<br>')
+  const subjectB64 = Buffer.from(asunto).toString('base64')
+
+  let mime: string
+  if (adjuntos.length === 0) {
+    mime = [
+      `To: ${para}`,
+      `Subject: =?UTF-8?B?${subjectB64}?=`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(html).toString('base64'),
+    ].join('\r\n')
+  } else {
+    const boundary = `----gocelular${Date.now()}`
+    const partes = [
+      `To: ${para}`,
+      `Subject: =?UTF-8?B?${subjectB64}?=`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(html).toString('base64'),
+    ]
+    for (const adj of adjuntos) {
+      partes.push(
+        `--${boundary}`,
+        `Content-Type: ${adj.mimeType}; name="${adj.filename}"`,
+        `Content-Disposition: attachment; filename="${adj.filename}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        adj.base64
+      )
+    }
+    partes.push(`--${boundary}--`)
+    mime = partes.join('\r\n')
+  }
+
+  const res = await gmailFetch(token, `/messages/send`, {
+    method: 'POST',
+    body: JSON.stringify({ raw: Buffer.from(mime).toString('base64url') }),
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    return { error: `Gmail respondió ${res.status}: ${detail.slice(0, 150)}` }
+  }
   return { ok: true }
 }
 

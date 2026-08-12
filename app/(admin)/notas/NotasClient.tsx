@@ -182,9 +182,17 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Notas y Pendientes</h1>
       <p className="text-sm text-gray-500 mb-4">Tu espacio de trabajo personal</p>
 
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex border-b border-gray-200 mb-4">
         {(['todo', 'notas', 'guardadas', 'mails'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === t
+                ? 'border-magenta-600 text-magenta-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
             {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : t === 'guardadas' ? `Guardadas (${guardadas.length})` : 'Mails'}
           </button>
         ))}

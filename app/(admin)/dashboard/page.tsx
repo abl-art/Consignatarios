@@ -7,6 +7,7 @@ import { getMejorPrecio, getInventarioByCategoria } from '@/lib/actions/compras'
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
+import SoporteCard from './SoporteCard'
 import ConversionChart from './ConversionChart'
 import GeografiaVentas from './GeografiaVentas'
 import QueVendemos from './QueVendemos'
@@ -236,6 +237,9 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Soporte: top reclamos de clientes (mails Knox/Trustonic) */}
+      <SoporteCard />
 
       {/* Ventas históricas */}
       <div className="mt-6">
