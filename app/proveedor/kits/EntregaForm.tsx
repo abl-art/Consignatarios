@@ -73,29 +73,46 @@ export default function EntregaForm({
       const wb = XLSX.read(buf)
       const rows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })
 
+      // Estructura del archivo: SKU | EAN | CANTIDAD. Si hay fila de
+      // encabezado se usan sus posiciones; si no, columnas 1 y 3.
+      let colSku = 0
+      let colCantidad = 2
+      let inicio = 0
+      for (let i = 0; i < Math.min(rows.length, 5); i++) {
+        const celdas = (rows[i] ?? []).map(c => String(c ?? '').trim().toLowerCase())
+        const iSku = celdas.findIndex(c => c === 'sku' || c === 'codigo' || c === 'código')
+        const iCant = celdas.findIndex(c => c.startsWith('cant'))
+        if (iSku >= 0 && iCant >= 0) {
+          colSku = iSku
+          colCantidad = iCant
+          inicio = i + 1
+          break
+        }
+      }
+
       const nuevas: Record<string, number> = {}
       const noMatcheadas: string[] = []
-      for (const row of rows) {
+      for (const row of rows.slice(inicio)) {
         if (!Array.isArray(row) || row.length === 0) continue
-        const celdas = row.map(c => String(c ?? '').trim())
-        const kit = productos.find(p =>
-          celdas.some(c => c.toLowerCase() === p.codigo.toLowerCase() || c.toLowerCase() === p.nombre.toLowerCase())
-        )
+        const sku = String(row[colSku] ?? '').trim()
+        if (!sku) continue
+        const kit = productos.find(p => p.codigo.toLowerCase() === sku.toLowerCase())
         if (!kit) {
-          const texto = celdas.join(' ').toLowerCase()
-          if (texto.includes('ks-') || texto.includes('kit ')) noMatcheadas.push(celdas.filter(Boolean).join(' | '))
+          noMatcheadas.push(row.map(c => String(c ?? '').trim()).filter(Boolean).join(' | '))
           continue
         }
-        const cantidad = row
-          .map(c => (typeof c === 'number' ? c : Number(String(c ?? '').trim())))
-          .find(n => Number.isInteger(n) && n > 0)
-        if (cantidad) nuevas[kit.id] = (nuevas[kit.id] ?? 0) + cantidad
+        const cantidad = Number(String(row[colCantidad] ?? '').trim())
+        if (Number.isInteger(cantidad) && cantidad > 0) {
+          nuevas[kit.id] = (nuevas[kit.id] ?? 0) + cantidad
+        } else {
+          noMatcheadas.push(`${sku} (cantidad inválida: ${String(row[colCantidad] ?? 'vacía')})`)
+        }
       }
 
       if (Object.keys(nuevas).length === 0) {
         reset()
         setError(
-          'No se encontraron kits en el archivo. Cada fila tiene que tener el SKU (ej: KS-MOTO-G06) o el nombre exacto del kit, y la cantidad.'
+          'No se encontraron kits en el archivo. La estructura tiene que ser: SKU (ej: KS-MOTO-G06), EAN y CANTIDAD.'
         )
         return
       }
@@ -167,7 +184,7 @@ export default function EntregaForm({
                 </div>
                 <div className="p-5">
                   <p className="text-sm text-gray-600 mb-4">
-                    Subí el Excel de la entrega. Cada fila con el SKU o nombre del kit y la cantidad.
+                    Subí el Excel de la entrega con la estructura <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">SKU · EAN · CANTIDAD</span>.
                     El archivo queda adjunto al pedido para informarlo a GOcelular / Andreani.
                   </p>
                   <label className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-gray-400 transition-colors">
