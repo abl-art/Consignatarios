@@ -1548,10 +1548,15 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
 
   async function disparar() {
     setEnviando(true)
-    const { informarCompraGocelular } = await import('@/lib/actions/purchase-webhook')
-    await informarCompraGocelular(pedidoId)
-    setEnviando(false)
-    router.refresh()
+    try {
+      const { informarCompraGocelular } = await import('@/lib/actions/purchase-webhook')
+      await informarCompraGocelular(pedidoId)
+    } catch {
+      // el estado persistido en el pedido (via router.refresh) mostrara el error si lo hubo
+    } finally {
+      setEnviando(false)
+      router.refresh()
+    }
   }
 
   const estado = gocelular?.estado ?? 'no_enviado'
@@ -1594,7 +1599,7 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
         )}
       </div>
       {expandido && gocelular && (
-        <div className="mt-1.5 text-[11px] space-y-0.5">
+        <div className="mt-1.5 text-[11px] space-y-0.5 max-h-40 overflow-y-auto">
           {estado === 'informado' && (
             <p className="text-green-700">
               purchase_id: <span className="font-mono">{gocelular.purchaseId}</span>
@@ -1602,13 +1607,13 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
               {gocelular.batches?.map(b => ` · ${b.units} ${b.type === 'device' ? 'celulares' : 'accesorios'}`).join('')}
             </p>
           )}
-          {(gocelular.errores ?? []).map((e, i) => <p key={i} className="text-red-600">• {e}</p>)}
+          {(gocelular.errores ?? []).map((e, i) => <p key={`${i}-${e.slice(0, 40)}`} className="text-red-600">• {e}</p>)}
           {(gocelular.pendingAliases ?? []).length > 0 && (
             <p className="text-amber-600">
               SKUs pendientes de alias (GOcelular los resuelve, no requiere acción): {gocelular.pendingAliases!.map(a => a.sku).join(', ')}
             </p>
           )}
-          {(gocelular.warnings ?? []).map((w, i) => <p key={i} className="text-amber-600">• {w}</p>)}
+          {(gocelular.warnings ?? []).map((w, i) => <p key={`${i}-${w.slice(0, 40)}`} className="text-amber-600">• {w}</p>)}
         </div>
       )}
     </div>
