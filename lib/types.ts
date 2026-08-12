@@ -162,6 +162,17 @@ export interface ClienteMayorista {
   direccion_entrega: string | null
   transporte: string | null
   limite_cuenta_corriente: number | null
+  plazo_dias: number
+  entrega_nombre: string | null
+  entrega_dni: string | null
+  entrega_telefono: string | null
+  entrega_email: string | null
+  entrega_calle: string | null
+  entrega_numero: string | null
+  entrega_piso_depto: string | null
+  entrega_localidad: string | null
+  entrega_cp: string | null
+  entrega_provincia: string | null
   created_at: string
 }
 

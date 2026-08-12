@@ -8,6 +8,19 @@ import { verificarLimiteCC } from './pagos-mayoristas'
 // Types
 // ---------------------------------------------------------------------------
 
+export interface GocelularVentaEstado {
+  estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
+  saleId?: string
+  faStatus?: string
+  dispatchId?: string
+  numeroOrdenExterna?: string
+  enviadoAt?: string
+  warnings?: string[]
+  errores?: string[]
+  codigoError?: string
+  payloadEnviado?: string
+}
+
 export interface ProformaItem {
   id?: string
   producto_id: string
@@ -34,6 +47,8 @@ export interface Proforma {
   total_iva: number
   total_con_iva: number
   notas: string | null
+  origen: 'stock_local' | 'andreani_wh'
+  gocelular: GocelularVentaEstado | null
   created_at: string
 }
 
