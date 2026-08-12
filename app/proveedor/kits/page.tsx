@@ -67,6 +67,15 @@ export default async function ProveedorKitsPage({
       </div>
 
       <div className="max-w-5xl mx-auto p-6">
+        {/* Registrar entrega */}
+        <div className="flex justify-end mb-4">
+          <EntregaForm
+            token={searchParams.token!}
+            productos={kits.map(p => ({ id: p.id, nombre: p.nombre, codigo: p.codigo }))}
+            precios={preciosMil200}
+          />
+        </div>
+
         {/* Kits GOcelular: en transito + stock Andreani */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
@@ -134,13 +143,6 @@ export default async function ProveedorKitsPage({
           &quot;Stock Andreani&quot; = kits ingresados al warehouse menos los despachados.
           &quot;Reponer&quot; = stock Andreani + en tránsito menor a {UMBRAL_REPONER} unidades.
         </p>
-
-        {/* Formulario de entrega */}
-        <EntregaForm
-          token={searchParams.token!}
-          productos={kits.map(p => ({ id: p.id, nombre: p.nombre, codigo: p.codigo }))}
-          precios={preciosMil200}
-        />
       </div>
     </div>
   )

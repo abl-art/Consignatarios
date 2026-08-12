@@ -30,27 +30,37 @@ export default function EntregaForm({
   const [exito, setExito] = useState(false)
   const [excelBase64, setExcelBase64] = useState<string | null>(null)
   const [excelNombre, setExcelNombre] = useState<string | null>(null)
-  const [excelAviso, setExcelAviso] = useState<string | null>(null)
+  const [sinMatch, setSinMatch] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
 
-  const itemsConCantidad = productos.filter(p => (cantidades[p.id] ?? 0) > 0)
-  const totalKits = Object.values(cantidades).reduce((s, q) => s + (q > 0 ? q : 0), 0)
-  const totalImporte = itemsConCantidad.reduce(
+  const itemsLeidos = productos.filter(p => (cantidades[p.id] ?? 0) > 0)
+  const totalKits = itemsLeidos.reduce((s, p) => s + (cantidades[p.id] ?? 0), 0)
+  const totalImporte = itemsLeidos.reduce(
     (s, p) => s + (cantidades[p.id] ?? 0) * (precios[p.id] ?? PRECIO_DEFAULT),
     0
   )
+  const leido = itemsLeidos.length > 0
 
-  function limpiarExcel() {
+  function reset() {
+    setCantidades({})
     setExcelBase64(null)
     setExcelNombre(null)
-    setExcelAviso(null)
+    setSinMatch([])
+    setError(null)
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  // Lee el Excel, guarda el archivo (base64) y precarga cantidades matcheando
+  function cerrar() {
+    setOpen(false)
+    reset()
+  }
+
+  // Lee el Excel: guarda el archivo (base64) y arma las cantidades matcheando
   // cada fila contra el SKU o el nombre del kit
   async function handleExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setError(null)
     try {
       const buf = await file.arrayBuffer()
 
@@ -59,14 +69,12 @@ export default function EntregaForm({
       for (let i = 0; i < bytes.length; i += 0x8000) {
         b64 += String.fromCharCode(...Array.from(bytes.subarray(i, i + 0x8000)))
       }
-      setExcelBase64(btoa(b64))
-      setExcelNombre(file.name)
 
       const wb = XLSX.read(buf)
       const rows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })
 
       const nuevas: Record<string, number> = {}
-      const sinMatch: string[] = []
+      const noMatcheadas: string[] = []
       for (const row of rows) {
         if (!Array.isArray(row) || row.length === 0) continue
         const celdas = row.map(c => String(c ?? '').trim())
@@ -74,9 +82,8 @@ export default function EntregaForm({
           celdas.some(c => c.toLowerCase() === p.codigo.toLowerCase() || c.toLowerCase() === p.nombre.toLowerCase())
         )
         if (!kit) {
-          // Solo avisar filas que parecen datos (tienen algun texto con KS- o "kit")
           const texto = celdas.join(' ').toLowerCase()
-          if (texto.includes('ks-') || texto.includes('kit ')) sinMatch.push(celdas.filter(Boolean).join(' | '))
+          if (texto.includes('ks-') || texto.includes('kit ')) noMatcheadas.push(celdas.filter(Boolean).join(' | '))
           continue
         }
         const cantidad = row
@@ -86,30 +93,30 @@ export default function EntregaForm({
       }
 
       if (Object.keys(nuevas).length === 0) {
-        setExcelAviso(
-          'No se encontraron kits en el Excel. Verificá que cada fila tenga el SKU (ej: KS-MOTO-G06) o el nombre exacto del kit y la cantidad. El archivo queda adjunto igual — cargá las cantidades a mano.'
+        reset()
+        setError(
+          'No se encontraron kits en el archivo. Cada fila tiene que tener el SKU (ej: KS-MOTO-G06) o el nombre exacto del kit, y la cantidad.'
         )
-      } else {
-        setCantidades(nuevas)
-        setExcelAviso(
-          `Se cargaron ${Object.values(nuevas).reduce((s, n) => s + n, 0)} kits desde el Excel. Revisá las cantidades antes de confirmar.` +
-            (sinMatch.length > 0 ? ` Filas sin match: ${sinMatch.slice(0, 3).join(' / ')}` : '')
-        )
+        return
       }
+
+      setExcelBase64(btoa(b64))
+      setExcelNombre(file.name)
+      setCantidades(nuevas)
+      setSinMatch(noMatcheadas)
     } catch {
-      limpiarExcel()
-      setExcelAviso('No se pudo leer el archivo. Tiene que ser un Excel (.xlsx / .xls) o CSV.')
+      reset()
+      setError('No se pudo leer el archivo. Tiene que ser un Excel (.xlsx / .xls) o CSV.')
     }
   }
 
   async function handleSubmit() {
     if (totalKits === 0) return
-    if (!confirm(`¿Confirmar entrega de ${totalKits} kits?`)) return
 
     setEnviando(true)
     const result = await registrarEntregaKits(
       token,
-      itemsConCantidad.map(p => ({
+      itemsLeidos.map(p => ({
         productoId: p.id,
         productoNombre: p.nombre,
         productoCodigo: p.codigo,
@@ -121,115 +128,134 @@ export default function EntregaForm({
 
     if (result.ok) {
       setExito(true)
-      setCantidades({})
-      limpiarExcel()
       setTimeout(() => {
         setExito(false)
-        setOpen(false)
+        cerrar()
         router.refresh()
-      }, 2000)
+      }, 1800)
     } else {
       alert(result.error ?? 'Error al registrar')
     }
   }
 
-  if (!open) {
-    return (
+  return (
+    <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
+        className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors"
       >
-        <span className="text-lg leading-none">+</span> Registrar Entrega
+        + Registrar Entrega
       </button>
-    )
-  }
 
-  return (
-    <div className="bg-white border border-green-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 bg-green-50 border-b border-green-200 flex items-center justify-between">
-        <h3 className="font-semibold text-green-900">Registrar entrega</h3>
-        <button
-          onClick={() => { setOpen(false); setCantidades({}); limpiarExcel() }}
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          Cancelar
-        </button>
-      </div>
-
-      {exito ? (
-        <div className="p-8 text-center">
-          <svg className="w-10 h-10 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-green-700 font-semibold">Entrega registrada</p>
-        </div>
-      ) : (
-        <>
-          {/* Carga de Excel */}
-          <div className="p-4 border-b border-gray-100">
-            <p className="text-xs text-gray-500 mb-2">
-              Subí el Excel de la entrega (queda adjunto al pedido para informarlo a GOcelular / Andreani).
-              Formato: una fila por kit con SKU o nombre y cantidad.
-            </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleExcel}
-                className="text-xs text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-lg file:bg-green-100 file:text-green-700 file:font-semibold file:text-xs hover:file:bg-green-200 file:cursor-pointer"
-              />
-              {excelNombre && (
-                <span className="inline-flex items-center gap-2 px-2.5 py-1 text-xs bg-green-50 border border-green-200 rounded-full text-green-800">
-                  {excelNombre}
-                  <button onClick={limpiarExcel} className="text-green-600 hover:text-green-900 font-bold">×</button>
-                </span>
-              )}
-            </div>
-            {excelAviso && (
-              <p className="text-xs mt-2 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">{excelAviso}</p>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-lg overflow-hidden">
+            {exito ? (
+              <div className="p-10 text-center">
+                <svg className="w-10 h-10 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-gray-900 font-semibold">Entrega registrada</p>
+                <p className="text-xs text-gray-500 mt-1">Los kits quedan en tránsito al WH de Andreani</p>
+              </div>
+            ) : !leido ? (
+              /* Paso 1: seleccionar archivo */
+              <>
+                <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900">Registrar entrega</h3>
+                  <button onClick={cerrar} className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+                </div>
+                <div className="p-5">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Subí el Excel de la entrega. Cada fila con el SKU o nombre del kit y la cantidad.
+                    El archivo queda adjunto al pedido para informarlo a GOcelular / Andreani.
+                  </p>
+                  <label className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-gray-400 transition-colors">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleExcel}
+                      className="hidden"
+                    />
+                    <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p className="text-sm font-medium text-gray-700">Seleccionar archivo</p>
+                    <p className="text-xs text-gray-400 mt-1">Excel (.xlsx, .xls) o CSV</p>
+                  </label>
+                  {error && (
+                    <p className="text-xs mt-3 text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Paso 2: confirmar lo leido */
+              <>
+                <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Confirmar entrega</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{excelNombre}</p>
+                  </div>
+                  <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700">Cambiar archivo</button>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-gray-500 mb-3">Revisá que el archivo se haya leído bien:</p>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Kit</th>
+                          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">SKU</th>
+                          <th className="text-right px-4 py-2 text-xs font-medium text-gray-500">Cantidad</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {itemsLeidos.map(p => (
+                          <tr key={p.id}>
+                            <td className="px-4 py-2 text-gray-900">{p.nombre}</td>
+                            <td className="px-4 py-2 font-mono text-xs text-gray-500">{p.codigo}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-900">{cantidades[p.id]}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50 border-t border-gray-200">
+                        <tr className="font-semibold text-gray-900">
+                          <td className="px-4 py-2">Total</td>
+                          <td className="px-4 py-2" />
+                          <td className="px-4 py-2 text-right">{totalKits}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <div className="flex justify-between items-center text-sm text-gray-600 mb-3">
+                    <span>Importe total</span>
+                    <span className="font-semibold text-gray-900">${totalImporte.toLocaleString('es-AR')}</span>
+                  </div>
+                  {sinMatch.length > 0 && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      Filas del archivo sin match (no se incluyen): {sinMatch.slice(0, 3).join(' / ')}
+                      {sinMatch.length > 3 ? ` y ${sinMatch.length - 3} más` : ''}
+                    </p>
+                  )}
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={cerrar} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={enviando}
+                      className="px-5 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                    >
+                      {enviando ? 'Registrando...' : `Confirmar entrega (${totalKits} kits)`}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
-
-          <div className="p-4">
-            <p className="text-xs text-gray-500 mb-3">Cantidad de kits entregados por modelo:</p>
-            <div className="space-y-2">
-              {productos.map(p => (
-                <div key={p.id} className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={0}
-                    value={cantidades[p.id] || ''}
-                    onChange={e => setCantidades(prev => ({ ...prev, [p.id]: parseInt(e.target.value) || 0 }))}
-                    placeholder="0"
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm text-right font-mono"
-                  />
-                  <span className="text-sm text-gray-700">{p.nombre}</span>
-                  <span className="text-xs text-gray-400 font-mono">{p.codigo}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {totalKits > 0 && (
-            <div className="px-4 pb-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 flex justify-between items-center">
-                <span className="text-sm text-green-800">Total: <strong>{totalKits} kits</strong></span>
-                <span className="text-sm text-green-800 font-semibold">
-                  ${totalImporte.toLocaleString('es-AR')}
-                </span>
-              </div>
-              <button
-                onClick={handleSubmit}
-                disabled={enviando}
-                className="w-full py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-              >
-                {enviando ? 'Registrando...' : 'Confirmar entrega'}
-              </button>
-            </div>
-          )}
-        </>
+        </div>
       )}
-    </div>
+    </>
   )
 }
