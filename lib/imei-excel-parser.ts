@@ -29,7 +29,7 @@ function aMatriz(data: string): string[][] {
   if (esBase64Xlsx(data)) {
     const wb = XLSX.read(data, { type: 'base64' })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, defval: '' })
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: '' })
     return rows.map(r => r.map(c => String(c ?? '').trim()))
   }
   // Legacy: texto plano, separador ; o , o tab
@@ -58,7 +58,7 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
       const v = (row[col] ?? '').replace(/\s/g, '')
       if (!v) continue
       noVacias++
-      if (/^\d{15}$/.test(v)) imeis++
+      if (/^\d{15}$/.test(v) && luhnValido(v)) imeis++
       else if (/^\d{8,14}$/.test(v)) eans++
       else textos++
       if (skusConocidos.has(v)) skuMatch++
@@ -85,22 +85,36 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
   const errores: string[] = []
   const porSku = new Map<string, { ean: string | null; imeis: string[] }>()
   const vistos = new Set<string>()
+  let ultimoSku = ''
 
   for (const row of matriz) {
     const rawImei = (row[colImei.col] ?? '').replace(/\s/g, '')
     if (!/^\d{15}$/.test(rawImei)) continue // fila de encabezado o vacia
-    const sku = (row[colSku.col] ?? '').trim()
-    const ean = colEan ? (row[colEan.col] ?? '').replace(/\s/g, '') || null : null
 
     if (!luhnValido(rawImei)) {
       errores.push(`IMEI con dígito verificador inválido: ${rawImei}`)
       continue
     }
+
+    // Manejo de SKU con forward-fill para celdas merged
+    const skuRaw = (row[colSku.col] ?? '')
+    const skuStripped = skuRaw.replace(/\s/g, '')
+    let sku: string
+    if (skuStripped) {
+      sku = skusConocidos.has(skuStripped) ? skuStripped : skuRaw.trim()
+      ultimoSku = sku
+    } else {
+      sku = ultimoSku
+    }
+
+    const ean = colEan ? (row[colEan.col] ?? '').replace(/\s/g, '') || null : null
+
     if (vistos.has(rawImei)) {
       errores.push(`IMEI duplicado en el archivo: ${rawImei}`)
       continue
     }
     vistos.add(rawImei)
+
     if (!sku) {
       errores.push(`IMEI ${rawImei} sin SKU en su fila`)
       continue

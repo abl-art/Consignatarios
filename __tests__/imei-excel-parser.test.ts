@@ -54,6 +54,7 @@ describe('parseImeiExcel', () => {
   it('reporta IMEIs con Luhn invalido', () => {
     const b64 = xlsxB64([
       ['SKU', 'IMEI', 'EAN'],
+      ['PB970105AR', IMEI_A, '7790894902032'],
       ['PB970105AR', '354581531507665', '7790894902032'],
     ])
     const r = parseImeiExcel(b64, skus)
@@ -73,6 +74,42 @@ describe('parseImeiExcel', () => {
     const csv = `sku;ean;imei\nPB970105AR;7790894902032;${IMEI_A}`
     const r = parseImeiExcel(csv, skus)
     expect(r.errores).toEqual([])
+    expect(r.lines[0].imeis).toEqual([IMEI_A])
+  })
+
+  it('parsea celdas numericas sin corrupcion en notacion cientifica', () => {
+    const b64 = xlsxB64([
+      ['SKU', 'EAN', 'IMEI'],
+      ['PB970105AR', 7790894902032, 354581531507664],
+    ])
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores).toEqual([])
+    expect(r.lines[0].ean).toBe('7790894902032')
+    expect(r.lines[0].imeis).toEqual(['354581531507664'])
+  })
+
+  it('maneja celdas SKU merged con forward-fill', () => {
+    const b64 = xlsxB64([
+      ['SKU', 'IMEI'],
+      ['PB970105AR', IMEI_A],
+      ['', IMEI_B],
+    ])
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores).toEqual([])
+    expect(r.lines).toHaveLength(1)
+    expect(r.lines[0].sku).toBe('PB970105AR')
+    expect(r.lines[0].imeis).toEqual([IMEI_A, IMEI_B])
+  })
+
+  it('reporta IMEI duplicado', () => {
+    const b64 = xlsxB64([
+      ['SKU', 'IMEI'],
+      ['PB970105AR', IMEI_A],
+      ['PB970105AR', IMEI_A],
+    ])
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores.some(e => e.includes('duplicado'))).toBe(true)
+    expect(r.lines[0].imeis).toHaveLength(1)
     expect(r.lines[0].imeis).toEqual([IMEI_A])
   })
 })
