@@ -13,6 +13,11 @@ export interface SnapshotEtapa {
   maxHoras: number | null
 }
 
+export interface ModeloCantidad {
+  modelo: string
+  cantidad: number
+}
+
 export interface WarehouseSnapshot {
   enCola: SnapshotEtapa & { vencidos: number }
   pendientesPicking: SnapshotEtapa
@@ -26,6 +31,11 @@ export interface WarehouseSnapshot {
     ingresados: number
     enviadosWh: number
     expedidos: number
+  }
+  modelos: {
+    enCola: ModeloCantidad[]
+    pendientesPicking: ModeloCantidad[]
+    pickeadosHoy: ModeloCantidad[]
   }
 }
 
@@ -70,6 +80,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
       pendientesPicking: { cantidad: 0, promHoras: null, maxHoras: null },
       picking: { hoy: 0, ultimaHora: 0, ultimoHaceMin: null, atascados: 0 },
       hoyFlujos: { ingresados: 0, enviadosWh: 0, expedidos: 0 },
+      modelos: { enCola: [], pendientesPicking: [], pickeadosHoy: [] },
     },
     counts: { enCola: 0, enviado: 0, picking: 0, expedido: 0, cancelado: 0, requiereAtencion: 0 },
     etapas: {
@@ -87,7 +98,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
 
   const client = await pool.connect()
   try {
-    const [pedidosRes, serieRes, snapshotRes, packedRes, flujosRes] = await Promise.all([
+    const [pedidosRes, serieRes, snapshotRes, packedRes, modelosRes, modelosPackedRes, flujosRes] = await Promise.all([
       client.query<{
         estado: string
         created_at: Date
@@ -148,6 +159,33 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
            ROUND((EXTRACT(EPOCH FROM (now() - MAX(created_at))) / 60)::numeric, 0)::text AS ultimo_hace_min
          FROM andreani_wh_webhook_events
          WHERE tipo = 'pedido'`
+      ),
+      // Modelos por etapa actual: items de los pedidos en cola y enviados
+      client.query<{ grupo: string; modelo: string; cantidad: string }>(
+        `SELECT
+           CASE WHEN p.estado IN ('queued', 'sending') THEN 'cola' ELSE 'sent' END AS grupo,
+           soi.display_name AS modelo,
+           SUM(soi.quantity)::text AS cantidad
+         FROM andreani_wh_pedidos p
+         JOIN store_order_items soi ON soi.order_id = p.store_order_id
+         WHERE p.estado IN ('queued', 'sending', 'sent')
+         GROUP BY 1, 2
+         ORDER BY 1, SUM(soi.quantity) DESC`
+      ),
+      // Modelos pickeados hoy: items de los pedidos con evento packed de hoy
+      client.query<{ modelo: string; cantidad: string }>(
+        `SELECT soi.display_name AS modelo, SUM(soi.quantity)::text AS cantidad
+         FROM (
+           SELECT DISTINCT p.id, p.store_order_id
+           FROM andreani_wh_webhook_events we
+           JOIN andreani_wh_pedidos p ON p.orden_wh = we.payload->>'ordenWh'
+           WHERE we.tipo = 'pedido'
+             AND (we.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+                 = (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+         ) pd
+         JOIN store_order_items soi ON soi.order_id = pd.store_order_id
+         GROUP BY 1
+         ORDER BY SUM(soi.quantity) DESC`
       ),
       // Flujos del día (hora AR): cuántos pedidos avanzaron de etapa hoy
       client.query<{ ingresados: string; enviados_wh: string; expedidos: string }>(
@@ -259,6 +297,15 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
           ingresados: Number(flujosRes.rows[0]?.ingresados ?? 0),
           enviadosWh: Number(flujosRes.rows[0]?.enviados_wh ?? 0),
           expedidos: Number(flujosRes.rows[0]?.expedidos ?? 0),
+        },
+        modelos: {
+          enCola: modelosRes.rows
+            .filter(r => r.grupo === 'cola')
+            .map(r => ({ modelo: r.modelo, cantidad: Number(r.cantidad) })),
+          pendientesPicking: modelosRes.rows
+            .filter(r => r.grupo === 'sent')
+            .map(r => ({ modelo: r.modelo, cantidad: Number(r.cantidad) })),
+          pickeadosHoy: modelosPackedRes.rows.map(r => ({ modelo: r.modelo, cantidad: Number(r.cantidad) })),
         },
       },
       counts,

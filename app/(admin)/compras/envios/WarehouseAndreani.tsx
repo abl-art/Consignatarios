@@ -66,6 +66,22 @@ function formatDuracion(min: number | null): string {
   return h > 0 ? `${d}d ${h}h` : `${d}d`
 }
 
+function ListaModelos({ modelos, borde }: { modelos: { modelo: string; cantidad: number }[]; borde: string }) {
+  if (modelos.length === 0) return null
+  return (
+    <div className={`mt-2 pt-2 border-t ${borde}`}>
+      <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
+        {modelos.map(m => (
+          <div key={m.modelo} className="flex justify-between items-baseline gap-2 text-[11px]">
+            <span className="text-gray-600 truncate">{m.modelo}</span>
+            <span className="font-semibold text-gray-800 tabular-nums shrink-0">{m.cantidad}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const ETAPAS_PIPELINE = [
   { key: 'enCola', label: 'En Cola', sub: 'ingresaron en el período', color: 'bg-gray-100 text-gray-700 border-gray-300' },
   { key: 'enviado', label: 'Enviado', sub: 'enviados al WH en el período', color: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -196,6 +212,7 @@ export default function WarehouseAndreani() {
                     ⚠ {report.snapshot.enCola.vencidos} ya pasaron su hora límite de despacho
                   </p>
                 )}
+                <ListaModelos modelos={report.snapshot.modelos.enCola} borde="border-gray-200" />
               </div>
               <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
                 <p className="text-3xl font-bold text-blue-800">{report.snapshot.pendientesPicking.cantidad}</p>
@@ -211,6 +228,7 @@ export default function WarehouseAndreani() {
                   <span className="text-red-500 font-semibold">−{report.snapshot.picking.hoy}</span>
                   <span className="text-blue-600/80"> pickeados hoy</span>
                 </p>
+                <ListaModelos modelos={report.snapshot.modelos.pendientesPicking} borde="border-blue-200" />
               </div>
               <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
                 <p className="text-3xl font-bold text-amber-800">{report.snapshot.picking.hoy}</p>
@@ -233,6 +251,7 @@ export default function WarehouseAndreani() {
                     ⚠ {report.snapshot.picking.atascados} pickeado{report.snapshot.picking.atascados !== 1 ? 's' : ''} sin expedir hace +1h
                   </p>
                 )}
+                <ListaModelos modelos={report.snapshot.modelos.pickeadosHoy} borde="border-amber-200" />
               </div>
             </div>
           </div>
