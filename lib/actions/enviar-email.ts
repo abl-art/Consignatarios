@@ -66,7 +66,7 @@ export async function enviarPedidoEmail(input: {
 </body>
 </html>`
 
-  const subject = `Nota de Pedido - GOcelular - ${fecha}`
+  const subject = `Pedido GOcelular (${totalUnidades} unidades) - GOserviciosdigitales SAS`
   const mime = [
     `To: ${proveedorEmail}`,
     `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
