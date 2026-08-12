@@ -13,7 +13,8 @@ const PROVEEDOR = {
   email: 'ezecanova@gmail.com',
 }
 
-const KIT_PRECIO = 7000
+// Precio de respaldo si el kit no tiene precio cargado en el catalogo
+const KIT_PRECIO_DEFAULT = 7000
 const KIT_PLAZO = '30, 60 y 90 días'
 
 interface EntregaItem {
@@ -23,11 +24,24 @@ interface EntregaItem {
   cantidad: number
 }
 
-export async function registrarEntregaKits(token: string, items: EntregaItem[]) {
+// Precios del catalogo (compras_precios) del proveedor Mil200 por producto
+export async function getPreciosKitsMil200(): Promise<Record<string, number>> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('compras_precios')
+    .select('producto_id, precio')
+    .eq('proveedor_id', PROVEEDOR.id)
+  const map: Record<string, number> = {}
+  for (const r of data ?? []) map[r.producto_id] = Number(r.precio)
+  return map
+}
+
+export async function registrarEntregaKits(token: string, items: EntregaItem[], excelBase64?: string) {
   if (token !== VALID_TOKEN) return { error: 'Token inválido' }
   if (items.length === 0 || items.every(i => i.cantidad <= 0)) return { error: 'Sin items' }
 
   const validItems = items.filter(i => i.cantidad > 0)
+  const precios = await getPreciosKitsMil200()
   const now = new Date()
   const pedidoId = `NP-${now.getTime()}-${PROVEEDOR.id}`
 
@@ -45,7 +59,7 @@ export async function registrarEntregaKits(token: string, items: EntregaItem[]) 
       proveedorNombre: PROVEEDOR.nombre,
       proveedorWhatsapp: PROVEEDOR.whatsapp,
       proveedorEmail: PROVEEDOR.email,
-      precio: KIT_PRECIO,
+      precio: precios[i.productoId] ?? KIT_PRECIO_DEFAULT,
       plazo: KIT_PLAZO,
       cantidad: i.cantidad,
     })),
@@ -54,6 +68,9 @@ export async function registrarEntregaKits(token: string, items: EntregaItem[]) 
     fecha: now.toLocaleDateString('es-AR'),
     confirmadoAt: now.toISOString(),
     entregadoAt: now.toISOString(),
+    // Excel de la entrega (base64): se descarga desde el gestor de pedidos
+    // para informarlo a GOcelular / Andreani
+    ...(excelBase64 ? { imeiFile: excelBase64 } : {}),
   }
 
   const supabase = createAdminClient()

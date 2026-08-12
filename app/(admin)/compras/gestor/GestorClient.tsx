@@ -168,13 +168,11 @@ export default function GestorClient({
 
   const filtrados = useMemo(() => {
     let result = productos
-    // Kits de Seguridad: show celulares models (same models, different proveedor)
-    if (filtroCategoria === 'Kits de Seguridad') {
-      result = productos.filter((p) => p.categoria === 'Celulares')
-    } else if (filtroCategoria) {
+    // Kits de Seguridad: solo los sincronizados desde GOcelular (SKU KS-*)
+    if (filtroCategoria) {
       result = result.filter((p) => p.categoria === filtroCategoria)
     }
-    if (filtroMarca && (filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad')) {
+    if (filtroMarca && filtroCategoria === 'Celulares') {
       result = result.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
     }
     if (busqueda) {
@@ -199,7 +197,7 @@ export default function GestorClient({
         tipos = prov.direccion ? [prov.direccion] : []
       }
       if (filtroCategoria && tipos.length > 0 && !tipos.includes(filtroCategoria)) return false
-      if (filtroMarca && (filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad')) {
+      if (filtroMarca && filtroCategoria === 'Celulares') {
         const marcasProv = parseProvMarcas(prov.notas)
         if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
       }
@@ -207,25 +205,7 @@ export default function GestorClient({
     })
   }, [proveedores, filtroCategoria, filtroMarca])
 
-  // Find kit product IDs (products in "Kits de Seguridad" category)
-  const kitProductIds = useMemo(() => productos.filter(p => p.categoria === 'Kits de Seguridad').map(p => p.id), [productos])
-
-  // Kit prices by proveedor: { provId: Precio }
-  const kitPreciosPorProv = useMemo(() => {
-    const map: Record<string, Precio> = {}
-    kitProductIds.forEach(kitId => {
-      precios.filter(p => p.producto_id === kitId).forEach(p => {
-        map[p.proveedor_id] = p
-      })
-    })
-    return map
-  }, [precios, kitProductIds])
-
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
-    // In kit mode, use the generic kit price for any celular model
-    if (filtroCategoria === 'Kits de Seguridad') {
-      return kitPreciosPorProv[proveedorId]
-    }
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
   }
 
@@ -607,7 +587,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
               ))}
             </div>
           </div>
-          {(filtroCategoria === 'Celulares' || filtroCategoria === 'Kits de Seguridad') && (
+          {filtroCategoria === 'Celulares' && (
             <div className="flex flex-wrap gap-2 mb-4">
               <button
                 onClick={() => setFiltroMarca('')}

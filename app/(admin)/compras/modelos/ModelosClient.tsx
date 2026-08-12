@@ -29,7 +29,8 @@ interface Precio {
   plazo: string
 }
 
-const CATEGORIAS = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Kits de Seguridad', 'Accesorios', 'Otros']
+// Kits de Seguridad no se crean a mano: se sincronizan desde GOcelular (store_products)
+const CATEGORIAS = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Accesorios', 'Otros']
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
 const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 
@@ -295,6 +296,14 @@ export default function ModelosClient({
         ))}
       </div>
 
+      {/* Aviso: kits sincronizados desde GOcelular */}
+      {filtroCategoria === 'Kits de Seguridad' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-4 text-xs text-blue-700">
+          Los Kits de Seguridad se sincronizan automaticamente desde GOcelular (SKU y nombre).
+          Para agregar, renombrar o dar de baja un kit, hacelo en GOcelular y recarga esta pagina.
+        </div>
+      )}
+
       {/* Marca filter (only for Celulares) */}
       {filtroCategoria === 'Celulares' && (
         <div className="flex flex-wrap gap-2 mb-4">
@@ -427,18 +436,29 @@ export default function ModelosClient({
                             )}
                           </svg>
                         </button>
-                        <button
-                          onClick={() => startEditProduct(prod)}
-                          className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProduct(prod.id)}
-                          className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                        >
-                          Eliminar
-                        </button>
+                        {prod.categoria === 'Kits de Seguridad' ? (
+                          <span
+                            title="Sincronizado desde GOcelular"
+                            className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded font-medium"
+                          >
+                            GOcelular
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startEditProduct(prod)}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(prod.id)}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Eliminar
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
