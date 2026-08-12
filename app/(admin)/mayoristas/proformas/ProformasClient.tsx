@@ -504,7 +504,7 @@ export default function ProformasClient({ productos, mupInicial, proformasGuarda
                           {p.estado === 'confirmada' ? 'Confirmada' : 'Borrador'}
                         </span>
                         {p.estado === 'confirmada' && (
-                          <GocelularChip proformaId={p.id} gocelular={p.gocelular} />
+                          <GocelularChip proformaId={p.id} gocelular={p.gocelular} proformaEstado={p.estado} />
                         )}
                       </td>
                       <td className="px-6 py-3 text-right font-bold text-magenta-700 tabular-nums">
@@ -569,9 +569,10 @@ const FA_STATUS_LABELS: Record<string, string> = {
   failed: 'FA falló',
 }
 
-function GocelularChip({ proformaId, gocelular }: {
+function GocelularChip({ proformaId, gocelular, proformaEstado }: {
   proformaId: string
   gocelular: Proforma['gocelular']
+  proformaEstado: Proforma['estado']
 }) {
   const router = useRouter()
   const [enviando, setEnviando] = useState(false)
@@ -618,6 +619,12 @@ function GocelularChip({ proformaId, gocelular }: {
           <button onClick={() => disparar()} disabled={enviando}
             className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
             {enviando ? 'Enviando...' : 'Reintentar'}
+          </button>
+        )}
+        {estado === 'no_enviado' && proformaEstado === 'confirmada' && (
+          <button onClick={() => disparar()} disabled={enviando}
+            className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
+            {enviando ? 'Enviando...' : 'Enviar a GOcelular'}
           </button>
         )}
         {estado === 'informado' && (

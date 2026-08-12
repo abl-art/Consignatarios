@@ -377,14 +377,12 @@ export async function prepararAsignacionMayorista(input: {
     .update({ estado: 'mayorista', fecha_asignacion: today })
     .in('id', dispositivo_ids)
 
-  // Notificar a GOcelular (mismo mecanismo que consignatarios)
-  const { data: proforma } = await admin.from('proformas').select('nombre, cliente_nombre').eq('id', input.proforma_id).single()
-  const clienteLabel = proforma?.cliente_nombre || proforma?.nombre || 'Venta Mayorista'
-  notificarGocelular(admin, imeis, null, clienteLabel, 'assign_to_consignee').catch(() => {})
+  // No se notifica consignacion: la venta mayorista viaja por el webhook wholesale (GOcelular
+  // marca los IMEIs sold_wholesale y los asigna al panel del local; el uso de consignacion para
+  // ventas mayoristas quedo descontinuado segun su doc)
 
   // Disparo del webhook de venta mayorista (stock_local): se dispara cuando la asignación de
   // IMEIs de la proforma queda completa (suma de todas sus asignaciones = unidades pedidas).
-  // No bloqueante, mismo criterio que notificarGocelular arriba.
   const { data: proformaOrigen } = await admin
     .from('proformas')
     .select('origen, proforma_items(cantidad)')
@@ -396,7 +394,7 @@ export async function prepararAsignacionMayorista(input: {
     const totalAsignado = (asigs ?? []).reduce((s, a) => s + a.total_unidades, 0)
     if (totalPedido > 0 && totalAsignado === totalPedido) {
       const { informarVentaGocelular } = await import('@/lib/actions/wholesale-webhook')
-      informarVentaGocelular(input.proforma_id).catch((e) => console.error('Error informando venta a GOcelular:', e))
+      await informarVentaGocelular(input.proforma_id).catch((e) => console.error('Error informando venta a GOcelular:', e))
     }
   }
 

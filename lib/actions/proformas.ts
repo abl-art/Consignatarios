@@ -38,7 +38,6 @@ export interface Proforma {
   nombre: string
   cliente_nombre: string
   cliente_mayorista_id: string | null
-  store_id: string | null
   fecha: string
   fecha_confirmacion: string | null
   mup: number

@@ -53,11 +53,14 @@ async function cargarCatalogoVenta(storeId: string, imeis: string[]): Promise<Ca
   try {
     const [storeRes, imeisRes] = await Promise.all([
       storeId
-        ? client.query<{ gocuotas_store_id: string; store_name: string; merchant_name: string; is_active: boolean }>(
-            `SELECT gocuotas_store_id, store_name, merchant_name, is_active FROM gocuotas_stores WHERE gocuotas_store_id = $1`,
+        ? client.query<{ gocuotas_store_id: string; store_name: string; nombre: string; is_active: boolean }>(
+            `SELECT gocuotas_store_id, store_name,
+                    COALESCE(merchant_name, NULLIF(split_part(store_name, ' - ', 1), ''), store_name) AS nombre,
+                    is_active
+             FROM gocuotas_stores WHERE gocuotas_store_id = $1`,
             [storeId]
           )
-        : Promise.resolve({ rows: [] as { gocuotas_store_id: string; store_name: string; merchant_name: string; is_active: boolean }[] }),
+        : Promise.resolve({ rows: [] as { gocuotas_store_id: string; store_name: string; nombre: string; is_active: boolean }[] }),
       imeis.length > 0
         ? client.query<{ imei: string; status: string; store_ref: string | null }>(
             `SELECT ii.imei, ii.status::text, gs.gocuotas_store_id AS store_ref
@@ -73,7 +76,7 @@ async function cargarCatalogoVenta(storeId: string, imeis: string[]): Promise<Ca
     for (const row of imeisRes.rows) imeisEstado.set(row.imei, { status: row.status, storeId: row.store_ref })
     return {
       store: storeRow
-        ? { existe: true, activo: storeRow.is_active, nombre: storeRow.merchant_name }
+        ? { existe: true, activo: storeRow.is_active, nombre: storeRow.nombre }
         : { existe: false, activo: false, nombre: null },
       imeisEstado,
       // GOcelular no expone (por ahora) un catalogo propio de jurisdicciones vía esta base:
@@ -386,15 +389,26 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
     const proforma = proformaRow as ProformaConItems
 
     if (proforma.estado !== 'confirmada') return { ok: false, estado: 'no_confirmada' }
-    if (proforma.gocelular?.estado === 'informado' && !opts?.replay) return { ok: true, estado: 'informado' }
+    const gocelularPrevio = proforma.gocelular
+    if (gocelularPrevio?.estado === 'informado' && !opts?.replay) return { ok: true, estado: 'informado' }
+
+    // Tras un 'rechazado' hay que reconstruir el payload de cero: el fix del usuario (ej. store id
+    // corregido en la ficha del cliente) tiene que llegar en el body nuevo, no en el reventado que
+    // ya sabemos que GOcelular no acepto. Un 4xx legacy no persiste nada del lado de ellos, asi que
+    // un timestamp nuevo es seguro. Excepcion: proforma_conflict SI reusa el body byte-identico —
+    // es la unica via para que el reintento coincida con el hash de idempotencia legacy de
+    // GOcelular (aunque su boton de reintento esta oculto en la UI, esta guarda cubre reintentos
+    // programaticos/replay).
+    const debeReconstruir = gocelularPrevio?.estado === 'rechazado' && gocelularPrevio.codigoError !== 'proforma_conflict'
 
     let rawBody: string
+    let payloadWarnings: string[] | undefined
 
-    if (proforma.gocelular?.payloadEnviado) {
+    if (gocelularPrevio?.payloadEnviado && !debeReconstruir) {
       // Reintento manual o replay: reusar el body byte-identico persistido en el primer intento —
       // NUNCA regenerar (el timestamp del body participa del hash de idempotencia legacy de
       // GOcelular; un body distinto para la misma proforma dispara un 409 proforma_conflict espurio).
-      rawBody = proforma.gocelular.payloadEnviado
+      rawBody = gocelularPrevio.payloadEnviado
     } else {
       const built = await construirPayload(proforma)
       if ('estado' in built) {
@@ -402,6 +416,7 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
         return { ok: false, estado: built.estado }
       }
       rawBody = JSON.stringify(built.payload)
+      payloadWarnings = built.warnings
       // Persistir el payload ANTES del POST: si el proceso muere aca, el proximo intento reusa
       // este mismo body en vez de regenerar uno distinto. Si este guardado falla (incluso tras el
       // reintento interno de persistir), NO hay que enviar: un intento posterior reconstruiria el
@@ -425,14 +440,18 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
 
     // 7. Persistir resultado
     if (res.ok) {
+      // Merge de warnings (no perder las de la construccion del payload en un replay) y
+      // preservar enviadoAt original: un replay/reintento posterior a un envio ya informado no
+      // debe pisar la fecha del primer envio exitoso.
+      const warningsPrevios = payloadWarnings ?? gocelularPrevio?.warnings ?? []
       await persistir(proformaId, {
         estado: 'informado',
         saleId: res.body?.sale_id,
         faStatus: res.body?.fa_status,
         dispatchId: res.body?.dispatch?.id,
         numeroOrdenExterna: res.body?.dispatch?.numero_orden_externa,
-        warnings: res.body?.warnings,
-        enviadoAt: new Date().toISOString(),
+        warnings: [...new Set([...warningsPrevios, ...(res.body?.warnings ?? [])])],
+        enviadoAt: gocelularPrevio?.enviadoAt ?? new Date().toISOString(),
         payloadEnviado: rawBody,
       })
       return { ok: true, estado: 'informado' }
@@ -467,6 +486,21 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
     }
 
     const codigo = res.body?.code ?? res.body?.error ?? ''
+
+    // proforma_conflict: si mientras tanto la proforma ya quedo 'informado' (ej. un intento
+    // concurrente que si prospero, o un replay posterior a un envio exitoso), no lo pisamos con
+    // 'rechazado' — solo dejamos rastro en logs. Releemos de Supabase en vez de confiar en
+    // `proforma`/`gocelularPrevio` (cargados al principio de esta invocacion, pueden estar
+    // desactualizados).
+    if (codigo === 'proforma_conflict') {
+      const { data: actual } = await supabase.from('proformas').select('gocelular').eq('id', proformaId).single()
+      const gocelularActual = (actual as { gocelular: GocelularVentaEstado | null } | null)?.gocelular
+      if (gocelularActual?.estado === 'informado') {
+        console.error(`informarVentaGocelular: proforma_conflict para ${proformaId} pero el estado actual ya es 'informado' — no se pisa`, res.body)
+        return { ok: false, estado: 'rechazado' }
+      }
+    }
+
     await persistir(proformaId, {
       estado: 'rechazado',
       codigoError: codigo || undefined,
