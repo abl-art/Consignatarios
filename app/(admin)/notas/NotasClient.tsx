@@ -371,7 +371,15 @@ function TodoTab({ initialData, initialNotasEventos }: { initialData: WeekData; 
               Conectar Google Calendar
             </a>
           )}
-          {googleOk && <span className="text-[10px] text-green-600">● Calendar</span>}
+          {googleOk && (
+            <a
+              href="/api/auth/google"
+              title="Reconectar Google (renovar permisos de Calendar y Gmail)"
+              className="text-[10px] text-green-600 hover:underline"
+            >
+              ● Google conectado — reconectar
+            </a>
+          )}
           <button onClick={() => setWeekOffset(w => w + 1)} className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Siguiente &rarr;</button>
         </div>
       </div>
