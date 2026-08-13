@@ -394,6 +394,18 @@ export async function marcarImportante(id: string): Promise<{ ok?: boolean; erro
   return { ok: true }
 }
 
+// Quita la estrella (sale de la pestana Importantes)
+export async function quitarImportante(id: string): Promise<{ ok?: boolean; error?: string }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+  const res = await gmailFetch(token, `/messages/${id}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ removeLabelIds: ['STARRED'] }),
+  })
+  if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  return { ok: true }
+}
+
 // Vuelve a marcar como no leido (reaparece en la bandeja)
 export async function marcarNoLeido(id: string): Promise<{ ok?: boolean; error?: string }> {
   const token = await getGoogleAccessToken()

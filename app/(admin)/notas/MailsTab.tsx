@@ -16,6 +16,7 @@ import {
   getContactos,
   getConteosVistas,
   marcarTodosLeidos,
+  quitarImportante,
   type MailResumen,
   type MailDetalle,
   type VistaMails,
@@ -278,6 +279,7 @@ export default function MailsTab({ active }: { active: boolean }) {
       setMails(prev => ordenar(prev.map(m => (m.id === detalle.id ? { ...m, noLeido: detalleNoLeido } : m))))
     }
     setDetalle(null)
+    actualizarConteos()
   }
 
   async function accion(id: string, fn: (id: string) => Promise<{ ok?: boolean; error?: string }>) {
@@ -290,6 +292,7 @@ export default function MailsTab({ active }: { active: boolean }) {
       }
       setMails(prev => prev.filter(m => m.id !== id))
       if (detalle?.id === id) setDetalle(null)
+      actualizarConteos()
     } finally {
       setAccionando(prev => {
         const s = new Set(prev)
@@ -314,6 +317,24 @@ export default function MailsTab({ active }: { active: boolean }) {
     }
     setImportantes(prev => new Set(prev).add(id))
     mostrarAviso('Marcado como importante — lo encontrás en la pestaña Importantes')
+    actualizarConteos()
+  }
+
+  async function quitarEstrella(id: string) {
+    const res = await quitarImportante(id)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    if (vista === 'importantes') setMails(prev => prev.filter(m => m.id !== id))
+    setImportantes(prev => {
+      const s = new Set(prev)
+      s.delete(id)
+      return s
+    })
+    if (detalle?.id === id) setDetalle(null)
+    mostrarAviso('Estrella quitada — sale de Importantes')
+    actualizarConteos()
   }
 
   async function todosLeidos() {
@@ -343,6 +364,7 @@ export default function MailsTab({ active }: { active: boolean }) {
     if (detalle?.id === id) setDetalleNoLeido(true)
     setMails(prev => ordenar(prev.map(m => (m.id === id ? { ...m, noLeido: true } : m))))
     mostrarAviso('Marcado como no leído — vuelve a la Bandeja')
+    actualizarConteos()
   }
 
   async function bajarAdjunto(mensajeId: string, adj: AdjuntoInfo) {
@@ -653,13 +675,23 @@ export default function MailsTab({ active }: { active: boolean }) {
                   >
                     Pendiente
                   </button>
-                  <button
-                    title="Marcar como importante (pestaña Importantes)"
-                    onClick={() => aImportante(m.id)}
-                    className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
-                  >
-                    ★
-                  </button>
+                  {vista === 'importantes' ? (
+                    <button
+                      title="Quitar la estrella (sale de Importantes)"
+                      onClick={() => quitarEstrella(m.id)}
+                      className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
+                    >
+                      Quitar ★
+                    </button>
+                  ) : (
+                    <button
+                      title="Marcar como importante (pestaña Importantes)"
+                      onClick={() => aImportante(m.id)}
+                      className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
+                    >
+                      ★
+                    </button>
+                  )}
                   {!m.noLeido && (
                     <button
                       title="Marcar como no leído (vuelve a la Bandeja)"
