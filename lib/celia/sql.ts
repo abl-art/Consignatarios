@@ -41,24 +41,37 @@ export async function ejecutarConsulta(pool: Pool, sql: string): Promise<Resulta
 
   const client = await pool.connect()
   try {
-    await client.query(`SET statement_timeout = ${TIMEOUT_MS}`)
-    await client.query('SET default_transaction_read_only = on')
-    const sqlConLimite = envolverConLimite(sql)
-    const res = await client.query(sqlConLimite)
-    const filas = res.rows.slice(0, MAX_FILAS)
-    return { filas, truncado: res.rows.length > MAX_FILAS }
-  } finally {
+    // Todo en UNA transacción: con transaction pooling (pgbouncer) cada
+    // statement puede ir a una conexión física distinta, y un SET suelto
+    // no se garantiza que aplique al query siguiente. SET LOCAL dentro de
+    // BEGIN/COMMIT sí queda atado al mismo turno lógico.
+    await client.query('BEGIN READ ONLY')
     try {
-      await client.query('RESET statement_timeout')
-      await client.query('RESET default_transaction_read_only')
-    } catch { /* la conexion puede estar rota tras un timeout */ }
+      await client.query(`SET LOCAL statement_timeout = ${TIMEOUT_MS}`)
+      const sqlConLimite = envolverConLimite(sql)
+      const res = await client.query(sqlConLimite)
+      await client.query('COMMIT')
+      const filas = res.rows.slice(0, MAX_FILAS)
+      return { filas, truncado: res.rows.length > MAX_FILAS }
+    } catch (e) {
+      try { await client.query('ROLLBACK') } catch { /* la conexion puede estar rota tras un timeout */ }
+      throw e
+    }
+  } finally {
     client.release()
   }
 }
 
+const MAX_CHARS_RESULTADO = 150_000
+const MARCADOR_CORTE = '\n[RESULTADO CORTADO POR TAMAÑO — pedí menos columnas o agregá filtros]'
+
 export function serializarFilas(filas: Record<string, unknown>[]): string {
-  return JSON.stringify(filas, (_k, v) => {
+  const json = JSON.stringify(filas, (_k, v) => {
     if (typeof v === 'bigint') return v.toString()
     return v
   })
+  if (json.length > MAX_CHARS_RESULTADO) {
+    return json.slice(0, MAX_CHARS_RESULTADO) + MARCADOR_CORTE
+  }
+  return json
 }

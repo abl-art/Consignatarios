@@ -45,6 +45,11 @@ describe('serializarFilas', () => {
     expect(out).toContain('2026-01-01')
     expect(out).toContain('9007199254740993')
   })
+  it('corta el resultado si supera el tamaño máximo', () => {
+    const filas = Array.from({ length: 20000 }, (_, i) => ({ id: i, texto: 'x'.repeat(20) }))
+    const out = serializarFilas(filas)
+    expect(out.endsWith('[RESULTADO CORTADO POR TAMAÑO — pedí menos columnas o agregá filtros]')).toBe(true)
+  })
 })
 
 describe('envolverConLimite', () => {
