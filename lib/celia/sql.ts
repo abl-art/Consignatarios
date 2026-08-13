@@ -5,7 +5,12 @@ const TIMEOUT_MS = 15000
 
 // Palabras que nunca pueden aparecer en una consulta de Celia (defensa en
 // profundidad; ademas la sesion corre con default_transaction_read_only)
-const PROHIBIDAS = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|vacuum|call|execute|listen|notify|reset|comment|merge|lock)\b/i
+const PROHIBIDAS = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|vacuum|call|execute|listen|notify|reset|comment|merge|lock|set_config|current_setting|pg_sleep|pg_read_file|pg_read_binary_file|lo_import|lo_export|dblink|dblink_exec|pg_terminate_backend|pg_cancel_backend)\b/i
+
+export function envolverConLimite(sql: string): string {
+  const limpio = sql.replace(/;+\s*$/, '').trim()
+  return `SELECT * FROM (\n${limpio}\n) AS _celia_q LIMIT 501`
+}
 
 export function validarSelect(sql: string): { ok: true } | { ok: false; error: string } {
   const limpio = sql
@@ -34,7 +39,8 @@ export async function ejecutarConsulta(pool: Pool, sql: string): Promise<Resulta
   try {
     await client.query(`SET statement_timeout = ${TIMEOUT_MS}`)
     await client.query('SET default_transaction_read_only = on')
-    const res = await client.query(sql)
+    const sqlConLimite = envolverConLimite(sql)
+    const res = await client.query(sqlConLimite)
     const filas = res.rows.slice(0, MAX_FILAS)
     return { filas, truncado: res.rows.length > MAX_FILAS }
   } finally {

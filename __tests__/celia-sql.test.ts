@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validarSelect, serializarFilas } from '@/lib/celia/sql'
+import { validarSelect, serializarFilas, envolverConLimite } from '@/lib/celia/sql'
 
 describe('validarSelect', () => {
   it('acepta un SELECT simple', () => {
@@ -28,6 +28,15 @@ describe('validarSelect', () => {
   it('no confunde offset con set', () => {
     expect(validarSelect('SELECT * FROM ventas LIMIT 10 OFFSET 5').ok).toBe(true)
   })
+  it('rechaza set_config y pg_sleep', () => {
+    expect(validarSelect("SELECT set_config('statement_timeout','0',false)").ok).toBe(false)
+    expect(validarSelect('SELECT pg_sleep(10)').ok).toBe(false)
+  })
+  it('rechaza funciones de archivo y dblink', () => {
+    for (const sql of ["SELECT pg_read_file('/etc/passwd')", "SELECT dblink('...', 'select 1')", 'SELECT lo_import(0)']) {
+      expect(validarSelect(sql).ok).toBe(false)
+    }
+  })
 })
 
 describe('serializarFilas', () => {
@@ -35,5 +44,11 @@ describe('serializarFilas', () => {
     const out = serializarFilas([{ f: new Date('2026-01-01T00:00:00Z'), n: BigInt('9007199254740993') }])
     expect(out).toContain('2026-01-01')
     expect(out).toContain('9007199254740993')
+  })
+})
+
+describe('envolverConLimite', () => {
+  it('envuelve y limpia el ; final', () => {
+    expect(envolverConLimite('SELECT * FROM ventas;')).toBe('SELECT * FROM (\nSELECT * FROM ventas\n) AS _celia_q LIMIT 501')
   })
 })
