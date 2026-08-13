@@ -15,6 +15,7 @@ import {
   responderMail,
   getContactos,
   getConteosVistas,
+  marcarTodosLeidos,
   type MailResumen,
   type MailDetalle,
   type VistaMails,
@@ -315,6 +316,24 @@ export default function MailsTab({ active }: { active: boolean }) {
     mostrarAviso('Marcado como importante — lo encontrás en la pestaña Importantes')
   }
 
+  async function todosLeidos() {
+    if (!confirm('¿Marcar como leídos TODOS los mails sin leer de esta vista?')) return
+    setLoading(true)
+    try {
+      const res = await marcarTodosLeidos(vista)
+      if (res.error) {
+        setError(res.error)
+        return
+      }
+      mostrarAviso(`${res.marcados ?? 0} mails marcados como leídos`)
+      setMails([])
+      cargar({ vista, busqueda })
+      actualizarConteos()
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function aNoLeido(id: string) {
     const res = await marcarNoLeido(id)
     if (res.error) {
@@ -572,6 +591,16 @@ export default function MailsTab({ active }: { active: boolean }) {
           >
             {loading ? 'Cargando...' : 'Actualizar'}
           </button>
+          {(conteos[vista] ?? 0) > 0 && vista !== 'importantes' && (
+            <button
+              onClick={todosLeidos}
+              disabled={loading}
+              title="Marca como leídos todos los no leídos de esta vista"
+              className="px-4 py-2 text-xs font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              Marcar todos leídos
+            </button>
+          )}
         </div>
 
         <p className="text-xs text-gray-400 mb-3">{vistaActual.desc}</p>

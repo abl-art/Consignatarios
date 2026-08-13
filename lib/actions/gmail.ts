@@ -150,11 +150,12 @@ function buildQuery(vista: VistaMails, busqueda?: string): string {
       // Con busqueda se rastrea TODA la bandeja de entrada (leidos incluidos)
       partes.push('in:inbox')
     } else {
-      // Sin busqueda: solo no leidos (inbox zero). Soporte Trustonic y
-      // Basecamp tienen su propia vista; los cierres SPS se archivan solos
+      // Sin busqueda: solo no leidos (inbox zero). Lo que tiene su propia
+      // vista (Soporte, Basecamp, Cristian) no cuenta ni aparece aca
       partes.push('in:inbox is:unread')
       partes.push(`-from:${SOPORTE_GOCELULAR}`)
       partes.push(`-from:${BASECAMP}`)
+      partes.push(`-from:${CRISTIAN}`)
       partes.push(`-(${SPS_QUERY})`)
     }
   }
@@ -186,16 +187,50 @@ export async function getConteosVistas(): Promise<Record<string, number>> {
     { vista: 'soporte', q: `${buildQuery('soporte')} is:unread` },
   ]
 
+  // Conteo exacto: se cuentan los ids reales (hasta 100; mas alla se
+  // muestra 99+). El resultSizeEstimate de Gmail infla los numeros.
   const resultados = await Promise.all(
     queries.map(async ({ vista, q }) => {
-      const res = await gmailFetch(token, `/messages?${new URLSearchParams({ maxResults: '1', q })}`)
+      const res = await gmailFetch(token, `/messages?${new URLSearchParams({ maxResults: '100', q })}`)
       if (!res.ok) return { vista, n: 0 }
       const data = await res.json()
-      return { vista, n: Number(data.resultSizeEstimate ?? 0) }
+      const n = (data.messages ?? []).length
+      return { vista, n: data.nextPageToken ? 100 : n }
     })
   )
 
   return Object.fromEntries(resultados.map(r => [r.vista, r.n]))
+}
+
+// Marca como leidos todos los no leidos de la vista (hasta 500)
+export async function marcarTodosLeidos(vista: VistaMails): Promise<{ ok?: boolean; marcados?: number; error?: string }> {
+  const token = await getGoogleAccessToken()
+  if (!token) return { error: NO_CONECTADO }
+
+  const base = buildQuery(vista)
+  const q = base.includes('is:unread') ? base : `${base} is:unread`
+
+  const ids: string[] = []
+  let pageToken: string | undefined
+  while (ids.length < 500) {
+    const params = new URLSearchParams({ maxResults: '100', q })
+    if (pageToken) params.set('pageToken', pageToken)
+    const res = await gmailFetch(token, `/messages?${params}`)
+    if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+    const data = await res.json()
+    ids.push(...((data.messages ?? []) as { id: string }[]).map(m => m.id))
+    pageToken = data.nextPageToken
+    if (!pageToken) break
+  }
+
+  if (ids.length === 0) return { ok: true, marcados: 0 }
+
+  const res = await gmailFetch(token, `/messages/batchModify`, {
+    method: 'POST',
+    body: JSON.stringify({ ids, removeLabelIds: ['UNREAD'] }),
+  })
+  if (!res.ok) return { error: `Gmail respondió ${res.status}` }
+  return { ok: true, marcados: ids.length }
 }
 
 // Archiva en Gmail los cierres de lote SPS de Payway (no sirven).
