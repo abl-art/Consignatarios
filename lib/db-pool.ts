@@ -68,3 +68,25 @@ export function getKeyContactPool(): Pool | null {
   }
   return keyContactPool
 }
+
+// Singleton pool para el Postgres de Supabase (consultas SQL de Celia)
+let supabasePool: Pool | null = null
+
+export function getSupabasePool(): Pool | null {
+  const url = process.env.SUPABASE_DB_URL
+  if (!url) return null
+
+  if (!supabasePool) {
+    supabasePool = new Pool({
+      connectionString: url,
+      max: 3,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      ssl: { rejectUnauthorized: false },
+    })
+    supabasePool.on('error', (err) => {
+      console.error('Supabase pool error:', err.message)
+    })
+  }
+  return supabasePool
+}
