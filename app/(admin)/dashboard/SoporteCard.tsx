@@ -56,15 +56,15 @@ export default function SoporteCard() {
       )}
 
       {data && data.categorias.length > 0 && (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
           {data.categorias.map((c, i) => (
             <div key={c.categoria}>
               <div className="flex items-baseline justify-between gap-2 mb-1">
-                <p className="text-sm font-medium text-gray-800">
+                <p className="text-sm font-medium text-gray-800 truncate">
                   <span className="text-gray-400 font-normal mr-1.5">{i + 1}.</span>
                   {c.categoria}
                 </p>
-                <p className="text-sm font-bold text-gray-900 tabular-nums">
+                <p className="text-sm font-bold text-gray-900 tabular-nums shrink-0">
                   {c.cantidad}
                   <span className="text-xs font-normal text-gray-400 ml-1">
                     ({data.total > 0 ? Math.round((c.cantidad / data.total) * 100) : 0}%)
@@ -85,6 +85,12 @@ export default function SoporteCard() {
             </div>
           ))}
         </div>
+      )}
+
+      {data && (data.otros > 0 || data.sinComentario > 0) && (
+        <p className="text-[11px] text-gray-400 mt-4 pt-3 border-t border-gray-100">
+          Fuera del ranking: {data.otros} sin patrón claro (Otros) y {data.sinComentario} sin comentario del cliente.
+        </p>
       )}
     </div>
   )

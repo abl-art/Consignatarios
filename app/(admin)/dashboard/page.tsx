@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic'
+// La card de Soporte analiza hasta 500 mails de Gmail (60 dias)
+export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
