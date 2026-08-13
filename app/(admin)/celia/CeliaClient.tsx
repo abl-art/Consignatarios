@@ -55,12 +55,19 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
 
     let convId = activaId
     if (!convId) {
-      convId = await crearConversacion(pregunta)
-      setActivaId(convId)
-      setConversaciones((prev) => [
-        { id: convId!, titulo: pregunta.slice(0, 60), updated_at: new Date().toISOString() },
-        ...prev,
-      ])
+      try {
+        convId = await crearConversacion(pregunta)
+        setActivaId(convId)
+        setConversaciones((prev) => [
+          { id: convId!, titulo: pregunta.slice(0, 60), updated_at: new Date().toISOString() },
+          ...prev,
+        ])
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo crear la conversación')
+        setInput(pregunta)
+        setPensando(false)
+        return
+      }
     }
 
     setMensajes((prev) => [...prev, { role: 'user', texto: pregunta }, { role: 'assistant', texto: '' }])
@@ -119,6 +126,9 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de conexión')
+      // El usuario no debe perder lo que escribió: lo restauramos en el
+      // input para que pueda reintentar con Enviar.
+      setInput(pregunta)
     } finally {
       setPensando(false)
       setEstado(null)
