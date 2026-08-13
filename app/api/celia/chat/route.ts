@@ -81,11 +81,31 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: 'No se pudo cargar el historial' }), { status: 500 })
   }
 
-  const messages: Anthropic.MessageParam[] = [
-    ...(previos ?? []).map((m) => ({
+  // Saneo del historial rehidratado: un content vacío/falsy (p.ej. un
+  // refusal que no llegamos a persistir bien, o una fila corrupta) puede
+  // brickear la conversación entera si lo mandamos tal cual a la API.
+  const historialSaneado = (previos ?? [])
+    .map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content as Anthropic.MessageParam['content'],
-    })),
+    }))
+    .filter((m) => Array.isArray(m.content) ? m.content.length > 0 : !!m.content)
+
+  // Si el último mensaje persistido es un assistant con bloques tool_use,
+  // significa que el turno se cortó antes de guardar el tool_result
+  // correspondiente. Ese tool_use quedaría huérfano (sin tool_result) y la
+  // API lo rechaza — lo eliminamos.
+  if (historialSaneado.length > 0) {
+    const ultimo = historialSaneado[historialSaneado.length - 1]
+    const tieneToolUseHuerfano =
+      ultimo.role === 'assistant' &&
+      Array.isArray(ultimo.content) &&
+      ultimo.content.some((b) => b.type === 'tool_use')
+    if (tieneToolUseHuerfano) historialSaneado.pop()
+  }
+
+  const messages: Anthropic.MessageParam[] = [
+    ...historialSaneado,
     { role: 'user', content: mensaje },
   ]
 
@@ -113,6 +133,8 @@ export async function POST(request: Request) {
         }
       }
 
+      let terminoNormal = false
+
       try {
         for (let i = 0; i < MAX_ITERACIONES; i++) {
           const msgStream = anthropic.messages.stream({
@@ -127,12 +149,23 @@ export async function POST(request: Request) {
 
           const respuesta = await msgStream.finalMessage()
 
-          messages.push({ role: 'assistant', content: respuesta.content })
-          await admin.from('celia_mensajes').insert({
-            conversacion_id: conversacionId,
-            role: 'assistant',
-            content: respuesta.content,
-          })
+          // No persistir/encolar mensajes assistant con content vacío
+          // (p.ej. un refusal sin bloques): rompería el próximo turno y
+          // ensuciaría el historial para conversaciones futuras.
+          if (respuesta.content.length > 0) {
+            messages.push({ role: 'assistant', content: respuesta.content })
+            const { error: errorInsertAssistant } = await admin.from('celia_mensajes').insert({
+              conversacion_id: conversacionId,
+              role: 'assistant',
+              content: respuesta.content,
+            })
+            if (errorInsertAssistant) {
+              // La respuesta ya se streameó al cliente; no abortamos por un
+              // fallo de persistencia. El saneo del historial al inicio
+              // protege futuras conversaciones de un mensaje corrupto.
+              console.error('Celia error insertando mensaje de assistant:', errorInsertAssistant)
+            }
+          }
 
           if (respuesta.stop_reason === 'tool_use') {
             const resultados: Anthropic.ToolResultBlockParam[] = []
@@ -151,11 +184,14 @@ export async function POST(request: Request) {
             }
             const turnoResultados: Anthropic.MessageParam = { role: 'user', content: resultados }
             messages.push(turnoResultados)
-            await admin.from('celia_mensajes').insert({
+            const { error: errorInsertToolResults } = await admin.from('celia_mensajes').insert({
               conversacion_id: conversacionId,
               role: 'user',
               content: resultados,
             })
+            if (errorInsertToolResults) {
+              console.error('Celia error insertando tool_results:', errorInsertToolResults)
+            }
             continue
           }
 
@@ -164,7 +200,15 @@ export async function POST(request: Request) {
           } else if (respuesta.stop_reason === 'max_tokens') {
             emitir({ tipo: 'error', mensaje: 'La respuesta quedó incompleta (límite de tokens). Pedile que resuma.' })
           }
+          terminoNormal = true
           break // end_turn u otro stop: terminamos
+        }
+
+        if (!terminoNormal) {
+          emitir({
+            tipo: 'error',
+            mensaje: 'Celia alcanzó el límite de consultas para esta pregunta. Probá reformularla o dividirla.',
+          })
         }
 
         await admin
@@ -175,7 +219,14 @@ export async function POST(request: Request) {
         emitir({ tipo: 'fin' })
       } catch (e) {
         console.error('Celia error:', e)
-        emitir({ tipo: 'error', mensaje: e instanceof Error ? e.message : 'Error inesperado' })
+        const mensajeError = e instanceof Error ? e.message : String(e)
+        const esContextoExcedido = /prompt is too long|context/i.test(mensajeError)
+        emitir({
+          tipo: 'error',
+          mensaje: esContextoExcedido
+            ? 'La conversación se hizo demasiado larga. Abrí una conversación nueva para seguir.'
+            : (e instanceof Error ? e.message : 'Error inesperado'),
+        })
       } finally {
         try {
           controller.close()
