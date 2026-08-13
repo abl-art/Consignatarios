@@ -15,6 +15,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
+  { href: '/celia', label: 'Celia', icon: 'celia' },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
   { href: '/canales', label: 'Canales de Comercialización', icon: 'tienda' },

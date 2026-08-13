@@ -25,6 +25,7 @@ export type IconName =
   | 'reloj'
   | 'fabrica'
   | 'documento'
+  | 'celia'
 
 /**
  * Iconos de sidebar. Usa strokes de 1.8px para buena legibilidad a 16px.
@@ -207,6 +208,17 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
           <path d="M14 2v6h6" />
           <path d="M16 13H8M16 17H8M10 9H8" />
+        </svg>
+      )
+    case 'celia':
+      return (
+        <svg {...common}>
+          <path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 1.2.3 2.1.8 2.9-.5.9-.8 1.9-.8 2.6h11c0-.7-.3-1.7-.8-2.6.5-.8.8-1.7.8-2.9A5.5 5.5 0 0 0 12 3Z" />
+          <circle cx="12" cy="9.5" r="2.8" />
+          <path d="M6.5 9.5H5a1 1 0 0 0-1 1v1.5a1 1 0 0 0 1 1h1.5" />
+          <path d="M17.5 9.5H19a1 1 0 0 1 1 1v1.5a1 1 0 0 1-1 1h-1.5" />
+          <path d="M17.5 13v1.5a2 2 0 0 1-2 2H13" />
+          <path d="M5 21c0-2.8 3.1-4.5 7-4.5s7 1.7 7 4.5" />
         </svg>
       )
     default:
