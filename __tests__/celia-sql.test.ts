@@ -51,4 +51,7 @@ describe('envolverConLimite', () => {
   it('envuelve y limpia el ; final', () => {
     expect(envolverConLimite('SELECT * FROM ventas;')).toBe('SELECT * FROM (\nSELECT * FROM ventas\n) AS _celia_q LIMIT 501')
   })
+  it('limpia comentarios finales antes del wrapping', () => {
+    expect(envolverConLimite('SELECT 1; -- nota final')).toBe('SELECT * FROM (\nSELECT 1\n) AS _celia_q LIMIT 501')
+  })
 })

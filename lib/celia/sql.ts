@@ -7,17 +7,21 @@ const TIMEOUT_MS = 15000
 // profundidad; ademas la sesion corre con default_transaction_read_only)
 const PROHIBIDAS = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|vacuum|call|execute|listen|notify|reset|comment|merge|lock|set_config|current_setting|pg_sleep|pg_read_file|pg_read_binary_file|lo_import|lo_export|dblink|dblink_exec|pg_terminate_backend|pg_cancel_backend)\b/i
 
-export function envolverConLimite(sql: string): string {
-  const limpio = sql.replace(/;+\s*$/, '').trim()
-  return `SELECT * FROM (\n${limpio}\n) AS _celia_q LIMIT 501`
-}
-
-export function validarSelect(sql: string): { ok: true } | { ok: false; error: string } {
-  const limpio = sql
+function limpiarSql(sql: string): string {
+  return sql
     .replace(/--.*$/gm, '')          // comentarios de linea
     .replace(/\/\*[\s\S]*?\*\//g, '') // comentarios de bloque
     .trim()
     .replace(/;+\s*$/, '')            // ; final permitido
+}
+
+export function envolverConLimite(sql: string): string {
+  const limpio = limpiarSql(sql)
+  return `SELECT * FROM (\n${limpio}\n) AS _celia_q LIMIT 501`
+}
+
+export function validarSelect(sql: string): { ok: true } | { ok: false; error: string } {
+  const limpio = limpiarSql(sql)
   if (limpio.length === 0) return { ok: false, error: 'Consulta vacía' }
   if (limpio.includes(';')) return { ok: false, error: 'Solo se permite una única sentencia' }
   if (!/^(select|with)\b/i.test(limpio)) return { ok: false, error: 'Solo se permiten consultas SELECT' }
