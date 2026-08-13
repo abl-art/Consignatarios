@@ -70,11 +70,16 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
 
   // Cargar historial previo (bloques completos, incluidos tool_use/tool_result)
-  const { data: previos } = await admin
+  const { data: previos, error: errorPrevios } = await admin
     .from('celia_mensajes')
     .select('role, content')
     .eq('conversacion_id', conversacionId)
     .order('created_at', { ascending: true })
+
+  if (errorPrevios) {
+    console.error('Celia error cargando historial:', errorPrevios)
+    return new Response(JSON.stringify({ error: 'No se pudo cargar el historial' }), { status: 500 })
+  }
 
   const messages: Anthropic.MessageParam[] = [
     ...(previos ?? []).map((m) => ({
@@ -85,18 +90,28 @@ export async function POST(request: Request) {
   ]
 
   // Persistir el mensaje del usuario ya mismo
-  await admin.from('celia_mensajes').insert({
+  const { error: errorInsertUser } = await admin.from('celia_mensajes').insert({
     conversacion_id: conversacionId,
     role: 'user',
     content: [{ type: 'text', text: mensaje }],
   })
 
+  if (errorInsertUser) {
+    console.error('Celia error insertando mensaje de usuario:', errorInsertUser)
+    return new Response(JSON.stringify({ error: 'Conversación inexistente' }), { status: 404 })
+  }
+
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
-      const emitir = (obj: object) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+      const emitir = (obj: object) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+        } catch {
+          // El cliente se desconectó — no hay a quién emitir
+        }
+      }
 
       try {
         for (let i = 0; i < MAX_ITERACIONES; i++) {
@@ -162,8 +177,17 @@ export async function POST(request: Request) {
         console.error('Celia error:', e)
         emitir({ tipo: 'error', mensaje: e instanceof Error ? e.message : 'Error inesperado' })
       } finally {
-        controller.close()
+        try {
+          controller.close()
+        } catch {
+          // Puede estar ya cerrado si el cliente se desconectó
+        }
       }
+    },
+    cancel() {
+      // El cliente se desconectó a mitad de stream. No hace falta abortar
+      // las llamadas en curso (deferred como minor conocido); emitir()
+      // y el close() en el finally ya son no-op seguros en ese caso.
     },
   })
 
