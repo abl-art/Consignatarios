@@ -33,6 +33,7 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
   }, [mensajes, estado])
 
   async function abrirConversacion(id: string) {
+    if (pensando) return
     setActivaId(id)
     setError(null)
     const rows = await obtenerMensajes(id)
@@ -70,7 +71,12 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversacionId: convId, mensaje: pregunta }),
       })
-      if (!res.ok || !res.body) throw new Error(`Error ${res.status}`)
+      if (!res.ok) {
+        let msg = `Error ${res.status}`
+        try { const j = await res.json(); if (j?.error) msg = j.error } catch {}
+        throw new Error(msg)
+      }
+      if (!res.body) throw new Error('Sin respuesta del servidor')
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -83,17 +89,22 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
         buffer = partes.pop() ?? ''
         for (const parte of partes) {
           if (!parte.startsWith('data: ')) continue
-          const ev = JSON.parse(parte.slice(6))
+          let ev: { tipo: string; delta?: string; texto?: string; mensaje?: string }
+          try {
+            ev = JSON.parse(parte.slice(6))
+          } catch {
+            continue
+          }
           if (ev.tipo === 'texto') {
             setEstado(null)
             setMensajes((prev) => {
               const copia = [...prev]
               const ultimo = copia[copia.length - 1]
-              copia[copia.length - 1] = { ...ultimo, texto: ultimo.texto + ev.delta }
+              copia[copia.length - 1] = { ...ultimo, texto: ultimo.texto + (ev.delta ?? '') }
               return copia
             })
           } else if (ev.tipo === 'estado') {
-            setEstado(ev.texto)
+            setEstado(ev.texto ?? null)
             // Nueva burbuja de assistant para el texto que viene despues de la consulta
             setMensajes((prev) => {
               const ultimo = prev[prev.length - 1]
@@ -102,7 +113,7 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
                 : [...prev, { role: 'assistant', texto: '' }]
             })
           } else if (ev.tipo === 'error') {
-            setError(ev.mensaje)
+            setError(ev.mensaje ?? 'Error desconocido')
           }
         }
       }
@@ -115,6 +126,7 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
   }
 
   async function borrar(id: string) {
+    if (pensando) return
     if (!confirm('¿Borrar esta conversación?')) return
     await borrarConversacion(id)
     setConversaciones((prev) => prev.filter((c) => c.id !== id))
@@ -122,6 +134,7 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
   }
 
   function nueva() {
+    if (pensando) return
     setActivaId(null)
     setMensajes([])
     setError(null)
@@ -132,7 +145,12 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
       {/* Historial */}
       <aside className="w-64 shrink-0 bg-white border border-gray-200 rounded-xl flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <button onClick={nueva} className="w-full bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700">
+          <button
+            onClick={nueva}
+            className={`w-full bg-gray-900 text-white text-sm rounded-lg py-2 hover:bg-gray-700 ${
+              pensando ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
             + Nueva conversación
           </button>
         </div>
@@ -142,7 +160,7 @@ export default function CeliaClient({ conversacionesIniciales }: { conversacione
               key={c.id}
               className={`group flex items-center justify-between px-3 py-2 text-sm rounded-lg cursor-pointer ${
                 activaId === c.id ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'
-              }`}
+              } ${pensando ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={() => abrirConversacion(c.id)}
             >
               <span className="truncate">{c.titulo}</span>
