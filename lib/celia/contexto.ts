@@ -15,6 +15,7 @@ export const SYSTEM_CELIA = `Sos Celia, la asistente de datos de GOcelular360. R
 - Comisiones: se calculan sobre el neto (precio / 1.21, sin IVA).
 - Cheques a proveedores: tabla cheques_proveedor en Supabase (sincronizada cada hora desde un sheet). Columnas: numero_cheque, estado_cheque, cuit, nombre, fecha_pago (date), importe (numeric). "Pendiente de pago" = fecha_pago > CURRENT_DATE.
 - Canales de venta: la columna de canal está en las órdenes de la tienda; "Riiing" es un canal/vendedor.
+- Las tablas fc_* de esa base pertenecen a otro sistema (finanzas familiares) y NO deben consultarse.
 
 # Cómo trabajar
 - Armá consultas concretas con agregaciones en SQL (no pidas tablas enteras). Usá LIMIT.
@@ -103,14 +104,6 @@ dispositivos(id uuid, imei text, modelo_id uuid, estado estado_dispositivo, cons
 facturas(id uuid, proveedor_id uuid, numero text, fecha date, fecha_vencimiento date, monto num, estado estado_factura, descripcion text, created_at ts, detalle_compra text, fecha_entrega date, detalle_items jsonb)
 facturas_envios(id uuid, nro_legal text, fecha_comprobante date, fecha_desde date, fecha_hasta date, total_envios int, total_facturado num, envios_conciliados int, envios_sobrantes int, monto_sobrante num, created_at ts, envios_duplicados int, monto_duplicado num)
 facturas_envios_detalle(id uuid, factura_id uuid, nro_envio text, fecha_envio date, concepto text, importe num, localidad_destino text, cp_destino text, estado text, created_at ts, sucursal_destino text)
-fc_inversiones_aportes(id int, fecha date, tipo text, moneda text, monto num, nota text, created_at ts, cuenta text)
-fc_inversiones_cuentas(cuenta text, nombre text, created_at ts)
-fc_inversiones_posiciones(id int, reporte_id int, categoria text, moneda text, sector text, codigo text, ticker text, descripcion text, cantidad num, precio num, importe num)
-fc_inversiones_reportes(id int, fecha date, cuenta text, titular text, tc_mep num, total_ars num, total_usd num, total_general_ars num, total_general_usd num, created_at ts)
-fc_realstate_impuestos(id int, address text, year int, winter_tax num, summer_tax num, created_at ts)
-fc_realstate_propiedades(id int, reporte_id int, address text, income num, expenses num, net_income num, income_breakdown jsonb, expense_breakdown jsonb, created_at ts)
-fc_realstate_reportes(id int, company text, period text, statement_date text, prepared_by text, ciudad text, total_income num, total_expenses num, total_net num, created_at ts)
-fc_realstate_stock(id int, address text, purchase_date text, purchase_price num, created_at ts)
 flujo_asistencias(id uuid, fecha date, monto num, created_at ts)
 flujo_config(key text, value text, updated_at ts)
 flujo_egresos(id uuid, flujo_dia date, concepto text, medio_de_pago text, cuotas int, monto num, created_at ts)
