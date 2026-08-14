@@ -46,6 +46,7 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                 <th className="px-4 py-3 text-left font-medium">Nombre</th>
                 <th className="px-4 py-3 text-right font-medium">WH Andreani</th>
                 <th className="px-4 py-3 text-right font-medium">WH GOcuotas</th>
+                <th className="px-4 py-3 text-right font-medium">En tránsito</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
               </tr>
             </thead>
@@ -63,12 +64,13 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whAndreani || '—'}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whGocuotas || '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{r.enTransito || '—'}</td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{r.total}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                     No se encontraron productos
                   </td>
                 </tr>
@@ -84,6 +86,9 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {filtered.reduce((s, r) => s + r.whGocuotas, 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-amber-600">
+                  {filtered.reduce((s, r) => s + r.enTransito, 0).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {filtered.reduce((s, r) => s + r.total, 0).toLocaleString()}
