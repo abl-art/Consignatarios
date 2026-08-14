@@ -85,6 +85,9 @@ interface PedidoGuardado {
     errores?: string[]
     warnings?: string[]
     codigoError?: string
+    ingresoDetectadoAt?: string
+    unidadesIngresadas?: number
+    unidadesTotales?: number
   }
 }
 
@@ -1599,6 +1602,14 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
     informado: { label: 'GOcelular: informado ✓', cls: 'bg-green-50 text-green-700 border-green-200' },
   }
   const c = chips[estado]
+  // Progreso de ingreso al deposito de Andreani detectado por sync-ingresos
+  const enIngreso = estado === 'informado' && !gocelular?.ingresoDetectadoAt
+    && (gocelular?.unidadesTotales ?? 0) > 0
+  const labelChip = gocelular?.ingresoDetectadoAt
+    ? 'GOcelular: ingresado al stock ✓✓'
+    : enIngreso
+      ? `${c.label} · stock ${gocelular!.unidadesIngresadas ?? 0}/${gocelular!.unidadesTotales}`
+      : c.label
   const tieneDetalle = (gocelular?.errores?.length ?? 0) > 0 || (gocelular?.pendingAliases?.length ?? 0) > 0 || estado === 'informado'
 
   return (
@@ -1608,7 +1619,7 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
           onClick={() => tieneDetalle && setExpandido(!expandido)}
           className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${c.cls} ${tieneDetalle ? 'cursor-pointer' : 'cursor-default'}`}
         >
-          {c.label}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
+          {labelChip}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
         </button>
         {estado === 'no_enviado' && soloAddons && (
           <button onClick={disparar} disabled={enviando}
@@ -1642,6 +1653,12 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
               {gocelular.purchaseId && <>purchase_id: <span className="font-mono">{gocelular.purchaseId}</span></>}
               {gocelular.enviadoAt && ` · ${new Date(gocelular.enviadoAt).toLocaleString('es-AR')}`}
               {gocelular.batches?.map(b => ` · ${b.units} ${b.type === 'device' ? 'celulares' : 'accesorios'}`).join('')}
+            </p>
+          )}
+          {estado === 'informado' && gocelular.ingresoDetectadoAt && (
+            <p className="text-green-700">
+              Ingresado al stock de Andreani el {new Date(gocelular.ingresoDetectadoAt).toLocaleString('es-AR')}
+              {gocelular.unidadesTotales ? ` (${gocelular.unidadesIngresadas}/${gocelular.unidadesTotales} unidades)` : ''}
             </p>
           )}
           {(gocelular.errores ?? []).map((e, i) => <p key={`${i}-${e.slice(0, 40)}`} className="text-red-600">• {e}</p>)}

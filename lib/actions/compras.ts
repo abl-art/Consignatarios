@@ -202,6 +202,10 @@ export interface GocelularEstado {
   errores?: string[]
   warnings?: string[]
   codigoError?: string
+  // Ingreso al stock de Andreani detectado contra la DB de GOcelular (sync-ingresos)
+  ingresoDetectadoAt?: string
+  unidadesIngresadas?: number
+  unidadesTotales?: number
 }
 
 export interface Pedido {

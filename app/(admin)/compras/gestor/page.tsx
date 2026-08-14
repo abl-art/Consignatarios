@@ -4,10 +4,11 @@ export const maxDuration = 60
 import { getProductos, getProveedores, getPrecios, getPedidos } from '@/lib/actions/compras'
 import { getForecastEvents, getComprasDias } from '@/lib/actions/finanzas'
 import { syncKitsGocelular } from '@/lib/actions/sync-kits'
+import { sincronizarIngresosGocelular } from '@/lib/actions/sync-ingresos'
 import GestorClient from './GestorClient'
 
 export default async function GestorPage() {
-  await syncKitsGocelular()
+  await Promise.all([syncKitsGocelular(), sincronizarIngresosGocelular()])
   const [productos, proveedores, precios, pedidos, events, dias] = await Promise.all([
     getProductos(),
     getProveedores(),
