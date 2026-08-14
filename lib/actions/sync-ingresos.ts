@@ -53,7 +53,13 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
                 a.ultimo AS fecha_addons
          FROM purchase_intakes pi
          LEFT JOIN LATERAL (
-           SELECT count(*) AS total, count(inv.imei) AS ingresados, max(inv.created_at) AS ultimo
+           -- Ingresado = la fila existe y ya no esta en transito: GOcelular crea los items
+           -- como in_transit_andreani al confirmar la compra y los pasa a andreani_wh (con
+           -- andreani_received_at) recien cuando Andreani los recibe; destino local nace en 'local'
+           SELECT count(*) AS total,
+                  count(inv.imei) FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ingresados,
+                  max(COALESCE(inv.andreani_received_at, inv.created_at))
+                    FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ultimo
            FROM (
              SELECT jsonb_array_elements_text(COALESCE(l->'imeis', '[]'::jsonb)) AS imei
              FROM jsonb_array_elements(pi.source_payload->'lines') l
