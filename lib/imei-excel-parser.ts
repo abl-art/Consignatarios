@@ -25,29 +25,69 @@ function esBase64Xlsx(data: string): boolean {
 }
 
 // Convierte el archivo (xlsx base64 o CSV plano legacy) en una matriz de celdas string
-function aMatriz(data: string): string[][] {
+// por cada hoja del workbook (el CSV legacy es una sola "hoja")
+function aMatrices(data: string): string[][][] {
   if (esBase64Xlsx(data)) {
     const wb = XLSX.read(data, { type: 'base64' })
-    const ws = wb.Sheets[wb.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: '' })
-    return rows.map(r => r.map(c => String(c ?? '').trim()))
+    return wb.SheetNames.map(name => {
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' })
+      return rows.map(r => r.map(c => String(c ?? '').trim()))
+    })
   }
   // Legacy: texto plano, separador ; o , o tab
   const sep = data.includes(';') ? ';' : data.includes('\t') ? '\t' : ','
-  return data
+  return [data
     .split(/\r?\n/)
     .filter(l => l.trim())
-    .map(l => l.split(sep).map(c => c.trim()))
+    .map(l => l.split(sep).map(c => c.trim()))]
+}
+
+function contarImeisValidos(matriz: string[][]): number {
+  let n = 0
+  for (const row of matriz) {
+    for (const c of row) {
+      const v = c.replace(/\s/g, '')
+      if (/^\d{15}$/.test(v) && luhnValido(v)) n++
+    }
+  }
+  return n
+}
+
+// Encabezados que identifican la columna de SKU cuando ningun valor matchea el catalogo
+// (ej. Excel de Newsan: el SKU viene bajo "PRODUCTO" y aun no existe en GOcelular)
+const HEADER_SKU_RE = /^(sku|producto|articulo|codigo|cod|modelo|material)s?$/
+
+function buscarColSkuPorEncabezado(matriz: string[][]): number | null {
+  for (const row of matriz.slice(0, 5)) {
+    for (let col = 0; col < row.length; col++) {
+      const v = row[col].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s._-]+/g, '')
+      if (HEADER_SKU_RE.test(v)) return col
+    }
+  }
+  return null
 }
 
 export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<string>): ImeiParseResult {
-  let matriz: string[][]
+  let matrices: string[][][]
   try {
-    matriz = aMatriz(imeiFileB64OrText)
+    matrices = aMatrices(imeiFileB64OrText).filter(m => m.length > 0)
   } catch {
     return { lines: [], errores: ['No pude leer el archivo de IMEIs (formato no reconocido)'] }
   }
-  if (matriz.length === 0) return { lines: [], errores: ['El archivo de IMEIs está vacío'] }
+  if (matrices.length === 0) return { lines: [], errores: ['El archivo de IMEIs está vacío'] }
+
+  // Elegir la hoja con mas IMEIs validos (ej. Newsan manda una hoja "Parametros" antes de los datos)
+  let matriz = matrices[0]
+  if (matrices.length > 1) {
+    let mejor = -1
+    for (const m of matrices) {
+      const n = contarImeisValidos(m)
+      if (n > mejor) {
+        mejor = n
+        matriz = m
+      }
+    }
+  }
 
   const nCols = Math.max(...matriz.map(r => r.length))
 
@@ -71,8 +111,16 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
     return { lines: [], errores: ['No encontré una columna de IMEIs (15 dígitos) en el archivo'] }
   }
 
-  // SKU: primero la columna con mas matches contra el catalogo; si no hay, la de texto con mas valores
+  // SKU: primero la columna con mas matches contra el catalogo; despues la que su encabezado
+  // diga SKU/PRODUCTO/ARTICULO/etc; si no hay, la de texto con mas valores
   let colSku = stats.filter(s => s.col !== colImei.col && s.skuMatch > 0).sort((a, b) => b.skuMatch - a.skuMatch)[0]
+  if (!colSku) {
+    const colEncabezado = buscarColSkuPorEncabezado(matriz)
+    if (colEncabezado !== null && colEncabezado !== colImei.col) {
+      const candidata = stats.find(s => s.col === colEncabezado && s.noVacias > 1)
+      if (candidata) colSku = candidata
+    }
+  }
   if (!colSku) colSku = stats.filter(s => s.col !== colImei.col && s.textos > 0).sort((a, b) => b.textos - a.textos)[0]
   if (!colSku) {
     return { lines: [], errores: ['No encontré una columna de SKU en el archivo'] }

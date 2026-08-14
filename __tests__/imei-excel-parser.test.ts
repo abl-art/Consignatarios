@@ -14,6 +14,14 @@ function xlsxB64(rows: unknown[][]): string {
   return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' })
 }
 
+function xlsxB64Multi(sheets: { name: string; rows: unknown[][] }[]): string {
+  const wb = XLSX.utils.book_new()
+  for (const s of sheets) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name)
+  }
+  return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' })
+}
+
 describe('luhnValido', () => {
   it('acepta IMEI valido y rechaza invalido', () => {
     expect(luhnValido(IMEI_A)).toBe(true)
@@ -111,6 +119,51 @@ describe('parseImeiExcel', () => {
     expect(r.errores.some(e => e.includes('duplicado'))).toBe(true)
     expect(r.lines[0].imeis).toHaveLength(1)
     expect(r.lines[0].imeis).toEqual([IMEI_A])
+  })
+
+  it('encuentra los IMEIs aunque la hoja de datos no sea la primera (formato Newsan)', () => {
+    const b64 = xlsxB64Multi([
+      {
+        name: 'Parametros',
+        rows: [
+          ['Parametros', ''],
+          ['Org. Inventario', 'MCH'],
+          ['FC', 'A-0039-00680820'],
+          ['IMEI', ''],
+        ],
+      },
+      {
+        name: 'XXE OM Rep Comercial Consulta',
+        rows: [
+          ['ORGANIZACION', 'PRODUCTO', 'NUMERO_SERIE', 'IMEI', 'EAN'],
+          // La columna "IMEI" de Newsan trae un numero interno de 15 digitos que NO es IMEI
+          // (no pasa Luhn); los IMEIs reales vienen en NUMERO_SERIE.
+          ['Monte Chingolo', '91PBBJ0016AR', IMEI_A, '075970000092069', '7790894901967'],
+          ['Monte Chingolo', '91PBBJ0016AR', IMEI_B, '075970000092068', '7790894901967'],
+          ['Monte Chingolo', '91PBBJ0016AR', IMEI_C, '075970000092070', '7790894901967'],
+        ],
+      },
+    ])
+    // El SKU de Newsan no esta en el catalogo: debe elegir la columna por su encabezado PRODUCTO
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores).toEqual([])
+    expect(r.lines).toHaveLength(1)
+    expect(r.lines[0].sku).toBe('91PBBJ0016AR')
+    expect(r.lines[0].imeis).toEqual([IMEI_A, IMEI_B, IMEI_C])
+    expect(r.lines[0].ean).toBe('7790894901967')
+  })
+
+  it('usa el encabezado (SKU/PRODUCTO/ARTICULO) para la columna de SKU cuando no matchea el catalogo', () => {
+    const b64 = xlsxB64([
+      ['ORGANIZACION', 'ARTICULO', 'IMEI'],
+      ['Monte Chingolo', 'SKU-NUEVO-1', IMEI_A],
+      ['Monte Chingolo', 'SKU-NUEVO-1', IMEI_B],
+    ])
+    const r = parseImeiExcel(b64, skus)
+    expect(r.errores).toEqual([])
+    expect(r.lines).toHaveLength(1)
+    expect(r.lines[0].sku).toBe('SKU-NUEVO-1')
+    expect(r.lines[0].imeis).toEqual([IMEI_A, IMEI_B])
   })
 
   it('parsea un CSV plano codificado en base64 (lo que sube el navegador via FileReader)', () => {
