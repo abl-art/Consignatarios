@@ -26,7 +26,7 @@
     },
     {
       "path": "/api/cron/sync-ingresos",
-      "schedule": "*/30 * * * *"
+      "schedule": "30 10 * * *"
     }
   ]
 }
