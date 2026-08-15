@@ -1,19 +1,10 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import NavIcon, { type IconName } from '@/components/NavIcon'
+import AdminSidebar, { type AdminNavItem } from '@/components/AdminSidebar'
 import MobileMenu from '@/components/MobileMenu'
 import { contarTacsPendientes } from '@/lib/actions/tacs'
 
-interface NavItem {
-  href: string
-  label: string
-  icon: IconName
-  external?: boolean
-  badge?: boolean
-}
-
-const navItems: NavItem[] = [
+const navItems: AdminNavItem[] = [
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
   { href: '/celia', label: 'Celia', icon: 'celia' },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
@@ -45,51 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - hidden on mobile, visible on md+ */}
-      <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
-        <div className="p-5 border-b border-gray-200">
-          <img src="/logo.png" alt="GOcelular" className="h-8" />
-          <span className="text-xs text-gray-400 block">Panel Admin</span>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) =>
-            item.external ? (
-              <a
-                key={item.href}
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
-              >
-                <NavIcon name={item.icon} />
-                <span>{item.label}</span>
-                <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-              </a>
-            ) : (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-magenta-50 hover:text-magenta-700 transition-colors"
-              >
-                <NavIcon name={item.icon} />
-                <span>{item.label}</span>
-                {item.badge && tacsPendientes > 0 && (
-                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full">{tacsPendientes}</span>
-                )}
-              </Link>
-            )
-          )}
-        </nav>
-        <div className="p-3 border-t border-gray-200">
-          <form action="/api/auth/signout" method="post">
-            <button
-              type="submit"
-              className="w-full text-left px-3 py-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-      </aside>
+      <AdminSidebar items={navItems} tacsPendientes={tacsPendientes} />
 
       {/* Mobile menu */}
       <MobileMenu items={navItems.map(item => ({
