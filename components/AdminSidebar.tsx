@@ -35,15 +35,23 @@ export default function AdminSidebar({ items, tacsPendientes }: { items: AdminNa
 
   return (
     <aside className={`hidden md:flex bg-white border-r border-gray-200 flex-col shrink-0 ${collapsed ? 'w-14' : 'w-60'} ${mounted ? 'transition-[width] duration-200' : ''}`}>
-      <div className={`border-b border-gray-200 ${collapsed ? 'p-3 flex justify-center' : 'p-5'}`}>
+      <div className={`border-b border-gray-200 ${collapsed ? 'p-3 flex flex-col items-center gap-2' : 'p-5 flex items-start justify-between gap-2'}`}>
         {collapsed ? (
           <img src="/icon-192.png" alt="GOcelular" className="h-8 w-8 rounded" />
         ) : (
-          <>
+          <div>
             <img src="/logo.png" alt="GOcelular" className="h-8" />
             <span className="text-xs text-gray-400 block">Panel Admin</span>
-          </>
+          </div>
         )}
+        <button
+          type="button"
+          onClick={toggle}
+          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          className="p-1.5 text-gray-400 rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+        >
+          <svg className={`w-4 h-4 ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+        </button>
       </div>
       <nav className={`flex-1 space-y-0.5 overflow-y-auto ${collapsed ? 'p-2' : 'p-3'}`}>
         {items.map((item) =>
@@ -84,16 +92,7 @@ export default function AdminSidebar({ items, tacsPendientes }: { items: AdminNa
           )
         )}
       </nav>
-      <div className={`border-t border-gray-200 ${collapsed ? 'p-2' : 'p-3'} space-y-0.5`}>
-        <button
-          type="button"
-          onClick={toggle}
-          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-          className={`w-full flex items-center gap-2 py-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 transition-colors ${collapsed ? 'px-0 justify-center' : 'px-3'}`}
-        >
-          <svg className={`w-4 h-4 shrink-0 ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-          {!collapsed && <span>Colapsar menú</span>}
-        </button>
+      <div className={`border-t border-gray-200 ${collapsed ? 'p-2' : 'p-3'}`}>
         <form action="/api/auth/signout" method="post">
           <button
             type="submit"
