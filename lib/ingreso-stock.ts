@@ -25,3 +25,31 @@ export function evaluarIngreso(c: IngresoCounts): IngresoEval {
     unidadesTotales,
   }
 }
+
+export interface PedidoSyncFields {
+  entregadoAt?: string
+  ingresoStockAt?: string
+  gocelular?: {
+    estado?: string
+    ingresoDetectadoAt?: string
+    unidadesIngresadas?: number
+    unidadesTotales?: number
+  }
+}
+
+// Un pedido informado se sigue chequeando hasta que el sync confirme el ingreso real
+// (ingresoDetectadoAt). Antes el corte era `!ingresoStockAt`, asi que un pedido marcado
+// a mano quedaba fuera del sync para siempre: nunca se le seteaba entregadoAt y figuraba
+// como ingresado y en transito al mismo tiempo.
+export function necesitaSyncIngreso(p: PedidoSyncFields): boolean {
+  return p.gocelular?.estado === 'informado' && !p.gocelular.ingresoDetectadoAt
+}
+
+// Ingreso marcado a mano que el deposito todavia no respalda: el pedido dice "stock
+// ingresado" pero GOcelular reporta menos unidades fuera de transito de las pedidas.
+export function ingresoSinRespaldo(p: PedidoSyncFields): boolean {
+  if (!p.ingresoStockAt || !necesitaSyncIngreso(p)) return false
+  const totales = p.gocelular?.unidadesTotales ?? 0
+  if (totales === 0) return false
+  return (p.gocelular?.unidadesIngresadas ?? 0) < totales
+}

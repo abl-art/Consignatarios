@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
 import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido } from '@/lib/actions/compras'
 import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
+import { ingresoSinRespaldo } from '@/lib/ingreso-stock'
 
 interface Proveedor {
   id: string
@@ -1397,6 +1398,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                 <GocelularChip
                                   pedidoId={p.id}
                                   gocelular={p.gocelular}
+                                  ingresoStockAt={ingresosStock[p.id] || p.ingresoStockAt}
                                   soloAddons={p.items.every(i => (categoriaPorProducto.get(i.productoId) ?? 'Celulares') !== 'Celulares')}
                                 />
 
@@ -1571,9 +1573,10 @@ function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedid
   )
 }
 
-function GocelularChip({ pedidoId, gocelular, soloAddons }: {
+function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
   pedidoId: string
   gocelular?: PedidoGuardado['gocelular']
+  ingresoStockAt?: string
   soloAddons: boolean
 }) {
   const router = useRouter()
@@ -1605,11 +1608,16 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
   // Progreso de ingreso al deposito de Andreani detectado por sync-ingresos
   const enIngreso = estado === 'informado' && !gocelular?.ingresoDetectadoAt
     && (gocelular?.unidadesTotales ?? 0) > 0
+  // Marcado a mano como ingresado pero el deposito todavia no lo respalda
+  const sinRespaldo = ingresoSinRespaldo({ ingresoStockAt, gocelular })
   const labelChip = gocelular?.ingresoDetectadoAt
     ? 'GOcelular: ingresado al stock ✓✓'
-    : enIngreso
-      ? `${c.label} · stock ${gocelular!.unidadesIngresadas ?? 0}/${gocelular!.unidadesTotales}`
-      : c.label
+    : sinRespaldo
+      ? `⚠ marcado ingresado · Andreani recibió ${gocelular!.unidadesIngresadas ?? 0}/${gocelular!.unidadesTotales}`
+      : enIngreso
+        ? `${c.label} · stock ${gocelular!.unidadesIngresadas ?? 0}/${gocelular!.unidadesTotales}`
+        : c.label
+  const clsChip = sinRespaldo ? 'bg-amber-50 text-amber-700 border-amber-300' : c.cls
   const tieneDetalle = (gocelular?.errores?.length ?? 0) > 0 || (gocelular?.pendingAliases?.length ?? 0) > 0 || estado === 'informado'
 
   return (
@@ -1617,7 +1625,7 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
       <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => tieneDetalle && setExpandido(!expandido)}
-          className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${c.cls} ${tieneDetalle ? 'cursor-pointer' : 'cursor-default'}`}
+          className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${clsChip} ${tieneDetalle ? 'cursor-pointer' : 'cursor-default'}`}
         >
           {labelChip}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
         </button>
@@ -1659,6 +1667,13 @@ function GocelularChip({ pedidoId, gocelular, soloAddons }: {
             <p className="text-green-700">
               Ingresado al stock de Andreani el {new Date(gocelular.ingresoDetectadoAt).toLocaleString('es-AR')}
               {gocelular.unidadesTotales ? ` (${gocelular.unidadesIngresadas}/${gocelular.unidadesTotales} unidades)` : ''}
+            </p>
+          )}
+          {sinRespaldo && (
+            <p className="text-amber-700">
+              El pedido figura ingresado al stock el {new Date(ingresoStockAt!).toLocaleDateString('es-AR')}, pero en GOcelular
+              {' '}{gocelular.unidadesIngresadas ?? 0} de {gocelular.unidadesTotales} unidades siguen en tránsito a Andreani.
+              Se corrige solo cuando el depósito las reciba.
             </p>
           )}
           {(gocelular.errores ?? []).map((e, i) => <p key={`${i}-${e.slice(0, 40)}`} className="text-red-600">• {e}</p>)}

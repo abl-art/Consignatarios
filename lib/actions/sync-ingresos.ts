@@ -2,7 +2,7 @@
 
 import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { evaluarIngreso } from '@/lib/ingreso-stock'
+import { evaluarIngreso, necesitaSyncIngreso } from '@/lib/ingreso-stock'
 import type { Pedido } from '@/lib/actions/compras'
 
 interface IngresoRow {
@@ -19,8 +19,11 @@ interface IngresoRow {
 // aparecen en inventory_items (celulares) y las cantidades recibidas por Andreani en
 // inventory_intake_addon_items (accesorios). Cuando el ingreso esta completo marca el
 // pedido como recibido e ingresado al stock con la fecha real del deposito; si es
-// parcial guarda el progreso para mostrarlo en el gestor. Best-effort al cargar la
-// pagina, como syncKitsGocelular: cualquier error se loguea y no rompe la carga.
+// parcial guarda el progreso para mostrarlo en el gestor. Incluye los pedidos marcados
+// a mano como ingresados mientras el deposito no lo confirme (ver necesitaSyncIngreso):
+// el marcado manual puede adelantarse al ingreso real y la fecha del deposito lo corrige.
+// Best-effort al cargar la pagina, como syncKitsGocelular: cualquier error se loguea y
+// no rompe la carga.
 export async function sincronizarIngresosGocelular(): Promise<void> {
   try {
     const supabase = createAdminClient()
@@ -31,7 +34,7 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
     for (const row of data) {
       try {
         const p = JSON.parse(row.value) as Pedido
-        if (p.gocelular?.estado === 'informado' && !p.ingresoStockAt) pendientes.push(p)
+        if (necesitaSyncIngreso(p)) pendientes.push(p)
       } catch {
         // JSON invalido: lo ignoramos aca, no es responsabilidad de este sync
       }
