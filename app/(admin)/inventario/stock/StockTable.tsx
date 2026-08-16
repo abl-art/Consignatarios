@@ -3,6 +3,14 @@
 import { useState } from 'react'
 import type { StockWarehouseRow } from '@/lib/gocelular'
 
+// A partir de estos dias en transito el lote deja de ser un envio en curso y pasa a ser
+// un dato trabado: las unidades no estan en ningun deposito y no suman al total de stock.
+export const DIAS_TRANSITO_TRABADO = 10
+
+export function diasDesde(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+}
+
 export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
   const [filtro, setFiltro] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'celular' | 'accesorio'>('todos')
@@ -64,7 +72,23 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whAndreani || '—'}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whGocuotas || '—'}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{r.enTransito || '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">
+                    {r.enTransito ? (() => {
+                      const dias = r.enTransitoDesde ? diasDesde(r.enTransitoDesde) : null
+                      const trabado = dias !== null && dias >= DIAS_TRANSITO_TRABADO
+                      return (
+                        <span
+                          className={trabado ? 'text-red-600 font-semibold' : 'text-amber-600'}
+                          title={trabado
+                            ? `La unidad más vieja lleva ${dias} días en tránsito: revisar si ya está en el depósito y quedó sin actualizar`
+                            : dias !== null ? `La unidad más vieja lleva ${dias} días en tránsito` : undefined}
+                        >
+                          {r.enTransito}
+                          {trabado && <span className="ml-1">⚠</span>}
+                        </span>
+                      )
+                    })() : '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{r.total}</td>
                 </tr>
               ))}

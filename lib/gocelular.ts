@@ -835,6 +835,9 @@ export interface StockWarehouseRow {
   whGocuotas: number
   // Unidades informadas a GOcelular que Andreani todavia no recibio (no suman al total)
   enTransito: number
+  // Fecha de alta de la unidad mas vieja que sigue en transito (ISO) — sirve para detectar
+  // lotes trabados: si Andreani nunca los recibe, quedan invisibles para el total de stock
+  enTransitoDesde: string | null
   total: number
   tipo: 'celular' | 'accesorio'
 }
@@ -846,13 +849,14 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
   const client = await pool.connect()
   try {
     const [celRes, accRes, abastRes, pedidoRes, transitoAddonRes] = await Promise.all([
-      client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; en_transito: string; total: string }>(
+      client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; en_transito: string; en_transito_desde: Date | null; total: string }>(
         `SELECT
           COALESCE(ii.model_code, '—') AS sku,
           COALESCE(dm.name, ii.model_code) AS nombre,
           COUNT(*) FILTER (WHERE ii.physical_location = 'andreani_wh')::text AS wh_andreani,
           COUNT(*) FILTER (WHERE ii.physical_location = 'local')::text AS wh_gocuotas,
           COUNT(*) FILTER (WHERE ii.physical_location = 'in_transit_andreani')::text AS en_transito,
+          MIN(ii.created_at) FILTER (WHERE ii.physical_location = 'in_transit_andreani') AS en_transito_desde,
           COUNT(*) FILTER (WHERE ii.physical_location IS DISTINCT FROM 'in_transit_andreani')::text AS total
         FROM inventory_items ii
         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
@@ -879,8 +883,10 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
          WHERE tipo = 'pedido' AND estado = 'accepted'`
       ),
       // Accesorios informados a GOcelular que Andreani aun no recibio
-      client.query<{ sku: string; pendiente: string }>(
-        `SELECT sp.sku, SUM(ai.quantity - LEAST(ai.received_quantity, ai.quantity))::text AS pendiente
+      client.query<{ sku: string; pendiente: string; desde: Date | null }>(
+        `SELECT sp.sku,
+                SUM(ai.quantity - LEAST(ai.received_quantity, ai.quantity))::text AS pendiente,
+                MIN(ai.created_at) AS desde
          FROM inventory_intake_addon_items ai
          JOIN store_products sp ON sp.id = ai.addon_product_id
          WHERE ai.quantity > ai.received_quantity
@@ -914,8 +920,10 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
     const rows: StockWarehouseRow[] = []
 
     const transitoAddons: Record<string, number> = {}
+    const transitoAddonsDesde: Record<string, string> = {}
     for (const r of transitoAddonRes.rows) {
       transitoAddons[r.sku] = Number(r.pendiente)
+      if (r.desde) transitoAddonsDesde[r.sku] = new Date(r.desde).toISOString()
     }
 
     for (const r of celRes.rows) {
@@ -925,6 +933,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         whAndreani: Number(r.wh_andreani),
         whGocuotas: Number(r.wh_gocuotas),
         enTransito: Number(r.en_transito),
+        enTransitoDesde: r.en_transito_desde ? new Date(r.en_transito_desde).toISOString() : null,
         total: Number(r.total),
         tipo: 'celular',
       })
@@ -940,6 +949,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         whAndreani: enAndreani,
         whGocuotas: enGocuotas,
         enTransito: transitoAddons[r.sku] ?? 0,
+        enTransitoDesde: transitoAddonsDesde[r.sku] ?? null,
         total: totalStock,
         tipo: 'accesorio',
       })
