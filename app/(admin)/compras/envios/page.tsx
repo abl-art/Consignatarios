@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
+import { fetchAsns, type AsnResumen } from '@/lib/gocelular'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
 import CostoCiudad from './CostoCiudad'
 import WarehouseAndreani from './WarehouseAndreani'
+import AsnTable from './AsnTable'
 
 export default async function EnviosPage({
   searchParams,
@@ -12,6 +14,12 @@ export default async function EnviosPage({
   searchParams: { tab?: string; provincia?: string }
 }) {
   const facturas = await getFacturasEnvios()
+  let asns: AsnResumen[] = []
+  try {
+    asns = await fetchAsns()
+  } catch {
+    // GOcelular no disponible
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -93,6 +101,11 @@ export default async function EnviosPage({
           id: 'warehouse',
           label: 'Warehouse Andreani',
           content: <WarehouseAndreani />,
+        },
+        {
+          id: 'asn',
+          label: 'ASN',
+          content: <AsnTable asns={asns} />,
         },
       ]} />
     </div>

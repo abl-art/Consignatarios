@@ -151,6 +151,61 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
   }
 }
 
+import { armarAsns, type AsnResumen } from './asn'
+
+export type { AsnResumen }
+
+/**
+ * ASN (abastecimientos a Andreani) con su avance de ingreso, para la pestaña
+ * ASN de /compras/envios. Un celular cuenta como ingresado cuando ya no está
+ * in_transit_andreani; un accesorio, por received_quantity.
+ */
+export async function fetchAsns(): Promise<AsnResumen[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const [txRes, celRes, accRes] = await Promise.all([
+      client.query<{ id: string; id_transaccion: string; numero_orden_externa: string; estado: string; fecha: string }>(
+        `SELECT id::text, COALESCE(id_transaccion, '—') AS id_transaccion,
+                COALESCE(numero_orden_externa, '—') AS numero_orden_externa,
+                estado::text, created_at::date::text AS fecha
+         FROM andreani_wh_transactions
+         WHERE tipo = 'abastecimiento'`
+      ),
+      client.query<{ asn_transaction_id: string; modelo: string; unidades: string; en_transito: string }>(
+        `SELECT iii.asn_transaction_id::text,
+                COALESCE(dm.name, ii.model_code, '—') AS modelo,
+                COUNT(*)::text AS unidades,
+                COUNT(*) FILTER (WHERE ii.physical_location = 'in_transit_andreani')::text AS en_transito
+         FROM inventory_intake_items iii
+         JOIN inventory_items ii ON ii.imei = COALESCE(iii.inventory_item_imei, iii.imei)
+         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+         WHERE iii.asn_transaction_id IS NOT NULL
+         GROUP BY 1, 2`
+      ),
+      client.query<{ asn_transaction_id: string; sku: string; cantidad: string; recibidas: string }>(
+        `SELECT ai.asn_transaction_id::text, sp.sku,
+                SUM(ai.quantity)::text AS cantidad,
+                SUM(LEAST(ai.received_quantity, ai.quantity))::text AS recibidas
+         FROM inventory_intake_addon_items ai
+         JOIN store_products sp ON sp.id = ai.addon_product_id
+         WHERE ai.asn_transaction_id IS NOT NULL
+         GROUP BY 1, 2`
+      ),
+    ])
+
+    return armarAsns(
+      txRes.rows,
+      celRes.rows.map((r) => ({ ...r, unidades: Number(r.unidades), en_transito: Number(r.en_transito) })),
+      accRes.rows.map((r) => ({ ...r, cantidad: Number(r.cantidad), recibidas: Number(r.recibidas) }))
+    )
+  } finally {
+    client.release()
+  }
+}
+
 export interface VentaMensualRaw {
   mes: string // 'YYYY-MM'
   store_name: string
