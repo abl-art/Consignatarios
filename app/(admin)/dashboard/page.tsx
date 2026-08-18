@@ -123,11 +123,34 @@ export default async function DashboardPage() {
         <QueVendemos initialData={ventasMarca} />
       </div>
 
-      {/* Contracargos + Stock */}
+      {/* Proyección de ventas + Stock */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <ProyeccionVentasCard />
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
+          <div className="grid grid-cols-3 xl:grid-cols-5 gap-2">
+            {[
+              { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, valor: valorPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
+              { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, valor: valorSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
+              { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, valor: valorParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
+              { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, valor: valorAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
+              { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, valor: valorKits, color: 'text-amber-700', bg: 'bg-amber-50' },
+            ].map(cat => (
+              <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-3 text-center hover:shadow-md transition-shadow`}>
+                <p className={`text-xl font-bold ${cat.color}`}>{cat.stock}</p>
+                <p className="text-[10px] text-gray-500">{cat.label}</p>
+                <p className={`text-[10px] ${cat.color} mt-0.5`}>{formatearMoneda(cat.valor)}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Contracargos + Bloqueados vs Mora */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
           <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500 mb-1">Monto incobrable</p>
               <p className="text-xl font-bold text-red-700">{formatearMoneda(contracargos.monto_contracargos)}</p>
@@ -147,37 +170,14 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
-          <div className="grid grid-cols-5 gap-2">
-            {[
-              { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, valor: valorPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
-              { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, valor: valorSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
-              { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, valor: valorParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
-              { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, valor: valorAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
-              { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, valor: valorKits, color: 'text-amber-700', bg: 'bg-amber-50' },
-            ].map(cat => (
-              <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-3 text-center hover:shadow-md transition-shadow`}>
-                <p className={`text-xl font-bold ${cat.color}`}>{cat.stock}</p>
-                <p className="text-[10px] text-gray-500">{cat.label}</p>
-                <p className={`text-[10px] ${cat.color} mt-0.5`}>{formatearMoneda(cat.valor)}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Proyección de ventas mensuales */}
-      <ProyeccionVentasCard />
-
-      {/* Bloqueados vs Mora */}
-      {(() => {
+        {/* Bloqueados vs Mora */}
+        {(() => {
         const m = bloqueadosVsMora
         const pct = (n: number) => m.ordenesMora > 0 ? ((n / m.ordenesMora) * 100).toFixed(1) + '%' : '0%'
         return (
-          <div className={`rounded-xl border p-5 mt-4 ${m.sinBloquear > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+          <div className={`rounded-xl border p-5 ${m.sinBloquear > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
             <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;4 días)</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
                 <p className="text-2xl font-bold text-red-700">{m.bloqueados.toLocaleString('es-AR')}</p>
@@ -213,7 +213,8 @@ export default async function DashboardPage() {
             </div>
           </div>
         )
-      })()}
+        })()}
+      </div>
 
       {/* Trustonic - ancho completo */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
@@ -366,14 +367,14 @@ async function ProyeccionVentasCard() {
   if (p.proyeccion.length === 0 || p.mesesCerrados === 0) return null
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Ventas mensuales proyectadas</h2>
         <p className="text-sm text-gray-500">
           Real ene–{NOMBRES_MES[String(p.mesesCerrados).padStart(2, '0')].toLowerCase().slice(0, 3)}: prom. <span className="font-semibold text-gray-700">{Math.round(p.promedioMensualCerrado.ventas)} ventas · {formatearMoneda(Math.round(p.promedioMensualCerrado.monto))}</span> /mes
         </p>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {p.proyeccion.map((punto) => (
           <div key={punto.mes} className="bg-gray-50 rounded-lg p-4 text-center">
             <p className="text-sm text-gray-500 mb-1">{NOMBRES_MES[punto.mes.slice(5)]}</p>
