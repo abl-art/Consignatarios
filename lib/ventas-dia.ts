@@ -74,3 +74,74 @@ export function resumenVentasDia(
 function promediar(total: Cifras): Cifras {
   return { ventas: total.ventas / DIAS, monto: total.monto / DIAS }
 }
+
+export interface VentaMensual extends VentaAgrupada {
+  mes: string // 'YYYY-MM'
+}
+
+export interface ProyeccionVentas {
+  promedioMensualCerrado: Cifras
+  mesesCerrados: number
+  proyeccion: { mes: string; ventas: number; monto: number }[]
+}
+
+/**
+ * Proyecta los meses restantes del año con una regresión lineal sobre los
+ * meses cerrados (enero → mes anterior al actual; el mes en curso queda fuera
+ * por incompleto). Meses sin ventas cuentan como cero. Excluye consignatarios
+ * (modelo en baja); la proyección nunca baja de cero.
+ */
+export function proyectarVentasMensuales(
+  mensuales: VentaMensual[],
+  prefixes: ConsignatarioPrefix[],
+  mesActual: string // 'YYYY-MM'
+): ProyeccionVentas {
+  const [anio, mesNum] = mesActual.split('-').map(Number)
+  const cerrados = mesNum - 1
+
+  const clave = (m: number) => `${anio}-${String(m).padStart(2, '0')}`
+  const serie: Cifras[] = []
+  for (let m = 1; m <= cerrados; m++) {
+    const delMes = mensuales.filter((v) => v.mes === clave(m) && clasificar(v, prefixes) !== 'consignatarios')
+    serie.push(delMes.reduce((acc, v) => ({ ventas: acc.ventas + v.ventas, monto: acc.monto + v.monto }), { ventas: 0, monto: 0 }))
+  }
+
+  const ajusteVentas = ajustarRecta(serie.map((c) => c.ventas))
+  const ajusteMonto = ajustarRecta(serie.map((c) => c.monto))
+
+  const proyeccion = []
+  for (let m = mesNum + 1; m <= 12; m++) {
+    proyeccion.push({
+      mes: clave(m),
+      ventas: Math.max(0, ajusteVentas.a + ajusteVentas.b * m),
+      monto: Math.max(0, ajusteMonto.a + ajusteMonto.b * m),
+    })
+  }
+
+  const total = serie.reduce((acc, c) => ({ ventas: acc.ventas + c.ventas, monto: acc.monto + c.monto }), { ventas: 0, monto: 0 })
+  return {
+    promedioMensualCerrado: cerrados > 0 ? { ventas: total.ventas / cerrados, monto: total.monto / cerrados } : { ventas: 0, monto: 0 },
+    mesesCerrados: cerrados,
+    proyeccion,
+  }
+}
+
+// Cuadrados mínimos sobre y = a + b·x con x = 1..n. Con menos de 2 puntos
+// no hay pendiente: devuelve la media (o cero) como recta plana.
+function ajustarRecta(ys: number[]): { a: number; b: number } {
+  const n = ys.length
+  if (n === 0) return { a: 0, b: 0 }
+  const media = ys.reduce((s, y) => s + y, 0) / n
+  if (n === 1) return { a: media, b: 0 }
+
+  const mediaX = (n + 1) / 2
+  let sxy = 0
+  let sxx = 0
+  for (let i = 0; i < n; i++) {
+    const dx = i + 1 - mediaX
+    sxy += dx * (ys[i] - media)
+    sxx += dx * dx
+  }
+  const b = sxy / sxx
+  return { a: media - b * mediaX, b }
+}

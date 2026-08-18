@@ -4,8 +4,8 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
-import { resumenVentasDia } from '@/lib/ventas-dia'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
+import { resumenVentasDia, proyectarVentasMensuales } from '@/lib/ventas-dia'
 import { getMejorPrecio, getInventarioByCategoria } from '@/lib/actions/compras'
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import Link from 'next/link'
@@ -167,6 +167,9 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* Proyección de ventas mensuales */}
+      <ProyeccionVentasCard />
+
       {/* Bloqueados vs Mora */}
       {(() => {
         const m = bloqueadosVsMora
@@ -279,9 +282,6 @@ async function VentasDelDia() {
 
   const resumen = resumenVentasDia(ventasHoy, ventasUlt30d, prefixes)
 
-  const promedio = (c: { ventas: number; monto: number }) =>
-    `prom. ${Math.round(c.ventas)} ventas · ${formatearMoneda(Math.round(c.monto))} /día`
-
   const canales = [
     { key: 'gocelular' as const, label: 'GOcelular', color: 'bg-magenta-50', borderColor: 'border-magenta-200', iconColor: 'text-magenta-700' },
     { key: 'terceros' as const, label: 'Terceros', color: 'bg-gray-50', borderColor: 'border-gray-200', iconColor: 'text-gray-700' },
@@ -289,45 +289,101 @@ async function VentasDelDia() {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Ventas del día</h2>
-          <p className="text-xs text-gray-500">{resumen.hoy.total.ventas} ventas · {formatearMoneda(resumen.hoy.total.monto)}</p>
+          <h2 className="text-lg font-semibold text-gray-900">Ventas del día</h2>
+          <p className="text-sm text-gray-500">{resumen.hoy.total.ventas} ventas · {formatearMoneda(resumen.hoy.total.monto)}</p>
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {canales.map((canal) => {
           const cifras = resumen.hoy[canal.key]
+          const prom = resumen.prom30d[canal.key]
 
           const Wrapper = canal.key === 'terceros' ? 'a' : 'div'
           const extraProps = canal.key === 'terceros' ? { href: '/dashboard/terceros' } : {}
           return (
-            <Wrapper key={canal.key} {...extraProps} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-3 block ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
+            <Wrapper key={canal.key} {...extraProps} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-4 block ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <h3 className={`text-sm font-bold ${canal.iconColor}`}>{canal.label}</h3>
+                  <h3 className={`text-base font-bold ${canal.iconColor}`}>{canal.label}</h3>
                   {canal.key === 'terceros' && cifras.ventas > 0 && (
-                    <span className="text-[10px] text-gray-400">ver detalle →</span>
+                    <span className="text-xs text-gray-400">ver detalle →</span>
                   )}
                 </div>
                 <div className="flex items-center gap-4">
-                  <p className={`text-lg font-bold ${canal.iconColor}`}>{formatearMoneda(cifras.monto)}</p>
-                  <div className="text-right min-w-[40px]">
-                    <p className="text-sm font-bold text-gray-900">{cifras.ventas}</p>
-                    <p className="text-[10px] text-gray-400">ventas</p>
+                  <p className={`text-2xl font-bold ${canal.iconColor}`}>{formatearMoneda(cifras.monto)}</p>
+                  <div className="text-right min-w-[48px]">
+                    <p className="text-xl font-bold text-gray-900">{cifras.ventas}</p>
+                    <p className="text-xs text-gray-400">ventas</p>
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1">{promedio(resumen.prom30d[canal.key])}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                prom. <span className="font-semibold text-gray-700">{Math.round(prom.ventas)} ventas</span> · <span className="font-semibold text-gray-700">{formatearMoneda(Math.round(prom.monto))}</span> /día
+              </p>
             </Wrapper>
           )
         })}
       </div>
 
-      <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100">
-        Promedio general (30d): <span className="font-semibold text-gray-700">{Math.round(resumen.prom30d.general.ventas)} ventas · {formatearMoneda(Math.round(resumen.prom30d.general.monto))} /día</span>
-      </p>
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-sm text-gray-500 mb-1">Promedio general (30d)</p>
+        <p className="text-xl font-bold text-gray-900">
+          {Math.round(resumen.prom30d.general.ventas)} ventas · {formatearMoneda(Math.round(resumen.prom30d.general.monto))} <span className="text-sm font-normal text-gray-500">/día</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const NOMBRES_MES: Record<string, string> = {
+  '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril', '05': 'Mayo', '06': 'Junio',
+  '07': 'Julio', '08': 'Agosto', '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
+}
+
+async function ProyeccionVentasCard() {
+  const supabase = createClient()
+  const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
+  const prefixes = (consigs ?? [])
+    .filter((c: { store_prefix: string | null }) => c.store_prefix)
+    .map((c: { nombre: string; store_prefix: string | null }) => ({
+      nombre: c.nombre,
+      prefix: c.store_prefix!.toLowerCase(),
+    }))
+
+  let mensuales: Awaited<ReturnType<typeof fetchVentasMensualesAnio>> = []
+  try {
+    mensuales = await fetchVentasMensualesAnio()
+  } catch {
+    // GOcelular no disponible
+  }
+  if (mensuales.length === 0) return null
+
+  const mesActual = new Date().toISOString().slice(0, 7)
+  const p = proyectarVentasMensuales(mensuales, prefixes, mesActual)
+  if (p.proyeccion.length === 0 || p.mesesCerrados === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Ventas mensuales proyectadas</h2>
+        <p className="text-sm text-gray-500">
+          Real ene–{NOMBRES_MES[String(p.mesesCerrados).padStart(2, '0')].toLowerCase().slice(0, 3)}: prom. <span className="font-semibold text-gray-700">{Math.round(p.promedioMensualCerrado.ventas)} ventas · {formatearMoneda(Math.round(p.promedioMensualCerrado.monto))}</span> /mes
+        </p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {p.proyeccion.map((punto) => (
+          <div key={punto.mes} className="bg-gray-50 rounded-lg p-4 text-center">
+            <p className="text-sm text-gray-500 mb-1">{NOMBRES_MES[punto.mes.slice(5)]}</p>
+            <p className="text-2xl font-bold text-gray-900">{Math.round(punto.ventas).toLocaleString('es-AR')}</p>
+            <p className="text-xs text-gray-400">ventas</p>
+            <p className="text-sm font-semibold text-magenta-700 mt-1">{formatearMoneda(Math.round(punto.monto))}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-3">Tendencia lineal sobre los meses cerrados del año · sin consignatarios</p>
     </div>
   )
 }

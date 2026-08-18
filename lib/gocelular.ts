@@ -151,6 +151,44 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
   }
 }
 
+export interface VentaMensualRaw {
+  mes: string // 'YYYY-MM'
+  store_name: string
+  client_id: string
+  ventas: number
+  monto: number
+}
+
+/**
+ * Ventas del año en curso agrupadas por mes y store_name. Misma base que
+ * fetchVentasHoy (órdenes creadas, no anuladas) — alimenta la proyección
+ * mensual del dashboard.
+ */
+export async function fetchVentasMensualesAnio(): Promise<VentaMensualRaw[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ mes: string; store_name: string; client_id: string; ventas: string; monto: string }>(
+      `SELECT to_char(go.created_at, 'YYYY-MM') AS mes, go.store_name, go.client_id::text, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
+       FROM gocuotas_orders go
+       WHERE go.order_discarded_at IS NULL
+         AND go.created_at >= date_trunc('year', CURRENT_DATE)
+       GROUP BY 1, go.store_name, go.client_id`
+    )
+    return res.rows.map((r) => ({
+      mes: r.mes,
+      store_name: r.store_name,
+      client_id: r.client_id,
+      ventas: Number(r.ventas),
+      monto: Number(r.monto),
+    }))
+  } finally {
+    client.release()
+  }
+}
+
 /**
  * Dado un array de order_ids ya sincronizados, devuelve los que fueron
  * anulados en GOcelular (order_discarded_at IS NOT NULL).
