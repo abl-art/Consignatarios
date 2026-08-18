@@ -12,6 +12,7 @@ function fila(over: Partial<StockWarehouseRow> = {}): StockWarehouseRow {
     enTransitoDesde: null,
     total: 110,
     tipo: 'celular',
+    marca: 'Motorola',
     ...over,
   }
 }

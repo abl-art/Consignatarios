@@ -4,13 +4,24 @@ import { useState } from 'react'
 import type { StockDisponibilidadRow } from '@/lib/disponibilidad'
 
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
+import { categoriaAccesorio, type CategoriaAccesorio } from '@/lib/categoria-accesorio'
+
+type TipoFiltro = 'todos' | 'celular' | 'accesorio' | CategoriaAccesorio
 
 export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] }) {
   const [filtro, setFiltro] = useState('')
-  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'celular' | 'accesorio'>('todos')
+  const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>('todos')
+  const [marcaFiltro, setMarcaFiltro] = useState('todas')
+
+  const marcas = Array.from(new Set(rows.map(r => r.marca).filter((m): m is string => !!m))).sort()
 
   const filtered = rows.filter(r => {
-    if (tipoFiltro !== 'todos' && r.tipo !== tipoFiltro) return false
+    if (tipoFiltro === 'celular' || tipoFiltro === 'accesorio') {
+      if (r.tipo !== tipoFiltro) return false
+    } else if (tipoFiltro !== 'todos') {
+      if (r.tipo !== 'accesorio' || categoriaAccesorio(r.sku, r.nombre) !== tipoFiltro) return false
+    }
+    if (marcaFiltro !== 'todas' && r.marca !== marcaFiltro) return false
     if (filtro) {
       const q = filtro.toLowerCase()
       return r.nombre.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q)
@@ -30,12 +41,26 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
         />
         <select
           value={tipoFiltro}
-          onChange={e => setTipoFiltro(e.target.value as 'todos' | 'celular' | 'accesorio')}
+          onChange={e => setTipoFiltro(e.target.value as TipoFiltro)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
         >
           <option value="todos">Todos</option>
           <option value="celular">Celulares</option>
-          <option value="accesorio">Accesorios</option>
+          <option value="accesorio">Accesorios (todos)</option>
+          <option value="kit">— Kits de seguridad</option>
+          <option value="auricular">— Auriculares</option>
+          <option value="parlante">— Parlantes</option>
+          <option value="smartwatch">— Smartwatches</option>
+        </select>
+        <select
+          value={marcaFiltro}
+          onChange={e => setMarcaFiltro(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="todas">Todas las marcas</option>
+          {marcas.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
         </select>
       </div>
 

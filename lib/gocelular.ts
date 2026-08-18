@@ -153,6 +153,7 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 
 import { armarAsns, type AsnResumen } from './asn'
 import { calcularStockAccesorio } from './stock-accesorios'
+import { normalizarMarca } from './marca'
 
 export type { AsnResumen }
 
@@ -1006,6 +1007,7 @@ export interface StockWarehouseRow {
   enTransitoDesde: string | null
   total: number
   tipo: 'celular' | 'accesorio'
+  marca: string | null
 }
 
 export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
@@ -1015,7 +1017,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
   const client = await pool.connect()
   try {
     const [celRes, accRes, abastRes, pedidoRes, transitoAddonRes, pendAceptadoRes] = await Promise.all([
-      client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; en_transito: string; en_transito_desde: Date | null; total: string }>(
+      client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; en_transito: string; en_transito_desde: Date | null; total: string; marca: string | null }>(
         `SELECT
           COALESCE(ii.model_code, '—') AS sku,
           COALESCE(dm.name, ii.model_code) AS nombre,
@@ -1023,15 +1025,16 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
           COUNT(*) FILTER (WHERE ii.physical_location = 'local')::text AS wh_gocuotas,
           COUNT(*) FILTER (WHERE ii.physical_location = 'in_transit_andreani')::text AS en_transito,
           MIN(ii.created_at) FILTER (WHERE ii.physical_location = 'in_transit_andreani') AS en_transito_desde,
-          COUNT(*) FILTER (WHERE ii.physical_location IS DISTINCT FROM 'in_transit_andreani')::text AS total
+          COUNT(*) FILTER (WHERE ii.physical_location IS DISTINCT FROM 'in_transit_andreani')::text AS total,
+          MAX(dm.brand) AS marca
         FROM inventory_items ii
         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
         WHERE ii.status = 'available'
         GROUP BY ii.model_code, COALESCE(dm.name, ii.model_code)
         ORDER BY COALESCE(dm.name, ii.model_code)`
       ),
-      client.query<{ sku: string; nombre: string; stock: string }>(
-        `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock
+      client.query<{ sku: string; nombre: string; stock: string; marca: string | null }>(
+        `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock, brand AS marca
          FROM store_products
          WHERE is_addon = true
            AND (status = 'active' OR sku ILIKE 'KS-%')
@@ -1114,6 +1117,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         enTransitoDesde: r.en_transito_desde ? new Date(r.en_transito_desde).toISOString() : null,
         total: Number(r.total),
         tipo: 'celular',
+        marca: normalizarMarca(r.marca),
       })
     }
 
@@ -1140,6 +1144,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         enTransitoDesde: transitoAddonsDesde[r.sku] ?? null,
         total,
         tipo: 'accesorio',
+        marca: normalizarMarca(r.marca),
       })
     }
 
