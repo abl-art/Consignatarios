@@ -77,7 +77,8 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
                 <th className="px-4 py-3 text-right font-medium" title="Pedidos en el warehouse de Andreani aún no expedidos (sin IMEI asignado)">Pend. Andreani</th>
                 <th className="px-4 py-3 text-right font-medium" title="WH Andreani + WH GOcuotas − pendientes">Disponible real</th>
                 <th className="px-4 py-3 text-right font-medium">En tránsito</th>
-                <th className="px-4 py-3 text-right font-medium" title="Disponible real + en tránsito">Próxima disponib.</th>
+                <th className="px-4 py-3 text-right font-medium" title="Comprado en el gestor de pedidos, aún no informado a GOcelular (al informarse pasa a En tránsito)">Pedido</th>
+                <th className="px-4 py-3 text-right font-medium" title="Disponible real + en tránsito + pedido">Próxima disponib.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -116,6 +117,7 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
                       )
                     })() : '—'}
                   </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{r.pedido || '—'}</td>
                   <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${r.proximaDisponibilidad < 0 ? 'text-red-600' : ''}`}>
                     {r.proximaDisponibilidad}
                   </td>
@@ -123,7 +125,7 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                     No se encontraron productos
                   </td>
                 </tr>
@@ -151,6 +153,9 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-amber-600">
                   {filtered.reduce((s, r) => s + r.enTransito, 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-blue-600">
+                  {filtered.reduce((s, r) => s + r.pedido, 0).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {filtered.reduce((s, r) => s + r.proximaDisponibilidad, 0).toLocaleString()}

@@ -37,6 +37,13 @@ describe('completarDisponibilidad', () => {
     expect(r.proximaDisponibilidad).toBe(450)
   })
 
+  it('el pedido del gestor suma a la próxima disponibilidad', () => {
+    const [r] = completarDisponibilidad([{ ...fila(), pedido: 100 }], { gocuotas: {}, andreani: {} })
+    expect(r.pedido).toBe(100)
+    expect(r.disponibleReal).toBe(110) // el pedido no toca el disponible de hoy
+    expect(r.proximaDisponibilidad).toBe(550) // 110 + 340 tránsito + 100 pedido
+  })
+
   it('la sobreventa da disponible real negativo (no se recorta)', () => {
     const [r] = completarDisponibilidad([fila({ whAndreani: 1, whGocuotas: 0, enTransito: 10 })], {
       gocuotas: { 'XT2536 (g06)': 5 },

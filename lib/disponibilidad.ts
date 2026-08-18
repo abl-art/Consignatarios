@@ -17,23 +17,27 @@ export interface StockDisponibilidadRow extends StockWarehouseRow {
   pendGocuotas: number
   pendAndreani: number
   disponibleReal: number
+  // Unidades compradas en el gestor de pedidos aún no informadas a GOcelular
+  pedido: number
   proximaDisponibilidad: number
 }
 
 export function completarDisponibilidad(
-  rows: StockWarehouseRow[],
+  rows: (StockWarehouseRow & { pedido?: number })[],
   pendientes: PendientesPorClave
 ): StockDisponibilidadRow[] {
   return rows.map((r) => {
     const pendGocuotas = pendientes.gocuotas[r.sku] ?? 0
     const pendAndreani = pendientes.andreani[r.sku] ?? 0
+    const pedido = r.pedido ?? 0
     const disponibleReal = r.whAndreani + r.whGocuotas - pendGocuotas - pendAndreani
     return {
       ...r,
       pendGocuotas,
       pendAndreani,
       disponibleReal,
-      proximaDisponibilidad: disponibleReal + r.enTransito,
+      pedido,
+      proximaDisponibilidad: disponibleReal + r.enTransito + pedido,
     }
   })
 }
