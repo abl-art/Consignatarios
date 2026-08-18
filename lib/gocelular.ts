@@ -122,6 +122,36 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
 }
 
 /**
+ * Ventas de los últimos 30 días calendario cerrados (sin contar hoy),
+ * agrupadas por store_name. Misma base que fetchVentasHoy (órdenes creadas,
+ * no entregadas) para que los promedios sean comparables con el día.
+ */
+export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ store_name: string; client_id: string; ventas: string; monto: string }>(
+      `SELECT go.store_name, go.client_id::text, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
+       FROM gocuotas_orders go
+       WHERE go.order_discarded_at IS NULL
+         AND go.created_at::date >= CURRENT_DATE - 30
+         AND go.created_at::date < CURRENT_DATE
+       GROUP BY go.store_name, go.client_id`
+    )
+    return res.rows.map((r) => ({
+      store_name: r.store_name,
+      client_id: r.client_id,
+      ventas: Number(r.ventas),
+      monto: Number(r.monto),
+    }))
+  } finally {
+    client.release()
+  }
+}
+
+/**
  * Dado un array de order_ids ya sincronizados, devuelve los que fueron
  * anulados en GOcelular (order_discarded_at IS NOT NULL).
  */

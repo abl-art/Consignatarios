@@ -4,7 +4,8 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, CLIENT_IDS_PROPIOS, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
+import { resumenVentasDia } from '@/lib/ventas-dia'
 import { getMejorPrecio, getInventarioByCategoria } from '@/lib/actions/compras'
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import Link from 'next/link'
@@ -267,78 +268,66 @@ async function VentasDelDia() {
     }))
 
   let ventasHoy: VentaDiaria[] = []
+  let ventasUlt30d: VentaDiaria[] = []
   try {
-    ventasHoy = await fetchVentasHoy()
+    ;[ventasHoy, ventasUlt30d] = await Promise.all([fetchVentasHoy(), fetchVentasUlt30d()])
   } catch {
     // GOcelular no disponible
   }
 
-  if (ventasHoy.length === 0) return null
+  if (ventasHoy.length === 0 && ventasUlt30d.length === 0) return null
 
-  type Canal = 'gocelular' | 'consignatarios' | 'terceros'
-  interface VentaClasificada extends VentaDiaria {
-    canal: Canal
-    consignatarioNombre?: string
-  }
+  const resumen = resumenVentasDia(ventasHoy, ventasUlt30d, prefixes)
 
-  const clasificadas: VentaClasificada[] = ventasHoy.map((v) => {
-    // Client IDs propios son siempre venta propia
-    if (CLIENT_IDS_PROPIOS.includes(v.client_id)) {
-      return { ...v, canal: 'gocelular' }
-    }
-    const lower = v.store_name.toLowerCase()
-    const match = prefixes.find((p) => lower.startsWith(p.prefix))
-    if (match) {
-      return { ...v, canal: 'consignatarios', consignatarioNombre: match.nombre }
-    }
-    return { ...v, canal: 'terceros' }
-  })
+  const promedio = (c: { ventas: number; monto: number }) =>
+    `prom. ${Math.round(c.ventas)} ventas · ${formatearMoneda(Math.round(c.monto))} /día`
 
-  const canales: { key: Canal; label: string; color: string; borderColor: string; iconColor: string }[] = [
-    { key: 'gocelular', label: 'GOcelular', color: 'bg-magenta-50', borderColor: 'border-magenta-200', iconColor: 'text-magenta-700' },
-    { key: 'consignatarios', label: 'Consignatarios', color: 'bg-blue-50', borderColor: 'border-blue-200', iconColor: 'text-blue-700' },
-    { key: 'terceros', label: 'Terceros', color: 'bg-gray-50', borderColor: 'border-gray-200', iconColor: 'text-gray-700' },
+  const canales = [
+    { key: 'gocelular' as const, label: 'GOcelular', color: 'bg-magenta-50', borderColor: 'border-magenta-200', iconColor: 'text-magenta-700' },
+    { key: 'terceros' as const, label: 'Terceros', color: 'bg-gray-50', borderColor: 'border-gray-200', iconColor: 'text-gray-700' },
   ]
-
-  const totalVentas = clasificadas.reduce((s, v) => s + v.ventas, 0)
-  const totalMonto = clasificadas.reduce((s, v) => s + v.monto, 0)
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Ventas del día</h2>
-          <p className="text-xs text-gray-500">{totalVentas} ventas · {formatearMoneda(totalMonto)}</p>
+          <p className="text-xs text-gray-500">{resumen.hoy.total.ventas} ventas · {formatearMoneda(resumen.hoy.total.monto)}</p>
         </div>
       </div>
 
       <div className="space-y-2">
         {canales.map((canal) => {
-          const items = clasificadas.filter((v) => v.canal === canal.key)
-          const canalVentas = items.reduce((s, v) => s + v.ventas, 0)
-          const canalMonto = items.reduce((s, v) => s + v.monto, 0)
+          const cifras = resumen.hoy[canal.key]
 
           const Wrapper = canal.key === 'terceros' ? 'a' : 'div'
           const extraProps = canal.key === 'terceros' ? { href: '/dashboard/terceros' } : {}
           return (
-            <Wrapper key={canal.key} {...extraProps} className={`flex items-center justify-between rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-3 ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
-              <div className="flex items-center gap-3">
-                <h3 className={`text-sm font-bold ${canal.iconColor}`}>{canal.label}</h3>
-                {canal.key === 'terceros' && canalVentas > 0 && (
-                  <span className="text-[10px] text-gray-400">ver detalle →</span>
-                )}
-              </div>
-              <div className="flex items-center gap-4">
-                <p className={`text-lg font-bold ${canal.iconColor}`}>{formatearMoneda(canalMonto)}</p>
-                <div className="text-right min-w-[40px]">
-                  <p className="text-sm font-bold text-gray-900">{canalVentas}</p>
-                  <p className="text-[10px] text-gray-400">ventas</p>
+            <Wrapper key={canal.key} {...extraProps} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-3 block ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className={`text-sm font-bold ${canal.iconColor}`}>{canal.label}</h3>
+                  {canal.key === 'terceros' && cifras.ventas > 0 && (
+                    <span className="text-[10px] text-gray-400">ver detalle →</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  <p className={`text-lg font-bold ${canal.iconColor}`}>{formatearMoneda(cifras.monto)}</p>
+                  <div className="text-right min-w-[40px]">
+                    <p className="text-sm font-bold text-gray-900">{cifras.ventas}</p>
+                    <p className="text-[10px] text-gray-400">ventas</p>
+                  </div>
                 </div>
               </div>
+              <p className="text-[10px] text-gray-400 mt-1">{promedio(resumen.prom30d[canal.key])}</p>
             </Wrapper>
           )
         })}
       </div>
+
+      <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100">
+        Promedio general (30d): <span className="font-semibold text-gray-700">{Math.round(resumen.prom30d.general.ventas)} ventas · {formatearMoneda(Math.round(resumen.prom30d.general.monto))} /día</span>
+      </p>
     </div>
   )
 }
