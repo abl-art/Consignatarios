@@ -207,6 +207,48 @@ export async function fetchAsns(): Promise<AsnResumen[]> {
   }
 }
 
+/**
+ * Unidades pendientes de picking por depósito, agrupadas por clave de fila de
+ * stock (model_code para celulares, sku para accesorios). Pendiente = orden
+ * paga sin entregar y sin IMEI asignado (con IMEI la unidad ya está 'assigned'
+ * y salió del stock: restarla de nuevo sería doble descuento). El lado GOcuotas
+ * se acota a órdenes de los últimos 30 días para no arrastrar backlog viejo.
+ */
+export async function fetchPendientesPicking(): Promise<{ gocuotas: Record<string, number>; andreani: Record<string, number> }> {
+  const vacio = { gocuotas: {}, andreani: {} }
+  const pool = getPool()
+  if (!pool) return vacio
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ via: 'andreani' | 'gocuotas'; clave: string | null; unidades: string }>(
+      `SELECT CASE WHEN p.id IS NOT NULL THEN 'andreani' ELSE 'gocuotas' END AS via,
+              CASE WHEN sp.is_addon THEN sp.sku ELSE sp.model_code END AS clave,
+              SUM(soi.quantity)::text AS unidades
+       FROM store_orders so
+       JOIN store_order_items soi ON soi.order_id = so.id
+       JOIN store_products sp ON sp.id = soi.product_id
+       LEFT JOIN andreani_wh_pedidos p ON p.store_order_id = so.id AND p.estado <> 'cancelled'
+       WHERE so.paid_at IS NOT NULL
+         AND so.cancelled_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM shipments s
+           WHERE s.store_order_id = so.id AND s.type = 'outbound' AND s.status <> 'cancelled'
+             AND (s.imei IS NOT NULL OR s.delivered_at IS NOT NULL))
+         AND (p.id IS NOT NULL OR so.paid_at > now() - INTERVAL '30 days')
+       GROUP BY 1, 2`
+    )
+    const out: { gocuotas: Record<string, number>; andreani: Record<string, number> } = { gocuotas: {}, andreani: {} }
+    for (const r of res.rows) {
+      if (!r.clave) continue
+      out[r.via][r.clave] = (out[r.via][r.clave] ?? 0) + Number(r.unidades)
+    }
+    return out
+  } finally {
+    client.release()
+  }
+}
+
 export interface VentaMensualRaw {
   mes: string // 'YYYY-MM'
   store_name: string

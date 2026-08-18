@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import type { StockWarehouseRow } from '@/lib/gocelular'
+import type { StockDisponibilidadRow } from '@/lib/disponibilidad'
 
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 
-export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
+export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] }) {
   const [filtro, setFiltro] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'celular' | 'accesorio'>('todos')
 
@@ -48,8 +48,11 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                 <th className="px-4 py-3 text-left font-medium">Nombre</th>
                 <th className="px-4 py-3 text-right font-medium">WH Andreani</th>
                 <th className="px-4 py-3 text-right font-medium">WH GOcuotas</th>
+                <th className="px-4 py-3 text-right font-medium" title="Órdenes pagas con envío propio, sin entregar y sin IMEI asignado">Pend. GO</th>
+                <th className="px-4 py-3 text-right font-medium" title="Pedidos en el warehouse de Andreani aún no expedidos (sin IMEI asignado)">Pend. Andreani</th>
+                <th className="px-4 py-3 text-right font-medium" title="WH Andreani + WH GOcuotas − pendientes">Disponible real</th>
                 <th className="px-4 py-3 text-right font-medium">En tránsito</th>
-                <th className="px-4 py-3 text-right font-medium">Total</th>
+                <th className="px-4 py-3 text-right font-medium" title="Disponible real + en tránsito">Próxima disponib.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -66,6 +69,11 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whAndreani || '—'}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.whGocuotas || '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{r.pendGocuotas || '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{r.pendAndreani || '—'}</td>
+                  <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${r.disponibleReal < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {r.disponibleReal}
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {r.enTransito ? (() => {
                       const dias = r.enTransitoDesde ? diasDesde(r.enTransitoDesde) : null
@@ -83,12 +91,14 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                       )
                     })() : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{r.total}</td>
+                  <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${r.proximaDisponibilidad < 0 ? 'text-red-600' : ''}`}>
+                    {r.proximaDisponibilidad}
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                     No se encontraron productos
                   </td>
                 </tr>
@@ -105,11 +115,20 @@ export default function StockTable({ rows }: { rows: StockWarehouseRow[] }) {
                 <td className="px-4 py-3 text-right tabular-nums">
                   {filtered.reduce((s, r) => s + r.whGocuotas, 0).toLocaleString()}
                 </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-500">
+                  {filtered.reduce((s, r) => s + r.pendGocuotas, 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-500">
+                  {filtered.reduce((s, r) => s + r.pendAndreani, 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {filtered.reduce((s, r) => s + r.disponibleReal, 0).toLocaleString()}
+                </td>
                 <td className="px-4 py-3 text-right tabular-nums text-amber-600">
                   {filtered.reduce((s, r) => s + r.enTransito, 0).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
-                  {filtered.reduce((s, r) => s + r.total, 0).toLocaleString()}
+                  {filtered.reduce((s, r) => s + r.proximaDisponibilidad, 0).toLocaleString()}
                 </td>
               </tr>
             </tfoot>
