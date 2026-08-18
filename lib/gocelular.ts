@@ -152,6 +152,7 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 }
 
 import { armarAsns, type AsnResumen } from './asn'
+import { calcularStockAccesorio } from './stock-accesorios'
 
 export type { AsnResumen }
 
@@ -971,7 +972,7 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
 
   const client = await pool.connect()
   try {
-    const [celRes, accRes, abastRes, pedidoRes, transitoAddonRes] = await Promise.all([
+    const [celRes, accRes, abastRes, pedidoRes, transitoAddonRes, pendAceptadoRes] = await Promise.all([
       client.query<{ sku: string; nombre: string; wh_andreani: string; wh_gocuotas: string; en_transito: string; en_transito_desde: Date | null; total: string }>(
         `SELECT
           COALESCE(ii.model_code, '—') AS sku,
@@ -1013,6 +1014,18 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
          FROM inventory_intake_addon_items ai
          JOIN store_products sp ON sp.id = ai.addon_product_id
          WHERE ai.quantity > ai.received_quantity
+         GROUP BY sp.sku`
+      ),
+      // De eso pendiente, lo que pertenece a un ASN ya aceptado: esta contado en
+      // el payload como "informado" pero Andreani todavia no lo recibio
+      client.query<{ sku: string; pendiente: string }>(
+        `SELECT sp.sku,
+                SUM(ai.quantity - LEAST(ai.received_quantity, ai.quantity))::text AS pendiente
+         FROM inventory_intake_addon_items ai
+         JOIN store_products sp ON sp.id = ai.addon_product_id
+         JOIN andreani_wh_transactions t ON t.id = ai.asn_transaction_id
+         WHERE ai.quantity > ai.received_quantity
+           AND t.tipo = 'abastecimiento' AND t.estado = 'accepted'
          GROUP BY sp.sku`
       ),
     ])
@@ -1062,18 +1075,28 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
       })
     }
 
+    const pendientesAceptadas: Record<string, number> = {}
+    for (const r of pendAceptadoRes.rows) {
+      pendientesAceptadas[r.sku] = Number(r.pendiente)
+    }
+
     for (const r of accRes.rows) {
-      const totalStock = Number(r.stock)
-      const enAndreani = Math.max(0, (ingested[r.sku] ?? 0) - (dispatched[r.sku] ?? 0))
-      const enGocuotas = Math.max(0, totalStock - enAndreani)
+      const enTransito = transitoAddons[r.sku] ?? 0
+      const { whAndreani, whGocuotas, total } = calcularStockAccesorio({
+        stock: Number(r.stock),
+        informadas: ingested[r.sku] ?? 0,
+        pendientesAceptadas: pendientesAceptadas[r.sku] ?? 0,
+        despachadas: dispatched[r.sku] ?? 0,
+        enTransito,
+      })
       rows.push({
         sku: r.sku,
         nombre: r.nombre,
-        whAndreani: enAndreani,
-        whGocuotas: enGocuotas,
-        enTransito: transitoAddons[r.sku] ?? 0,
+        whAndreani,
+        whGocuotas,
+        enTransito,
         enTransitoDesde: transitoAddonsDesde[r.sku] ?? null,
-        total: totalStock,
+        total,
         tipo: 'accesorio',
       })
     }
