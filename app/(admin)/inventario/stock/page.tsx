@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { fetchStockPorWarehouse } from '@/lib/gocelular'
-import StockTable, { DIAS_TRANSITO_TRABADO, diasDesde } from './StockTable'
+import StockTable from './StockTable'
+import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 
 export default async function StockPage() {
   const rows = await fetchStockPorWarehouse()
