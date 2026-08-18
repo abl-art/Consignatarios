@@ -16,8 +16,6 @@ export default async function StockPage() {
   ])
   const rows = completarDisponibilidad(aplicarPedidos(baseRows, pedidos), pendientes)
 
-  const totalAndreani = rows.reduce((s, r) => s + r.whAndreani, 0)
-  const totalGocuotas = rows.reduce((s, r) => s + r.whGocuotas, 0)
   const totalTransito = rows.reduce((s, r) => s + r.enTransito, 0)
   const totalGeneral = rows.reduce((s, r) => s + r.total, 0)
 
@@ -35,25 +33,6 @@ export default async function StockPage() {
         Inventario disponible por SKU y ubicacion — {totalGeneral} unidades en depósitos
         {totalTransito > 0 ? ` + ${totalTransito} en tránsito` : ''}
       </p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalAndreani.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">WH Andreani</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalGocuotas.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">WH GOcuotas</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-amber-600">{totalTransito.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">En tránsito</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalGeneral.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Total en depósitos</p>
-        </div>
-      </div>
 
       {unidadesTrabadas > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">

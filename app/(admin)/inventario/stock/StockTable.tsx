@@ -29,8 +29,56 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
     return true
   })
 
+  // Tarjetas por tipo de producto: disponible real grande + próxima abajo; clic = filtrar
+  const tiposCard: { key: TipoFiltro; label: string }[] = [
+    { key: 'celular', label: 'Celulares' },
+    { key: 'kit', label: 'Kits' },
+    { key: 'auricular', label: 'Auriculares' },
+    { key: 'parlante', label: 'Parlantes' },
+    { key: 'smartwatch', label: 'Smartwatches' },
+  ]
+  const filasDeTipo = (key: TipoFiltro) =>
+    rows.filter(r => key === 'celular' ? r.tipo === 'celular' : r.tipo === 'accesorio' && categoriaAccesorio(r.sku, r.nombre) === key)
+  const cards = tiposCard
+    .map(t => {
+      const filas = filasDeTipo(t.key)
+      return {
+        ...t,
+        disponible: filas.reduce((s, r) => s + r.disponibleReal, 0),
+        proxima: filas.reduce((s, r) => s + r.proximaDisponibilidad, 0),
+        vacia: filas.length === 0,
+      }
+    })
+    .filter(c => !c.vacia)
+  const totalTransito = rows.reduce((s, r) => s + r.enTransito, 0)
+  const totalPedido = rows.reduce((s, r) => s + r.pedido, 0)
+
   return (
     <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+        {cards.map(c => (
+          <button
+            key={c.key}
+            onClick={() => setTipoFiltro(tipoFiltro === c.key ? 'todos' : c.key)}
+            className={`bg-white border rounded-xl p-4 text-center transition-shadow hover:shadow-md ${tipoFiltro === c.key ? 'border-magenta-400 ring-2 ring-magenta-200' : 'border-gray-200'}`}
+          >
+            <p className={`text-2xl font-bold ${c.disponible < 0 ? 'text-red-600' : 'text-gray-900'}`}>{c.disponible.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-1">{c.label}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">próx. {c.proxima.toLocaleString()}</p>
+          </button>
+        ))}
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-amber-600">{totalTransito.toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-1">En tránsito</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">informado a GOcelular</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-blue-600">{totalPedido.toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-1">Pedidos</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">sin informar</p>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           type="text"
