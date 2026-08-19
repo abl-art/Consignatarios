@@ -108,6 +108,13 @@ describe('normalizarModelo', () => {
     expect(normalizarModelo('Moto G06 64GB')).not.toBe(normalizarModelo('Moto G06 128GB'))
     expect(normalizarModelo('Samsung Galaxy A07 128GB')).not.toBe(normalizarModelo('Samsung Galaxy A17 128GB'))
   })
+
+  it('el par almacenamiento/RAM estilo Xiaomi conserva el almacenamiento (número mayor)', () => {
+    // "128/4 GB" es almacenamiento/RAM; "4/128GB" es RAM/almacenamiento — ambos → 128gb
+    expect(normalizarModelo('Xiaomi Redmi 14C 128/4 GB')).toBe(normalizarModelo('Xiaomi Redmi 14C 128GB'))
+    expect(normalizarModelo('Xiaomi Redmi 14C 128/4 GB')).not.toBe(normalizarModelo('Xiaomi Redmi 14C 256/4 GB'))
+    expect(normalizarModelo('Moto G56 5G 256/8GB')).toBe(normalizarModelo('Moto G56 5G 8/256GB'))
+  })
 })
 
 describe('coberturaPorModelos', () => {

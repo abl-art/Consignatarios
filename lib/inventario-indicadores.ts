@@ -70,14 +70,16 @@ export function mesesDeStock(
 /**
  * Clave de comparación de modelos. El catálogo y las ventas escriben el mismo equipo
  * distinto ("Celular Samsung A07 4/128 GB" vs "Samsung A07 128GB", "G77 8/256GB 5G"
- * vs "G77 5G 256GB"): quita sufijos de bundle ("+ Funda..."), el prefijo "Celular",
- * el prefijo de RAM ("4/128" → "128"), pega "128 gb" → "128gb" y ordena los tokens.
+ * vs "G77 5G 256GB", y Xiaomi invierte el par: "128/4 GB" = almacenamiento/RAM):
+ * quita sufijos de bundle ("+ Funda..."), el prefijo "Celular", colapsa el par
+ * RAM/almacenamiento quedándose con el número mayor (el almacenamiento, sin importar
+ * el orden), pega "128 gb" → "128gb" y ordena los tokens.
  */
 export function normalizarModelo(nombre: string): string {
   let n = nombre.toLowerCase()
   n = n.replace(/\s*\+\s*.*/, '')
   n = n.replace(/\bcelular\b/g, '')
-  n = n.replace(/\b\d+\//g, '')
+  n = n.replace(/(\d+)\s*(?:gb)?\s*\/\s*(\d+)\s*(?:gb)?/g, (_, a, b) => `${Math.max(Number(a), Number(b))}gb`)
   n = n.replace(/(\d+)\s+gb\b/g, '$1gb')
   return n.split(/\s+/).filter(Boolean).sort().join(' ')
 }
