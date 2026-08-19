@@ -50,7 +50,7 @@ export default async function InventarioPage() {
       <p className="text-sm text-gray-500 mb-6">{totalStock.toLocaleString('es-AR')} unidades — valorizadas en {formatearMoneda(totalVenta)}</p>
 
       {/* Navegación */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Link
           href="/inventario/stock"
           className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
@@ -95,40 +95,6 @@ export default async function InventarioPage() {
             <p className="text-[10px] text-gray-400 mt-1">venta 30d con menos de 5 días de stock</p>
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="bg-gray-900 px-4 py-3 text-white text-center">
-            <span className="text-2xl">🛒</span>
-          </div>
-          <div className="p-3">
-            <p className="text-sm font-semibold text-gray-900 text-center mb-1.5">Modelos a comprar</p>
-            {aComprar.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-2">Sin urgencias</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {aComprar.map(m => (
-                  <li key={m.modelo} className="text-xs">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-gray-700 truncate" title={m.modelo}>{m.modelo}</span>
-                      <span className="text-red-600 font-semibold shrink-0">{fmtPct1.format(m.pctVentasTotal)}%</span>
-                    </div>
-                    <div className="text-[10px] leading-tight">
-                      {m.enTransito === 0 && m.pedido === 0 ? (
-                        <span className="text-red-500 font-medium">sin reponer</span>
-                      ) : (
-                        <>
-                          {m.enTransito > 0 && <span className="text-emerald-600">🚚 {m.enTransito.toLocaleString('es-AR')} en tránsito</span>}
-                          {m.enTransito > 0 && m.pedido > 0 && <span className="text-gray-300"> · </span>}
-                          {m.pedido > 0 && <span className="text-blue-600">📦 {m.pedido.toLocaleString('es-AR')} pedidos</span>}
-                        </>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="text-[10px] text-gray-400 mt-1.5 text-center">en riesgo y &gt;4% de la venta total</p>
-          </div>
-        </div>
       </div>
 
       {error && (
@@ -139,6 +105,57 @@ export default async function InventarioPage() {
 
       {!error && (
         <>
+          {/* Modelos a comprar */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+              <h2 className="text-base font-semibold text-gray-900">🛒 Modelos a comprar</h2>
+              <p className="text-xs text-gray-400">en riesgo (cobertura &lt;5 días) y más del 4% de la venta total</p>
+            </div>
+            {aComprar.length === 0 ? (
+              <p className="text-sm text-gray-400 py-2">Sin urgencias: ningún modelo en riesgo pesa más del 4% de la venta.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
+                      <th className="py-1.5 px-2 font-medium">Modelo</th>
+                      <th className="py-1.5 px-2 font-medium text-right">% venta total</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Stock</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
+                      <th className="py-1.5 px-2 font-medium text-right">En tránsito</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Pedidos</th>
+                      <th className="py-1.5 px-2 font-medium">Reposición</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aComprar.map(m => (
+                      <tr key={m.modelo} className="border-b border-gray-100">
+                        <td className="py-1.5 px-2 text-gray-900">{m.modelo}</td>
+                        <td className="py-1.5 px-2 text-right font-semibold text-red-600">{fmtPct1.format(m.pctVentasTotal)}%</td>
+                        <td className={`py-1.5 px-2 text-right ${m.stock === 0 ? 'text-red-600 font-medium' : ''}`}>{m.stock.toLocaleString('es-AR')}</td>
+                        <td className="py-1.5 px-2 text-right text-red-600 font-medium">
+                          {m.cobertura !== null ? `${fmtPct1.format(m.cobertura)} días` : '—'}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-emerald-600">{m.enTransito > 0 ? `🚚 ${m.enTransito.toLocaleString('es-AR')}` : '—'}</td>
+                        <td className="py-1.5 px-2 text-right text-blue-600">{m.pedido > 0 ? `📦 ${m.pedido.toLocaleString('es-AR')}` : '—'}</td>
+                        <td className="py-1.5 px-2">
+                          {m.enTransito === 0 && m.pedido === 0 ? (
+                            <span className="text-xs font-semibold text-white bg-red-600 rounded-full px-2 py-0.5">SIN REPONER</span>
+                          ) : (
+                            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">en camino</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 mt-2">
+              Ordenados por peso en la venta: lo primero que conviene reponer es lo que más venta salva · En tránsito: informado a GOcelular, viajando a Andreani · Pedidos: comprados en el gestor, aún sin informar
+            </p>
+          </div>
+
           {/* Valorización en tiempo real */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
             <h2 className="text-base font-semibold text-gray-900 mb-3">Valorización del stock</h2>
