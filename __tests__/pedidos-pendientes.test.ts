@@ -82,3 +82,18 @@ describe('aplicarPedidos', () => {
     expect(rows[0].pedido).toBe(100)
   })
 })
+
+describe('pedidos informados que GOcelular aún no ingresó (alias pendiente)', () => {
+  it('siguen contando como Pedido si figuran en informadosSinIngreso', () => {
+    const p = pedido({ id: 'NP-1', gocelular: { estado: 'informado' } })
+    // Sin evidencia del limbo, se asume que ya está en tránsito (comportamiento actual)
+    expect(aplicarPedidos([fila()], [p])[0].pedido).toBe(0)
+    // Con el intake trabado (0 unidades aceptadas), las unidades vuelven a Pedido
+    expect(aplicarPedidos([fila()], [p], new Set(['NP-1']))[0].pedido).toBe(90)
+  })
+
+  it('un informado con ingreso ya iniciado no vuelve a Pedido', () => {
+    const p = pedido({ id: 'NP-2', gocelular: { estado: 'informado' } })
+    expect(aplicarPedidos([fila()], [p], new Set(['NP-1']))[0].pedido).toBe(0)
+  })
+})

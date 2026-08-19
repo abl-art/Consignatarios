@@ -13,6 +13,7 @@ import { categoriaAccesorio } from './categoria-accesorio'
 import { normalizarMarca } from './marca'
 
 export interface PedidoGestor {
+  id?: string
   estado: 'borrador' | 'confirmado' | 'enviado'
   items: { productoNombre: string; cantidad: number }[]
   ingresoStockAt?: string
@@ -31,18 +32,26 @@ function claves(nombre: string): string[] {
   return c1 === c2 ? [c1] : [c1, c2]
 }
 
-function pendiente(p: PedidoGestor): boolean {
-  return (
-    (p.estado === 'confirmado' || p.estado === 'enviado') &&
-    !p.ingresoStockAt &&
-    p.gocelular?.estado !== 'informado'
-  )
+function pendiente(p: PedidoGestor, informadosSinIngreso: Set<string>): boolean {
+  if (p.estado !== 'confirmado' && p.estado !== 'enviado') return false
+  if (p.ingresoStockAt) return false
+  // Informado normalmente implica que GOcelular ya creó el inventario (pasa a "En
+  // tránsito"), pero si el intake quedó trabado (ej. alias pendiente, 0 unidades
+  // aceptadas) las unidades no existen en ningún lado: siguen siendo "Pedido".
+  if (p.gocelular?.estado === 'informado') {
+    return p.id !== undefined && informadosSinIngreso.has(p.id)
+  }
+  return true
 }
 
-export function aplicarPedidos(rows: StockWarehouseRow[], pedidos: PedidoGestor[]): StockConPedidoRow[] {
+export function aplicarPedidos(
+  rows: StockWarehouseRow[],
+  pedidos: PedidoGestor[],
+  informadosSinIngreso: Set<string> = new Set(),
+): StockConPedidoRow[] {
   // cantidad pedida por nombre crudo (para crear filas nuevas con nombre lindo)
   const porNombre = new Map<string, number>()
-  for (const p of pedidos.filter(pendiente)) {
+  for (const p of pedidos.filter(p => pendiente(p, informadosSinIngreso))) {
     for (const it of p.items ?? []) {
       const nombre = it.productoNombre.trim()
       if (!nombre) continue
