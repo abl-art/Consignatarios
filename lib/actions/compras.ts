@@ -233,7 +233,16 @@ export async function getPedidos(): Promise<Pedido[]> {
   const supabase = createAdminClient()
   const { data } = await supabase.from('flujo_config').select('key, value').like('key', 'pedido_%')
   if (!data) return []
-  return data.map(r => JSON.parse(r.value) as Pedido).sort((a, b) => b.fecha.localeCompare(a.fecha))
+  // Orden por fecha real, más nuevo primero. `fecha` es texto "D/M/YYYY" y
+  // compararlo como string mezcla todo ("5/8" > "19/8"): se usa el timestamp
+  // del id (NP-<ms>-...) y la fecha parseada como respaldo.
+  const ts = (p: Pedido): number => {
+    const m = p.id?.match(/^NP-(\d{10,})/)
+    if (m) return Number(m[1])
+    const [d, mes, anio] = (p.fecha ?? '').split('/').map(Number)
+    return anio ? new Date(anio, (mes || 1) - 1, d || 1).getTime() : 0
+  }
+  return data.map(r => JSON.parse(r.value) as Pedido).sort((a, b) => ts(b) - ts(a))
 }
 
 export async function guardarPedido(pedido: Pedido) {
