@@ -21,6 +21,13 @@ interface Props {
 const fmt1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 const fmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
+/** El % se pinta de rojo cuando el modelo pesa en las ventas y está por quebrar:
+ *  ahí el número ES la pérdida de ventas si no se repone. */
+function pctClase(pct: number | null, cobertura: number | null): string {
+  if (pct !== null && pct >= 5 && cobertura !== null && cobertura < 15) return 'text-red-600 font-semibold'
+  return 'text-gray-700'
+}
+
 export default function IndicadoresProducto({ meses, filas }: Props) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
 
@@ -66,7 +73,7 @@ export default function IndicadoresProducto({ meses, filas }: Props) {
         </table>
       </div>
       <p className="text-[10px] text-gray-400 mt-2">
-        Cobertura: stock ÷ venta diaria 30d (en rojo si &lt;15 días) · Rotación: vendidas 30d ÷ stock promedio del mes · Meses de Stock pondera cada producto por su valor · Click en un producto para ver la cobertura por modelo
+        Cobertura: stock ÷ venta diaria 30d (en rojo si &lt;15 días) · Rotación: vendidas 30d ÷ stock promedio del mes · Meses de Stock pondera cada producto por su valor · Click en un producto para ver el detalle por modelo · % ventas 30d: peso del modelo en las ventas del producto — en rojo si está por quebrar (esa es la venta que se pierde sin reposición)
       </p>
     </div>
   )
@@ -103,6 +110,7 @@ function FilaProducto({ fila, abierto, onToggle }: { fila: FilaIndicador; abiert
                     <th className="py-1 pl-6 pr-2 font-medium">Modelo</th>
                     <th className="py-1 px-2 font-medium text-right">Stock</th>
                     <th className="py-1 px-2 font-medium text-right">u/día 30d</th>
+                    <th className="py-1 px-2 font-medium text-right">% ventas 30d</th>
                     <th className="py-1 px-2 font-medium text-right">Cobertura</th>
                   </tr>
                 </thead>
@@ -112,6 +120,9 @@ function FilaProducto({ fila, abierto, onToggle }: { fila: FilaIndicador; abiert
                       <td className="py-1 pl-6 pr-2 text-gray-700">{m.modelo}</td>
                       <td className={`py-1 px-2 text-right ${m.stock === 0 ? 'text-red-600 font-medium' : ''}`}>{m.stock.toLocaleString('es-AR')}</td>
                       <td className="py-1 px-2 text-right text-gray-500">{m.ventaDiaria30 > 0 ? fmt1.format(m.ventaDiaria30) : '—'}</td>
+                      <td className={`py-1 px-2 text-right ${pctClase(m.pctVentas30, m.cobertura)}`}>
+                        {m.pctVentas30 !== null && m.pctVentas30 > 0 ? `${fmt1.format(m.pctVentas30)}%` : '—'}
+                      </td>
                       <td className={`py-1 px-2 text-right font-medium ${m.cobertura !== null && m.cobertura < 15 ? 'text-red-600' : 'text-gray-700'}`}>
                         {m.cobertura !== null ? `${fmt1.format(m.cobertura)} días` : '—'}
                       </td>

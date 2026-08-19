@@ -136,6 +136,20 @@ describe('coberturaPorModelos', () => {
     expect(redmi.cobertura).toBe(0)
   })
 
+  it('calcula el % de las ventas 30d que representa cada modelo', () => {
+    // total ventas = 150 + 60 + 30 = 240
+    const res = coberturaPorModelos(stock, ventas30)
+    expect(res.find(r => r.modelo === 'Samsung Galaxy A07 4/128 GB')!.pctVentas30).toBeCloseTo(62.5)
+    expect(res.find(r => r.modelo === 'Motorola Moto G06 64GB')!.pctVentas30).toBeCloseTo(25)
+    expect(res.find(r => r.modelo === 'Xiaomi Redmi 14C 128GB')!.pctVentas30).toBeCloseTo(12.5)
+    expect(res.find(r => r.modelo === 'Moto G86 5G - 256GB/8GB')!.pctVentas30).toBe(0)
+  })
+
+  it('sin ventas totales el % es null', () => {
+    const res = coberturaPorModelos(stock, [])
+    expect(res[0].pctVentas30).toBeNull()
+  })
+
   it('ordena por cobertura ascendente (lo urgente primero), sin ventas al final', () => {
     const res = coberturaPorModelos(stock, ventas30)
     expect(res[0].modelo).toBe('Xiaomi Redmi 14C 128GB') // cobertura 0

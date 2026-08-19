@@ -197,9 +197,16 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       if (data.porProducto.length === 1) {
         const p0 = data.porProducto[0]
         const vel = velocidadVenta(data.ventasDiarias, hoy).diaria30
-        modelos = [{ modelo: p0.nombre, stock: p0.stock, ventaDiaria30: vel, cobertura: diasCobertura(p0.stock, vel) }]
+        modelos = [{
+          modelo: p0.nombre,
+          stock: p0.stock,
+          ventaDiaria30: vel,
+          cobertura: diasCobertura(p0.stock, vel),
+          pctVentas30: vel > 0 ? 100 : null,
+        }]
       } else {
         const ventasPorNombre = new Map(data.ventas30PorVariante.map(v => [v.nombre.toLowerCase(), v.cantidad]))
+        const totalVentas30 = data.ventas30PorVariante.reduce((s, v) => s + v.cantidad, 0)
         modelos = data.porProducto
           .map(p => {
             const cant = ventasPorNombre.get(p.nombre.toLowerCase())
@@ -209,6 +216,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
               stock: p.stock,
               ventaDiaria30: vel,
               cobertura: cant !== undefined ? diasCobertura(p.stock, vel) : null,
+              pctVentas30: cant !== undefined && totalVentas30 > 0 ? (cant / totalVentas30) * 100 : null,
             }
           })
           .sort((a, b) => (a.cobertura ?? Infinity) - (b.cobertura ?? Infinity))
@@ -259,7 +267,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         // Los kits salen en bundles de celulares: se muestra el stock por modelo, sin cobertura
         modelos: kitsItems
           .filter(k => k.disponible > 0)
-          .map(k => ({ modelo: k.modelo, stock: k.disponible, ventaDiaria30: 0, cobertura: null }))
+          .map(k => ({ modelo: k.modelo, stock: k.disponible, ventaDiaria30: 0, cobertura: null, pctVentas30: null }))
           .sort((a, b) => b.stock - a.stock),
       },
     ]

@@ -87,6 +87,8 @@ export interface CoberturaModelo {
   stock: number
   ventaDiaria30: number
   cobertura: number | null
+  /** % del total de ventas 30d del producto que representa este modelo (null sin ventas totales) */
+  pctVentas30: number | null
 }
 
 /**
@@ -105,23 +107,28 @@ export function coberturaPorModelos(
     ventasPorKey.set(key, { modelo: v.modelo, ventas: (prev?.ventas ?? 0) + v.ventas })
   }
 
+  const totalVentas30 = ventas30.reduce((s, v) => s + v.ventas, 0)
+  const pct = (ventas: number): number | null =>
+    totalVentas30 > 0 ? (ventas / totalVentas30) * 100 : null
+
   const resultado: CoberturaModelo[] = []
   const stockKeys = new Set<string>()
   for (const s of stock) {
     const key = normalizarModelo(s.modelo)
     stockKeys.add(key)
-    const ventaDiaria30 = (ventasPorKey.get(key)?.ventas ?? 0) / 30
+    const ventas = ventasPorKey.get(key)?.ventas ?? 0
     resultado.push({
       modelo: s.modelo,
       stock: s.qty,
-      ventaDiaria30,
-      cobertura: diasCobertura(s.qty, ventaDiaria30),
+      ventaDiaria30: ventas / 30,
+      cobertura: diasCobertura(s.qty, ventas / 30),
+      pctVentas30: pct(ventas),
     })
   }
   // Modelos que venden pero no tienen stock: cobertura 0
   for (const [key, v] of ventasPorKey) {
     if (!stockKeys.has(key) && v.ventas > 0) {
-      resultado.push({ modelo: v.modelo, stock: 0, ventaDiaria30: v.ventas / 30, cobertura: 0 })
+      resultado.push({ modelo: v.modelo, stock: 0, ventaDiaria30: v.ventas / 30, cobertura: 0, pctVentas30: pct(v.ventas) })
     }
   }
 
