@@ -8,6 +8,7 @@ import {
   normalizarModelo,
   coberturaPorModelos,
   ventasPorCobertura,
+  modelosAComprar,
   type VentaDia,
 } from '@/lib/inventario-indicadores'
 
@@ -187,6 +188,27 @@ describe('ventasPorCobertura', () => {
   it('sin ventas devuelve null', () => {
     expect(ventasPorCobertura([{ ventaDiaria30: 0, cobertura: 10 }])).toEqual({ pctSaludable: null, pctRiesgo: null })
     expect(ventasPorCobertura([])).toEqual({ pctSaludable: null, pctRiesgo: null })
+  })
+})
+
+describe('modelosAComprar', () => {
+  const modelos = [
+    { modelo: 'A', stock: 0, ventaDiaria30: 30, cobertura: 0 },      // riesgo, 30%
+    { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },      // riesgo, 5%
+    { modelo: 'C', stock: 2, ventaDiaria30: 3, cobertura: 0.7 },     // riesgo pero 3% → afuera
+    { modelo: 'D', stock: 500, ventaDiaria30: 60, cobertura: 8.3 },  // 60% pero sin riesgo
+    { modelo: 'E', stock: 50, ventaDiaria30: 2, cobertura: 25 },     // sano
+  ]
+
+  it('lista solo los modelos en riesgo (<5d) con peso mayor al umbral, ordenados por peso', () => {
+    const res = modelosAComprar(modelos)
+    expect(res.map(m => m.modelo)).toEqual(['A', 'B'])
+    expect(res[0].pctVentasTotal).toBeCloseTo(30)
+    expect(res[1].pctVentasTotal).toBeCloseTo(5)
+  })
+
+  it('sin ventas totales devuelve vacío', () => {
+    expect(modelosAComprar([{ modelo: 'X', stock: 5, ventaDiaria30: 0, cobertura: null }])).toEqual([])
   })
 })
 

@@ -161,6 +161,36 @@ export function ventasPorCobertura(
   return { pctSaludable: (saludable / total) * 100, pctRiesgo: (riesgo / total) * 100 }
 }
 
+export interface ModeloAComprar {
+  modelo: string
+  stock: number
+  /** % de la venta total (todos los productos) que representa el modelo */
+  pctVentasTotal: number
+  cobertura: number | null
+}
+
+/**
+ * Lista de compra urgente: modelos en riesgo (cobertura < 5 días, incluye los
+ * que venden con stock 0) que pesan más del umbral en la venta total.
+ * Ordenada por peso descendente: primero lo que más venta salva.
+ */
+export function modelosAComprar(
+  modelos: { modelo: string; stock: number; ventaDiaria30: number; cobertura: number | null }[],
+  umbralPct = 4,
+): ModeloAComprar[] {
+  const total = modelos.reduce((s, m) => s + m.ventaDiaria30, 0)
+  if (total <= 0) return []
+  return modelos
+    .map(m => ({
+      modelo: m.modelo,
+      stock: m.stock,
+      pctVentasTotal: (m.ventaDiaria30 / total) * 100,
+      cobertura: m.cobertura,
+    }))
+    .filter(m => m.cobertura !== null && m.cobertura < 5 && m.pctVentasTotal > umbralPct)
+    .sort((a, b) => b.pctVentasTotal - a.pctVentasTotal)
+}
+
 export interface StockModelo {
   modelo: string
   qty: number

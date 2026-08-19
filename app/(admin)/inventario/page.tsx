@@ -9,6 +9,7 @@ import {
   rotacionMensual,
   mesesDeStock,
   ventasPorCobertura,
+  modelosAComprar,
 } from '@/lib/inventario-indicadores'
 import InventarioChart from '@/components/inventario/InventarioChart'
 import IndicadoresProducto from '@/components/inventario/IndicadoresProducto'
@@ -37,8 +38,11 @@ export default async function InventarioPage() {
     productos.map(p => ({ valorVenta: p.valorVenta ?? p.costoReposicion ?? 0, montoVentas30d: p.montoVentas30d })),
   )
   const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
-  const cobVentas = ventasPorCobertura(productos.flatMap(p => p.modelos))
+  const todosLosModelos = productos.flatMap(p => p.modelos)
+  const cobVentas = ventasPorCobertura(todosLosModelos)
+  const aComprar = modelosAComprar(todosLosModelos)
   const fmtPct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
+  const fmtPct1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -89,6 +93,27 @@ export default async function InventarioPage() {
             <p className="text-2xl font-bold text-red-700">{cobVentas.pctRiesgo !== null ? `${fmtPct.format(cobVentas.pctRiesgo)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas en Riesgo</p>
             <p className="text-[10px] text-gray-400 mt-1">venta 30d con menos de 5 días de stock</p>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-900 px-4 py-3 text-white text-center">
+            <span className="text-2xl">🛒</span>
+          </div>
+          <div className="p-3">
+            <p className="text-sm font-semibold text-gray-900 text-center mb-1.5">Modelos a comprar</p>
+            {aComprar.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-2">Sin urgencias</p>
+            ) : (
+              <ul className="space-y-1">
+                {aComprar.map(m => (
+                  <li key={m.modelo} className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="text-gray-700 truncate" title={m.modelo}>{m.modelo}</span>
+                    <span className="text-red-600 font-semibold shrink-0">{fmtPct1.format(m.pctVentasTotal)}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1.5 text-center">en riesgo y &gt;4% de la venta total</p>
           </div>
         </div>
       </div>
