@@ -140,6 +140,27 @@ export function coberturaPorModelos(
   })
 }
 
+/**
+ * Qué parte de la venta (u/día 30d de todos los modelos) está respaldada por
+ * stock sano y cuánta está por quebrar. Modelos sin ventas no aportan.
+ * - saludable: cobertura > 20 días
+ * - riesgo: cobertura < 5 días (incluye los que venden con stock 0)
+ */
+export function ventasPorCobertura(
+  modelos: { ventaDiaria30: number; cobertura: number | null }[],
+): { pctSaludable: number | null; pctRiesgo: number | null } {
+  const total = modelos.reduce((s, m) => s + m.ventaDiaria30, 0)
+  if (total <= 0) return { pctSaludable: null, pctRiesgo: null }
+  let saludable = 0
+  let riesgo = 0
+  for (const m of modelos) {
+    if (m.cobertura === null) continue
+    if (m.cobertura > 20) saludable += m.ventaDiaria30
+    if (m.cobertura < 5) riesgo += m.ventaDiaria30
+  }
+  return { pctSaludable: (saludable / total) * 100, pctRiesgo: (riesgo / total) * 100 }
+}
+
 export interface StockModelo {
   modelo: string
   qty: number

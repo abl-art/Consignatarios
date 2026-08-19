@@ -7,6 +7,7 @@ import {
   stockSinMovimiento,
   normalizarModelo,
   coberturaPorModelos,
+  ventasPorCobertura,
   type VentaDia,
 } from '@/lib/inventario-indicadores'
 
@@ -157,6 +158,35 @@ describe('coberturaPorModelos', () => {
     expect(res[2].modelo).toBe('Samsung Galaxy A07 4/128 GB') // 60
     expect(res[3].modelo).toBe('Moto G86 5G - 256GB/8GB') // sin ventas → null, último
     expect(res[3].cobertura).toBeNull()
+  })
+})
+
+describe('ventasPorCobertura', () => {
+  it('separa la venta respaldada (+20d) de la venta en riesgo (<5d)', () => {
+    const modelos = [
+      { ventaDiaria30: 6, cobertura: 60 },   // saludable
+      { ventaDiaria30: 3, cobertura: 2 },    // riesgo
+      { ventaDiaria30: 1, cobertura: 0 },    // riesgo (stock 0)
+      { ventaDiaria30: 2, cobertura: 12 },   // ni una ni otra
+      { ventaDiaria30: 0, cobertura: null }, // sin ventas: no aporta
+    ]
+    const r = ventasPorCobertura(modelos)
+    expect(r.pctSaludable).toBeCloseTo(50) // 6/12
+    expect(r.pctRiesgo).toBeCloseTo((4 / 12) * 100)
+  })
+
+  it('el borde exacto no cuenta: 20d no es saludable, 5d no es riesgo', () => {
+    const r = ventasPorCobertura([
+      { ventaDiaria30: 1, cobertura: 20 },
+      { ventaDiaria30: 1, cobertura: 5 },
+    ])
+    expect(r.pctSaludable).toBe(0)
+    expect(r.pctRiesgo).toBe(0)
+  })
+
+  it('sin ventas devuelve null', () => {
+    expect(ventasPorCobertura([{ ventaDiaria30: 0, cobertura: 10 }])).toEqual({ pctSaludable: null, pctRiesgo: null })
+    expect(ventasPorCobertura([])).toEqual({ pctSaludable: null, pctRiesgo: null })
   })
 })
 

@@ -8,6 +8,7 @@ import {
   diasCobertura,
   rotacionMensual,
   mesesDeStock,
+  ventasPorCobertura,
 } from '@/lib/inventario-indicadores'
 import InventarioChart from '@/components/inventario/InventarioChart'
 import IndicadoresProducto from '@/components/inventario/IndicadoresProducto'
@@ -36,6 +37,8 @@ export default async function InventarioPage() {
     productos.map(p => ({ valorVenta: p.valorVenta ?? p.costoReposicion ?? 0, montoVentas30d: p.montoVentas30d })),
   )
   const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
+  const cobVentas = ventasPorCobertura(productos.flatMap(p => p.modelos))
+  const fmtPct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -68,6 +71,26 @@ export default async function InventarioPage() {
             <p className="text-[10px] text-gray-400 mt-1">Control de stock y contabilidad</p>
           </div>
         </Link>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-green-600 px-4 py-3 text-white text-center">
+            <span className="text-2xl">✅</span>
+          </div>
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-green-700">{cobVentas.pctSaludable !== null ? `${fmtPct.format(cobVentas.pctSaludable)}%` : '—'}</p>
+            <p className="text-sm font-semibold text-gray-900">Ventas con Cobertura</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con más de 20 días de stock</p>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-red-600 px-4 py-3 text-white text-center">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-red-700">{cobVentas.pctRiesgo !== null ? `${fmtPct.format(cobVentas.pctRiesgo)}%` : '—'}</p>
+            <p className="text-sm font-semibold text-gray-900">Ventas en Riesgo</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con menos de 5 días de stock</p>
+          </div>
+        </div>
       </div>
 
       {error && (
