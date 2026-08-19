@@ -75,13 +75,22 @@ export default function EntregaForm({
 
       // Estructura del archivo: SKU | EAN | CANTIDAD. Si hay fila de
       // encabezado se usan sus posiciones; si no, columnas 1 y 3.
+      // Puede haber varias columnas "Cantidad..." (ej. "Cantidad de Cajas" y
+      // "Cantidad Total de Unidades"): siempre valen las unidades, no las cajas.
       let colSku = 0
       let colCantidad = 2
       let inicio = 0
       for (let i = 0; i < Math.min(rows.length, 5); i++) {
         const celdas = (rows[i] ?? []).map(c => String(c ?? '').trim().toLowerCase())
         const iSku = celdas.findIndex(c => c === 'sku' || c === 'codigo' || c === 'código')
-        const iCant = celdas.findIndex(c => c.startsWith('cant'))
+        const candidatas = celdas
+          .map((c, idx) => ({ c, idx }))
+          .filter(x => x.c.startsWith('cant'))
+        const iCant = (
+          candidatas.find(x => x.c.includes('unidad')) ??
+          candidatas.find(x => !x.c.includes('caja')) ??
+          candidatas[0]
+        )?.idx ?? -1
         if (iSku >= 0 && iCant >= 0) {
           colSku = iSku
           colCantidad = iCant
