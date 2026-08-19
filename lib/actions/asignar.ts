@@ -199,7 +199,7 @@ export async function prepararAsignacion(input: PrepararAsignacionInput): Promis
   const { data: consig } = await admin.from('consignatarios').select('nombre').eq('id', input.consignatario_id).single()
   notificarGocelular(admin, imeis, input.consignatario_id, consig?.nombre || '', 'assign_to_consignee').catch(() => {})
 
-  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/inventario')
   revalidatePath('/dashboard')
 
@@ -236,7 +236,7 @@ export async function eliminarBorrador(asignacionId: string): Promise<{ ok: true
   await admin.from('asignacion_items').delete().eq('asignacion_id', asignacionId)
   await admin.from('asignaciones').delete().eq('id', asignacionId)
 
-  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/inventario')
   return { ok: true }
@@ -258,7 +258,7 @@ export async function confirmarAsignacion(asignacionId: string, firmadoPor: stri
 
   if (error) return { error: error.message }
 
-  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/inventario')
   return { ok: true }
 }
@@ -315,7 +315,7 @@ export async function devolverEquipo(dispositivoId: string): Promise<{ ok: true 
   // Notify GOcelular to re-add to available stock
   notificarGocelular(admin, [disp.imei], consigId, consigData?.nombre || '', 'return_from_consignee').catch(() => {})
 
-  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
   revalidatePath('/inventario')
   revalidatePath('/consignatarios')
   return { ok: true }

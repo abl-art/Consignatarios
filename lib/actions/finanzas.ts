@@ -363,7 +363,7 @@ export async function setForecastEvents(events: Record<string, number>) {
   const { error } = await supabase.from('flujo_config').upsert({ key: 'forecast_events', value: JSON.stringify(events), updated_at: new Date().toISOString() })
   if (error) return { error: error.message }
   revalidatePath('/dashboard')
-  revalidatePath('/inventario/celulares')
+  revalidatePath('/inventario')
   return { ok: true }
 }
 
@@ -377,7 +377,7 @@ export async function setComprasDias(dias: number) {
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_config').upsert({ key: 'compras_dias', value: String(dias), updated_at: new Date().toISOString() })
   if (error) return { error: error.message }
-  revalidatePath('/inventario/celulares')
+  revalidatePath('/inventario')
   return { ok: true }
 }
 

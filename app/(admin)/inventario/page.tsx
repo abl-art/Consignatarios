@@ -1,60 +1,49 @@
-import Link from 'next/link'
-import { fetchStockPropio, fetchAddonStock } from '@/lib/gocelular'
-import { getInventarioByCategoria } from '@/lib/actions/compras'
-import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
+export const dynamic = 'force-dynamic'
 
-const SMARTWATCHES_KW = ['pulsera', 'band', 'watch', 'smartwatch', 'reloj']
-const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
-const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl']
+import Link from 'next/link'
+import { formatearMoneda } from '@/lib/utils'
+import { fetchInventarioResumen } from '@/lib/actions/inventario-resumen'
+import {
+  velocidadVenta,
+  diasCobertura,
+  rotacionMensual,
+  mesesDeStock,
+} from '@/lib/inventario-indicadores'
+import InventarioChart from '@/components/inventario/InventarioChart'
+
+const fmt1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
+const fmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
 export default async function InventarioPage() {
-  const [stockCelulares, addons, modelosOcultos] = await Promise.all([
-    fetchStockPropio(),
-    fetchAddonStock(),
-    getModelosOcultos(),
-  ])
+  const { productos, ventasPorModeloCelulares, sinMovimiento, error } = await fetchInventarioResumen()
+  const hoy = new Date().toISOString().slice(0, 10)
 
-  const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
-  const stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
+  const totalStock = productos.reduce((s, p) => s + p.stock, 0)
+  const totalCosto = productos.reduce((s, p) => s + (p.costoReposicion ?? 0), 0)
+  const totalVenta = productos.reduce((s, p) => s + (p.valorVenta ?? 0), 0)
 
-  const stockSmartwatch = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
-  const stockAuriculares = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
-  const stockParlantes = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k))).reduce((s, a) => s + a.stock, 0)
-
-  const categorias = [
-    { href: '/inventario/celulares', label: 'Celulares', stock: stockCelulares, color: 'bg-magenta-600', icon: '📱' },
-    { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, color: 'bg-blue-600', icon: '⌚' },
-    { href: '/inventario/parlantes', label: 'Parlantes', stock: stockParlantes, color: 'bg-purple-600', icon: '🔊' },
-    { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, color: 'bg-cyan-600', icon: '🎧' },
-    { href: '/inventario/kits-seguridad', label: 'Kits de Seguridad', stock: stockKits, color: 'bg-amber-600', icon: '🔒' },
-  ]
-
-  const totalStock = categorias.reduce((s, c) => s + c.stock, 0)
+  const indicadores = productos.map(p => {
+    const vel = velocidadVenta(p.ventasDiarias, hoy)
+    return {
+      key: p.key,
+      label: p.label,
+      vel,
+      cobertura: diasCobertura(p.stock, vel.diaria30),
+      rotacion: rotacionMensual(vel.diaria30 * 30, p.stock, p.stockCierreAnterior),
+    }
+  })
+  const meses = mesesDeStock(
+    productos.map(p => ({ valorVenta: p.valorVenta ?? p.costoReposicion ?? 0, montoVentas30d: p.montoVentas30d })),
+  )
+  const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Inventario</h1>
-      <p className="text-sm text-gray-500 mb-6">Stock disponible por categoría — {totalStock} unidades totales</p>
+      <p className="text-sm text-gray-500 mb-6">{totalStock.toLocaleString('es-AR')} unidades — valorizadas en {formatearMoneda(totalVenta)}</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {categorias.map(cat => (
-          <Link
-            key={cat.href}
-            href={cat.href}
-            className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
-          >
-            <div className={`${cat.color} px-4 py-3 text-white text-center`}>
-              <span className="text-2xl">{cat.icon}</span>
-            </div>
-            <div className="p-4 text-center">
-              <p className="text-3xl font-bold text-gray-900">{cat.stock}</p>
-              <p className="text-xs text-gray-500 mt-1">{cat.label}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+      {/* Navegación */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Link
           href="/inventario/stock"
           className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
@@ -80,6 +69,146 @@ export default async function InventarioPage() {
           </div>
         </Link>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-700">
+          No se pudo consultar GOcelular: {error}
+        </div>
+      )}
+
+      {!error && (
+        <>
+          {/* Valorización en tiempo real */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Valorización del stock</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
+                    <th className="py-2 px-3 font-medium">Producto</th>
+                    <th className="py-2 px-3 font-medium text-right">Stock</th>
+                    <th className="py-2 px-3 font-medium text-right">Costo de Reposición</th>
+                    <th className="py-2 px-3 font-medium text-right">Valor de Venta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productos.map(p => (
+                    <tr key={p.key} className="border-b border-gray-100">
+                      <td className="py-2 px-3 text-gray-900">
+                        {p.key === 'kits' ? (
+                          <Link href="/inventario/kits-seguridad" className="text-magenta-700 hover:underline">
+                            {p.label} →
+                          </Link>
+                        ) : p.label}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">{p.stock.toLocaleString('es-AR')}</td>
+                      <td className="py-2 px-3 text-right">{p.costoReposicion !== null ? formatearMoneda(Math.round(p.costoReposicion)) : '—'}</td>
+                      <td className="py-2 px-3 text-right">{p.valorVenta !== null ? formatearMoneda(Math.round(p.valorVenta)) : '—'}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold text-gray-900">
+                    <td className="py-2 px-3">Total</td>
+                    <td className="py-2 px-3 text-right">{totalStock.toLocaleString('es-AR')}</td>
+                    <td className="py-2 px-3 text-right">{formatearMoneda(Math.round(totalCosto))}</td>
+                    <td className="py-2 px-3 text-right">{formatearMoneda(Math.round(totalVenta))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Costo de Reposición: stock × último costo cargado en Compras · Valor de Venta: stock × precio actual de la tienda · Kits sin valor de venta (se regalan), valuados a costo
+            </p>
+          </div>
+
+          {/* Indicadores de gestión */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-xs text-gray-500 mb-1">Meses de Stock</p>
+              <p className="text-4xl font-bold text-gray-900">{meses !== null ? fmt1.format(meses) : '—'}</p>
+              <p className="text-[10px] text-gray-400 mt-1">
+                valorización total ÷ venta mensual valorizada (30d) — pondera cada producto por su valor
+              </p>
+            </div>
+            <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-800 mb-3">Indicadores por producto</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
+                      <th className="py-1.5 px-2 font-medium">Producto</th>
+                      <th className="py-1.5 px-2 font-medium text-right">u/día 7d</th>
+                      <th className="py-1.5 px-2 font-medium text-right">u/día 30d</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Rotación 30d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {indicadores.map(i => (
+                      <tr key={i.key} className="border-b border-gray-100">
+                        <td className="py-1.5 px-2 text-gray-900">{i.label}</td>
+                        <td className="py-1.5 px-2 text-right">{fmt1.format(i.vel.diaria7)}</td>
+                        <td className="py-1.5 px-2 text-right">{fmt1.format(i.vel.diaria30)}</td>
+                        <td className={`py-1.5 px-2 text-right font-medium ${i.cobertura !== null && i.cobertura < 15 ? 'text-red-600' : 'text-gray-900'}`}>
+                          {i.cobertura !== null ? `${fmt1.format(i.cobertura)} días` : '—'}
+                        </td>
+                        <td className="py-1.5 px-2 text-right">{i.rotacion !== null ? `${fmt2.format(i.rotacion)}×` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2">
+                Cobertura: stock ÷ venta diaria 30d (en rojo si &lt;15 días) · Rotación: vendidas 30d ÷ stock promedio del mes
+              </p>
+            </div>
+          </div>
+
+          {/* Stock sin movimiento */}
+          {sinMovimiento.length > 0 && (
+            <div className="bg-white rounded-xl border border-amber-200 p-5 mb-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-gray-800">Stock sin movimiento (30 días)</h2>
+                <p className="text-sm text-amber-700 font-semibold">{formatearMoneda(Math.round(capitalInmovilizado))} inmovilizados</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
+                      <th className="py-1.5 px-2 font-medium">Modelo</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Unidades</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Capital</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sinMovimiento.map(m => (
+                      <tr key={m.modelo} className="border-b border-gray-100">
+                        <td className="py-1.5 px-2 text-gray-900">{m.modelo}</td>
+                        <td className="py-1.5 px-2 text-right">{m.qty.toLocaleString('es-AR')}</td>
+                        <td className="py-1.5 px-2 text-right">{m.capital > 0 ? formatearMoneda(Math.round(m.capital)) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2">Modelos de celular con stock disponible y cero ventas en los últimos 30 días, valuados al último costo</p>
+            </div>
+          )}
+
+          {/* Gráfico unificado + existencias mensuales */}
+          <InventarioChart
+            celulares={ventasPorModeloCelulares}
+            productos={productos
+              .filter(p => p.key !== 'celulares')
+              .map(p => ({
+                key: p.key,
+                label: p.label,
+                ventasDiarias: p.ventasDiarias,
+                cierres: p.cierres,
+                sinMonto: p.key === 'kits',
+              }))}
+          />
+        </>
+      )}
     </div>
   )
 }

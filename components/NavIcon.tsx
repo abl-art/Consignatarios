@@ -6,9 +6,6 @@ interface NavIconProps {
 export type IconName =
   | 'dashboard'
   | 'inventario'
-  | 'tenencia'
-  | 'tenencia-propia'
-  | 'asignar'
   | 'consignatarios'
   | 'modelos'
   | 'auditorias'
@@ -59,30 +56,6 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
           <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
           <path d="M3.27 6.96L12 12l8.73-5.04" />
           <path d="M12 22V12" />
-        </svg>
-      )
-    case 'tenencia':
-      return (
-        <svg {...common}>
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 00-3-3.87" />
-          <path d="M16 3.13a4 4 0 010 7.75" />
-        </svg>
-      )
-    case 'tenencia-propia':
-      return (
-        <svg {...common}>
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-          <rect x="9" y="13" width="6" height="9" />
-        </svg>
-      )
-    case 'asignar':
-      return (
-        <svg {...common}>
-          <path d="M5 12h14" />
-          <path d="M13 6l6 6-6 6" />
-          <path d="M3 3v18" />
         </svg>
       )
     case 'consignatarios':

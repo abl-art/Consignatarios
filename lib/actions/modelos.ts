@@ -20,7 +20,7 @@ export async function editarModelo(input: EditInput) {
   if (error) return { error: error.message }
   revalidatePath('/modelos')
   revalidatePath('/inventario')
-  revalidatePath('/asignar')
+  revalidatePath('/consignatarios/asignaciones')
   return { ok: true }
 }
 

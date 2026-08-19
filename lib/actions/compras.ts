@@ -159,6 +159,8 @@ export async function setPrecio(producto_id: string, proveedor_id: string, preci
     proveedor_id,
     precio,
     plazo,
+    // Refrescar la fecha en cada carga: "último costo" para la valorización de /inventario
+    created_at: new Date().toISOString(),
   }, { onConflict: 'producto_id,proveedor_id' })
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -620,6 +622,44 @@ export async function getMejorPrecio(): Promise<Record<string, number>> {
     result[nombre] = mejorPorProducto[prod.id]
   }
   return result
+}
+
+export interface UltimoCosto {
+  categoria: string
+  nombre: string // nombre normalizado del producto
+  precio: number
+}
+
+/**
+ * Último costo cargado por producto (created_at más reciente en compras_precios),
+ * con la categoría del producto. Base del "Costo de Reposición" en /inventario.
+ */
+export async function getUltimosCostos(): Promise<UltimoCosto[]> {
+  const supabase = createAdminClient()
+  const { data: precios } = await supabase
+    .from('compras_precios')
+    .select('producto_id, precio, created_at')
+    .order('created_at', { ascending: false })
+  if (!precios || precios.length === 0) return []
+
+  const ultimoPorProducto: Record<string, number> = {}
+  for (const p of precios) {
+    if (!(p.producto_id in ultimoPorProducto)) {
+      ultimoPorProducto[p.producto_id] = Number(p.precio)
+    }
+  }
+
+  const { data: prods } = await supabase
+    .from('compras_productos')
+    .select('id, nombre, categoria')
+    .in('id', Object.keys(ultimoPorProducto))
+  if (!prods) return []
+
+  return prods.map(prod => ({
+    categoria: prod.categoria as string,
+    nombre: normalizarNombreProducto(prod.nombre),
+    precio: ultimoPorProducto[prod.id],
+  }))
 }
 
 // ---------------------------------------------------------------------------

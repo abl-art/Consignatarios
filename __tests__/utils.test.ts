@@ -24,8 +24,9 @@ describe('validarIMEI', () => {
 })
 
 describe('formatearMoneda', () => {
-  it('formatea número como pesos argentinos', () => {
-    expect(formatearMoneda(1234.5)).toMatch(/1\.234/)
+  it('formatea número como pesos argentinos (redondea sin decimales)', () => {
+    expect(formatearMoneda(1234.5)).toMatch(/1\.235/)
+    expect(formatearMoneda(1234.4)).toMatch(/1\.234/)
   })
 
   it('formatea cero', () => {

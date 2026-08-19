@@ -1,0 +1,41 @@
+# Snapshot tenencia consignatarios — 19 ago 2026
+
+Registrado antes de eliminar la página /inventario/tenencia (rediseño de /inventario).
+Los datos originales siguen en Supabase, tabla `dispositivos` (join `consignatarios` + `modelos`).
+
+
+## AVENIDA HOGAR
+
+| Modelo | Cantidad | Costo unit. | Asignado desde | IMEIs |
+|---|---|---|---|---|
+| Samsung Galaxy A17 4/128GB | 5 | $2.000 | 2026-04-21 | 355286180422772, 355286180425148, 355286180425171, 355286180425361, 355286180425551 |
+| Motorola Moto G06 64GB | 5 | $0 | 2026-04-21 | 355973761773307, 355973761773349, 355973761773364, 355973761773448, 355973761773927 |
+| Motorola Moto G17 4/128GB | 5 | $250.000 | 2026-04-21 | 352187610743584, 352187610743667, 352187610743683, 352187610743691, 352187610743725 |
+| Motorola Moto G17 4/256GB | 5 | $226.423 | 2026-04-16 | 352187610514530, 352187610516360, 352187610516493, 352187610516519, 352187610516600 |
+| Motorola Moto G06 4/128GB | 5 | $2.500.000 | 2026-04-21 | 355973761499218, 355973761500122, 355973761500247, 355973761500254, 355973761501823 |
+| Samsung Galaxy A07 4/64GB | 5 | $300.000 | 2026-04-21 | 351755486899242, 351755486901048, 351755486902244, 351755486905049, 351755486906237 |
+| Motorola Moto G77 8/256GB 5G | 2 | $0 | 2026-04-21 | 350296481401347, 350296481405231 |
+| Samsung Galaxy A36 5G 256GB | 1 | $2.000 | 2026-04-21 | 350399475629210 |
+| Samsung Galaxy A56 5G 256GB | 1 | $300.000 | 2026-04-21 | 354581531821636 |
+
+## BLA BLA ACCESORIOS
+
+| Modelo | Cantidad | Costo unit. | Asignado desde | IMEIs |
+|---|---|---|---|---|
+| Motorola Moto G06 4/128GB | 1 | $2.500.000 | 2026-04-29 | 355973761393940 |
+| Motorola Moto G06 64GB | 1 | $0 | 2026-04-21 | 355973761774305 |
+| Motorola Moto G17 4/256GB | 1 | $226.423 | 2026-04-29 | 352187611801126 |
+| Samsung Galaxy A07 4/64GB | 1 | $300.000 | 2026-04-21 | 352859168081134 |
+| Samsung Galaxy A17 4/128GB | 1 | $2.000 | 2026-04-21 | 355286180425379 |
+
+## LOGHINET SOLUCIONES SRL
+
+| Modelo | Cantidad | Costo unit. | Asignado desde | IMEIs |
+|---|---|---|---|---|
+| Motorola Moto G17 4/256GB | 2 | $226.423 | 2026-04-21 | 352187611311696, 352187611312298 |
+| Motorola Moto G06 4/128GB | 1 | $2.500.000 | 2026-04-23 | 355973761326627 |
+| Motorola Moto G06 64GB | 1 | $0 | 2026-04-21 | 355973761775567 |
+| Samsung Galaxy A07 4/128 GB | 1 | $259.600 | 2026-04-23 | 352859161637700 |
+| Samsung Galaxy A17 4/128GB | 1 | $2.000 | 2026-04-21 | 355286180375889 |
+
+**Total: 45 equipos.**

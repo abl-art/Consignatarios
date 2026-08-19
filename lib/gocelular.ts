@@ -677,6 +677,58 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
   }
 }
 
+/** Precio de venta (default_price, en pesos) por modelo activo de la tienda GOcelular. */
+export async function fetchPreciosVentaCelulares(): Promise<Record<string, number>> {
+  const pool = getPool()
+  if (!pool) return {}
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ name: string; default_price: string | null }>(
+      `SELECT name, default_price FROM device_models WHERE active = true`
+    )
+    const result: Record<string, number> = {}
+    for (const r of res.rows) {
+      if (r.default_price !== null && Number(r.default_price) > 0) {
+        result[r.name] = Number(r.default_price)
+      }
+    }
+    return result
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Salidas diarias de kits de seguridad: órdenes entregadas de la tienda propia
+ * cuyo producto incluye el kit de regalo. El kit no se cobra, así que no hay monto.
+ */
+export async function fetchSalidasKitsDiarias(): Promise<{ fecha: string; cantidad: number }[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ fecha: Date; cantidad: string }>(
+      `SELECT o.order_created_at::date AS fecha, COUNT(*)::text AS cantidad
+       FROM gocuotas_orders o
+       JOIN store_orders so ON so.id::text = o.store_order_id
+       WHERE o.order_delivered_at IS NOT NULL
+         AND o.order_discarded_at IS NULL
+         AND o.client_id::text IN (${SQL_IDS_PROPIOS})
+         AND so.product_name ILIKE '%kit%'
+       GROUP BY 1
+       ORDER BY 1`
+    )
+    return res.rows.map((r) => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
+      cantidad: Number(r.cantidad),
+    }))
+  } finally {
+    client.release()
+  }
+}
+
 export interface VentaTercero {
   store_name: string
   client_id: string
