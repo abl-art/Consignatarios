@@ -128,7 +128,7 @@ export default async function DashboardPage() {
         <ProyeccionVentasCard />
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
-          <div className="grid grid-cols-3 xl:grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 xl:grid-cols-5 gap-3">
             {[
               { href: '/inventario/celulares', label: 'Celulares', stock: stockPropio, valor: valorPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
               { href: '/inventario/smartwatches', label: 'Smartwatches', stock: stockSmartwatch, valor: valorSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
@@ -136,10 +136,11 @@ export default async function DashboardPage() {
               { href: '/inventario/auriculares', label: 'Auriculares', stock: stockAuriculares, valor: valorAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
               { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, valor: valorKits, color: 'text-amber-700', bg: 'bg-amber-50' },
             ].map(cat => (
-              <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-3 text-center hover:shadow-md transition-shadow`}>
-                <p className={`text-xl font-bold ${cat.color}`}>{cat.stock}</p>
-                <p className="text-[10px] text-gray-500">{cat.label}</p>
-                <p className={`text-[10px] ${cat.color} mt-0.5`}>{formatearMoneda(cat.valor)}</p>
+              <Link key={cat.href} href={cat.href} className={`${cat.bg} rounded-lg p-4 text-center hover:shadow-md transition-shadow`}>
+                <p className="text-sm text-gray-500 mb-1 truncate">{cat.label}</p>
+                <p className={`text-2xl font-bold ${cat.color}`}>{cat.stock}</p>
+                <p className="text-xs text-gray-400">unidades</p>
+                <p className={`text-sm font-semibold ${cat.color} mt-1`}>{formatearMoneda(cat.valor)}</p>
               </Link>
             ))}
           </div>
