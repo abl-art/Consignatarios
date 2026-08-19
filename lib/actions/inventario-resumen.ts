@@ -23,13 +23,16 @@ import { stockSinMovimiento, type VentaDia, type ModeloSinMovimiento } from '@/l
 
 export type ProductoKey = 'celulares' | 'smartwatches' | 'parlantes' | 'auriculares' | 'kits'
 
+/** Los kits no tienen precio de tienda (se regalan): valor de venta definido por Emiliano. */
+const PRECIO_VENTA_KIT = 9000
+
 export interface ProductoResumen {
   key: ProductoKey
   label: string
   stock: number
-  /** Total $ al último costo cargado en Compras. Null si no hay costo para matchear. */
+  /** Total $ al costo del proveedor más barato en Compras (última actualización). Null si no hay costo para matchear. */
   costoReposicion: number | null
-  /** Total $ al precio de venta actual de la tienda. Null para kits (se regalan). */
+  /** Total $ al precio de venta actual de la tienda. Kits: precio fijo definido. */
   valorVenta: number | null
   /** $ vendidos en los últimos 30 días cerrados (para Meses de Stock). */
   montoVentas30d: number
@@ -169,8 +172,8 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     ): ProductoResumen => {
       const costos = costosPorCategoria.get(categoria) ?? {}
       const precios = Object.values(costos)
-      // Una sola línea de producto por categoría: el último costo cargado más alto es el vigente
-      const costoUnit = precios.length > 0 ? Math.max(...precios) : 0
+      // Si la categoría tiene más de un producto cargado en Compras, vale el más barato
+      const costoUnit = precios.length > 0 ? Math.min(...precios) : 0
       return {
         key,
         label,
@@ -206,7 +209,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         label: 'Kits de Seguridad',
         stock: stockKits,
         costoReposicion: costoKits > 0 ? costoKits : null,
-        valorVenta: null, // los kits se regalan con los celulares
+        valorVenta: stockKits * PRECIO_VENTA_KIT,
         montoVentas30d: 0,
         ventasDiarias: salidasKits.map(s => ({ ...s, monto: 0 })),
         cierres: cierresKits,

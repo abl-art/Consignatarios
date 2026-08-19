@@ -631,21 +631,32 @@ export interface UltimoCosto {
 }
 
 /**
- * Último costo cargado por producto (created_at más reciente en compras_precios),
- * con la categoría del producto. Base del "Costo de Reposición" en /inventario.
+ * Costo de reposición por producto para /inventario: el precio del proveedor
+ * más barato, tomando de cada proveedor su última actualización (created_at
+ * más reciente). Con un solo proveedor, se usa ese. Empate de precio → el
+ * actualizado más recientemente.
  */
 export async function getUltimosCostos(): Promise<UltimoCosto[]> {
   const supabase = createAdminClient()
   const { data: precios } = await supabase
     .from('compras_precios')
-    .select('producto_id, precio, created_at')
+    .select('producto_id, proveedor_id, precio, created_at')
     .order('created_at', { ascending: false })
   if (!precios || precios.length === 0) return []
 
-  const ultimoPorProducto: Record<string, number> = {}
+  // Última actualización por (producto, proveedor) — vienen ordenados desc
+  const ultimoPorProveedor = new Map<string, number>()
   for (const p of precios) {
-    if (!(p.producto_id in ultimoPorProducto)) {
-      ultimoPorProducto[p.producto_id] = Number(p.precio)
+    const key = `${p.producto_id}|${p.proveedor_id}`
+    if (!ultimoPorProveedor.has(key)) ultimoPorProveedor.set(key, Number(p.precio))
+  }
+
+  // Entre proveedores, el más barato (en empate gana el más reciente, que va primero)
+  const ultimoPorProducto: Record<string, number> = {}
+  for (const [key, precio] of ultimoPorProveedor) {
+    const productoId = key.split('|')[0]
+    if (!(productoId in ultimoPorProducto) || precio < ultimoPorProducto[productoId]) {
+      ultimoPorProducto[productoId] = precio
     }
   }
 
