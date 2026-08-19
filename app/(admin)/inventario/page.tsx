@@ -10,9 +10,7 @@ import {
   mesesDeStock,
 } from '@/lib/inventario-indicadores'
 import InventarioChart from '@/components/inventario/InventarioChart'
-
-const fmt1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
-const fmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
+import IndicadoresProducto from '@/components/inventario/IndicadoresProducto'
 
 export default async function InventarioPage() {
   const { productos, ventasPorModeloCelulares, sinMovimiento, error } = await fetchInventarioResumen()
@@ -27,9 +25,11 @@ export default async function InventarioPage() {
     return {
       key: p.key,
       label: p.label,
-      vel,
+      vel7: vel.diaria7,
+      vel30: vel.diaria30,
       cobertura: diasCobertura(p.stock, vel.diaria30),
       rotacion: rotacionMensual(vel.diaria30 * 30, p.stock, p.stockCierreAnterior),
+      modelos: p.modelos,
     }
   })
   const meses = mesesDeStock(
@@ -121,47 +121,7 @@ export default async function InventarioPage() {
           </div>
 
           {/* Indicadores de gestión */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-xs text-gray-500 mb-1">Meses de Stock</p>
-              <p className="text-4xl font-bold text-gray-900">{meses !== null ? fmt1.format(meses) : '—'}</p>
-              <p className="text-[10px] text-gray-400 mt-1">
-                valorización total ÷ venta mensual valorizada (30d) — pondera cada producto por su valor
-              </p>
-            </div>
-            <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="text-sm font-semibold text-gray-800 mb-3">Indicadores por producto</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
-                      <th className="py-1.5 px-2 font-medium">Producto</th>
-                      <th className="py-1.5 px-2 font-medium text-right">u/día 7d</th>
-                      <th className="py-1.5 px-2 font-medium text-right">u/día 30d</th>
-                      <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
-                      <th className="py-1.5 px-2 font-medium text-right">Rotación 30d</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {indicadores.map(i => (
-                      <tr key={i.key} className="border-b border-gray-100">
-                        <td className="py-1.5 px-2 text-gray-900">{i.label}</td>
-                        <td className="py-1.5 px-2 text-right">{fmt1.format(i.vel.diaria7)}</td>
-                        <td className="py-1.5 px-2 text-right">{fmt1.format(i.vel.diaria30)}</td>
-                        <td className={`py-1.5 px-2 text-right font-medium ${i.cobertura !== null && i.cobertura < 15 ? 'text-red-600' : 'text-gray-900'}`}>
-                          {i.cobertura !== null ? `${fmt1.format(i.cobertura)} días` : '—'}
-                        </td>
-                        <td className="py-1.5 px-2 text-right">{i.rotacion !== null ? `${fmt2.format(i.rotacion)}×` : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-2">
-                Cobertura: stock ÷ venta diaria 30d (en rojo si &lt;15 días) · Rotación: vendidas 30d ÷ stock promedio del mes
-              </p>
-            </div>
-          </div>
+          <IndicadoresProducto meses={meses} filas={indicadores} />
 
           {/* Stock sin movimiento */}
           {sinMovimiento.length > 0 && (

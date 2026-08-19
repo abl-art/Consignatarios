@@ -82,6 +82,57 @@ export function normalizarModelo(nombre: string): string {
   return n.split(/\s+/).filter(Boolean).sort().join(' ')
 }
 
+export interface CoberturaModelo {
+  modelo: string
+  stock: number
+  ventaDiaria30: number
+  cobertura: number | null
+}
+
+/**
+ * Cobertura por modelo para planificar compras: cruza stock y ventas 30d por
+ * clave normalizada. Incluye modelos que venden sin stock (cobertura 0, lo más
+ * urgente). Ordena por cobertura ascendente; sin ventas al final.
+ */
+export function coberturaPorModelos(
+  stock: { modelo: string; qty: number }[],
+  ventas30: { modelo: string; ventas: number }[],
+): CoberturaModelo[] {
+  const ventasPorKey = new Map<string, { modelo: string; ventas: number }>()
+  for (const v of ventas30) {
+    const key = normalizarModelo(v.modelo)
+    const prev = ventasPorKey.get(key)
+    ventasPorKey.set(key, { modelo: v.modelo, ventas: (prev?.ventas ?? 0) + v.ventas })
+  }
+
+  const resultado: CoberturaModelo[] = []
+  const stockKeys = new Set<string>()
+  for (const s of stock) {
+    const key = normalizarModelo(s.modelo)
+    stockKeys.add(key)
+    const ventaDiaria30 = (ventasPorKey.get(key)?.ventas ?? 0) / 30
+    resultado.push({
+      modelo: s.modelo,
+      stock: s.qty,
+      ventaDiaria30,
+      cobertura: diasCobertura(s.qty, ventaDiaria30),
+    })
+  }
+  // Modelos que venden pero no tienen stock: cobertura 0
+  for (const [key, v] of ventasPorKey) {
+    if (!stockKeys.has(key) && v.ventas > 0) {
+      resultado.push({ modelo: v.modelo, stock: 0, ventaDiaria30: v.ventas / 30, cobertura: 0 })
+    }
+  }
+
+  return resultado.sort((a, b) => {
+    if (a.cobertura === null && b.cobertura === null) return b.stock - a.stock
+    if (a.cobertura === null) return 1
+    if (b.cobertura === null) return -1
+    return a.cobertura - b.cobertura
+  })
+}
+
 export interface StockModelo {
   modelo: string
   qty: number

@@ -19,7 +19,15 @@ import { getUltimosCostos, getInventarioByCategoria } from '@/lib/actions/compra
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import { resumenVentasDia } from '@/lib/ventas-dia'
 import { buscarPrecio } from '@/lib/utils'
-import { stockSinMovimiento, type VentaDia, type ModeloSinMovimiento } from '@/lib/inventario-indicadores'
+import {
+  stockSinMovimiento,
+  coberturaPorModelos,
+  diasCobertura,
+  velocidadVenta,
+  type VentaDia,
+  type ModeloSinMovimiento,
+  type CoberturaModelo,
+} from '@/lib/inventario-indicadores'
 
 export type ProductoKey = 'celulares' | 'smartwatches' | 'parlantes' | 'auriculares' | 'kits'
 
@@ -40,6 +48,8 @@ export interface ProductoResumen {
   cierres: CierreMensual[]
   /** stock_final del último cierre mensual, para rotación. */
   stockCierreAnterior: number | null
+  /** Desglose por modelo con cobertura, para planificar compras (fila desplegable). */
+  modelos: CoberturaModelo[]
 }
 
 export interface InventarioResumen {
@@ -163,6 +173,12 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       }))
     } catch { /* cierres no disponibles */ }
 
+    // Desglose por modelo de celulares (cobertura para compras)
+    const modelosCelulares = coberturaPorModelos(
+      stockDetalle.map(s => ({ modelo: s.model_name, qty: s.qty })),
+      Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
+    )
+
     // ── Accesorios ─────────────────────────────────────────────────────────
     const accesorio = (
       key: ProductoKey,
@@ -174,6 +190,30 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       const precios = Object.values(costos)
       // Si la categoría tiene más de un producto cargado en Compras, vale el más barato
       const costoUnit = precios.length > 0 ? Math.min(...precios) : 0
+
+      // Desglose por producto de tienda. Con un solo producto la venta de la
+      // categoría es suya; con varios se cruza por nombre exacto de variante.
+      let modelos: CoberturaModelo[]
+      if (data.porProducto.length === 1) {
+        const p0 = data.porProducto[0]
+        const vel = velocidadVenta(data.ventasDiarias, hoy).diaria30
+        modelos = [{ modelo: p0.nombre, stock: p0.stock, ventaDiaria30: vel, cobertura: diasCobertura(p0.stock, vel) }]
+      } else {
+        const ventasPorNombre = new Map(data.ventas30PorVariante.map(v => [v.nombre.toLowerCase(), v.cantidad]))
+        modelos = data.porProducto
+          .map(p => {
+            const cant = ventasPorNombre.get(p.nombre.toLowerCase())
+            const vel = cant !== undefined ? cant / 30 : 0
+            return {
+              modelo: p.nombre,
+              stock: p.stock,
+              ventaDiaria30: vel,
+              cobertura: cant !== undefined ? diasCobertura(p.stock, vel) : null,
+            }
+          })
+          .sort((a, b) => (a.cobertura ?? Infinity) - (b.cobertura ?? Infinity))
+      }
+
       return {
         key,
         label,
@@ -184,6 +224,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         ventasDiarias: data.ventasDiarias,
         cierres: data.cierres,
         stockCierreAnterior: data.cierres[0]?.stock_final ?? null,
+        modelos,
       }
     }
 
@@ -200,6 +241,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
           .map(([fecha, cantidad]) => ({ fecha, cantidad, monto: 0 })),
         cierres: [],
         stockCierreAnterior: null,
+        modelos: modelosCelulares,
       },
       accesorio('smartwatches', 'Smartwatches', 'Smartwatches', smartwatches),
       accesorio('parlantes', 'Parlantes', 'Parlantes', parlantes),
@@ -214,6 +256,11 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         ventasDiarias: salidasKits.map(s => ({ ...s, monto: 0 })),
         cierres: cierresKits,
         stockCierreAnterior: cierresKits[0]?.stock_final ?? null,
+        // Los kits salen en bundles de celulares: se muestra el stock por modelo, sin cobertura
+        modelos: kitsItems
+          .filter(k => k.disponible > 0)
+          .map(k => ({ modelo: k.modelo, stock: k.disponible, ventaDiaria30: 0, cobertura: null }))
+          .sort((a, b) => b.stock - a.stock),
       },
     ]
 

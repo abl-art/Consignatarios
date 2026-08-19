@@ -6,6 +6,7 @@ import {
   mesesDeStock,
   stockSinMovimiento,
   normalizarModelo,
+  coberturaPorModelos,
   type VentaDia,
 } from '@/lib/inventario-indicadores'
 
@@ -104,6 +105,44 @@ describe('normalizarModelo', () => {
   it('no confunde modelos distintos', () => {
     expect(normalizarModelo('Moto G06 64GB')).not.toBe(normalizarModelo('Moto G06 128GB'))
     expect(normalizarModelo('Samsung Galaxy A07 128GB')).not.toBe(normalizarModelo('Samsung Galaxy A17 128GB'))
+  })
+})
+
+describe('coberturaPorModelos', () => {
+  const stock = [
+    { modelo: 'Samsung Galaxy A07 4/128 GB', qty: 300 },
+    { modelo: 'Motorola Moto G06 64GB', qty: 30 },
+    { modelo: 'Moto G86 5G - 256GB/8GB', qty: 19 },
+  ]
+  const ventas30 = [
+    { modelo: 'Samsung Galaxy A07 128GB', ventas: 150 }, // variante de escritura
+    { modelo: 'Celular Motorola Moto G06 64GB + KIT de Seguridad GRATIS!', ventas: 60 },
+    { modelo: 'Xiaomi Redmi 14C 128GB', ventas: 30 }, // vende pero sin stock
+  ]
+
+  it('cruza stock y ventas por modelo normalizado y calcula cobertura', () => {
+    const res = coberturaPorModelos(stock, ventas30)
+    const a07 = res.find(r => r.modelo === 'Samsung Galaxy A07 4/128 GB')!
+    expect(a07.ventaDiaria30).toBe(5) // 150/30
+    expect(a07.cobertura).toBe(60) // 300/5
+    const g06 = res.find(r => r.modelo === 'Motorola Moto G06 64GB')!
+    expect(g06.cobertura).toBe(15) // 30/2
+  })
+
+  it('modelo que vende sin stock aparece con cobertura 0 (urgente)', () => {
+    const res = coberturaPorModelos(stock, ventas30)
+    const redmi = res.find(r => r.modelo === 'Xiaomi Redmi 14C 128GB')!
+    expect(redmi.stock).toBe(0)
+    expect(redmi.cobertura).toBe(0)
+  })
+
+  it('ordena por cobertura ascendente (lo urgente primero), sin ventas al final', () => {
+    const res = coberturaPorModelos(stock, ventas30)
+    expect(res[0].modelo).toBe('Xiaomi Redmi 14C 128GB') // cobertura 0
+    expect(res[1].modelo).toBe('Motorola Moto G06 64GB') // 15
+    expect(res[2].modelo).toBe('Samsung Galaxy A07 4/128 GB') // 60
+    expect(res[3].modelo).toBe('Moto G86 5G - 256GB/8GB') // sin ventas → null, último
+    expect(res[3].cobertura).toBeNull()
   })
 })
 

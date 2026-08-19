@@ -80,6 +80,10 @@ export interface AccesorioData {
   kpis: AccesorioKpis
   ventasDiarias: VentaDiaria[]
   cierres: CierreMensual[]
+  /** Productos de tienda que componen la categoría, con su stock */
+  porProducto: { nombre: string; stock: number }[]
+  /** Ventas 30d cerrados por variante de nombre (display_name de la orden) */
+  ventas30PorVariante: { nombre: string; cantidad: number }[]
   error: string | null
 }
 
@@ -101,6 +105,8 @@ export async function fetchAccesorioData(config: CategoriaConfig): Promise<Acces
     kpis: { stockDisponible: 0, precioUnitario: 0, valuacion: 0, ventasMes: 0, ventasSemana: 0, ventasAyer: 0 },
     ventasDiarias: [],
     cierres: [],
+    porProducto: [],
+    ventas30PorVariante: [],
     error: null,
   }
 
@@ -151,6 +157,22 @@ export async function fetchAccesorioData(config: CategoriaConfig): Promise<Acces
       monto: Number(r.monto),
     }))
 
+    // 2b. Ventas 30d cerrados por variante (para cobertura por producto en /inventario)
+    const ventas30Res = await client.query<{ nombre: string; cantidad: string }>(
+      `SELECT soi.display_name AS nombre, COALESCE(SUM(soi.quantity), 0)::text AS cantidad
+       FROM store_order_items soi
+       JOIN store_orders so ON so.id = soi.order_id
+       JOIN gocuotas_orders go ON go.order_id = so.gocuotas_order_id
+       WHERE go.order_status = 'approved'
+         AND go.order_discarded_at IS NULL
+         AND LOWER(soi.display_name) = ANY($1)
+         AND so.created_at::date >= CURRENT_DATE - 30
+         AND so.created_at::date < CURRENT_DATE
+       GROUP BY 1`,
+      [config.variants]
+    )
+    const ventas30PorVariante = ventas30Res.rows.map(r => ({ nombre: r.nombre, cantidad: Number(r.cantidad) }))
+
     // 3. KPI calculations from ventasDiarias
     const now = new Date()
     const yesterday = toDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
@@ -191,6 +213,8 @@ export async function fetchAccesorioData(config: CategoriaConfig): Promise<Acces
       kpis: { stockDisponible, precioUnitario, valuacion, ventasMes, ventasSemana, ventasAyer },
       ventasDiarias,
       cierres,
+      porProducto: matchingProducts.map(r => ({ nombre: r.display_name, stock: Number(r.stock) })),
+      ventas30PorVariante,
       error: null,
     }
   } catch (e: unknown) {
