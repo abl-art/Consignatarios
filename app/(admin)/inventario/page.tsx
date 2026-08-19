@@ -124,7 +124,6 @@ export default async function InventarioPage() {
                       <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
                       <th className="py-1.5 px-2 font-medium text-right">En tránsito</th>
                       <th className="py-1.5 px-2 font-medium text-right">Pedidos</th>
-                      <th className="py-1.5 px-2 font-medium">Reposición</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -138,13 +137,6 @@ export default async function InventarioPage() {
                         </td>
                         <td className="py-1.5 px-2 text-right text-emerald-600">{m.enTransito > 0 ? `🚚 ${m.enTransito.toLocaleString('es-AR')}` : '—'}</td>
                         <td className="py-1.5 px-2 text-right text-blue-600">{m.pedido > 0 ? `📦 ${m.pedido.toLocaleString('es-AR')}` : '—'}</td>
-                        <td className="py-1.5 px-2">
-                          {m.enTransito === 0 && m.pedido === 0 ? (
-                            <span className="text-xs font-semibold text-white bg-red-600 rounded-full px-2 py-0.5">SIN REPONER</span>
-                          ) : (
-                            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">en camino</span>
-                          )}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
