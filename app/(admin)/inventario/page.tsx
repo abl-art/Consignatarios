@@ -15,7 +15,7 @@ import InventarioChart from '@/components/inventario/InventarioChart'
 import IndicadoresProducto from '@/components/inventario/IndicadoresProducto'
 
 export default async function InventarioPage() {
-  const { productos, ventasPorModeloCelulares, sinMovimiento, error } = await fetchInventarioResumen()
+  const { productos, ventasPorModeloCelulares, sinMovimiento, reposiciones, error } = await fetchInventarioResumen()
   const hoy = new Date().toISOString().slice(0, 10)
 
   const totalStock = productos.reduce((s, p) => s + p.stock, 0)
@@ -40,7 +40,7 @@ export default async function InventarioPage() {
   const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
   const todosLosModelos = productos.flatMap(p => p.modelos)
   const cobVentas = ventasPorCobertura(todosLosModelos)
-  const aComprar = modelosAComprar(todosLosModelos)
+  const aComprar = modelosAComprar(todosLosModelos, 4, reposiciones)
   const fmtPct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
   const fmtPct1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
@@ -104,11 +104,24 @@ export default async function InventarioPage() {
             {aComprar.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-2">Sin urgencias</p>
             ) : (
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {aComprar.map(m => (
-                  <li key={m.modelo} className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="text-gray-700 truncate" title={m.modelo}>{m.modelo}</span>
-                    <span className="text-red-600 font-semibold shrink-0">{fmtPct1.format(m.pctVentasTotal)}%</span>
+                  <li key={m.modelo} className="text-xs">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-gray-700 truncate" title={m.modelo}>{m.modelo}</span>
+                      <span className="text-red-600 font-semibold shrink-0">{fmtPct1.format(m.pctVentasTotal)}%</span>
+                    </div>
+                    <div className="text-[10px] leading-tight">
+                      {m.enTransito === 0 && m.pedido === 0 ? (
+                        <span className="text-red-500 font-medium">sin reponer</span>
+                      ) : (
+                        <>
+                          {m.enTransito > 0 && <span className="text-emerald-600">🚚 {m.enTransito.toLocaleString('es-AR')} en tránsito</span>}
+                          {m.enTransito > 0 && m.pedido > 0 && <span className="text-gray-300"> · </span>}
+                          {m.pedido > 0 && <span className="text-blue-600">📦 {m.pedido.toLocaleString('es-AR')} pedidos</span>}
+                        </>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

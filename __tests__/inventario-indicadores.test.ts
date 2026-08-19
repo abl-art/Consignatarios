@@ -210,6 +210,23 @@ describe('modelosAComprar', () => {
   it('sin ventas totales devuelve vacío', () => {
     expect(modelosAComprar([{ modelo: 'X', stock: 5, ventaDiaria30: 0, cobertura: null }])).toEqual([])
   })
+
+  it('cruza reposiciones en camino por nombre normalizado; sin match queda sin reponer', () => {
+    const conRepo = [
+      { modelo: 'A 128 GB', stock: 0, ventaDiaria30: 30, cobertura: 0 },
+      { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },
+    ]
+    const res = modelosAComprar(conRepo, 4, [
+      { modelo: 'Celular A 4/128GB', enTransito: 100, pedido: 0 }, // matchea "A 128 GB"
+      { modelo: 'Celular A 4/128GB', enTransito: 0, pedido: 50 },  // mismo modelo: suma
+    ])
+    const a = res.find(m => m.modelo === 'A 128 GB')!
+    expect(a.enTransito).toBe(100)
+    expect(a.pedido).toBe(50)
+    const b = res.find(m => m.modelo === 'B')!
+    expect(b.enTransito).toBe(0)
+    expect(b.pedido).toBe(0)
+  })
 })
 
 describe('stockSinMovimiento', () => {

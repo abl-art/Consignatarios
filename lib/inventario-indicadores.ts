@@ -161,32 +161,58 @@ export function ventasPorCobertura(
   return { pctSaludable: (saludable / total) * 100, pctRiesgo: (riesgo / total) * 100 }
 }
 
+export interface ReposicionModelo {
+  modelo: string
+  /** Unidades informadas a GOcelular que Andreani aún no recibió */
+  enTransito: number
+  /** Unidades compradas en el gestor todavía sin informar */
+  pedido: number
+}
+
 export interface ModeloAComprar {
   modelo: string
   stock: number
   /** % de la venta total (todos los productos) que representa el modelo */
   pctVentasTotal: number
   cobertura: number | null
+  enTransito: number
+  pedido: number
 }
 
 /**
  * Lista de compra urgente: modelos en riesgo (cobertura < 5 días, incluye los
  * que venden con stock 0) que pesan más del umbral en la venta total.
  * Ordenada por peso descendente: primero lo que más venta salva.
+ * Con `reposiciones` marca lo que ya viene en camino (tránsito/pedido) para
+ * que compras priorice lo que está sin reponer.
  */
 export function modelosAComprar(
   modelos: { modelo: string; stock: number; ventaDiaria30: number; cobertura: number | null }[],
   umbralPct = 4,
+  reposiciones: ReposicionModelo[] = [],
 ): ModeloAComprar[] {
   const total = modelos.reduce((s, m) => s + m.ventaDiaria30, 0)
   if (total <= 0) return []
+
+  const repoPorKey = new Map<string, { enTransito: number; pedido: number }>()
+  for (const r of reposiciones) {
+    const key = normalizarModelo(r.modelo)
+    const prev = repoPorKey.get(key) ?? { enTransito: 0, pedido: 0 }
+    repoPorKey.set(key, { enTransito: prev.enTransito + r.enTransito, pedido: prev.pedido + r.pedido })
+  }
+
   return modelos
-    .map(m => ({
-      modelo: m.modelo,
-      stock: m.stock,
-      pctVentasTotal: (m.ventaDiaria30 / total) * 100,
-      cobertura: m.cobertura,
-    }))
+    .map(m => {
+      const repo = repoPorKey.get(normalizarModelo(m.modelo)) ?? { enTransito: 0, pedido: 0 }
+      return {
+        modelo: m.modelo,
+        stock: m.stock,
+        pctVentasTotal: (m.ventaDiaria30 / total) * 100,
+        cobertura: m.cobertura,
+        enTransito: repo.enTransito,
+        pedido: repo.pedido,
+      }
+    })
     .filter(m => m.cobertura !== null && m.cobertura < 5 && m.pctVentasTotal > umbralPct)
     .sort((a, b) => b.pctVentasTotal - a.pctVentasTotal)
 }

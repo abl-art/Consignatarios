@@ -6,8 +6,10 @@ import {
   fetchSalidasKitsDiarias,
   fetchVentasPorModelo,
   fetchVentasUlt30d,
+  fetchStockPorWarehouse,
   type VentaPorModelo,
 } from '@/lib/gocelular'
+import { aplicarPedidos } from '@/lib/pedidos-pendientes'
 import {
   fetchAccesorioData,
   SMARTWATCHES_CONFIG,
@@ -15,7 +17,7 @@ import {
   AURICULARES_CONFIG,
   type CierreMensual,
 } from '@/lib/actions/accesorios-ventas'
-import { getUltimosCostos, getInventarioByCategoria } from '@/lib/actions/compras'
+import { getUltimosCostos, getInventarioByCategoria, getPedidos } from '@/lib/actions/compras'
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import { resumenVentasDia } from '@/lib/ventas-dia'
 import { buscarPrecio } from '@/lib/utils'
@@ -27,6 +29,7 @@ import {
   type VentaDia,
   type ModeloSinMovimiento,
   type CoberturaModelo,
+  type ReposicionModelo,
 } from '@/lib/inventario-indicadores'
 
 export type ProductoKey = 'celulares' | 'smartwatches' | 'parlantes' | 'auriculares' | 'kits'
@@ -56,6 +59,8 @@ export interface InventarioResumen {
   productos: ProductoResumen[]
   ventasPorModeloCelulares: VentaPorModelo[]
   sinMovimiento: ModeloSinMovimiento[]
+  /** Reposición en camino por modelo (en tránsito Andreani + pedidos del gestor) */
+  reposiciones: ReposicionModelo[]
   error: string | null
 }
 
@@ -88,6 +93,8 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       smartwatches,
       parlantes,
       auriculares,
+      stockWarehouse,
+      pedidos,
     ] = await Promise.all([
       fetchStockPropio(),
       fetchStockPropioDetalle(),
@@ -101,7 +108,20 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       fetchAccesorioData(SMARTWATCHES_CONFIG),
       fetchAccesorioData(PARLANTES_CONFIG),
       fetchAccesorioData(AURICULARES_CONFIG),
+      fetchStockPorWarehouse(),
+      getPedidos().catch(() => []),
     ])
+
+    // Reposición en camino por modelo (misma fuente que /inventario/stock)
+    const reposiciones: ReposicionModelo[] = aplicarPedidos(stockWarehouse, pedidos)
+      .filter(r => r.enTransito > 0 || r.pedido > 0)
+      .map(r => ({
+        modelo: r.marca && !r.nombre.toLowerCase().includes(r.marca.toLowerCase())
+          ? `${r.marca} ${r.nombre}`
+          : r.nombre,
+        enTransito: r.enTransito,
+        pedido: r.pedido,
+      }))
 
     // Último costo por categoría: mapa nombre normalizado → precio (para buscarPrecio)
     const costosPorCategoria = new Map<string, Record<string, number>>()
@@ -272,12 +292,13 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       },
     ]
 
-    return { productos, ventasPorModeloCelulares: ventasPorModelo, sinMovimiento, error: null }
+    return { productos, ventasPorModeloCelulares: ventasPorModelo, sinMovimiento, reposiciones, error: null }
   } catch (e: unknown) {
     return {
       productos: [],
       ventasPorModeloCelulares: [],
       sinMovimiento: [],
+      reposiciones: [],
       error: e instanceof Error ? e.message : String(e),
     }
   }
