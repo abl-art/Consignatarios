@@ -8,6 +8,7 @@ import {
   normalizarModelo,
   coberturaPorModelos,
   ventasPorCobertura,
+  coberturaProyectada,
   modelosAComprar,
   type VentaDia,
 } from '@/lib/inventario-indicadores'
@@ -196,6 +197,38 @@ describe('ventasPorCobertura', () => {
   it('sin ventas devuelve null', () => {
     expect(ventasPorCobertura([{ ventaDiaria30: 0, cobertura: 10 }])).toEqual({ pctSaludable: null, pctRiesgo: null })
     expect(ventasPorCobertura([])).toEqual({ pctSaludable: null, pctRiesgo: null })
+  })
+})
+
+describe('coberturaProyectada', () => {
+  it('suma tránsito y pedido al stock antes de calcular cobertura, matcheando por nombre normalizado', () => {
+    const modelos = [
+      { modelo: 'A 128 GB', stock: 8, ventaDiaria30: 4, cobertura: 2 },
+      { modelo: 'B', stock: 10, ventaDiaria30: 1, cobertura: 10 },
+    ]
+    const res = coberturaProyectada(modelos, [
+      { modelo: 'Celular A 4/128GB', enTransito: 100, pedido: 20 }, // matchea "A 128 GB"
+    ])
+    expect(res[0].cobertura).toBeCloseTo((8 + 100 + 20) / 4) // 32 días
+    expect(res[1].cobertura).toBeCloseTo(10) // sin reposición: queda igual
+  })
+
+  it('un modelo sin ventas sigue sin cobertura calculable aunque tenga reposición', () => {
+    const res = coberturaProyectada(
+      [{ modelo: 'X', stock: 0, ventaDiaria30: 0, cobertura: null }],
+      [{ modelo: 'X', enTransito: 50, pedido: 0 }],
+    )
+    expect(res[0].cobertura).toBeNull()
+  })
+
+  it('con la proyección, un modelo en riesgo con pedido suficiente pasa a saludable en ventasPorCobertura', () => {
+    const modelos = [
+      { modelo: 'A', stock: 0, ventaDiaria30: 2, cobertura: 0 },  // riesgo... pero pedido en camino
+      { modelo: 'B', stock: 2, ventaDiaria30: 2, cobertura: 1 },  // riesgo sin reponer
+    ]
+    const r = ventasPorCobertura(coberturaProyectada(modelos, [{ modelo: 'A', enTransito: 0, pedido: 60 }]))
+    expect(r.pctSaludable).toBeCloseTo(50) // A: 60/2 = 30 días
+    expect(r.pctRiesgo).toBeCloseTo(50)    // B sigue en riesgo
   })
 })
 

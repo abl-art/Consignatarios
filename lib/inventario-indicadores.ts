@@ -172,6 +172,35 @@ export interface ReposicionModelo {
   pedido: number
 }
 
+function reposicionesPorKey(reposiciones: ReposicionModelo[]): Map<string, { enTransito: number; pedido: number }> {
+  const repoPorKey = new Map<string, { enTransito: number; pedido: number }>()
+  for (const r of reposiciones) {
+    const key = normalizarModelo(r.modelo)
+    const prev = repoPorKey.get(key) ?? { enTransito: 0, pedido: 0 }
+    repoPorKey.set(key, { enTransito: prev.enTransito + r.enTransito, pedido: prev.pedido + r.pedido })
+  }
+  return repoPorKey
+}
+
+/**
+ * Reemplaza la cobertura de cada modelo por la proyectada al ingresar lo que
+ * viene en camino (stock + tránsito + pedido). Para ventasPorCobertura: una
+ * venta con reposición ya comprada/viajando no debe contarse en riesgo.
+ */
+export function coberturaProyectada(
+  modelos: { modelo: string; stock: number; ventaDiaria30: number; cobertura: number | null }[],
+  reposiciones: ReposicionModelo[],
+): { ventaDiaria30: number; cobertura: number | null }[] {
+  const repoPorKey = reposicionesPorKey(reposiciones)
+  return modelos.map(m => {
+    const repo = repoPorKey.get(normalizarModelo(m.modelo)) ?? { enTransito: 0, pedido: 0 }
+    return {
+      ventaDiaria30: m.ventaDiaria30,
+      cobertura: diasCobertura(m.stock + repo.enTransito + repo.pedido, m.ventaDiaria30),
+    }
+  })
+}
+
 export interface ModeloAComprar {
   modelo: string
   stock: number
@@ -201,12 +230,7 @@ export function modelosAComprar(
   const total = modelos.reduce((s, m) => s + m.ventaDiaria30, 0)
   if (total <= 0) return []
 
-  const repoPorKey = new Map<string, { enTransito: number; pedido: number }>()
-  for (const r of reposiciones) {
-    const key = normalizarModelo(r.modelo)
-    const prev = repoPorKey.get(key) ?? { enTransito: 0, pedido: 0 }
-    repoPorKey.set(key, { enTransito: prev.enTransito + r.enTransito, pedido: prev.pedido + r.pedido })
-  }
+  const repoPorKey = reposicionesPorKey(reposiciones)
 
   return modelos
     .map(m => {

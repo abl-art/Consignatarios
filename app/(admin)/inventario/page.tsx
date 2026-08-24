@@ -9,6 +9,7 @@ import {
   rotacionMensual,
   mesesDeStock,
   ventasPorCobertura,
+  coberturaProyectada,
   modelosAComprar,
 } from '@/lib/inventario-indicadores'
 import InventarioChart from '@/components/inventario/InventarioChart'
@@ -39,7 +40,8 @@ export default async function InventarioPage() {
   )
   const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
   const todosLosModelos = productos.flatMap(p => p.modelos)
-  const cobVentas = ventasPorCobertura(todosLosModelos)
+  // Cobertura proyectada: lo en tránsito/pedido ya no cuenta como venta en riesgo
+  const cobVentas = ventasPorCobertura(coberturaProyectada(todosLosModelos, reposiciones))
   const aComprar = modelosAComprar(todosLosModelos, reposiciones)
   const fmtPct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
   const fmtPct1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
@@ -82,7 +84,7 @@ export default async function InventarioPage() {
           <div className="p-4 text-center">
             <p className="text-2xl font-bold text-green-700">{cobVentas.pctSaludable !== null ? `${fmtPct.format(cobVentas.pctSaludable)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas con Cobertura</p>
-            <p className="text-[10px] text-gray-400 mt-1">venta 30d con más de 20 días de stock</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con más de 20 días de stock, contando lo en tránsito y pedido</p>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -92,7 +94,7 @@ export default async function InventarioPage() {
           <div className="p-4 text-center">
             <p className="text-2xl font-bold text-red-700">{cobVentas.pctRiesgo !== null ? `${fmtPct.format(cobVentas.pctRiesgo)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas en Riesgo</p>
-            <p className="text-[10px] text-gray-400 mt-1">venta 30d con 20 días de stock o menos</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con 20 días o menos, aun con la reposición en camino</p>
           </div>
         </div>
       </div>
