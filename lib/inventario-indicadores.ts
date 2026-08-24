@@ -146,7 +146,8 @@ export function coberturaPorModelos(
  * Qué parte de la venta (u/día 30d de todos los modelos) está respaldada por
  * stock sano y cuánta está por quebrar. Modelos sin ventas no aportan.
  * - saludable: cobertura > 20 días
- * - riesgo: cobertura < 5 días (incluye los que venden con stock 0)
+ * - riesgo: cobertura ≤ 20 días (incluye los que venden con stock 0)
+ * Complementarios: saludable + riesgo = 100% de la venta.
  */
 export function ventasPorCobertura(
   modelos: { ventaDiaria30: number; cobertura: number | null }[],
@@ -158,7 +159,7 @@ export function ventasPorCobertura(
   for (const m of modelos) {
     if (m.cobertura === null) continue
     if (m.cobertura > 20) saludable += m.ventaDiaria30
-    if (m.cobertura < 5) riesgo += m.ventaDiaria30
+    else riesgo += m.ventaDiaria30
   }
   return { pctSaludable: (saludable / total) * 100, pctRiesgo: (riesgo / total) * 100 }
 }
@@ -176,21 +177,22 @@ export interface ModeloAComprar {
   stock: number
   /** % de la venta total (todos los productos) que representa el modelo */
   pctVentasTotal: number
+  /** Unidades vendidas en los últimos 30 días */
+  ventas30d: number
   cobertura: number | null
   enTransito: number
   pedido: number
 }
 
 /**
- * Lista de compra urgente: modelos en riesgo (cobertura < 5 días, incluye los
- * que venden con stock 0) que pesan más del umbral en la venta total.
- * Ordenada por peso descendente: primero lo que más venta salva.
- * Con `reposiciones` marca lo que ya viene en camino (tránsito/pedido) para
- * que compras priorice lo que está sin reponer.
+ * Lista de compra: todos los modelos con cobertura menor a 20 días (incluye
+ * los que venden con stock 0), con su peso en la venta total y las unidades
+ * vendidas en 30 días. Ordenada por peso descendente: primero lo que más
+ * venta salva. Con `reposiciones` marca lo que ya viene en camino
+ * (tránsito/pedido) para que compras priorice lo que está sin reponer.
  */
 export function modelosAComprar(
   modelos: { modelo: string; stock: number; ventaDiaria30: number; cobertura: number | null }[],
-  umbralPct = 4,
   reposiciones: ReposicionModelo[] = [],
 ): ModeloAComprar[] {
   const total = modelos.reduce((s, m) => s + m.ventaDiaria30, 0)
@@ -210,12 +212,13 @@ export function modelosAComprar(
         modelo: m.modelo,
         stock: m.stock,
         pctVentasTotal: (m.ventaDiaria30 / total) * 100,
+        ventas30d: m.ventaDiaria30 * 30,
         cobertura: m.cobertura,
         enTransito: repo.enTransito,
         pedido: repo.pedido,
       }
     })
-    .filter(m => m.cobertura !== null && m.cobertura < 5 && m.pctVentasTotal > umbralPct)
+    .filter(m => m.cobertura !== null && m.cobertura < 20)
     .sort((a, b) => b.pctVentasTotal - a.pctVentasTotal)
 }
 

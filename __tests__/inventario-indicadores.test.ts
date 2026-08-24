@@ -170,26 +170,27 @@ describe('coberturaPorModelos', () => {
 })
 
 describe('ventasPorCobertura', () => {
-  it('separa la venta respaldada (+20d) de la venta en riesgo (<5d)', () => {
+  it('separa la venta respaldada (+20d) de la venta en riesgo (≤20d) y suman 100%', () => {
     const modelos = [
       { ventaDiaria30: 6, cobertura: 60 },   // saludable
       { ventaDiaria30: 3, cobertura: 2 },    // riesgo
       { ventaDiaria30: 1, cobertura: 0 },    // riesgo (stock 0)
-      { ventaDiaria30: 2, cobertura: 12 },   // ni una ni otra
+      { ventaDiaria30: 2, cobertura: 12 },   // riesgo (bajo 20d)
       { ventaDiaria30: 0, cobertura: null }, // sin ventas: no aporta
     ]
     const r = ventasPorCobertura(modelos)
     expect(r.pctSaludable).toBeCloseTo(50) // 6/12
-    expect(r.pctRiesgo).toBeCloseTo((4 / 12) * 100)
+    expect(r.pctRiesgo).toBeCloseTo(50) // 6/12
+    expect(r.pctSaludable! + r.pctRiesgo!).toBeCloseTo(100)
   })
 
-  it('el borde exacto no cuenta: 20d no es saludable, 5d no es riesgo', () => {
+  it('el borde exacto de 20d cuenta como riesgo, no como saludable', () => {
     const r = ventasPorCobertura([
       { ventaDiaria30: 1, cobertura: 20 },
       { ventaDiaria30: 1, cobertura: 5 },
     ])
     expect(r.pctSaludable).toBe(0)
-    expect(r.pctRiesgo).toBe(0)
+    expect(r.pctRiesgo).toBe(100)
   })
 
   it('sin ventas devuelve null', () => {
@@ -200,18 +201,20 @@ describe('ventasPorCobertura', () => {
 
 describe('modelosAComprar', () => {
   const modelos = [
-    { modelo: 'A', stock: 0, ventaDiaria30: 30, cobertura: 0 },      // riesgo, 30%
-    { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },      // riesgo, 5%
-    { modelo: 'C', stock: 2, ventaDiaria30: 3, cobertura: 0.7 },     // riesgo pero 3% → afuera
-    { modelo: 'D', stock: 500, ventaDiaria30: 60, cobertura: 8.3 },  // 60% pero sin riesgo
-    { modelo: 'E', stock: 50, ventaDiaria30: 2, cobertura: 25 },     // sano
+    { modelo: 'A', stock: 0, ventaDiaria30: 30, cobertura: 0 },      // sin stock, 30%
+    { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },      // 5%
+    { modelo: 'C', stock: 2, ventaDiaria30: 3, cobertura: 0.7 },     // 3%: entra igual, sin umbral de peso
+    { modelo: 'D', stock: 500, ventaDiaria30: 60, cobertura: 8.3 },  // 60%
+    { modelo: 'E', stock: 50, ventaDiaria30: 2, cobertura: 25 },     // sano (≥20d) → afuera
   ]
 
-  it('lista solo los modelos en riesgo (<5d) con peso mayor al umbral, ordenados por peso', () => {
+  it('lista todos los modelos con cobertura <20d ordenados por peso, con ventas 30d', () => {
     const res = modelosAComprar(modelos)
-    expect(res.map(m => m.modelo)).toEqual(['A', 'B'])
-    expect(res[0].pctVentasTotal).toBeCloseTo(30)
-    expect(res[1].pctVentasTotal).toBeCloseTo(5)
+    expect(res.map(m => m.modelo)).toEqual(['D', 'A', 'B', 'C'])
+    expect(res[0].pctVentasTotal).toBeCloseTo(60)
+    expect(res[1].pctVentasTotal).toBeCloseTo(30)
+    expect(res[1].ventas30d).toBe(900) // 30 u/día × 30 días
+    expect(res[3].ventas30d).toBe(90)
   })
 
   it('sin ventas totales devuelve vacío', () => {
@@ -223,7 +226,7 @@ describe('modelosAComprar', () => {
       { modelo: 'A 128 GB', stock: 0, ventaDiaria30: 30, cobertura: 0 },
       { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },
     ]
-    const res = modelosAComprar(conRepo, 4, [
+    const res = modelosAComprar(conRepo, [
       { modelo: 'Celular A 4/128GB', enTransito: 100, pedido: 0 }, // matchea "A 128 GB"
       { modelo: 'Celular A 4/128GB', enTransito: 0, pedido: 50 },  // mismo modelo: suma
     ])

@@ -40,7 +40,7 @@ export default async function InventarioPage() {
   const capitalInmovilizado = sinMovimiento.reduce((s, m) => s + m.capital, 0)
   const todosLosModelos = productos.flatMap(p => p.modelos)
   const cobVentas = ventasPorCobertura(todosLosModelos)
-  const aComprar = modelosAComprar(todosLosModelos, 4, reposiciones)
+  const aComprar = modelosAComprar(todosLosModelos, reposiciones)
   const fmtPct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
   const fmtPct1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
@@ -92,7 +92,7 @@ export default async function InventarioPage() {
           <div className="p-4 text-center">
             <p className="text-2xl font-bold text-red-700">{cobVentas.pctRiesgo !== null ? `${fmtPct.format(cobVentas.pctRiesgo)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas en Riesgo</p>
-            <p className="text-[10px] text-gray-400 mt-1">venta 30d con menos de 5 días de stock</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con 20 días de stock o menos</p>
           </div>
         </div>
       </div>
@@ -109,10 +109,10 @@ export default async function InventarioPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
               <h2 className="text-base font-semibold text-gray-900">🛒 Modelos a comprar</h2>
-              <p className="text-xs text-gray-400">en riesgo (cobertura &lt;5 días) y más del 4% de la venta total</p>
+              <p className="text-xs text-gray-400">todos los modelos con cobertura menor a 20 días</p>
             </div>
             {aComprar.length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">Sin urgencias: ningún modelo en riesgo pesa más del 4% de la venta.</p>
+              <p className="text-sm text-gray-400 py-2">Sin urgencias: ningún modelo con menos de 20 días de cobertura.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -120,6 +120,7 @@ export default async function InventarioPage() {
                     <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
                       <th className="py-1.5 px-2 font-medium">Modelo</th>
                       <th className="py-1.5 px-2 font-medium text-right">% venta total</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Ventas 30d</th>
                       <th className="py-1.5 px-2 font-medium text-right">Stock</th>
                       <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
                       <th className="py-1.5 px-2 font-medium text-right">En tránsito</th>
@@ -131,6 +132,7 @@ export default async function InventarioPage() {
                       <tr key={m.modelo} className="border-b border-gray-100">
                         <td className="py-1.5 px-2 text-gray-900">{m.modelo}</td>
                         <td className="py-1.5 px-2 text-right font-semibold text-red-600">{fmtPct1.format(m.pctVentasTotal)}%</td>
+                        <td className="py-1.5 px-2 text-right">{Math.round(m.ventas30d).toLocaleString('es-AR')}</td>
                         <td className={`py-1.5 px-2 text-right ${m.stock === 0 ? 'text-red-600 font-medium' : ''}`}>{m.stock.toLocaleString('es-AR')}</td>
                         <td className="py-1.5 px-2 text-right text-red-600 font-medium">
                           {m.cobertura !== null ? `${fmtPct1.format(m.cobertura)} días` : '—'}
