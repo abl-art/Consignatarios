@@ -594,6 +594,7 @@ export async function fetchStockPropioDetalle(): Promise<{model_name: string; qt
        FROM inventory_items ii
        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
        WHERE ii.status = 'available'
+         AND ii.physical_location IS DISTINCT FROM 'in_transit_andreani'
        GROUP BY model_name`
     )
     return res.rows.map(r => ({ model_name: r.model_name, qty: Number(r.qty) }))
@@ -609,7 +610,11 @@ export async function fetchStockPropio(): Promise<number> {
   const client = await pool.connect()
   try {
     const [dispRes, pendRes] = await Promise.all([
-      client.query<{ qty: string }>(`SELECT COUNT(*)::text AS qty FROM inventory_items WHERE status = 'available'`),
+      client.query<{ qty: string }>(
+        `SELECT COUNT(*)::text AS qty FROM inventory_items
+         WHERE status = 'available'
+           AND physical_location IS DISTINCT FROM 'in_transit_andreani'`
+      ),
       client.query<{ qty: string }>(`
         SELECT COUNT(*)::text AS qty
         FROM store_orders so
