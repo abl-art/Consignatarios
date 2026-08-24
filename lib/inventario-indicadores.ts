@@ -182,6 +182,8 @@ export interface ModeloAComprar {
   cobertura: number | null
   enTransito: number
   pedido: number
+  /** Días de cobertura cuando ingrese lo en tránsito + pedido */
+  proximaCobertura: number | null
 }
 
 /**
@@ -189,7 +191,8 @@ export interface ModeloAComprar {
  * los que venden con stock 0), con su peso en la venta total y las unidades
  * vendidas en 30 días. Ordenada por peso descendente: primero lo que más
  * venta salva. Con `reposiciones` marca lo que ya viene en camino
- * (tránsito/pedido) para que compras priorice lo que está sin reponer.
+ * (tránsito/pedido) y proyecta la próxima cobertura con ese ingreso, para
+ * ver si lo pedido alcanza o igual hay que comprar.
  */
 export function modelosAComprar(
   modelos: { modelo: string; stock: number; ventaDiaria30: number; cobertura: number | null }[],
@@ -216,6 +219,7 @@ export function modelosAComprar(
         cobertura: m.cobertura,
         enTransito: repo.enTransito,
         pedido: repo.pedido,
+        proximaCobertura: diasCobertura(m.stock + repo.enTransito + repo.pedido, m.ventaDiaria30),
       }
     })
     .filter(m => m.cobertura !== null && m.cobertura < 20)

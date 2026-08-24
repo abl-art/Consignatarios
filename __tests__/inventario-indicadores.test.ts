@@ -233,9 +233,11 @@ describe('modelosAComprar', () => {
     const a = res.find(m => m.modelo === 'A 128 GB')!
     expect(a.enTransito).toBe(100)
     expect(a.pedido).toBe(50)
+    expect(a.proximaCobertura).toBeCloseTo(5) // (0+100+50) / 30 u/día
     const b = res.find(m => m.modelo === 'B')!
     expect(b.enTransito).toBe(0)
     expect(b.pedido).toBe(0)
+    expect(b.proximaCobertura).toBeCloseTo(2) // sin reposición: igual a la cobertura actual
   })
 })
 

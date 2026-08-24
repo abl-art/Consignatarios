@@ -125,6 +125,7 @@ export default async function InventarioPage() {
                       <th className="py-1.5 px-2 font-medium text-right">Cobertura</th>
                       <th className="py-1.5 px-2 font-medium text-right">En tránsito</th>
                       <th className="py-1.5 px-2 font-medium text-right">Pedidos</th>
+                      <th className="py-1.5 px-2 font-medium text-right">Próx. cobertura</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -139,6 +140,9 @@ export default async function InventarioPage() {
                         </td>
                         <td className="py-1.5 px-2 text-right text-emerald-600">{m.enTransito > 0 ? `🚚 ${m.enTransito.toLocaleString('es-AR')}` : '—'}</td>
                         <td className="py-1.5 px-2 text-right text-blue-600">{m.pedido > 0 ? `📦 ${m.pedido.toLocaleString('es-AR')}` : '—'}</td>
+                        <td className={`py-1.5 px-2 text-right font-medium ${m.proximaCobertura !== null && m.proximaCobertura > 20 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {m.proximaCobertura !== null ? `${fmtPct1.format(m.proximaCobertura)} días` : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -146,7 +150,7 @@ export default async function InventarioPage() {
               </div>
             )}
             <p className="text-[10px] text-gray-400 mt-2">
-              Ordenados por peso en la venta: lo primero que conviene reponer es lo que más venta salva · En tránsito: informado a GOcelular, viajando a Andreani · Pedidos: comprados en el gestor, aún sin informar
+              Ordenados por peso en la venta: lo primero que conviene reponer es lo que más venta salva · En tránsito: informado a GOcelular, viajando a Andreani · Pedidos: comprados en el gestor, aún sin informar · Próx. cobertura: días de stock cuando ingrese lo en tránsito + pedido (verde si supera 20 días; ámbar = aun así hay que comprar)
             </p>
           </div>
 
