@@ -8,7 +8,7 @@ export default async function ListaPreciosPage() {
   const filas = await getListaPrecios()
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-full mx-auto">
       <div className="mb-1">
         <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">&larr; Canales</Link>
       </div>
