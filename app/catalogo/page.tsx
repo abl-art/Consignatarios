@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { fetchCatalogoBuscador } from '@/lib/gocelular'
+import { agruparCatalogo, type CatalogoAgrupado } from '@/lib/catalogo-buscador'
 import BuscadorCatalogo from './BuscadorCatalogo'
 
 const VALID_TOKEN = 'catalogo2026go'
@@ -15,9 +16,9 @@ export default async function CatalogoPage({
     redirect('/login')
   }
 
-  let modelos: Awaited<ReturnType<typeof fetchCatalogoBuscador>> = []
+  let catalogo: CatalogoAgrupado = { marcas: [], modelos: [] }
   try {
-    modelos = await fetchCatalogoBuscador()
+    catalogo = agruparCatalogo(await fetchCatalogoBuscador())
   } catch {
     // GOcelular no disponible: se muestra la página vacía con el aviso del cliente
   }
@@ -28,12 +29,12 @@ export default async function CatalogoPage({
         <div className="max-w-3xl mx-auto">
           <h1 className="text-xl font-bold text-gray-900">GOcelular — Teléfonos habilitados</h1>
           <p className="text-xs text-gray-500">
-            Buscá cualquier modelo por nombre: si aparece acá, se puede vender con GOcelular.
+            Si aparece en este listado, se puede vender con GOcelular.
           </p>
         </div>
       </div>
       <div className="max-w-3xl mx-auto p-6">
-        <BuscadorCatalogo modelos={modelos} />
+        <BuscadorCatalogo catalogo={catalogo} />
       </div>
     </div>
   )

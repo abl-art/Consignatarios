@@ -1,11 +1,8 @@
-// Buscador público de teléfonos vendibles con GOcelular (/catalogo).
-// Fuente de verdad: device_models — cada resultado es UN model_code, sin
-// duplicados aunque el mismo equipo tenga distintos nombres según quién lo
-// venda ("Celular Samsung Galaxy A17 4/128 GB" ≈ "Samsung Galaxy A17 128GB").
-//
-// Matching por tokens sobre nombre canónico + alias, normalizando igual que
-// normalizarModelo: case/símbolos, y el par RAM/almacenamiento en cualquier
-// orden ("4/256" ≈ "256/4", el gestor y Xiaomi los invierten).
+// Listado público de teléfonos vendibles con GOcelular (/catalogo).
+// Fuente de verdad: device_models. Las variantes de memoria/RAM del mismo
+// modelo ("Moto G06 64gb" y "Moto G06 4/128GB") se agrupan en UNA entrada
+// comercial — la memoria no cambia si se puede vender o no. 4G vs 5G sí
+// distinguen: son equipos distintos.
 
 export interface ModeloCatalogo {
   modelCode: string
@@ -17,33 +14,52 @@ export interface ModeloCatalogo {
   alias: string[]
 }
 
-function normalizar(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+export interface ModeloAgrupado {
+  nombre: string
+  marca: string
+  modelCodes: string[]
 }
 
-// Variantes de un texto para el índice: normalizado y con cada par A/B invertido
-function variantes(s: string): string[] {
-  const base = s.toLowerCase()
-  const invertido = base.replace(/(\d+)\s*\/\s*(\d+)/g, '$2/$1')
-  const todas = invertido === base ? [base] : [base, invertido]
-  return todas.map(normalizar)
+export interface CatalogoAgrupado {
+  marcas: string[]
+  modelos: ModeloAgrupado[]
 }
 
-function indexar(m: ModeloCatalogo): string[] {
-  // sin espacios: así "128gb" (token) matchea "128 gb" (haystack) y viceversa
-  return [m.nombre, ...m.alias].flatMap(variantes).map(v => v.replace(/ /g, ''))
+// "Celular Samsung Galaxy A07 4/64 GB" → "Samsung Galaxy A07"
+function limpiarNombre(nombre: string): string {
+  return nombre
+    .replace(/^celular\s+/i, '')
+    .replace(/-?\s*\d+\s*(gb)?\s*\/\s*\d+\s*(gb)?/gi, ' ') // pares "4/128GB", "256GB/8GB"
+    .replace(/\b\d+\s*gb\b/gi, ' ') // sueltos "64gb", "512GB" (no toca "5G")
+    .replace(/\s*-\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
-export function buscarModelos(consulta: string, modelos: ModeloCatalogo[]): ModeloCatalogo[] {
-  const ordenados = [...modelos].sort(
+export function agruparCatalogo(modelos: ModeloCatalogo[]): CatalogoAgrupado {
+  const grupos = new Map<string, ModeloAgrupado>()
+  for (const m of modelos) {
+    if (!m.activo) continue
+    const limpio = limpiarNombre(m.nombre)
+    // clave sin la marca adelante, así "Moto G15" y "Motorola Moto G15" se unen
+    const sinMarca = limpio.toLowerCase().startsWith(m.marca.toLowerCase() + ' ')
+      ? limpio.slice(m.marca.length + 1)
+      : limpio
+    const clave = `${m.marca.toLowerCase()}|${sinMarca.toLowerCase()}`
+    const existente = grupos.get(clave)
+    if (existente) {
+      existente.modelCodes.push(m.modelCode)
+      // preferir el nombre que ya incluye la marca
+      if (limpio.toLowerCase().startsWith(m.marca.toLowerCase())) existente.nombre = limpio
+    } else {
+      const nombre = limpio.toLowerCase().startsWith(m.marca.toLowerCase()) ? limpio : `${m.marca} ${limpio}`
+      grupos.set(clave, { nombre, marca: m.marca, modelCodes: [m.modelCode] })
+    }
+  }
+
+  const lista = [...grupos.values()].sort(
     (a, b) => a.marca.localeCompare(b.marca) || a.nombre.localeCompare(b.nombre),
   )
-  const tokens = normalizar(consulta).split(' ').filter(Boolean)
-  if (tokens.length === 0) return ordenados
-
-  // cada token de la consulta debe aparecer en alguna entrada del índice
-  return ordenados.filter((m) => {
-    const indice = indexar(m)
-    return tokens.every(t => indice.some(h => h.includes(t)))
-  })
+  const marcas = [...new Set(lista.map(m => m.marca))].sort((a, b) => a.localeCompare(b))
+  return { marcas, modelos: lista }
 }

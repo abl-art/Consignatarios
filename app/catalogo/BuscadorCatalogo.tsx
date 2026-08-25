@@ -1,82 +1,61 @@
 'use client'
 
 import { useState } from 'react'
-import { buscarModelos, type ModeloCatalogo } from '@/lib/catalogo-buscador'
+import type { CatalogoAgrupado } from '@/lib/catalogo-buscador'
 
-const BLOQUEOS: Record<string, string> = {
-  motosafe: 'MotoSafe',
-  knox_guard: 'Knox Guard',
-  xiaomi: 'Xiaomi Lock',
+// Knox Guard aplica al 100% de los Samsung: la marca entera está habilitada
+const MARCAS_COMPLETAS: Record<string, string> = {
+  Samsung: 'Cualquier teléfono Samsung se puede vender con GOcelular.',
 }
 
-export default function BuscadorCatalogo({ modelos }: { modelos: ModeloCatalogo[] }) {
-  const [consulta, setConsulta] = useState('')
-  const resultados = buscarModelos(consulta, modelos)
+export default function BuscadorCatalogo({ catalogo }: { catalogo: CatalogoAgrupado }) {
+  const [marca, setMarca] = useState<string | null>(null)
 
-  if (modelos.length === 0) {
+  if (catalogo.modelos.length === 0) {
     return <p className="text-sm text-gray-500">El catálogo no está disponible en este momento. Probá de nuevo en unos minutos.</p>
   }
 
+  const mensajeMarca = marca ? MARCAS_COMPLETAS[marca] : undefined
+  const visibles = marca ? catalogo.modelos.filter(m => m.marca === marca) : catalogo.modelos
+
   return (
     <div>
-      <input
-        type="search"
-        value={consulta}
-        onChange={e => setConsulta(e.target.value)}
-        placeholder='Buscar modelo… ej: "a17 128", "moto g06", "redmi 14c"'
-        autoFocus
-        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 mb-2"
-      />
-      <p className="text-xs text-gray-400 mb-4">
-        {consulta.trim()
-          ? `${resultados.length} ${resultados.length === 1 ? 'modelo' : 'modelos'} para “${consulta.trim()}”`
-          : `${modelos.length} modelos en el catálogo`}
-      </p>
-
-      {resultados.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-          <p className="text-sm text-amber-800 font-medium">Ese modelo no está en el catálogo de GOcelular.</p>
-          <p className="text-xs text-amber-700 mt-1">Si creés que debería estar, consultá con el equipo de GOcelular.</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {resultados.map(m => (
-          <div key={m.modelCode} className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-semibold text-gray-900">{m.nombre}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {m.marca} · <span className="font-mono">{m.modelCode}</span>
-                </p>
-              </div>
-              <span className="shrink-0 inline-flex px-2.5 py-1 text-xs font-bold rounded-full bg-green-100 text-green-700">
-                ✓ Se vende con GOcelular
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-3 text-xs">
-              {m.lockSolution && (
-                <span className="px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-600">
-                  🔒 {BLOQUEOS[m.lockSolution] ?? m.lockSolution}
-                </span>
-              )}
-              <span className="px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-600">
-                📱 {m.dispositivos.toLocaleString('es-AR')} equipos registrados
-              </span>
-              {!m.activo && (
-                <span className="px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
-                  Inactivo en catálogo
-                </span>
-              )}
-            </div>
-            {m.alias.length > 0 && (
-              <p className="text-xs text-gray-400 mt-2">
-                También conocido como: {m.alias.join(' · ')}
-              </p>
-            )}
-          </div>
+      <div className="flex flex-wrap gap-2 mb-5">
+        <button
+          onClick={() => setMarca(null)}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            marca === null ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          Todas
+        </button>
+        {catalogo.marcas.map(m => (
+          <button
+            key={m}
+            onClick={() => setMarca(m)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              marca === m ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {m}
+          </button>
         ))}
       </div>
+
+      {mensajeMarca ? (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+          <p className="text-base text-green-800 font-semibold">✓ {mensajeMarca}</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+          {visibles.map(m => (
+            <div key={`${m.marca}|${m.nombre}`} className="flex items-center justify-between px-4 py-3">
+              <span className="text-sm font-medium text-gray-900">{m.nombre}</span>
+              <span className="shrink-0 text-xs font-bold text-green-700">✓ Se vende con GOcelular</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

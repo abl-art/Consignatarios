@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buscarModelos, type ModeloCatalogo } from '@/lib/catalogo-buscador'
+import { agruparCatalogo, type ModeloCatalogo } from '@/lib/catalogo-buscador'
 
 function modelo(over: Partial<ModeloCatalogo> = {}): ModeloCatalogo {
   return {
@@ -9,58 +9,67 @@ function modelo(over: Partial<ModeloCatalogo> = {}): ModeloCatalogo {
     activo: true,
     lockSolution: 'knox_guard',
     dispositivos: 250,
-    alias: ['Samsung Galaxy A17 4/128GB'],
+    alias: [],
     ...over,
   }
 }
 
-const CATALOGO: ModeloCatalogo[] = [
-  modelo(),
-  modelo({ modelCode: 'XT2535 (g06)', nombre: 'Motorola Moto G06 64gb', marca: 'Motorola', alias: [] }),
-  modelo({ modelCode: 'XT2536 (g06)', nombre: 'Motorola Moto G06 4/128GB', marca: 'Motorola', alias: [] }),
-  modelo({ modelCode: 'xi002', nombre: 'Xiaomi Redmi 14C 256/4 GB', marca: 'Xiaomi', alias: [] }),
-]
-
-describe('buscarModelos', () => {
-  it('consulta vacía devuelve todo el catálogo ordenado por marca y nombre', () => {
-    const r = buscarModelos('', CATALOGO)
-    expect(r).toHaveLength(4)
-    expect(r[0].marca).toBe('Motorola')
+describe('agruparCatalogo', () => {
+  it('agrupa variantes de memoria en una sola entrada', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'XT2535 (g06)', nombre: 'Motorola Moto G06 64gb', marca: 'Motorola' }),
+      modelo({ modelCode: 'XT2536 (g06)', nombre: 'Motorola Moto G06 4/128GB', marca: 'Motorola' }),
+    ])
+    expect(r.modelos).toHaveLength(1)
+    expect(r.modelos[0].nombre).toBe('Motorola Moto G06')
   })
 
-  it('matchea por tokens sin importar el orden ni mayúsculas', () => {
-    const r = buscarModelos('a17 samsung', CATALOGO)
-    expect(r).toHaveLength(1)
-    expect(r[0].modelCode).toBe('SM-A175F')
+  it('saca el prefijo "Celular" y la memoria del nombre', () => {
+    const r = agruparCatalogo([modelo({ nombre: 'Celular Samsung Galaxy A07 4/64 GB' })])
+    expect(r.modelos[0].nombre).toBe('Samsung Galaxy A07')
   })
 
-  it('tolera variantes de RAM/almacenamiento: "a17 128gb" matchea "4/128 GB"', () => {
-    expect(buscarModelos('a17 128gb', CATALOGO)).toHaveLength(1)
-    expect(buscarModelos('a17 4/128', CATALOGO)).toHaveLength(1)
+  it('une el mismo modelo con y sin marca en el nombre', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'MOTO_G15', nombre: 'Moto G15', marca: 'Motorola' }),
+      modelo({ modelCode: 'XT2521 (g15)', nombre: 'Motorola Moto G15 128GB/4GB', marca: 'Motorola' }),
+    ])
+    expect(r.modelos).toHaveLength(1)
+    expect(r.modelos[0].nombre).toBe('Motorola Moto G15')
   })
 
-  it('tolera el par invertido de Xiaomi: "14c 4/256" matchea "256/4 GB"', () => {
-    const r = buscarModelos('14c 4/256', CATALOGO)
-    expect(r).toHaveLength(1)
-    expect(r[0].modelCode).toBe('xi002')
+  it('mantiene separados 4G y 5G (solo la memoria no distingue)', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'SM-A175F', nombre: 'Celular Samsung Galaxy A17 4/128 GB' }),
+      modelo({ modelCode: 'SMA175G', nombre: 'Samsung Galaxy A17 5G 8/256GB' }),
+    ])
+    expect(r.modelos.map(m => m.nombre)).toEqual(['Samsung Galaxy A17', 'Samsung Galaxy A17 5G'])
   })
 
-  it('matchea también contra los alias, no solo el nombre canónico', () => {
-    // el alias no tiene la palabra "Celular"; el nombre canónico sí
-    const r = buscarModelos('galaxy a17 128', [modelo({ nombre: 'Nombre Interno Raro', alias: ['Samsung Galaxy A17 4/128GB'] })])
-    expect(r).toHaveLength(1)
+  it('limpia guiones sueltos que quedan al sacar la memoria', () => {
+    const r = agruparCatalogo([modelo({ nombre: 'Motorola Moto G86 5G -  256GB/8GB', marca: 'Motorola' })])
+    expect(r.modelos[0].nombre).toBe('Motorola Moto G86 5G')
   })
 
-  it('un modelo con varios alias que matchean aparece una sola vez', () => {
-    const r = buscarModelos('a17', [modelo({ alias: ['Samsung A17 128', 'Galaxy A17 4/128'] })])
-    expect(r).toHaveLength(1)
+  it('excluye los inactivos del catálogo', () => {
+    const r = agruparCatalogo([modelo(), modelo({ modelCode: 'SM-A26', nombre: 'Samsung Galaxy A26 5G 256GB', activo: false })])
+    expect(r.modelos).toHaveLength(1)
   })
 
-  it('buscar por marca lista todos los de esa marca', () => {
-    expect(buscarModelos('motorola', CATALOGO)).toHaveLength(2)
+  it('lista las marcas ordenadas y sin repetir', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'xi002', nombre: 'Xiaomi Redmi 14C 256/4 GB', marca: 'Xiaomi' }),
+      modelo({ modelCode: 'XT2535 (g06)', nombre: 'Motorola Moto G06 64gb', marca: 'Motorola' }),
+      modelo(),
+    ])
+    expect(r.marcas).toEqual(['Motorola', 'Samsung', 'Xiaomi'])
   })
 
-  it('sin coincidencias devuelve vacío', () => {
-    expect(buscarModelos('iphone 15', CATALOGO)).toHaveLength(0)
+  it('ordena los modelos por marca y nombre', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'xi002', nombre: 'Xiaomi Redmi 14C 256/4 GB', marca: 'Xiaomi' }),
+      modelo({ modelCode: 'XT2535 (g06)', nombre: 'Motorola Moto G06 64gb', marca: 'Motorola' }),
+    ])
+    expect(r.modelos.map(m => m.marca)).toEqual(['Motorola', 'Xiaomi'])
   })
 })
