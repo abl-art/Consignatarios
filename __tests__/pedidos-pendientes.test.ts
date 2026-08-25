@@ -83,17 +83,47 @@ describe('aplicarPedidos', () => {
   })
 })
 
-describe('pedidos informados que GOcelular aún no ingresó (alias pendiente)', () => {
-  it('siguen contando como Pedido si figuran en informadosSinIngreso', () => {
-    const p = pedido({ id: 'NP-1', gocelular: { estado: 'informado' } })
-    // Sin evidencia del limbo, se asume que ya está en tránsito (comportamiento actual)
-    expect(aplicarPedidos([fila()], [p])[0].pedido).toBe(0)
-    // Con el intake trabado (0 unidades aceptadas), las unidades vuelven a Pedido
-    expect(aplicarPedidos([fila()], [p], new Set(['NP-1']))[0].pedido).toBe(90)
+describe('pedidos informados cuentan como En tránsito con datos del gestor', () => {
+  it('un informado sin ingreso pasa a En tránsito, no a Pedido, sin esperar a GOcelular', () => {
+    const p = pedido({ gocelular: { estado: 'informado', enviadoAt: '2026-08-25T13:44:18.449Z' } })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows[0].pedido).toBe(0)
+    expect(rows[0].enTransito).toBe(90)
+    expect(rows[0].enTransitoDesde).toBe('2026-08-25T13:44:18.449Z')
   })
 
-  it('un informado con ingreso ya iniciado no vuelve a Pedido', () => {
-    const p = pedido({ id: 'NP-2', gocelular: { estado: 'informado' } })
-    expect(aplicarPedidos([fila()], [p], new Set(['NP-1']))[0].pedido).toBe(0)
+  it('no duplica cuando GOcelular ya creó el tránsito: toma el máximo', () => {
+    const p = pedido({ gocelular: { estado: 'informado' } })
+    const rows = aplicarPedidos([fila({ enTransito: 90, enTransitoDesde: '2026-08-20T00:00:00.000Z' })], [p])
+    expect(rows[0].enTransito).toBe(90)
+    // el desde de GOcelular (creación real del inventario) se conserva
+    expect(rows[0].enTransitoDesde).toBe('2026-08-20T00:00:00.000Z')
+  })
+
+  it('si GOcelular creó menos unidades que las informadas (alias trabado) manda el gestor', () => {
+    // Kinito 25/8: 220 informadas, GOcelular aceptó 210 y dejó 10 en alias pendiente
+    const p = pedido({ gocelular: { estado: 'informado' } })
+    const rows = aplicarPedidos([fila({ enTransito: 80 })], [p])
+    expect(rows[0].enTransito).toBe(90)
+  })
+
+  it('un modelo informado sin fila de stock genera fila nueva en tránsito', () => {
+    const p = pedido({
+      gocelular: { estado: 'informado', enviadoAt: '2026-08-25T13:44:18.449Z' },
+      items: [{ productoNombre: 'Motorola Moto G67 4/256GB', cantidad: 10 }],
+    })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows).toHaveLength(2)
+    expect(rows[1].nombre).toBe('Motorola Moto G67 4/256GB')
+    expect(rows[1].enTransito).toBe(10)
+    expect(rows[1].enTransitoDesde).toBe('2026-08-25T13:44:18.449Z')
+    expect(rows[1].pedido).toBe(0)
+  })
+
+  it('un informado con ingreso completo no cuenta en tránsito ni en pedido', () => {
+    const p = pedido({ ingresoStockAt: '2026-08-21', gocelular: { estado: 'informado' } })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows[0].pedido).toBe(0)
+    expect(rows[0].enTransito).toBe(0)
   })
 })

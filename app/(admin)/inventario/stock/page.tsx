@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { fetchStockPorWarehouse, fetchPendientesPicking, fetchIntakesSinIngreso } from '@/lib/gocelular'
+import { fetchStockPorWarehouse, fetchPendientesPicking } from '@/lib/gocelular'
 import { completarDisponibilidad } from '@/lib/disponibilidad'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
 import { getPedidos } from '@/lib/actions/compras'
@@ -9,13 +9,12 @@ import StockTable from './StockTable'
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 
 export default async function StockPage() {
-  const [baseRows, pendientes, pedidos, intakesSinIngreso] = await Promise.all([
+  const [baseRows, pendientes, pedidos] = await Promise.all([
     fetchStockPorWarehouse(),
     fetchPendientesPicking().catch(() => ({ gocuotas: {}, andreani: {} })),
     getPedidos().catch(() => []),
-    fetchIntakesSinIngreso().catch(() => new Set<string>()),
   ])
-  const rows = completarDisponibilidad(aplicarPedidos(baseRows, pedidos, intakesSinIngreso), pendientes)
+  const rows = completarDisponibilidad(aplicarPedidos(baseRows, pedidos), pendientes)
 
   const totalTransito = rows.reduce((s, r) => s + r.enTransito, 0)
   const totalGeneral = rows.reduce((s, r) => s + r.total, 0)

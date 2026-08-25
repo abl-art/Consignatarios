@@ -7,7 +7,6 @@ import {
   fetchVentasPorModelo,
   fetchVentasUlt30d,
   fetchStockPorWarehouse,
-  fetchIntakesSinIngreso,
   type VentaPorModelo,
 } from '@/lib/gocelular'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
@@ -96,7 +95,6 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       auriculares,
       stockWarehouse,
       pedidos,
-      intakesSinIngreso,
     ] = await Promise.all([
       fetchStockPropio(),
       fetchStockPropioDetalle(),
@@ -112,11 +110,10 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       fetchAccesorioData(AURICULARES_CONFIG),
       fetchStockPorWarehouse(),
       getPedidos().catch(() => []),
-      fetchIntakesSinIngreso().catch(() => new Set<string>()),
     ])
 
     // Reposición en camino por modelo (misma fuente que /inventario/stock)
-    const reposiciones: ReposicionModelo[] = aplicarPedidos(stockWarehouse, pedidos, intakesSinIngreso)
+    const reposiciones: ReposicionModelo[] = aplicarPedidos(stockWarehouse, pedidos)
       .filter(r => r.enTransito > 0 || r.pedido > 0)
       .map(r => ({
         modelo: r.marca && !r.nombre.toLowerCase().includes(r.marca.toLowerCase())

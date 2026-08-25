@@ -682,30 +682,6 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
   }
 }
 
-/**
- * Compras informadas cuyo intake quedó trabado en GOcelular sin aceptar ninguna
- * unidad (ej. SKUs sin alias en device_model_skus): no existe inventario para
- * ellas, así que sus unidades deben seguir contando como "Pedido".
- * Devuelve los purchase_reference (= id del pedido del gestor).
- */
-export async function fetchIntakesSinIngreso(): Promise<Set<string>> {
-  const pool = getPool()
-  if (!pool) return new Set()
-
-  const client = await pool.connect()
-  try {
-    const res = await client.query<{ purchase_reference: string }>(
-      `SELECT purchase_reference
-       FROM purchase_intakes
-       WHERE COALESCE(units_accepted, 0) = 0
-         AND COALESCE(units_pending_alias, 0) > 0`
-    )
-    return new Set(res.rows.map(r => r.purchase_reference))
-  } finally {
-    client.release()
-  }
-}
-
 /** Precio de venta (default_price, en pesos) por modelo activo de la tienda GOcelular. */
 export async function fetchPreciosVentaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()
