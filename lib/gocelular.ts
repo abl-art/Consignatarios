@@ -778,6 +778,28 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
   }
 }
 
+/** Precio de venta publicado en la tienda (store_products.price en centavos) por celular activo. */
+export async function fetchPreciosTiendaCelulares(): Promise<Record<string, number>> {
+  const pool = getPool()
+  if (!pool) return {}
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ nombre: string; price: string }>(
+      `SELECT display_name AS nombre, price
+       FROM store_products
+       WHERE is_addon = false AND status = 'active' AND display_name NOT ILIKE '%E2E%'`
+    )
+    const result: Record<string, number> = {}
+    for (const r of res.rows) {
+      if (r.price !== null && Number(r.price) > 0) result[r.nombre] = Number(r.price) / 100
+    }
+    return result
+  } finally {
+    client.release()
+  }
+}
+
 /** Precio de venta (default_price, en pesos) por modelo activo de la tienda GOcelular. */
 export async function fetchPreciosVentaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()

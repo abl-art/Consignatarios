@@ -38,6 +38,13 @@ const canales = [
     color: 'amber',
     iconPath: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z',
   },
+  {
+    href: '/canales/lista-precios',
+    title: 'Lista de Precios',
+    description: 'PVP por modelo desde el costo sin IVA con múltiplo editable',
+    color: 'teal',
+    iconPath: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  },
 ]
 
 const colorClasses: Record<string, { bg: string; badge: string }> = {
@@ -46,6 +53,7 @@ const colorClasses: Record<string, { bg: string; badge: string }> = {
   purple: { bg: 'bg-purple-600', badge: 'bg-purple-100 text-purple-700' },
   rose: { bg: 'bg-rose-600', badge: 'bg-rose-100 text-rose-700' },
   amber: { bg: 'bg-amber-600', badge: 'bg-amber-100 text-amber-700' },
+  teal: { bg: 'bg-teal-600', badge: 'bg-teal-100 text-teal-700' },
 }
 
 export default function CanalesPage() {
