@@ -18,7 +18,7 @@ function Dias({ dias }: { dias: number }) {
   )
 }
 
-function Tabla({ alertas, conRazon }: { alertas: AlertaEnvio[]; conRazon: boolean }) {
+function Tabla({ alertas, conRazon, etiquetaNota = 'Razón' }: { alertas: AlertaEnvio[]; conRazon: boolean; etiquetaNota?: string }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
       <table className="w-full text-sm">
@@ -63,7 +63,7 @@ function Tabla({ alertas, conRazon }: { alertas: AlertaEnvio[]; conRazon: boolea
                 <tr>
                   <td colSpan={10} className="px-4 pb-3 pt-0">
                     <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      <span className="font-semibold">Razón:</span> {a.razon}
+                      <span className="font-semibold">{etiquetaNota}:</span> {a.razon}
                     </div>
                   </td>
                 </tr>
@@ -120,10 +120,11 @@ export default function AlertasTable({
             🚨 Expedidos sin IMEI ({expedidosSinImei.length})
           </h2>
           <p className="text-xs text-gray-500 mb-3">
-            Andreani despachó estos pedidos pero nunca se registró qué equipo salió: el stock queda inflado en una
-            unidad por cada uno hasta asignar el IMEI. La nota bajo la fila (si hay) es el último estado conocido.
+            Andreani despachó estos pedidos pero no hay ningún equipo vinculado a la orden (ni en el envío ni en el
+            inventario): el stock queda inflado en una unidad por cada uno hasta asignar el IMEI. La nota histórica
+            bajo la fila (si hay) refiere a problemas anteriores del pedido, no al estado actual.
           </p>
-          <Tabla alertas={expedidosSinImei} conRazon />
+          <Tabla alertas={expedidosSinImei} conRazon etiquetaNota="Nota histórica del pedido" />
         </div>
       )}
     </div>

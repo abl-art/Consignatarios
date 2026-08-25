@@ -194,7 +194,12 @@ export async function fetchAlertasEnvios(
          AND NOT EXISTS (
            SELECT 1 FROM shipments sh
            WHERE sh.store_order_id = so.id AND sh.type = 'outbound' AND sh.status <> 'cancelled'
-             AND (sh.imei IS NOT NULL OR sh.delivered_at IS NOT NULL))`
+             AND (sh.imei IS NOT NULL OR sh.delivered_at IS NOT NULL))
+         AND (p.estado <> 'expedido' OR NOT EXISTS (
+           -- GOcelular asigna el equipo contra la orden de GOcuotas, no la de la tienda:
+           -- con dispositivo vinculado el expedido ya no es alerta
+           SELECT 1 FROM inventory_items ii
+           WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text))`
     )
     return armarAlertasEnvios(res.rows, ahora)
   } finally {
