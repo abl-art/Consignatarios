@@ -9,12 +9,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchPreciosTiendaCelulares, fetchVentasPorModelo } from '@/lib/gocelular'
 import {
   armarListaPrecios,
+  type BonoModelo,
   type CostoProveedor,
   type FilaListaPrecios,
   type ProductoLista,
 } from '@/lib/lista-precios'
 
 const MULTIPLO_KEY = 'listaprecios_multiplo_'
+const BONO_KEY = 'listaprecios_bono_'
 
 export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   const supabase = createAdminClient()
@@ -24,7 +26,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
       supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto').eq('categoria', 'Celulares'),
       supabase.from('compras_precios').select('producto_id, proveedor_id, precio, created_at').order('created_at', { ascending: false }),
       supabase.from('compras_proveedores').select('id, nombre'),
-      supabase.from('flujo_config').select('key, value').like('key', `${MULTIPLO_KEY}%`),
+      supabase.from('flujo_config').select('key, value').like('key', 'listaprecios_%'),
       fetchPreciosTiendaCelulares().catch(() => ({} as Record<string, number>)),
       fetchVentasPorModelo().catch(() => []),
     ])
@@ -48,9 +50,18 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   }
 
   const multiplos: Record<string, number> = {}
+  const bonos: Record<string, BonoModelo> = {}
   for (const row of cfg ?? []) {
-    const valor = Number(row.value)
-    if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
+    const key = row.key as string
+    if (key.startsWith(MULTIPLO_KEY)) {
+      const valor = Number(row.value)
+      if (Number.isFinite(valor) && valor > 0) multiplos[key.slice(MULTIPLO_KEY.length)] = valor
+    } else if (key.startsWith(BONO_KEY)) {
+      try {
+        const bono = JSON.parse(row.value as string) as BonoModelo
+        if (bono && Number(bono.monto) > 0) bonos[key.slice(BONO_KEY.length)] = bono
+      } catch { /* valor corrupto: se ignora */ }
+    }
   }
 
   const desde = new Date()
@@ -61,7 +72,28 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
     if (v.fecha >= corte) ventas30d[v.modelo] = (ventas30d[v.modelo] ?? 0) + v.ventas
   }
 
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos)
+}
+
+export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null) {
+  const supabase = createAdminClient()
+  const key = `${BONO_KEY}${productoId}`
+  if (!bono || !(Number(bono.monto) > 0)) {
+    const { error } = await supabase.from('flujo_config').delete().eq('key', key)
+    if (error) return { error: error.message }
+  } else {
+    if (bono.desde && bono.hasta && bono.desde > bono.hasta) {
+      return { error: 'La vigencia "desde" no puede ser posterior a "hasta"' }
+    }
+    const { error } = await supabase.from('flujo_config').upsert({
+      key,
+      value: JSON.stringify({ monto: Number(bono.monto), desde: bono.desde || undefined, hasta: bono.hasta || undefined }),
+      updated_at: new Date().toISOString(),
+    })
+    if (error) return { error: error.message }
+  }
+  revalidatePath('/canales/lista-precios')
+  return { ok: true }
 }
 
 export async function setMultiploListaPrecios(productoId: string, multiplo: number) {

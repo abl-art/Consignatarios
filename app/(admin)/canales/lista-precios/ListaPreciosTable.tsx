@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaListaPrecios } from '@/lib/lista-precios'
-import { setMultiploListaPrecios } from '@/lib/actions/lista-precios-canales'
+import { setMultiploListaPrecios, setBonoListaPrecios } from '@/lib/actions/lista-precios-canales'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
 
@@ -36,6 +36,65 @@ function InputMultiplo({ fila }: { fila: FilaListaPrecios }) {
         fila.multiplo !== 2 ? 'border-blue-300 bg-blue-50 font-semibold' : 'border-gray-300'
       }`}
     />
+  )
+}
+
+function fechaCorta(iso: string): string {
+  const [, m, d] = iso.split('-')
+  return `${Number(d)}/${Number(m)}`
+}
+
+function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
+  const router = useRouter()
+  const [editando, setEditando] = useState(false)
+  const [monto, setMonto] = useState(fila.bonoMonto ? String(fila.bonoMonto) : '')
+  const [hasta, setHasta] = useState(fila.bonoHasta ?? '')
+  const [, startTransition] = useTransition()
+
+  const guardar = (quitar = false) => {
+    const n = Number(monto.replace(/\./g, '').replace(',', '.'))
+    startTransition(async () => {
+      await setBonoListaPrecios(fila.productoId, quitar || !(n > 0) ? null : { monto: n, hasta: hasta || undefined })
+      setEditando(false)
+      router.refresh()
+    })
+  }
+
+  if (!editando) {
+    return fila.bonoMonto ? (
+      <button
+        onClick={() => setEditando(true)}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
+        title="Editar bono"
+      >
+        {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
+      </button>
+    ) : (
+      <button
+        onClick={() => setEditando(true)}
+        className="text-gray-300 hover:text-gray-500 text-sm font-bold px-2"
+        title="Agregar bono"
+      >
+        +
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1 justify-end">
+      <input
+        type="text" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)}
+        placeholder="$ c/IVA" autoFocus
+        className="w-20 px-2 py-1 border border-gray-300 rounded-lg text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-500"
+      />
+      <input
+        type="date" value={hasta} onChange={e => setHasta(e.target.value)}
+        title="Vigente hasta"
+        className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+      />
+      <button onClick={() => guardar()} className="px-1.5 py-1 text-xs font-bold text-green-700 hover:bg-green-50 rounded" title="Guardar">✓</button>
+      <button onClick={() => guardar(true)} className="px-1.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded" title="Quitar bono">✕</button>
+    </div>
   )
 }
 
@@ -75,6 +134,10 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
               <th className="text-right px-4 py-3 font-medium text-gray-600">Múltiplo</th>
               <th className="text-right px-4 py-3 font-medium text-gray-900 bg-gray-100">PVP</th>
               <th className="text-right px-4 py-3 font-medium text-gray-900 bg-gray-100">Cuota (9)</th>
+              <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Bono</th>
+              <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">PVP c/bono</th>
+              <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Cuota c/bono</th>
+              <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC/u</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">MUP</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">MUP $</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Precio Tienda</th>
@@ -104,8 +167,12 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.ventas30d}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.costo !== null ? peso(f.costo) : '—'}</td>
                 <td className="px-4 py-2.5 text-right"><InputMultiplo fila={f} /></td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-900 bg-gray-50">{f.pvp !== null ? peso(f.pvp) : '—'}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-900 bg-gray-50">{f.cuota !== null ? peso(f.cuota) : '—'}</td>
+                <td className={`px-4 py-2.5 text-right tabular-nums bg-gray-50 ${f.pvpConBono !== null ? 'text-gray-400 line-through' : 'font-bold text-gray-900'}`}>{f.pvp !== null ? peso(f.pvp) : '—'}</td>
+                <td className={`px-4 py-2.5 text-right tabular-nums bg-gray-50 ${f.pvpConBono !== null ? 'text-gray-400 line-through' : 'font-semibold text-gray-900'}`}>{f.cuota !== null ? peso(f.cuota) : '—'}</td>
+                <td className="px-4 py-2.5 text-right bg-violet-50/40"><BonoEditor fila={f} /></td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{f.pvpConBono !== null ? peso(f.pvpConBono) : '—'}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-violet-800 bg-violet-50/40">{f.cuotaConBono !== null ? peso(f.cuotaConBono) : '—'}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-violet-700 bg-violet-50/40">{f.ncEsperada !== null ? peso(f.ncEsperada) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mup !== null ? f.mup.toFixed(2) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mupPesos !== null ? peso(f.mupPesos) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.precioTienda !== null ? peso(f.precioTienda) : '—'}</td>
@@ -120,8 +187,10 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        * Proveedor alternativo (el preferido de la marca no tiene precio cargado). Dif. = Precio Tienda − PVP:
-        en rojo, la tienda está vendiendo abajo del precio objetivo.
+        * Proveedor alternativo (el preferido de la marca no tiene precio cargado). Dif. = Precio Tienda − PVP
+        vigente (con bono si hay): en rojo, la tienda está vendiendo abajo del precio objetivo. Bono = monto con
+        IVA a nivel PVP, por modelo y con vencimiento; la cuota con bono también se redondea a centenas para
+        arriba. NC/u = nota de crédito esperada de la marca por unidad (bono ÷ múltiplo, neto de IVA y margen).
       </p>
     </div>
   )

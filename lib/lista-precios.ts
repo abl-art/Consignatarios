@@ -33,6 +33,16 @@ export interface CostoProveedor {
   precio: number
 }
 
+// Bono sell-out de la marca: monto fijo CON IVA definido a nivel PVP, por
+// modelo y por plazo. Se descuenta del PVP; la NC que llega de la marca es el
+// bono neto de IVA y del margen (÷1,21 ÷MUP = bono ÷ múltiplo) — la marca
+// cubre la parte del costo, el margen lo absorbe GOcelular.
+export interface BonoModelo {
+  monto: number
+  desde?: string // ISO yyyy-mm-dd; sin desde = ya vigente
+  hasta?: string // ISO yyyy-mm-dd inclusive; sin hasta = sin vencimiento
+}
+
 export interface FilaListaPrecios {
   productoId: string
   nombre: string
@@ -49,6 +59,11 @@ export interface FilaListaPrecios {
   precioTienda: number | null
   diferencia: number | null
   ventas30d: number
+  bonoMonto: number | null
+  bonoHasta: string | null
+  pvpConBono: number | null
+  cuotaConBono: number | null
+  ncEsperada: number | null
 }
 
 function elegirCosto(marca: string, costos: CostoProveedor[]): { costo: CostoProveedor; preferido: boolean } | null {
@@ -68,12 +83,22 @@ function porClaveNormalizada(valores: Record<string, number>): Map<string, numbe
   return m
 }
 
+function bonoVigente(bono: BonoModelo | undefined, hoy: Date): BonoModelo | null {
+  if (!bono || !(bono.monto > 0)) return null
+  const dia = hoy.toISOString().slice(0, 10)
+  if (bono.desde && dia < bono.desde) return null
+  if (bono.hasta && dia > bono.hasta) return null
+  return bono
+}
+
 export function armarListaPrecios(
   productos: ProductoLista[],
   costosPorProducto: Record<string, CostoProveedor[]>,
   multiplos: Record<string, number>,
   preciosTienda: Record<string, number>,
   ventas30dPorNombre: Record<string, number>,
+  bonos: Record<string, BonoModelo> = {},
+  hoy: Date = new Date(),
 ): FilaListaPrecios[] {
   const tienda = porClaveNormalizada(preciosTienda)
   const ventas = porClaveNormalizada(ventas30dPorNombre)
@@ -100,6 +125,17 @@ export function armarListaPrecios(
       mupPesos = pvp / IVA - eleccion.costo.precio
     }
 
+    const bono = bonoVigente(bonos[p.id], hoy)
+    let pvpConBono: number | null = null
+    let cuotaConBono: number | null = null
+    let ncEsperada: number | null = null
+    if (bono && pvp !== null) {
+      cuotaConBono = Math.ceil((pvp - bono.monto) / 9 / 100) * 100
+      pvpConBono = cuotaConBono * 9
+      ncEsperada = bono.monto / multiplo
+    }
+    const pvpVigente = pvpConBono ?? pvp
+
     filas.push({
       productoId: p.id,
       nombre: p.nombre,
@@ -114,8 +150,13 @@ export function armarListaPrecios(
       mup,
       mupPesos,
       precioTienda,
-      diferencia: precioTienda !== null && pvp !== null ? precioTienda - pvp : null,
+      diferencia: precioTienda !== null && pvpVigente !== null ? precioTienda - pvpVigente : null,
       ventas30d,
+      bonoMonto: bono && pvp !== null ? bono.monto : null,
+      bonoHasta: bono && pvp !== null ? bono.hasta ?? null : null,
+      pvpConBono,
+      cuotaConBono,
+      ncEsperada,
     })
   }
 

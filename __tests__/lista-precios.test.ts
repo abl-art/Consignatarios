@@ -92,6 +92,49 @@ describe('armarListaPrecios', () => {
     expect(fila.cuota).toBeNull()
   })
 
+  it('un bono vigente descuenta al PVP y re-redondea la cuota para arriba', () => {
+    // PVP base 484.200 − bono 50.000 = 434.200 → cuota 48.300 → PVP con bono 434.700
+    const [fila] = armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+      { p1: { monto: 50000, hasta: '2026-09-15' } }, new Date('2026-08-25'),
+    )
+    expect(fila.bonoMonto).toBe(50000)
+    expect(fila.cuotaConBono).toBe(48300)
+    expect(fila.pvpConBono).toBe(434700)
+    expect(fila.pvpConBono! % 900).toBe(0)
+  })
+
+  it('la NC esperada es el bono dividido el múltiplo (neto de IVA y MUP)', () => {
+    const [fila] = armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+      { p1: { monto: 50000 } }, new Date('2026-08-25'),
+    )
+    expect(fila.ncEsperada).toBe(25000)
+  })
+
+  it('un bono vencido o futuro no aplica', () => {
+    const vencido = armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+      { p1: { monto: 50000, hasta: '2026-08-20' } }, new Date('2026-08-25'),
+    )[0]
+    expect(vencido.bonoMonto).toBeNull()
+    expect(vencido.pvpConBono).toBeNull()
+    const futuro = armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+      { p1: { monto: 50000, desde: '2026-09-01' } }, new Date('2026-08-25'),
+    )[0]
+    expect(futuro.bonoMonto).toBeNull()
+  })
+
+  it('con bono vigente la diferencia vs tienda compara contra el PVP con bono', () => {
+    const [fila] = armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {},
+      { 'Motorola Moto G17 4/128GB': 484200 }, VENTAS,
+      { p1: { monto: 50000 } }, new Date('2026-08-25'),
+    )
+    expect(fila.diferencia).toBe(484200 - 434700)
+  })
+
   it('ordena por marca y nombre', () => {
     const filas = armarListaPrecios(
       [producto({ id: 'p2', nombre: 'Xiaomi Redmi 14C 128/4 GB' }), producto()],
