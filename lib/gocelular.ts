@@ -152,11 +152,51 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 }
 
 import { armarAsns, type AsnResumen } from './asn'
+import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
 export type { AsnResumen, AlertaEnvio }
+
+/**
+ * Catálogo de teléfonos vendibles con GOcelular para el buscador público
+ * /catalogo. Fuente de verdad: device_models; dispositivos = equipos con IMEI
+ * cargados en inventario; alias = nombres de los productos de la tienda que
+ * apuntan al mismo model_code (variantes de nombre según quién lo vende).
+ */
+export async function fetchCatalogoBuscador(): Promise<ModeloCatalogo[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      model_code: string; name: string; brand: string | null; active: boolean
+      lock_solution: string | null; dispositivos: string; alias: string[] | null
+    }>(
+      `SELECT dm.model_code, dm.name, dm.brand, dm.active, dm.lock_solution,
+              (SELECT COUNT(*) FROM inventory_items ii WHERE ii.model_code = dm.model_code)::text AS dispositivos,
+              (SELECT array_agg(DISTINCT sp.display_name)
+               FROM store_products sp
+               WHERE sp.model_code = dm.model_code AND sp.is_addon = false
+                 AND sp.display_name <> dm.name AND sp.display_name NOT ILIKE '%E2E%') AS alias
+       FROM device_models dm
+       ORDER BY dm.brand, dm.name`
+    )
+    return res.rows.map(r => ({
+      modelCode: r.model_code,
+      nombre: r.name,
+      marca: r.brand ?? '—',
+      activo: r.active,
+      lockSolution: r.lock_solution,
+      dispositivos: Number(r.dispositivos),
+      alias: r.alias ?? [],
+    }))
+  } finally {
+    client.release()
+  }
+}
 
 /**
  * Pedidos a Andreani que necesitan intervención, para la pestaña Alertas de
