@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calcularStockAccesorio } from '@/lib/stock-accesorios'
+import { calcularStockAccesorio, calcularStockKit } from '@/lib/stock-accesorios'
 
 describe('calcularStockAccesorio', () => {
   it('ASN aceptado pero no recibido: no cuenta en ningún depósito ni en el total', () => {
@@ -37,6 +37,26 @@ describe('calcularStockAccesorio', () => {
 
   it('nunca devuelve negativos', () => {
     const r = calcularStockAccesorio({ stock: 0, informadas: 10, pendientesAceptadas: 20, despachadas: 5, enTransito: 30 })
+    expect(r).toEqual({ whAndreani: 0, whGocuotas: 0, total: 0 })
+  })
+})
+
+describe('calcularStockKit', () => {
+  it('ignora el stock de GOcelular: Andreani = informadas menos despachadas', () => {
+    // KS-MOTO-G06 real (25/8): GOcelular dice 800 pero le faltan registrar 500 de
+    // ingreso y las 501 despachadas; lo confiable son los movimientos de Andreani
+    const r = calcularStockKit({ informadas: 1300, pendientesAceptadas: 0, despachadas: 501 })
+    expect(r).toEqual({ whAndreani: 799, whGocuotas: 0, total: 799 })
+  })
+
+  it('ASN aceptado pero no recibido no cuenta como stock en Andreani', () => {
+    const r = calcularStockKit({ informadas: 100, pendientesAceptadas: 100, despachadas: 0 })
+    expect(r).toEqual({ whAndreani: 0, whGocuotas: 0, total: 0 })
+  })
+
+  it('nunca devuelve negativos', () => {
+    // KS-MOTO-G17 hoy: 100 registradas pero 109 despachadas
+    const r = calcularStockKit({ informadas: 100, pendientesAceptadas: 0, despachadas: 109 })
     expect(r).toEqual({ whAndreani: 0, whGocuotas: 0, total: 0 })
   })
 })

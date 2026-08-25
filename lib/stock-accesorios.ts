@@ -21,6 +21,16 @@ export interface StockAccesorioResult {
   total: number
 }
 
+// Kits de Seguridad: store_products.stock no es confiable (no resta los
+// despachos en bundles y hubo ingresos manuales sin registrar), así que el
+// stock en Andreani sale solo de los movimientos aceptados por Andreani.
+// Misma fórmula que la vista proveedor (/proveedor/kits): ambas páginas
+// deben mostrar lo mismo.
+export function calcularStockKit(i: Omit<StockAccesorioInput, 'stock' | 'enTransito'>): StockAccesorioResult {
+  const whAndreani = Math.max(0, i.informadas - i.pendientesAceptadas - i.despachadas)
+  return { whAndreani, whGocuotas: 0, total: whAndreani }
+}
+
 export function calcularStockAccesorio(i: StockAccesorioInput): StockAccesorioResult {
   // Tope: lo en tránsito integra el stock pero no está en ningún depósito
   const whAndreani = Math.min(

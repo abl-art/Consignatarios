@@ -152,7 +152,7 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 }
 
 import { armarAsns, type AsnResumen } from './asn'
-import { calcularStockAccesorio } from './stock-accesorios'
+import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
 export type { AsnResumen }
@@ -1209,13 +1209,14 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
 
     for (const r of accRes.rows) {
       const enTransito = transitoAddons[r.sku] ?? 0
-      const { whAndreani, whGocuotas, total } = calcularStockAccesorio({
-        stock: Number(r.stock),
+      const movimientos = {
         informadas: ingested[r.sku] ?? 0,
         pendientesAceptadas: pendientesAceptadas[r.sku] ?? 0,
         despachadas: dispatched[r.sku] ?? 0,
-        enTransito,
-      })
+      }
+      const { whAndreani, whGocuotas, total } = r.sku.startsWith('KS-')
+        ? calcularStockKit(movimientos)
+        : calcularStockAccesorio({ ...movimientos, stock: Number(r.stock), enTransito })
       rows.push({
         sku: r.sku,
         nombre: r.nombre,

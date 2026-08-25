@@ -1,4 +1,5 @@
 import { getPool } from './db-pool'
+import { calcularStockKit } from './stock-accesorios'
 
 export interface KitSeguridad {
   sku: string
@@ -32,7 +33,7 @@ export async function fetchKitsStockAndreani(): Promise<Record<string, KitStockA
   const pool = getPool()
   if (!pool) return {}
 
-  const [kitsRes, abastRes, pedidoRes] = await Promise.all([
+  const [kitsRes, abastRes, pedidoRes, pendAceptadoRes] = await Promise.all([
     pool.query<{ sku: string; stock: string }>(
       `SELECT sku, COALESCE(stock, 0)::text AS stock
        FROM store_products
@@ -45,6 +46,18 @@ export async function fetchKitsStockAndreani(): Promise<Record<string, KitStockA
     pool.query<{ payload: { pedido?: { lineas?: Array<{ articulo?: { codigo?: string; cantidad?: number } }> } } }>(
       `SELECT payload FROM andreani_wh_transactions
        WHERE tipo = 'pedido' AND estado = 'accepted'`
+    ),
+    // ASN aceptado pero aún sin recepción física en Andreani
+    pool.query<{ sku: string; pendiente: string }>(
+      `SELECT sp.sku,
+              SUM(ai.quantity - LEAST(ai.received_quantity, ai.quantity))::text AS pendiente
+       FROM inventory_intake_addon_items ai
+       JOIN store_products sp ON sp.id = ai.addon_product_id
+       JOIN andreani_wh_transactions t ON t.id = ai.asn_transaction_id
+       WHERE ai.quantity > ai.received_quantity
+         AND t.tipo = 'abastecimiento' AND t.estado = 'accepted'
+         AND sp.sku ILIKE 'KS-%'
+       GROUP BY sp.sku`
     ),
   ])
 
@@ -69,12 +82,21 @@ export async function fetchKitsStockAndreani(): Promise<Record<string, KitStockA
     }
   }
 
+  const pendientesAceptadas: Record<string, number> = {}
+  for (const r of pendAceptadoRes.rows) {
+    pendientesAceptadas[r.sku] = Number(r.pendiente)
+  }
+
   const result: Record<string, KitStockAndreani> = {}
   for (const r of kitsRes.rows) {
     result[r.sku] = {
       sku: r.sku,
       stockTotal: Number(r.stock),
-      stockAndreani: Math.max(0, (ingresado[r.sku] ?? 0) - (despachado[r.sku] ?? 0)),
+      stockAndreani: calcularStockKit({
+        informadas: ingresado[r.sku] ?? 0,
+        pendientesAceptadas: pendientesAceptadas[r.sku] ?? 0,
+        despachadas: despachado[r.sku] ?? 0,
+      }).whAndreani,
     }
   }
   return result
