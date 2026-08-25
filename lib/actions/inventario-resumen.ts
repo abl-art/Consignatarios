@@ -3,6 +3,7 @@ import {
   fetchStockPropio,
   fetchStockPropioDetalle,
   fetchPreciosVentaCelulares,
+  fetchPreciosTiendaCelulares,
   fetchSalidasKitsDiarias,
   fetchVentasPorModelo,
   fetchVentasUlt30d,
@@ -26,6 +27,7 @@ import {
   coberturaPorModelos,
   diasCobertura,
   velocidadVenta,
+  normalizarModelo,
   type VentaDia,
   type ModeloSinMovimiento,
   type CoberturaModelo,
@@ -84,6 +86,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       stockCelulares,
       stockDetalle,
       preciosVenta,
+      preciosTienda,
       salidasKits,
       ventasPorModelo,
       ventasUlt30d,
@@ -99,6 +102,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       fetchStockPropio(),
       fetchStockPropioDetalle(),
       fetchPreciosVentaCelulares(),
+      fetchPreciosTiendaCelulares().catch(() => ({} as Record<string, number>)),
       fetchSalidasKitsDiarias(),
       fetchVentasPorModelo(),
       fetchVentasUlt30d(),
@@ -133,10 +137,20 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     const costosCelulares = costosPorCategoria.get('Celulares') ?? {}
 
     // ── Celulares ──────────────────────────────────────────────────────────
+    // Valor de venta: precio publicado en la tienda (store_products), matcheado
+    // por nombre normalizado; respaldo device_models.default_price (puede estar
+    // desactualizado) para modelos sin publicación activa
+    const tiendaPorClave = new Map<string, number>()
+    for (const [nombre, precio] of Object.entries(preciosTienda)) {
+      tiendaPorClave.set(normalizarModelo(nombre), precio)
+    }
+    const precioVentaDe = (modelName: string): number =>
+      tiendaPorClave.get(normalizarModelo(modelName)) ?? preciosVenta[modelName] ?? buscarPrecio(preciosVenta, modelName)
+
     let valorVentaCel = 0
     let costoReposicionCel = 0
     for (const s of stockDetalle) {
-      const pv = preciosVenta[s.model_name] ?? buscarPrecio(preciosVenta, s.model_name)
+      const pv = precioVentaDe(s.model_name)
       if (pv) valorVentaCel += s.qty * pv
       const pc = buscarPrecio(costosCelulares, s.model_name)
       if (pc) costoReposicionCel += s.qty * pc
@@ -167,7 +181,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       stockDetalle.map(s => ({
         modelo: s.model_name,
         qty: s.qty,
-        valorUnit: buscarPrecio(costosCelulares, s.model_name) || preciosVenta[s.model_name] || buscarPrecio(preciosVenta, s.model_name) || 0,
+        valorUnit: buscarPrecio(costosCelulares, s.model_name) || precioVentaDe(s.model_name) || 0,
       })),
       Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
     )

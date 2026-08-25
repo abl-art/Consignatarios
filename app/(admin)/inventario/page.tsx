@@ -194,7 +194,7 @@ export default async function InventarioPage() {
               </table>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Costo de Reposición: stock × costo del proveedor más barato en Compras (última actualización) · Valor de Venta: stock × precio actual de la tienda · Kits a $9.000 por unidad
+              Costo de Reposición: stock × costo del proveedor preferido de cada marca en Compras (Mirgor/Samsung, Newsan/Motorola, Solnik/Xiaomi, R.Fueguina/Nubia; sin precio, el más barato) · Valor de Venta: stock × precio publicado en la tienda · Kits a $9.000 por unidad
             </p>
           </div>
 
