@@ -3,6 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SQL_IDS_TODOS } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
+import { elegirCosto, type CostoProveedor } from '@/lib/lista-precios'
+import { normalizarMarca } from '@/lib/marca'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -640,46 +642,54 @@ export interface UltimoCosto {
 }
 
 /**
- * Costo de reposición por producto para /inventario: el precio del proveedor
- * más barato, tomando de cada proveedor su última actualización (created_at
- * más reciente). Con un solo proveedor, se usa ese. Empate de precio → el
- * actualizado más recientemente.
+ * Costo de reposición por producto para /inventario: misma regla que la
+ * Lista de Precios (elegirCosto): el proveedor preferido de cada marca
+ * (Mirgor→Samsung, Newsan→Motorola, Solnik→Xiaomi, R.Fueguina→Nubia) aunque
+ * no sea el más barato; sin precio ahí (o marca sin regla, ej. accesorios),
+ * el más barato del resto. De cada proveedor se toma su última actualización.
  */
 export async function getUltimosCostos(): Promise<UltimoCosto[]> {
   const supabase = createAdminClient()
-  const { data: precios } = await supabase
-    .from('compras_precios')
-    .select('producto_id, proveedor_id, precio, created_at')
-    .order('created_at', { ascending: false })
+  const [{ data: precios }, { data: provs }] = await Promise.all([
+    supabase
+      .from('compras_precios')
+      .select('producto_id, proveedor_id, precio, created_at')
+      .order('created_at', { ascending: false }),
+    supabase.from('compras_proveedores').select('id, nombre'),
+  ])
   if (!precios || precios.length === 0) return []
 
-  // Última actualización por (producto, proveedor) — vienen ordenados desc
-  const ultimoPorProveedor = new Map<string, number>()
+  const nombreProveedor = new Map<string, string>((provs ?? []).map(p => [p.id as string, p.nombre as string]))
+
+  // Última actualización por (producto, proveedor) — vienen ordenados desc,
+  // así en empate de precio el fallback elige al actualizado más recientemente
+  const vistos = new Set<string>()
+  const costosPorProducto: Record<string, CostoProveedor[]> = {}
   for (const p of precios) {
     const key = `${p.producto_id}|${p.proveedor_id}`
-    if (!ultimoPorProveedor.has(key)) ultimoPorProveedor.set(key, Number(p.precio))
-  }
-
-  // Entre proveedores, el más barato (en empate gana el más reciente, que va primero)
-  const ultimoPorProducto: Record<string, number> = {}
-  for (const [key, precio] of ultimoPorProveedor) {
-    const productoId = key.split('|')[0]
-    if (!(productoId in ultimoPorProducto) || precio < ultimoPorProducto[productoId]) {
-      ultimoPorProducto[productoId] = precio
-    }
+    if (vistos.has(key)) continue
+    vistos.add(key)
+    const proveedor = nombreProveedor.get(p.proveedor_id as string)
+    if (!proveedor) continue
+    ;(costosPorProducto[p.producto_id as string] ??= []).push({ proveedor, precio: Number(p.precio) })
   }
 
   const { data: prods } = await supabase
     .from('compras_productos')
     .select('id, nombre, categoria')
-    .in('id', Object.keys(ultimoPorProducto))
+    .in('id', Object.keys(costosPorProducto))
   if (!prods) return []
 
-  return prods.map(prod => ({
-    categoria: prod.categoria as string,
-    nombre: normalizarNombreProducto(prod.nombre),
-    precio: ultimoPorProducto[prod.id],
-  }))
+  return prods.flatMap(prod => {
+    const marca = normalizarMarca((prod.nombre as string).split(/\s+/)[0] ?? null) ?? '—'
+    const eleccion = elegirCosto(marca, costosPorProducto[prod.id as string] ?? [])
+    if (!eleccion) return []
+    return [{
+      categoria: prod.categoria as string,
+      nombre: normalizarNombreProducto(prod.nombre),
+      precio: eleccion.costo.precio,
+    }]
+  })
 }
 
 // ---------------------------------------------------------------------------

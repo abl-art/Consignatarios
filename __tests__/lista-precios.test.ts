@@ -1,11 +1,42 @@
 import { describe, it, expect } from 'vitest'
-import { armarListaPrecios, aplicarTodoBono, type ProductoLista, type TodoNotas } from '@/lib/lista-precios'
+import { armarListaPrecios, aplicarTodoBono, elegirCosto, type ProductoLista, type TodoNotas } from '@/lib/lista-precios'
 
 function producto(over: Partial<ProductoLista> = {}): ProductoLista {
   return { id: 'p1', nombre: 'Motorola Moto G17 4/128GB', codigo: 'MOTO-G17-128', ...over }
 }
 
 const VENTAS = { 'Motorola Moto G17 4/128GB': 50 }
+
+describe('elegirCosto (compartida con la valorización de inventario)', () => {
+  it('prefiere el proveedor de la marca aunque no sea el más barato', () => {
+    const r = elegirCosto('Motorola', [
+      { proveedor: 'SYNA SA', precio: 230000 },
+      { proveedor: 'NEWSAN SA', precio: 242000 },
+    ])
+    expect(r).toEqual({ costo: { proveedor: 'NEWSAN SA', precio: 242000 }, preferido: true })
+  })
+
+  it('sin proveedor preferido con precio cae al más barato', () => {
+    const r = elegirCosto('Samsung', [
+      { proveedor: 'SYNA SA', precio: 700000 },
+      { proveedor: 'MULTIPOINT SA', precio: 690000 },
+    ])
+    expect(r?.costo.precio).toBe(690000)
+    expect(r?.preferido).toBe(false)
+  })
+
+  it('marca sin regla (accesorios) usa el más barato', () => {
+    const r = elegirCosto('JBL', [
+      { proveedor: 'OHPIC SA', precio: 50000 },
+      { proveedor: 'SYNA SA', precio: 48000 },
+    ])
+    expect(r?.costo.precio).toBe(48000)
+  })
+
+  it('sin precios devuelve null', () => {
+    expect(elegirCosto('Motorola', [])).toBeNull()
+  })
+})
 
 describe('armarListaPrecios', () => {
   it('usa el proveedor preferido de la marca (Motorola → Newsan)', () => {

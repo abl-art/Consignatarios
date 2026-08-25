@@ -104,7 +104,12 @@ export interface FilaListaPrecios {
   ncEsperada: number | null
 }
 
-function elegirCosto(marca: string, costos: CostoProveedor[]): { costo: CostoProveedor; preferido: boolean } | null {
+/**
+ * Costo de referencia de un modelo: el proveedor preferido de la marca aunque
+ * no sea el más barato; sin precio ahí, el más barato del resto. Compartida
+ * entre la Lista de Precios y el Costo de Reposición de la valorización.
+ */
+export function elegirCosto(marca: string, costos: CostoProveedor[]): { costo: CostoProveedor; preferido: boolean } | null {
   if (costos.length === 0) return null
   const preferido = costos.find(c => c.proveedor === PROVEEDOR_PREFERIDO[marca])
   if (preferido) return { costo: preferido, preferido: true }
