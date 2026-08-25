@@ -128,8 +128,6 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Modelo</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Proveedor</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Ventas 30d</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Costo s/IVA</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Múltiplo</th>
               <th className="text-right px-4 py-3 font-medium text-gray-900 bg-gray-100">PVP</th>
@@ -149,22 +147,20 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
               <tr key={f.productoId} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5">
                   <span className="font-medium text-gray-900">{f.nombre}</span>
-                  {f.codigo && <span className="block text-xs text-gray-400 font-mono">{f.codigo}</span>}
+                  <span className="block text-xs text-gray-400">
+                    {f.codigo && <span className="font-mono">{f.codigo} · </span>}
+                    {f.proveedor ? (
+                      <span
+                        className={f.proveedorPreferido ? undefined : 'text-amber-600 font-medium'}
+                        title={f.proveedorPreferido ? undefined : 'El proveedor preferido de la marca no tiene precio: se usa el más barato del resto'}
+                      >
+                        {f.proveedor}{!f.proveedorPreferido && ' *'}
+                      </span>
+                    ) : (
+                      <span className="text-red-600 font-medium">sin precio</span>
+                    )}
+                  </span>
                 </td>
-                <td className="px-4 py-2.5">
-                  {f.proveedor ? (
-                    <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium ${
-                      f.proveedorPreferido
-                        ? 'bg-gray-50 text-gray-600 border-gray-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`} title={f.proveedorPreferido ? undefined : 'El proveedor preferido de la marca no tiene precio: se usa el más barato del resto'}>
-                      {f.proveedor}{!f.proveedorPreferido && ' *'}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-red-600 font-medium">sin precio</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.ventas30d}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.costo !== null ? peso(f.costo) : '—'}</td>
                 <td className="px-4 py-2.5 text-right"><InputMultiplo fila={f} /></td>
                 <td className={`px-4 py-2.5 text-right tabular-nums bg-gray-50 ${f.pvpConBono !== null ? 'text-gray-400 line-through' : 'font-bold text-gray-900'}`}>{f.pvp !== null ? peso(f.pvp) : '—'}</td>
