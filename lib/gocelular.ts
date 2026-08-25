@@ -286,6 +286,12 @@ export async function fetchPendientesPicking(): Promise<{ gocuotas: Record<strin
            SELECT 1 FROM shipments s
            WHERE s.store_order_id = so.id AND s.type = 'outbound' AND s.status <> 'cancelled'
              AND (s.imei IS NOT NULL OR s.delivered_at IS NOT NULL))
+         AND NOT EXISTS (
+           -- El IMEI se informa al pickear: GOcelular asigna el equipo contra la
+           -- orden de GOcuotas y la unidad pasa a 'assigned' (sale del stock).
+           -- Seguir restándola como pendiente sería doble descuento.
+           SELECT 1 FROM inventory_items ii
+           WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text)
          AND (p.id IS NOT NULL OR so.paid_at > now() - INTERVAL '30 days')
        GROUP BY 1, 2`
     )
