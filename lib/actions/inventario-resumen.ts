@@ -37,7 +37,8 @@ import {
 export type ProductoKey = 'celulares' | 'smartwatches' | 'parlantes' | 'auriculares' | 'kits'
 
 /** Los kits no tienen precio de tienda (se regalan): valor de venta definido por Emiliano. */
-const PRECIO_VENTA_KIT = 9000
+const PRECIO_VENTA_KIT = 9000 // fijo, definido por Emiliano — NO se le quita IVA
+const IVA = 1.21 // los precios de tienda incluyen IVA; el valor de venta se muestra neto
 
 export interface ProductoResumen {
   key: ProductoKey
@@ -45,7 +46,7 @@ export interface ProductoResumen {
   stock: number
   /** Total $ al costo del proveedor más barato en Compras (última actualización). Null si no hay costo para matchear. */
   costoReposicion: number | null
-  /** Total $ al precio de venta actual de la tienda. Kits: precio fijo definido. */
+  /** Total $ al precio de venta actual de la tienda SIN IVA (÷1,21). Kits: precio fijo definido, sin ajuste. */
   valorVenta: number | null
   /** $ vendidos en los últimos 30 días cerrados (para Meses de Stock). */
   montoVentas30d: number
@@ -145,7 +146,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       tiendaPorClave.set(normalizarModelo(nombre), precio)
     }
     const precioVentaDe = (modelName: string): number =>
-      tiendaPorClave.get(normalizarModelo(modelName)) ?? preciosVenta[modelName] ?? buscarPrecio(preciosVenta, modelName)
+      (tiendaPorClave.get(normalizarModelo(modelName)) ?? preciosVenta[modelName] ?? buscarPrecio(preciosVenta, modelName)) / IVA
 
     let valorVentaCel = 0
     let costoReposicionCel = 0
@@ -261,7 +262,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         label,
         stock: data.kpis.stockDisponible,
         costoReposicion: costoUnit > 0 ? data.kpis.stockDisponible * costoUnit : null,
-        valorVenta: data.kpis.valuacion,
+        valorVenta: data.kpis.valuacion / IVA,
         montoVentas30d: monto30d(data.ventasDiarias, hoy),
         ventasDiarias: data.ventasDiarias,
         cierres: data.cierres,

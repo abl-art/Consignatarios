@@ -4,10 +4,10 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchStockPropio, fetchStockPropioDetalle, fetchAddonStock, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
 import { resumenVentasDia, proyectarVentasMensuales } from '@/lib/ventas-dia'
-import { getMejorPrecio, getInventarioByCategoria } from '@/lib/actions/compras'
-import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
+import { getMejorPrecio } from '@/lib/actions/compras'
+import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventario-resumen'
 import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import SoporteCard from './SoporteCard'
@@ -22,14 +22,12 @@ export default async function DashboardPage() {
   const desde7d = daysAgo7.toISOString().slice(0, 10)
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, stockPropio, stockDetalle, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, addons, modelosOcultos] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
-    fetchStockPropio(),
-    fetchStockPropioDetalle(),
     getMejorPrecio(),
     supabase.from('dispositivos').select('modelos(marca, modelo)').eq('estado', 'asignado'),
     fetchTrustonicStats(),
@@ -37,41 +35,11 @@ export default async function DashboardPage() {
     fetchVentasGeografia().catch(() => ({ provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 })),
     fetchVentasPorMarca(desde7d, hoy).catch(() => []),
     fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0, promedioEntrega30d: 0, medianaEntrega30d: 0, entregas30d: 0 })),
-    fetchAddonStock().catch(() => []),
-    getModelosOcultos().catch(() => []),
+    fetchInventarioResumen().catch(() => ({ productos: [] })),
   ])
 
-  // Stock por categoría
-  const SMARTWATCHES_KW = ['pulsera', 'band', 'watch', 'smartwatch', 'reloj']
-  const AURICULARES_KW = ['buds', 'auricular', 'earphone', 'headphone', 'earbuds']
-  const PARLANTES_KW = ['speaker', 'parlante', 'bocina', 'altavoz', 'jbl']
-
-  const smartwatchItems = addons.filter(a => SMARTWATCHES_KW.some(k => a.displayName.toLowerCase().includes(k)))
-  const auricularesItems = addons.filter(a => AURICULARES_KW.some(k => a.displayName.toLowerCase().includes(k)))
-  const parlantesItems = addons.filter(a => PARLANTES_KW.some(k => a.displayName.toLowerCase().includes(k)))
-
-  const stockSmartwatch = smartwatchItems.reduce((s, a) => s + a.stock, 0)
-  const stockAuriculares = auricularesItems.reduce((s, a) => s + a.stock, 0)
-  const stockParlantes = parlantesItems.reduce((s, a) => s + a.stock, 0)
-
-  const valorSmartwatch = smartwatchItems.reduce((s, a) => s + a.stock * a.price, 0)
-  const valorAuriculares = auricularesItems.reduce((s, a) => s + a.stock * a.price, 0)
-  const valorParlantes = parlantesItems.reduce((s, a) => s + a.stock * a.price, 0)
-
-  let stockKits = 0
-  let valorKits = 0
-  try {
-    const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
-    stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
-    valorKits = kitsItems.reduce((s, r) => s + r.valuacion, 0)
-  } catch { /* ignore */ }
-
-  // Valorización tenencia propia
-  let valorPropio = 0
-  stockDetalle.forEach(s => {
-    const precio = buscarPrecio(preciosNewsan, s.model_name)
-    if (precio) valorPropio += s.qty * precio
-  })
+  // Stock disponible: los mismos datos que /inventario (fuente única)
+  const inv = (key: ProductoKey) => inventarioResumen.productos.find(p => p.key === key)
 
   // Valorización consignatarios
   let valorConsig = 0
@@ -130,11 +98,11 @@ export default async function DashboardPage() {
           <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
           <div className="grid grid-cols-3 xl:grid-cols-5 gap-3">
             {[
-              { href: '/inventario', label: 'Celulares', stock: stockPropio, valor: valorPropio, color: 'text-magenta-700', bg: 'bg-magenta-50' },
-              { href: '/inventario', label: 'Smartwatches', stock: stockSmartwatch, valor: valorSmartwatch, color: 'text-blue-700', bg: 'bg-blue-50' },
-              { href: '/inventario', label: 'Parlantes', stock: stockParlantes, valor: valorParlantes, color: 'text-purple-700', bg: 'bg-purple-50' },
-              { href: '/inventario', label: 'Auriculares', stock: stockAuriculares, valor: valorAuriculares, color: 'text-cyan-700', bg: 'bg-cyan-50' },
-              { href: '/inventario/kits-seguridad', label: 'Kits', stock: stockKits, valor: valorKits, color: 'text-amber-700', bg: 'bg-amber-50' },
+              { href: '/inventario', label: 'Celulares', stock: inv('celulares')?.stock ?? 0, valor: inv('celulares')?.valorVenta ?? 0, color: 'text-magenta-700', bg: 'bg-magenta-50' },
+              { href: '/inventario', label: 'Smartwatches', stock: inv('smartwatches')?.stock ?? 0, valor: inv('smartwatches')?.valorVenta ?? 0, color: 'text-blue-700', bg: 'bg-blue-50' },
+              { href: '/inventario', label: 'Parlantes', stock: inv('parlantes')?.stock ?? 0, valor: inv('parlantes')?.valorVenta ?? 0, color: 'text-purple-700', bg: 'bg-purple-50' },
+              { href: '/inventario', label: 'Auriculares', stock: inv('auriculares')?.stock ?? 0, valor: inv('auriculares')?.valorVenta ?? 0, color: 'text-cyan-700', bg: 'bg-cyan-50' },
+              { href: '/inventario/kits-seguridad', label: 'Kits', stock: inv('kits')?.stock ?? 0, valor: inv('kits')?.valorVenta ?? 0, color: 'text-amber-700', bg: 'bg-amber-50' },
             ].map(cat => (
               <Link key={cat.label} href={cat.href} className={`${cat.bg} rounded-lg p-4 text-center hover:shadow-md transition-shadow`}>
                 <p className="text-sm text-gray-500 mb-1 truncate">{cat.label}</p>
