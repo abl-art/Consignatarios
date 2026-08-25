@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarListaPrecios, type ProductoLista } from '@/lib/lista-precios'
+import { armarListaPrecios, aplicarTodoBono, type ProductoLista, type TodoNotas } from '@/lib/lista-precios'
 
 function producto(over: Partial<ProductoLista> = {}): ProductoLista {
   return { id: 'p1', nombre: 'Motorola Moto G17 4/128GB', codigo: 'MOTO-G17-128', ...over }
@@ -133,6 +133,45 @@ describe('armarListaPrecios', () => {
       { p1: { monto: 50000 } }, new Date('2026-08-25'),
     )
     expect(fila.diferencia).toBe(484200 - 434700)
+  })
+
+  it('un bono con vencimiento crea el ToDo "Vto BONO" urgente en esa fecha', () => {
+    const todos = aplicarTodoBono({}, 'p1', 'Vto BONO Motorola Moto G17 4/128GB', '2026-09-15')
+    expect(todos['2026-09-15']).toEqual([
+      { id: 'bono-p1', text: 'Vto BONO Motorola Moto G17 4/128GB', done: false, prioridad: 'urgente' },
+    ])
+  })
+
+  it('al cambiar la fecha del bono el ToDo pendiente se muda de día', () => {
+    const previo: Record<string, TodoNotas[]> = {
+      '2026-09-15': [
+        { id: 'bono-p1', text: 'Vto BONO Moto G17', done: false, prioridad: 'urgente' },
+        { id: 'otro', text: 'llamar a Pedro', done: false },
+      ],
+    }
+    const todos = aplicarTodoBono(previo, 'p1', 'Vto BONO Moto G17', '2026-09-30')
+    expect(todos['2026-09-15']).toEqual([{ id: 'otro', text: 'llamar a Pedro', done: false }])
+    expect(todos['2026-09-30']).toHaveLength(1)
+    expect(todos['2026-09-30'][0].prioridad).toBe('urgente')
+  })
+
+  it('al quitar el bono se borra el ToDo pendiente pero se respetan los ya hechos', () => {
+    const previo: Record<string, TodoNotas[]> = {
+      '2026-09-10': [{ id: 'bono-p1', text: 'Vto BONO viejo', done: true }],
+      '2026-09-15': [{ id: 'bono-p1', text: 'Vto BONO Moto G17', done: false }],
+    }
+    const todos = aplicarTodoBono(previo, 'p1', 'Vto BONO Moto G17', undefined)
+    expect(todos['2026-09-15']).toEqual([])
+    expect(todos['2026-09-10']).toHaveLength(1)
+  })
+
+  it('re-guardar el bono en la misma fecha no resetea un ToDo ya marcado hecho', () => {
+    const previo: Record<string, TodoNotas[]> = {
+      '2026-09-15': [{ id: 'bono-p1', text: 'Vto BONO Moto G17', done: true, prioridad: 'urgente' }],
+    }
+    const todos = aplicarTodoBono(previo, 'p1', 'Vto BONO Moto G17', '2026-09-15')
+    expect(todos['2026-09-15']).toHaveLength(1)
+    expect(todos['2026-09-15'][0].done).toBe(true)
   })
 
   it('ordena por marca y nombre', () => {

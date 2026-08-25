@@ -8,11 +8,13 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchPreciosTiendaCelulares, fetchVentasPorModelo } from '@/lib/gocelular'
 import {
+  aplicarTodoBono,
   armarListaPrecios,
   type BonoModelo,
   type CostoProveedor,
   type FilaListaPrecios,
   type ProductoLista,
+  type TodoNotas,
 } from '@/lib/lista-precios'
 
 const MULTIPLO_KEY = 'listaprecios_multiplo_'
@@ -93,6 +95,29 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
     if (error) return { error: error.message }
   }
   revalidatePath('/canales/lista-precios')
+
+  // Recordatorio en la pestaña ToDo de /notas: "Vto BONO <modelo>" urgente el
+  // día del vencimiento (se muda o borra solo si el bono cambia o se quita)
+  try {
+    const { data: prod } = await supabase.from('compras_productos').select('nombre').eq('id', productoId).single()
+    const nombre = (prod?.nombre as string) ?? productoId
+    const { data: cfgTodos } = await supabase.from('flujo_config').select('value').eq('key', 'app_todos').single()
+    const todos = cfgTodos?.value ? JSON.parse(cfgTodos.value) : {}
+    if (!Array.isArray(todos)) {
+      const actualizados = aplicarTodoBono(
+        todos as Record<string, TodoNotas[]>,
+        productoId,
+        `Vto BONO ${nombre}`,
+        bono && Number(bono.monto) > 0 ? bono.hasta || undefined : undefined,
+      )
+      await supabase.from('flujo_config').upsert({
+        key: 'app_todos',
+        value: JSON.stringify(actualizados),
+        updated_at: new Date().toISOString(),
+      })
+    }
+  } catch { /* el recordatorio es best-effort: no bloquea el guardado del bono */ }
+
   return { ok: true }
 }
 

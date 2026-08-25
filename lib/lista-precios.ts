@@ -43,6 +43,44 @@ export interface BonoModelo {
   hasta?: string // ISO yyyy-mm-dd inclusive; sin hasta = sin vencimiento
 }
 
+// Item de la pestaña ToDo de /notas (flujo_config 'app_todos', por fecha)
+export interface TodoNotas {
+  id: string
+  text: string
+  done: boolean
+  prioridad?: 'normal' | 'negrita' | 'urgente'
+}
+
+/**
+ * Sincroniza el recordatorio "Vto BONO <modelo>" en los ToDos de /notas:
+ * lo crea urgente (rojo y negrita) el día del vencimiento, lo muda si cambia
+ * la fecha, y lo borra si se quita el bono — sin tocar los ya marcados hechos.
+ */
+export function aplicarTodoBono(
+  todos: Record<string, TodoNotas[]>,
+  productoId: string,
+  texto: string,
+  hasta: string | undefined,
+): Record<string, TodoNotas[]> {
+  const id = `bono-${productoId}`
+  const resultado: Record<string, TodoNotas[]> = {}
+  for (const [fecha, items] of Object.entries(todos)) {
+    resultado[fecha] = Array.isArray(items)
+      ? items.filter(t => !(t.id === id && !t.done && fecha !== hasta))
+      : items
+  }
+  if (hasta) {
+    const items = Array.isArray(resultado[hasta]) ? resultado[hasta] : []
+    const existente = items.find(t => t.id === id)
+    if (existente) {
+      existente.text = texto
+    } else {
+      resultado[hasta] = [...items, { id, text: texto, done: false, prioridad: 'urgente' }]
+    }
+  }
+  return resultado
+}
+
 export interface FilaListaPrecios {
   productoId: string
   nombre: string
