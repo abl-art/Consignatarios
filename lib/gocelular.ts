@@ -152,10 +152,55 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 }
 
 import { armarAsns, type AsnResumen } from './asn'
+import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
-export type { AsnResumen }
+export type { AsnResumen, AlertaEnvio }
+
+/**
+ * Pedidos a Andreani que necesitan intervención, para la pestaña Alertas de
+ * /compras/envios: requires_attention (con la razón del WH) y expedidos sin
+ * IMEI asignado (salió mercadería sin registrar qué equipo — stock inflado).
+ */
+export async function fetchAlertasEnvios(
+  ahora: Date = new Date(),
+): Promise<{ requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] }> {
+  const pool = getPool()
+  if (!pool) return { requierenAtencion: [], expedidosSinImei: [] }
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<AlertaEnvioRaw>(
+      `SELECT p.estado, so.order_number AS "orderNumber",
+              so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
+              so.customer_phone AS "clienteTelefono", so.product_name AS producto,
+              so.shipping_city AS ciudad, so.shipping_province AS provincia,
+              so.paid_at::text AS "paidAt", p.sent_at::text AS "sentAt",
+              p.orden_wh AS "ordenWh", p.razon,
+              s.tracking_number AS tracking, s.status AS "shipmentStatus",
+              s.error_message AS "shipmentError", s.admitted_at::text AS "admittedAt"
+       FROM andreani_wh_pedidos p
+       JOIN store_orders so ON so.id = p.store_order_id
+       LEFT JOIN LATERAL (
+         SELECT s.tracking_number, s.status, s.error_message, s.admitted_at
+         FROM shipments s
+         WHERE s.store_order_id = so.id AND s.type = 'outbound' AND s.status <> 'cancelled'
+         ORDER BY s.created_at DESC LIMIT 1
+       ) s ON true
+       WHERE p.estado IN ('requires_attention', 'expedido')
+         AND so.paid_at IS NOT NULL
+         AND so.cancelled_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM shipments sh
+           WHERE sh.store_order_id = so.id AND sh.type = 'outbound' AND sh.status <> 'cancelled'
+             AND (sh.imei IS NOT NULL OR sh.delivered_at IS NOT NULL))`
+    )
+    return armarAlertasEnvios(res.rows, ahora)
+  } finally {
+    client.release()
+  }
+}
 
 /**
  * ASN (abastecimientos a Andreani) con su avance de ingreso, para la pestaña

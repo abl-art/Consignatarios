@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
-import { fetchAsns, type AsnResumen } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio } from '@/lib/gocelular'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
 import CostoCiudad from './CostoCiudad'
 import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
+import AlertasTable from './AlertasTable'
 
 export default async function EnviosPage({
   searchParams,
@@ -15,11 +16,13 @@ export default async function EnviosPage({
 }) {
   const facturas = await getFacturasEnvios()
   let asns: AsnResumen[] = []
+  let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   try {
-    asns = await fetchAsns()
+    ;[asns, alertas] = await Promise.all([fetchAsns(), fetchAlertasEnvios()])
   } catch {
     // GOcelular no disponible
   }
+  const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -106,6 +109,11 @@ export default async function EnviosPage({
           id: 'asn',
           label: 'ASN',
           content: <AsnTable asns={asns} />,
+        },
+        {
+          id: 'alertas',
+          label: totalAlertas > 0 ? `Alertas (${totalAlertas})` : 'Alertas',
+          content: <AlertasTable requierenAtencion={alertas.requierenAtencion} expedidosSinImei={alertas.expedidosSinImei} />,
         },
       ]} />
     </div>
