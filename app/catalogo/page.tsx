@@ -18,7 +18,7 @@ export default async function CatalogoPage({
 
   let catalogo: CatalogoAgrupado = { marcas: [], modelos: [] }
   try {
-    catalogo = agruparCatalogo(await fetchCatalogoBuscador())
+    catalogo = agruparCatalogo(await fetchCatalogoBuscador(), ['Motorola'])
   } catch {
     // GOcelular no disponible: se muestra la página vacía con el aviso del cliente
   }

@@ -36,10 +36,14 @@ function limpiarNombre(nombre: string): string {
     .trim()
 }
 
-export function agruparCatalogo(modelos: ModeloCatalogo[]): CatalogoAgrupado {
+export function agruparCatalogo(
+  modelos: ModeloCatalogo[],
+  // marcas cuyos inactivos igual se listan: están en la lista de dispositivos → se venden
+  marcasConInactivos: string[] = [],
+): CatalogoAgrupado {
   const grupos = new Map<string, ModeloAgrupado>()
   for (const m of modelos) {
-    if (!m.activo) continue
+    if (!m.activo && !marcasConInactivos.includes(m.marca)) continue
     const limpio = limpiarNombre(m.nombre)
     // clave sin la marca adelante, así "Moto G15" y "Motorola Moto G15" se unen
     const sinMarca = limpio.toLowerCase().startsWith(m.marca.toLowerCase() + ' ')

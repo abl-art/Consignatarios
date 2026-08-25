@@ -56,6 +56,14 @@ describe('agruparCatalogo', () => {
     expect(r.modelos).toHaveLength(1)
   })
 
+  it('incluye inactivos de las marcas indicadas (Motorola: en la lista = se vende)', () => {
+    const r = agruparCatalogo([
+      modelo({ modelCode: 'XT2527 (g86)', nombre: 'Motorola Moto G86 5G -  256GB/8GB', marca: 'Motorola', activo: false }),
+      modelo({ modelCode: 'SM-A26', nombre: 'Samsung Galaxy A26 5G 256GB', activo: false }),
+    ], ['Motorola'])
+    expect(r.modelos.map(m => m.nombre)).toEqual(['Motorola Moto G86 5G'])
+  })
+
   it('lista las marcas ordenadas y sin repetir', () => {
     const r = agruparCatalogo([
       modelo({ modelCode: 'xi002', nombre: 'Xiaomi Redmi 14C 256/4 GB', marca: 'Xiaomi' }),
