@@ -136,6 +136,8 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">PVP c/bono</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Cuota c/bono</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC/u</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">MUP</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">MUP $</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Precio Tienda</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Dif.</th>
             </tr>
@@ -167,6 +169,8 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{f.pvpConBono !== null ? peso(f.pvpConBono) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-violet-800 bg-violet-50/40">{f.cuotaConBono !== null ? peso(f.cuotaConBono) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-violet-700 bg-violet-50/40">{f.ncEsperada !== null ? peso(f.ncEsperada) : '—'}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mup !== null ? f.mup.toFixed(2) : '—'}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mupPesos !== null ? peso(f.mupPesos) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.precioTienda !== null ? peso(f.precioTienda) : '—'}</td>
                 <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${
                   f.diferencia === null ? 'text-gray-400' : f.diferencia < 0 ? 'text-red-600' : 'text-green-700'

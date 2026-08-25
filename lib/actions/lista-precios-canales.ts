@@ -74,6 +74,27 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
     if (v.fecha >= corte) ventas30d[v.modelo] = (ventas30d[v.modelo] ?? 0) + v.ventas
   }
 
+  // Autocuración: garantiza el ToDo "Vto BONO" de cada bono guardado (cubre
+  // bonos creados antes de la feature o si el sync del guardado falló)
+  try {
+    const { data: cfgTodos } = await supabase.from('flujo_config').select('value').eq('key', 'app_todos').single()
+    let todos = cfgTodos?.value ? JSON.parse(cfgTodos.value) : {}
+    if (!Array.isArray(todos)) {
+      const antes = JSON.stringify(todos)
+      for (const [id, bono] of Object.entries(bonos)) {
+        const nombre = productos.find(p => p.id === id)?.nombre ?? id
+        todos = aplicarTodoBono(todos as Record<string, TodoNotas[]>, id, `Vto BONO ${nombre}`, bono.hasta)
+      }
+      if (JSON.stringify(todos) !== antes) {
+        await supabase.from('flujo_config').upsert({
+          key: 'app_todos',
+          value: JSON.stringify(todos),
+          updated_at: new Date().toISOString(),
+        })
+      }
+    }
+  } catch { /* best-effort */ }
+
   return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos)
 }
 
