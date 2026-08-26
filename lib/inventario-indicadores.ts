@@ -79,6 +79,9 @@ export function normalizarModelo(nombre: string): string {
   let n = nombre.toLowerCase()
   n = n.replace(/\s*\+\s*.*/, '')
   n = n.replace(/\bcelular\b/g, '')
+  // la tienda a veces omite "Moto" en los Motorola ("Motorola Edge 60 Fusion"
+  // vs "Motorola Moto Edge 60 Fusion"): el token suelto no distingue modelos
+  n = n.replace(/\bmoto\b/g, '')
   n = n.replace(/(\d+)\s*(?:gb)?\s*\/\s*(\d+)\s*(?:gb)?/g, (_, a, b) => `${Math.max(Number(a), Number(b))}gb`)
   n = n.replace(/(\d+)\s+gb\b/g, '$1gb')
   return n.split(/\s+/).filter(Boolean).sort().join(' ')

@@ -103,6 +103,9 @@ describe('normalizarModelo', () => {
     expect(normalizarModelo('Motorola Moto G77 8/256GB 5G')).toBe(normalizarModelo('Motorola Moto G77 5G 256GB'))
     // sufijo de bundle
     expect(normalizarModelo('Motorola Moto G06 64GB + KIT de Seguridad GRATIS!')).toBe(normalizarModelo('Moto G06 Motorola 64gb'))
+    // la tienda omite "Moto" en algunos Motorola: mismo equipo con y sin la palabra
+    // (bug real 26/8: Edge 60 Fusion con 49 de stock aparecía como stock 0 en Modelos a comprar)
+    expect(normalizarModelo('Motorola Edge 60 Fusion 256GB')).toBe(normalizarModelo('Motorola Moto Edge 60 Fusion 256GB'))
   })
 
   it('no confunde modelos distintos', () => {
