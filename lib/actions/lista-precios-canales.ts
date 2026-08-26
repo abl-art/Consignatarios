@@ -83,7 +83,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
       const antes = JSON.stringify(todos)
       for (const [id, bono] of Object.entries(bonos)) {
         const nombre = productos.find(p => p.id === id)?.nombre ?? id
-        todos = aplicarTodoBono(todos as Record<string, TodoNotas[]>, id, `Vto BONO ${nombre}`, bono.hasta)
+        todos = aplicarTodoBono(todos as Record<string, TodoNotas[]>, id, nombre, bono.hasta, Number(bono.monto))
       }
       if (JSON.stringify(todos) !== antes) {
         await supabase.from('flujo_config').upsert({
@@ -128,8 +128,9 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
       const actualizados = aplicarTodoBono(
         todos as Record<string, TodoNotas[]>,
         productoId,
-        `Vto BONO ${nombre}`,
+        nombre,
         bono && Number(bono.monto) > 0 ? bono.hasta || undefined : undefined,
+        bono ? Number(bono.monto) : undefined,
       )
       await supabase.from('flujo_config').upsert({
         key: 'app_todos',

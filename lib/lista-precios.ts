@@ -51,31 +51,60 @@ export interface TodoNotas {
   prioridad?: 'normal' | 'negrita' | 'urgente'
 }
 
+const DIAS_RECLAMO_NC = 40
+
+function sumarDias(iso: string, dias: number): string {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
+function fechaCorta(iso: string): string {
+  const [, m, d] = iso.split('-')
+  return `${Number(d)}/${Number(m)}`
+}
+
 /**
- * Sincroniza el recordatorio "Vto BONO <modelo>" en los ToDos de /notas:
- * lo crea urgente (rojo y negrita) el día del vencimiento, lo muda si cambia
- * la fecha, y lo borra si se quita el bono — sin tocar los ya marcados hechos.
+ * Sincroniza los recordatorios del bono en los ToDos de /notas, ambos
+ * urgentes (rojo y negrita), mudándolos si cambia la fecha y borrándolos si
+ * se quita el bono — sin tocar los ya marcados hechos:
+ *   - "Vto BONO <modelo>" el día del vencimiento (reajustar precios)
+ *   - "NC bono del <vto> — <modelo>" 40 días después (reclamar la nota de
+ *     crédito a la marca)
  */
 export function aplicarTodoBono(
   todos: Record<string, TodoNotas[]>,
   productoId: string,
-  texto: string,
+  nombreModelo: string,
   hasta: string | undefined,
+  monto?: number,
 ): Record<string, TodoNotas[]> {
-  const id = `bono-${productoId}`
+  const montoTxt = monto ? ` ($${monto.toLocaleString('es-AR')})` : ''
+  const entradas: { id: string; fecha?: string; texto?: string }[] = hasta
+    ? [
+        { id: `bono-${productoId}`, fecha: hasta, texto: `Vto BONO ${nombreModelo}` },
+        {
+          id: `bono-nc-${productoId}`,
+          fecha: sumarDias(hasta, DIAS_RECLAMO_NC),
+          texto: `NC bono del ${fechaCorta(hasta)}${montoTxt} — ${nombreModelo}`,
+        },
+      ]
+    : [{ id: `bono-${productoId}` }, { id: `bono-nc-${productoId}` }]
+
   const resultado: Record<string, TodoNotas[]> = {}
   for (const [fecha, items] of Object.entries(todos)) {
     resultado[fecha] = Array.isArray(items)
-      ? items.filter(t => !(t.id === id && !t.done && fecha !== hasta))
+      ? items.filter(t => !entradas.some(e => e.id === t.id && !t.done && fecha !== e.fecha))
       : items
   }
-  if (hasta) {
-    const items = Array.isArray(resultado[hasta]) ? resultado[hasta] : []
-    const existente = items.find(t => t.id === id)
+  for (const e of entradas) {
+    if (!e.fecha || !e.texto) continue
+    const items = Array.isArray(resultado[e.fecha]) ? resultado[e.fecha] : []
+    const existente = items.find(t => t.id === e.id)
     if (existente) {
-      existente.text = texto
+      existente.text = e.texto
     } else {
-      resultado[hasta] = [...items, { id, text: texto, done: false, prioridad: 'urgente' }]
+      resultado[e.fecha] = [...items, { id: e.id, text: e.texto, done: false, prioridad: 'urgente' }]
     }
   }
   return resultado
