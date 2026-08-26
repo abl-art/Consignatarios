@@ -229,9 +229,11 @@ export function armarListaPrecios(
     let cuotaConBono: number | null = null
     let ncEsperada: number | null = null
     if (bono && pvp !== null) {
-      cuotaConBono = Math.ceil((pvp - bono.monto) / 9 / 100) * 100
-      pvpConBono = cuotaConBono * 9
+      // Al PVP se le descuenta solo la NC esperada (bono ÷ múltiplo), no el
+      // bono completo: la marca cubre esa parte y el margen no se pierde
       ncEsperada = bono.monto / multiplo
+      cuotaConBono = Math.ceil((pvp - ncEsperada) / 9 / 100) * 100
+      pvpConBono = cuotaConBono * 9
     }
     const pvpVigente = pvpConBono ?? pvp
 

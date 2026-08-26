@@ -196,8 +196,9 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
       <p className="text-xs text-gray-400 mt-3">
         * Proveedor alternativo (el preferido de la marca no tiene precio cargado). Dif. = Precio Tienda − PVP
         vigente (con bono si hay): en rojo, la tienda está vendiendo abajo del precio objetivo. Bono = monto con
-        IVA a nivel PVP, por modelo y con vencimiento; la cuota con bono también se redondea a centenas para
-        arriba. NC/u = nota de crédito esperada de la marca por unidad (bono ÷ múltiplo, neto de IVA y margen).
+        IVA informado por la marca, por modelo y con vencimiento. NC/u = nota de crédito esperada por unidad
+        (bono ÷ múltiplo, neto de IVA y margen). El PVP c/bono descuenta SOLO la NC esperada — no el bono
+        completo — así el margen no se pierde; la cuota con bono también se redondea a centenas para arriba.
       </p>
     </div>
   )

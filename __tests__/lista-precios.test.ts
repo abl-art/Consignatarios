@@ -123,15 +123,16 @@ describe('armarListaPrecios', () => {
     expect(fila.cuota).toBeNull()
   })
 
-  it('un bono vigente descuenta al PVP y re-redondea la cuota para arriba', () => {
-    // PVP base 484.200 − bono 50.000 = 434.200 → cuota 48.300 → PVP con bono 434.700
+  it('un bono vigente descuenta al PVP solo la NC esperada (el margen no se pierde)', () => {
+    // NC = 50.000/2 = 25.000 → PVP 484.200 − 25.000 = 459.200 → cuota 51.100 → PVP con bono 459.900
     const [fila] = armarListaPrecios(
       [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
       { p1: { monto: 50000, hasta: '2026-09-15' } }, new Date('2026-08-25'),
     )
     expect(fila.bonoMonto).toBe(50000)
-    expect(fila.cuotaConBono).toBe(48300)
-    expect(fila.pvpConBono).toBe(434700)
+    expect(fila.ncEsperada).toBe(25000)
+    expect(fila.cuotaConBono).toBe(51100)
+    expect(fila.pvpConBono).toBe(459900)
     expect(fila.pvpConBono! % 900).toBe(0)
   })
 
@@ -163,7 +164,7 @@ describe('armarListaPrecios', () => {
       { 'Motorola Moto G17 4/128GB': 484200 }, VENTAS,
       { p1: { monto: 50000 } }, new Date('2026-08-25'),
     )
-    expect(fila.diferencia).toBe(484200 - 434700)
+    expect(fila.diferencia).toBe(484200 - 459900)
   })
 
   const HOY = new Date('2026-08-26T12:00:00Z')
