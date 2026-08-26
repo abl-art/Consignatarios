@@ -23,6 +23,8 @@ interface DPDRow {
   dpd_31_60_monto: number
   dpd_60_plus_pct: number
   dpd_60_plus_monto: number
+  incobrable_pct: number
+  incobrable_monto: number
   total_vencido: number
 }
 
@@ -60,6 +62,7 @@ export default function DPDTab({ byOrigination, byDueMonth }: Props) {
     '8-30 dias': r.dpd_8_30_pct,
     '31-60 dias': r.dpd_31_60_pct,
     '+60 dias': r.dpd_60_plus_pct,
+    'Incobrable': r.incobrable_pct,
   }))
 
   return (
@@ -103,6 +106,8 @@ export default function DPDTab({ byOrigination, byDueMonth }: Props) {
                 <th className="text-right px-3 py-2 font-semibold text-gray-600 border-b border-gray-200">31-60 dias ($)</th>
                 <th className="text-right px-3 py-2 font-semibold text-gray-600 border-b border-gray-200">+60 dias (%)</th>
                 <th className="text-right px-3 py-2 font-semibold text-gray-600 border-b border-gray-200">+60 dias ($)</th>
+                <th className="text-right px-3 py-2 font-semibold text-red-700 border-b border-gray-200" title="Contracargos + equipos en transición 30+ días (orden completa, sin duplicar con los buckets de mora)">Incobrable (%)</th>
+                <th className="text-right px-3 py-2 font-semibold text-red-700 border-b border-gray-200">Incobrable ($)</th>
               </tr>
             </thead>
             <tbody>
@@ -117,6 +122,8 @@ export default function DPDTab({ byOrigination, byDueMonth }: Props) {
                   <td className="px-3 py-1.5 text-right text-gray-600">{formatearMoneda(row.dpd_31_60_monto)}</td>
                   <td className={`px-3 py-1.5 text-right font-medium ${pctColor(row.dpd_60_plus_pct)}`}>{row.dpd_60_plus_pct.toFixed(2)}%</td>
                   <td className="px-3 py-1.5 text-right text-gray-600">{formatearMoneda(row.dpd_60_plus_monto)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-red-700">{row.incobrable_pct.toFixed(2)}%</td>
+                  <td className="px-3 py-1.5 text-right text-red-700">{formatearMoneda(row.incobrable_monto)}</td>
                 </tr>
               ))}
             </tbody>
@@ -142,6 +149,7 @@ export default function DPDTab({ byOrigination, byDueMonth }: Props) {
               <Area type="monotone" dataKey="8-30 dias" stackId="1" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.7} />
               <Area type="monotone" dataKey="31-60 dias" stackId="1" stroke="#F97316" fill="#F97316" fillOpacity={0.7} />
               <Area type="monotone" dataKey="+60 dias" stackId="1" stroke="#EF4444" fill="#EF4444" fillOpacity={0.7} />
+              <Area type="monotone" dataKey="Incobrable" stackId="1" stroke="#7F1D1D" fill="#7F1D1D" fillOpacity={0.7} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

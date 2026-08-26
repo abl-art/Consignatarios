@@ -8,6 +8,8 @@ import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContr
 import { resumenVentasDia, proyectarVentasMensuales } from '@/lib/ventas-dia'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventario-resumen'
+import { fetchCuotasStats } from '@/lib/actions/finanzas'
+import { fetchOrdenesIncobrables } from '@/lib/gocelular'
 import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import SoporteCard from './SoporteCard'
@@ -22,7 +24,7 @@ export default async function DashboardPage() {
   const desde7d = daysAgo7.toISOString().slice(0, 10)
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -36,6 +38,8 @@ export default async function DashboardPage() {
     fetchVentasPorMarca(desde7d, hoy).catch(() => []),
     fetchTiempoEntrega().catch(() => ({ promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0, promedioEntrega30d: 0, medianaEntrega30d: 0, entregas30d: 0 })),
     fetchInventarioResumen().catch(() => ({ productos: [] })),
+    fetchCuotasStats().catch(() => ({ monto_contracargos: 0 })),
+    fetchOrdenesIncobrables().catch(() => [] as string[]),
   ])
 
   // Stock disponible: los mismos datos que /inventario (fuente única)
@@ -118,25 +122,28 @@ export default async function DashboardPage() {
       {/* Contracargos + Bloqueados vs Mora */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Contracargos</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Incobrables</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500 mb-1">Monto incobrable</p>
-              <p className="text-xl font-bold text-red-700">{formatearMoneda(contracargos.monto_contracargos)}</p>
+              <p className="text-xl font-bold text-red-700">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
-              <p className="text-xl font-bold text-red-700">{contracargos.porcentaje.toFixed(2)}%</p>
+              <p className="text-xl font-bold text-red-700">
+                {contracargos.monto_total_ventas > 0 ? ((cuotasStats.monto_contracargos / contracargos.monto_total_ventas) * 100).toFixed(2) : '0.00'}%
+              </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">Órdenes afectadas</p>
-              <p className="text-xl font-bold text-red-700">{contracargos.ordenes_afectadas}</p>
+              <p className="text-xs text-gray-500 mb-1">Órdenes castigadas</p>
+              <p className="text-xl font-bold text-red-700">{ordenesIncobrables.length}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">Contracargos</p>
               <p className="text-xl font-bold text-red-700">{contracargos.cantidad}</p>
             </div>
           </div>
+          <p className="text-xs text-gray-400 mt-2">Contracargos + mora 120+ días + equipos en transición 30+ días (misma fuente que Finanzas)</p>
         </div>
 
         {/* Bloqueados vs Mora */}

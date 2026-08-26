@@ -630,10 +630,18 @@ export async function fetchCuotasStats(): Promise<{
   const pool = getPool()
   if (!pool) return empty
 
-  // Get order IDs with real chargebacks
-  const { fetchOrderIdsConContracargo } = await import('@/lib/gocelular')
-  const cbOrderIds = await fetchOrderIdsConContracargo()
-  const cbOrderIdsList = cbOrderIds.length > 0 ? cbOrderIds.map(id => `'${id}'`).join(',') : "'0'"
+  // Órdenes incobrables: contracargos ∪ equipos en transición 30+ días (dedup).
+  // Sus cuotas salen de los buckets de mora y se castigan como incobrables.
+  const { fetchOrderIdsConContracargo, fetchOrderIdsTransicion30d } = await import('@/lib/gocelular')
+  const [cbOrderIds, transicionIds] = await Promise.all([
+    fetchOrderIdsConContracargo().catch(() => [] as string[]),
+    fetchOrderIdsTransicion30d().catch(() => [] as string[]),
+  ])
+  const cbSet = new Set(cbOrderIds)
+  const incobrablesIds = [...new Set([...cbOrderIds, ...transicionIds])]
+  const transicionSoloIds = transicionIds.filter(id => !cbSet.has(id))
+  const cbOrderIdsList = incobrablesIds.length > 0 ? incobrablesIds.map(id => `'${id}'`).join(',') : "'0'"
+  const transicionSoloList = transicionSoloIds.length > 0 ? transicionSoloIds.map(id => `'${id}'`).join(',') : "'0'"
 
   const client = await pool.connect()
   try {
@@ -728,7 +736,18 @@ export async function fetchCuotasStats(): Promise<{
         AND (CURRENT_DATE - i.installment_due_at::date) >= 120
     `)
     const montoMora120 = Number(mora120Res.rows[0].monto)
-    const montoIncobrableTotal = montoCBOrdenes + montoMora120
+
+    // Equipos en transición 30+ días (sin contracargo, para no duplicar): se
+    // castigan TODAS las cuotas pendientes de la orden, vencidas o no
+    const transicionRes = await client.query<{ monto: string }>(`
+      SELECT COALESCE(SUM(i.installment_amount), 0) AS monto
+      FROM gocuotas_installments i
+      WHERE i.order_id::text IN (${transicionSoloList})
+        AND i.installment_collected_at IS NULL
+        AND i.installment_discarded_at IS NULL
+    `)
+    const montoTransicion = Number(transicionRes.rows[0].monto)
+    const montoIncobrableTotal = montoCBOrdenes + montoMora120 + montoTransicion
 
     const pct = (n: number) => (total > 0 ? Math.round((n / total) * 10000) / 100 : 0)
 
@@ -890,6 +909,8 @@ interface DPDRow {
   dpd_31_60_monto: number
   dpd_60_plus_pct: number
   dpd_60_plus_monto: number
+  incobrable_pct: number
+  incobrable_monto: number
   total_vencido: number
 }
 
@@ -901,26 +922,40 @@ export async function fetchDPDIndicadores(): Promise<{
   const pool = getPool()
   if (!pool) return empty
 
+  // Órdenes incobrables (contracargos ∪ transición 30d): sus cuotas vencidas
+  // salen de los buckets por días y van a la columna Incobrable, sin duplicar
+  const { fetchOrdenesIncobrables } = await import('@/lib/gocelular')
+  const incobrablesIds = await fetchOrdenesIncobrables().catch(() => [] as string[])
+  const incobrablesList = incobrablesIds.length > 0 ? incobrablesIds.map(id => `'${id}'`).join(',') : "'0'"
+
   const baseQuery = (mesExpr: string) => `
     SELECT
       ${mesExpr} AS mes,
       SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS total_vencido,
       SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND o.order_id::text NOT IN (${incobrablesList})
         AND i.installment_due_at::date < CURRENT_DATE
         AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 1 AND 7
         THEN i.installment_amount ELSE 0 END) AS dpd_1_7,
       SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND o.order_id::text NOT IN (${incobrablesList})
         AND i.installment_due_at::date < CURRENT_DATE
         AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 8 AND 30
         THEN i.installment_amount ELSE 0 END) AS dpd_8_30,
       SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND o.order_id::text NOT IN (${incobrablesList})
         AND i.installment_due_at::date < CURRENT_DATE
         AND (CURRENT_DATE - i.installment_due_at::date) BETWEEN 31 AND 60
         THEN i.installment_amount ELSE 0 END) AS dpd_31_60,
       SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND o.order_id::text NOT IN (${incobrablesList})
         AND i.installment_due_at::date < CURRENT_DATE
         AND (CURRENT_DATE - i.installment_due_at::date) > 60
-        THEN i.installment_amount ELSE 0 END) AS dpd_60_plus
+        THEN i.installment_amount ELSE 0 END) AS dpd_60_plus,
+      SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
+        AND o.order_id::text IN (${incobrablesList})
+        AND i.installment_due_at::date < CURRENT_DATE
+        THEN i.installment_amount ELSE 0 END) AS dpd_incobrable
     FROM gocuotas_installments i
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
@@ -939,6 +974,7 @@ export async function fetchDPDIndicadores(): Promise<{
       dpd_8_30: string
       dpd_31_60: string
       dpd_60_plus: string
+      dpd_incobrable: string
     }
 
     const [resOrig, resDue] = await Promise.all([
@@ -955,6 +991,7 @@ export async function fetchDPDIndicadores(): Promise<{
           const d830 = Number(r.dpd_8_30)
           const d3160 = Number(r.dpd_31_60)
           const d60p = Number(r.dpd_60_plus)
+          const dInc = Number(r.dpd_incobrable)
           const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total * 100) * 100) / 100)
           return {
             mes: r.mes instanceof Date ? r.mes.toISOString().slice(0, 7) : String(r.mes).slice(0, 7),
@@ -966,6 +1003,8 @@ export async function fetchDPDIndicadores(): Promise<{
             dpd_31_60_monto: d3160,
             dpd_60_plus_pct: pct(d60p),
             dpd_60_plus_monto: d60p,
+            incobrable_pct: pct(dInc),
+            incobrable_monto: dInc,
             total_vencido: total,
           }
         })
@@ -1144,10 +1183,15 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
   const pool = getPool()
   if (!pool) return []
 
-  // Get order IDs with chargebacks to mark as incobrable
-  const { fetchOrderIdsConContracargo } = await import('@/lib/gocelular')
-  const cbOrderIds = await fetchOrderIdsConContracargo()
+  // Órdenes incobrables: contracargos (orden completa) + equipos en transición
+  // 30+ días (solo sus cuotas pendientes — las cobradas ya entraron)
+  const { fetchOrderIdsConContracargo, fetchOrderIdsTransicion30d } = await import('@/lib/gocelular')
+  const [cbOrderIds, transicionIds] = await Promise.all([
+    fetchOrderIdsConContracargo().catch(() => [] as string[]),
+    fetchOrderIdsTransicion30d().catch(() => [] as string[]),
+  ])
   const cbOrderIdsList = cbOrderIds.length > 0 ? cbOrderIds.map(id => `'${id}'`).join(',') : "'0'"
+  const transicionList = transicionIds.length > 0 ? transicionIds.map(id => `'${id}'`).join(',') : "'0'"
 
   const client = await pool.connect()
   try {
@@ -1179,7 +1223,8 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
               THEN (i.installment_collected_at::date - i.installment_due_at::date)
             ELSE NULL
           END AS days_late_paid,
-          CASE WHEN o.order_id::text IN (${cbOrderIdsList}) THEN true ELSE false END AS tiene_contracargo
+          CASE WHEN o.order_id::text IN (${cbOrderIdsList}) THEN true ELSE false END AS tiene_contracargo,
+          CASE WHEN o.order_id::text IN (${transicionList}) THEN true ELSE false END AS tiene_transicion
         FROM gocuotas_installments i
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
@@ -1198,6 +1243,7 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 60 AND 89 THEN 'RECUPERO_60_89'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 90 AND 119 THEN 'RECUPERO_90_119'
             WHEN collected_date IS NOT NULL AND days_late_paid >= 120 THEN 'RECUPERO_120_PLUS'
+            WHEN tiene_transicion AND collected_date IS NULL THEN 'INCOBRABLE_120_PLUS'
             WHEN collected_date IS NULL AND due_date >= CURRENT_DATE THEN 'POR_VENCER'
             WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 1 AND 29 THEN 'MORA_1_29'
             WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 30 AND 59 THEN 'MORA_30_59'

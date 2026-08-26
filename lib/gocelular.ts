@@ -592,6 +592,55 @@ export async function fetchOrderIdsConContracargo(): Promise<string[]> {
   }
 }
 
+/**
+ * Órdenes con equipo "en transición a bloqueado" hace 30+ días: en mora
+ * (cuota vencida >4 días, igual que Bloqueados vs Mora), estado Trustonic
+ * distinto de locked/idle/ready_for_use, y el último intento de bloqueo
+ * exitoso fue hace 30+ días sin confirmarse. Regla de Emiliano (26/8): esos
+ * equipos no vuelven a conectarse — la orden completa se castiga incobrable.
+ */
+export async function fetchOrderIdsTransicion30d(): Promise<string[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ order_id: string }>(
+      `SELECT DISTINCT d.order_id::text AS order_id
+       FROM devices d
+       JOIN gocuotas_orders o ON o.order_id = d.order_id
+       JOIN gocuotas_installments i ON i.order_id::text = o.order_id
+       WHERE i.installment_collected_at IS NULL
+         AND i.installment_discarded_at IS NULL
+         AND o.order_discarded_at IS NULL
+         AND i.installment_due_at < NOW() - INTERVAL '4 days'
+         AND (d.is_test_device = false OR d.is_test_device IS NULL)
+         AND d.trustonic_status::text NOT IN ('locked', 'idle', 'ready_for_use')
+         AND (SELECT MAX(dal.created_at) FROM device_actions_log dal
+              WHERE dal.device_imei = d.imei
+                AND dal.action_type::text = 'lock'
+                AND dal.result::text = 'success')
+             < NOW() - INTERVAL '30 days'`
+    )
+    return res.rows.map(r => r.order_id)
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Conjunto único de órdenes incobrables: contracargos ∪ transición 30d,
+ * deduplicado. Fuente única para Finanzas (Indicadores, DPD, PD, Vintage)
+ * y la tarjeta del Dashboard — cada orden se castiga una sola vez.
+ */
+export async function fetchOrdenesIncobrables(): Promise<string[]> {
+  const [cb, transicion] = await Promise.all([
+    fetchOrderIdsConContracargo().catch(() => []),
+    fetchOrderIdsTransicion30d().catch(() => []),
+  ])
+  return [...new Set([...cb, ...transicion])]
+}
+
 export interface VentaHistorica {
   fecha: string // YYYY-MM-DD
   store_name: string
