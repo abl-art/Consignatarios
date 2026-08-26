@@ -182,29 +182,29 @@ export default async function FinanzasPage({
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-8">
-          <div className="overflow-y-auto" style={{ maxHeight: '360px' }}>
-            <table className="w-full table-fixed" style={{ fontSize: '10px' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: '420px' }}>
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left px-0.5 py-1.5 font-semibold text-gray-500 w-[38px]">Fecha</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Adel</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Térm</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Atr</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Pend</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">Asist</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-green-600">May</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-blue-500">Proy</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Cel</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Lic</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Dsc</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Suel</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Env</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Int</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">Otr</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">V3</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-red-600">DCp</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Neto</th>
-                  <th className="text-right px-0.5 py-1.5 font-semibold text-gray-700">Saldo</th>
+                  <th className="text-left px-1.5 py-2.5 font-semibold text-gray-500 w-[56px]">Fecha</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Adel</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Térm</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Atr</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Pend</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Asist</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">May</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-blue-500">Proy</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Cel</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Lic</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Dsc</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Suel</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Env</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Int</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Otr</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">V3</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">DCp</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-gray-700">Neto</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-gray-700">Saldo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -213,25 +213,25 @@ export default async function FinanzasPage({
                   const esHoy = row.cash_date === hoy
                   return (
                   <tr key={i} className={`hover:bg-gray-50 ${esHoy ? 'bg-yellow-100' : ''}`}>
-                    <td className="px-0.5 py-0.5 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_adelantado)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_en_termino)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_atrasado)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_pendiente)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_asistencia)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-green-700">{fmtCompact(row.in_mayoristas)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-blue-600">{fmtCompact(row.in_proyectado)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_celulares)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_licencias)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_descartables)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_sueldos)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_envios)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_interes)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_otros)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_vta3ero)}</td>
-                    <td className="px-0.5 py-0.5 text-right text-red-700">{fmtCompact(row.out_dev_capital)}</td>
-                    <td className={`px-0.5 py-0.5 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.net_flow)}</td>
-                    <td className={`px-0.5 py-0.5 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.cash_balance)}</td>
+                    <td className="px-1.5 py-2 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_adelantado)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_en_termino)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_atrasado)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_pendiente)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_asistencia)}</td>
+                    <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_mayoristas)}</td>
+                    <td className="px-1.5 py-2 text-right text-blue-600">{fmtCompact(row.in_proyectado)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_celulares)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_licencias)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_descartables)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_sueldos)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_envios)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_interes)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_otros)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_vta3ero)}</td>
+                    <td className="px-1.5 py-2 text-right text-red-700">{fmtCompact(row.out_dev_capital)}</td>
+                    <td className={`px-1.5 py-2 text-right font-bold ${row.net_flow >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.net_flow)}</td>
+                    <td className={`px-1.5 py-2 text-right font-bold ${row.cash_balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtCompact(row.cash_balance)}</td>
                   </tr>
                   )
                 })}
@@ -275,7 +275,7 @@ export default async function FinanzasPage({
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-full mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
       <p className="text-sm text-gray-500 mb-6">Flujo de fondos y control de caja</p>
 
