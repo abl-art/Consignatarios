@@ -101,7 +101,8 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
 export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[] }) {
   const [marca, setMarca] = useState<string | null>(null)
   const marcas = [...new Set(filas.map(f => f.marca))].sort()
-  const visibles = marca ? filas.filter(f => f.marca === marca) : filas
+  const conBono = filas.filter(f => f.bonoMonto !== null)
+  const visibles = marca === '__bonos' ? conBono : marca ? filas.filter(f => f.marca === marca) : filas
 
   if (filas.length === 0) {
     return <p className="text-sm text-gray-500">No hay modelos con ventas en los últimos 30 días.</p>
@@ -121,6 +122,16 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
             {m ?? 'Todas'}
           </button>
         ))}
+        {conBono.length > 0 && (
+          <button
+            onClick={() => setMarca('__bonos')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              marca === '__bonos' ? 'bg-violet-700 text-white border-violet-700' : 'bg-violet-50 text-violet-700 border-violet-200 hover:border-violet-400'
+            }`}
+          >
+            Bonos ({conBono.length})
+          </button>
+        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
