@@ -59,6 +59,14 @@ function sumarDias(iso: string, dias: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Sábado → lunes (+2), domingo → lunes (+1): los recordatorios caen en día hábil
+function aDiaHabil(iso: string): string {
+  const dow = new Date(iso + 'T00:00:00Z').getUTCDay()
+  if (dow === 6) return sumarDias(iso, 2)
+  if (dow === 0) return sumarDias(iso, 1)
+  return iso
+}
+
 function fechaCorta(iso: string): string {
   const [, m, d] = iso.split('-')
   return `${Number(d)}/${Number(m)}`
@@ -66,11 +74,15 @@ function fechaCorta(iso: string): string {
 
 /**
  * Sincroniza los recordatorios del bono en los ToDos de /notas, ambos
- * urgentes (rojo y negrita), mudándolos si cambia la fecha y borrándolos si
- * se quita el bono — sin tocar los ya marcados hechos:
+ * urgentes (rojo y negrita) y siempre en día hábil (finde → lunes):
  *   - "Vto BONO <modelo>" el día del vencimiento (reajustar precios)
- *   - "NC bono del <vto> — <modelo>" 40 días después (reclamar la nota de
- *     crédito a la marca)
+ *   - "NC bono del <vto> ($monto) — <modelo>" 40 días después (reclamar la NC)
+ *
+ * El id lleva el vencimiento (bono-<id>-<hasta>): cada bono es un registro
+ * propio. Mientras el bono está vigente sus pendientes se mudan/actualizan al
+ * editarlo y se borran al quitarlo; cuando el bono VENCE quedan FIJOS para
+ * siempre — un bono nuevo del mismo modelo no pisa la historia del anterior.
+ * Los marcados hechos nunca se tocan.
  */
 export function aplicarTodoBono(
   todos: Record<string, TodoNotas[]>,
@@ -78,27 +90,42 @@ export function aplicarTodoBono(
   nombreModelo: string,
   hasta: string | undefined,
   monto?: number,
+  hoy: Date = new Date(),
 ): Record<string, TodoNotas[]> {
+  const hoyIso = hoy.toISOString().slice(0, 10)
+  // Bono ya vencido: su historia está congelada, no se toca nada
+  if (hasta && hasta < hoyIso) return todos
+
   const montoTxt = monto ? ` ($${monto.toLocaleString('es-AR')})` : ''
-  const entradas: { id: string; fecha?: string; texto?: string }[] = hasta
+  const entradas: { id: string; fecha: string; texto: string }[] = hasta
     ? [
-        { id: `bono-${productoId}`, fecha: hasta, texto: `Vto BONO ${nombreModelo}` },
+        { id: `bono-${productoId}-${hasta}`, fecha: aDiaHabil(hasta), texto: `Vto BONO ${nombreModelo}` },
         {
-          id: `bono-nc-${productoId}`,
-          fecha: sumarDias(hasta, DIAS_RECLAMO_NC),
+          id: `bono-nc-${productoId}-${hasta}`,
+          fecha: aDiaHabil(sumarDias(hasta, DIAS_RECLAMO_NC)),
           texto: `NC bono del ${fechaCorta(hasta)}${montoTxt} — ${nombreModelo}`,
         },
       ]
-    : [{ id: `bono-${productoId}` }, { id: `bono-nc-${productoId}` }]
+    : []
+
+  // ids de este producto: bono-<id>[-fecha] / bono-nc-<id>[-fecha] (sin fecha = formato viejo)
+  const idRe = new RegExp(`^bono(?:-nc)?-${productoId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:-(\\d{4}-\\d{2}-\\d{2}))?$`)
+  const esRemovible = (t: TodoNotas, fecha: string): boolean => {
+    if (t.done) return false
+    const m = t.id.match(idRe)
+    if (!m) return false
+    const vtoEmbebido = m[1]
+    if (vtoEmbebido && vtoEmbebido < hoyIso) return false // bono vencido: fijo
+    // pendiente de bono vigente (o formato viejo): se remueve salvo que sea
+    // exactamente la entrada actual en su lugar correcto
+    return !entradas.some(e => e.id === t.id && e.fecha === fecha)
+  }
 
   const resultado: Record<string, TodoNotas[]> = {}
   for (const [fecha, items] of Object.entries(todos)) {
-    resultado[fecha] = Array.isArray(items)
-      ? items.filter(t => !entradas.some(e => e.id === t.id && !t.done && fecha !== e.fecha))
-      : items
+    resultado[fecha] = Array.isArray(items) ? items.filter(t => !esRemovible(t, fecha)) : items
   }
   for (const e of entradas) {
-    if (!e.fecha || !e.texto) continue
     const items = Array.isArray(resultado[e.fecha]) ? resultado[e.fecha] : []
     const existente = items.find(t => t.id === e.id)
     if (existente) {
