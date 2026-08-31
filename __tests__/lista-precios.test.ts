@@ -345,6 +345,36 @@ describe('armarListaPrecios', () => {
     })
   })
 
+  describe('modelos fijados manualmente (desplegable Agregar modelo)', () => {
+    const COSTOS_FIJADO = { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }
+
+    it('un modelo sin ventas pero fijado aparece en la lista con fijado=true', () => {
+      const filas = armarListaPrecios(
+        [producto()], COSTOS_FIJADO, {}, {}, {}, // sin ventas
+        {}, new Date('2026-08-25'), [], ['p1'],
+      )
+      expect(filas).toHaveLength(1)
+      expect(filas[0].ventas30d).toBe(0)
+      expect(filas[0].fijado).toBe(true)
+      expect(filas[0].pvp).toBe(484200) // calcula precios como cualquier fila
+    })
+
+    it('un modelo con ventas y no fijado sale con fijado=false; fijado con ventas mantiene fijado=true', () => {
+      const filas = armarListaPrecios(
+        [producto(), producto({ id: 'p2', nombre: 'Motorola Moto G67 4/256GB' })],
+        COSTOS_FIJADO, {}, {}, { ...VENTAS, 'Motorola Moto G67 4/256GB': 5 },
+        {}, new Date('2026-08-25'), [], ['p2'],
+      )
+      expect(filas.find(f => f.productoId === 'p1')?.fijado).toBe(false)
+      expect(filas.find(f => f.productoId === 'p2')?.fijado).toBe(true)
+    })
+
+    it('sin ventas y sin fijar sigue sin aparecer', () => {
+      const filas = armarListaPrecios([producto()], COSTOS_FIJADO, {}, {}, {})
+      expect(filas).toHaveLength(0)
+    })
+  })
+
   describe('armarHistorialBonos (pestaña Bonos)', () => {
     const HOY_HIST = new Date('2026-08-25')
     const registro = (over: Partial<BonoRegistro> = {}): BonoRegistro => ({

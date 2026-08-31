@@ -1,13 +1,15 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getListaPrecios, getHistorialBonos } from '@/lib/actions/lista-precios-canales'
+import { getListaPrecios, getHistorialBonos, getModelosCelulares } from '@/lib/actions/lista-precios-canales'
 import ListaPreciosTable from './ListaPreciosTable'
 import BonosHistorialTable from './BonosHistorialTable'
 import TabsListaBonos from './TabsListaBonos'
 
 export default async function ListaPreciosPage() {
-  const [filas, bonos] = await Promise.all([getListaPrecios(), getHistorialBonos()])
+  const [filas, bonos, modelos] = await Promise.all([getListaPrecios(), getHistorialBonos(), getModelosCelulares()])
+  const enLista = new Set(filas.map(f => f.productoId))
+  const agregables = modelos.filter(m => !enLista.has(m.id))
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
@@ -21,7 +23,7 @@ export default async function ListaPreciosPage() {
       </p>
       <TabsListaBonos
         cantidadBonos={bonos.length}
-        lista={<ListaPreciosTable filas={filas} />}
+        lista={<ListaPreciosTable filas={filas} agregables={agregables} />}
         bonos={<BonosHistorialTable bonos={bonos} />}
       />
     </div>

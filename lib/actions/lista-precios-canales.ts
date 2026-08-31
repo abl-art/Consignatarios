@@ -32,6 +32,19 @@ import {
 
 const MULTIPLO_KEY = 'listaprecios_multiplo_'
 const BONO_KEY = 'listaprecios_bono_'
+// JSON array de producto_ids fijados a mano (aparecen aunque no vendan)
+const INCLUIDOS_KEY = 'listaprecios_incluidos'
+
+function parseIncluidos(cfg: { key: string; value: string }[] | null | undefined): string[] {
+  const row = (cfg ?? []).find(r => r.key === INCLUIDOS_KEY)
+  if (!row) return []
+  try {
+    const ids = JSON.parse(row.value)
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 interface BonoRow {
   id: string
@@ -199,7 +212,37 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
     }
   } catch { /* best-effort */ }
 
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, new Date(), ventasPropias)
+  const incluidos = parseIncluidos((cfg ?? []) as { key: string; value: string }[])
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, new Date(), ventasPropias, incluidos)
+}
+
+/** Catálogo de celulares (no ocultos) para el desplegable "Agregar modelo". */
+export async function getModelosCelulares(): Promise<{ id: string; nombre: string }[]> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('compras_productos')
+    .select('id, nombre, oculto')
+    .eq('categoria', 'Celulares')
+    .order('nombre')
+  return (data ?? [])
+    .filter(p => !p.oculto)
+    .map(p => ({ id: p.id as string, nombre: p.nombre as string }))
+}
+
+/** Fija o quita un modelo agregado a mano en la Lista de Precios. */
+export async function setModeloFijado(productoId: string, fijado: boolean) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('key, value').eq('key', INCLUIDOS_KEY)
+  const actuales = parseIncluidos(data as { key: string; value: string }[])
+  const nuevos = fijado ? [...new Set([...actuales, productoId])] : actuales.filter(id => id !== productoId)
+  const { error } = await supabase.from('flujo_config').upsert({
+    key: INCLUIDOS_KEY,
+    value: JSON.stringify(nuevos),
+    updated_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/canales/lista-precios')
+  return { ok: true }
 }
 
 /** Filas de la pestaña Bonos: historial completo de campañas con estado y NC. */

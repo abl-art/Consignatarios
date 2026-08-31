@@ -170,6 +170,7 @@ export interface FilaListaPrecios {
   precioTienda: number | null
   diferencia: number | null
   ventas30d: number
+  fijado: boolean // agregado a mano por el desplegable (aparece aunque no venda)
   bonoMonto: number | null
   bonoDesde: string | null
   bonoHasta: string | null
@@ -282,15 +283,17 @@ export function armarListaPrecios(
   bonos: Record<string, BonoModelo> = {},
   hoy: Date = new Date(),
   ventasPropiasDiarias: VentaPropiaDiaria[] = [],
+  incluidos: string[] = [],
 ): FilaListaPrecios[] {
   const tienda = porClaveNormalizada(preciosTienda)
   const ventas = porClaveNormalizada(ventas30dPorNombre)
+  const fijados = new Set(incluidos)
 
   const filas: FilaListaPrecios[] = []
   for (const p of productos) {
     const clave = normalizarModelo(p.nombre)
     const ventas30d = ventas.get(clave) ?? 0
-    if (ventas30d === 0) continue
+    if (ventas30d === 0 && !fijados.has(p.id)) continue
 
     const marca = normalizarMarca(p.nombre.split(/\s+/)[0] ?? null) ?? '—'
     const eleccion = elegirCosto(marca, costosPorProducto[p.id] ?? [])
@@ -353,6 +356,7 @@ export function armarListaPrecios(
       precioTienda,
       diferencia: precioTienda !== null && pvpVigente !== null ? precioTienda - pvpVigente : null,
       ventas30d,
+      fijado: fijados.has(p.id),
       bonoMonto: bono && pvp !== null ? bono.monto : null,
       bonoDesde: bono && pvp !== null ? bono.desde ?? null : null,
       bonoHasta: bono && pvp !== null ? bono.hasta ?? null : null,

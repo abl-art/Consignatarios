@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaListaPrecios } from '@/lib/lista-precios'
-import { setMultiploListaPrecios, setBonoListaPrecios } from '@/lib/actions/lista-precios-canales'
+import { setMultiploListaPrecios, setBonoListaPrecios, setModeloFijado } from '@/lib/actions/lista-precios-canales'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
 
@@ -135,13 +135,58 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   )
 }
 
-export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[] }) {
+function AgregarModelo({ agregables }: { agregables: { id: string; nombre: string }[] }) {
+  const router = useRouter()
+  const [agregando, startTransition] = useTransition()
+
+  if (agregables.length === 0) return null
+  return (
+    <select
+      value=""
+      disabled={agregando}
+      onChange={e => {
+        const id = e.target.value
+        if (!id) return
+        startTransition(async () => {
+          await setModeloFijado(id, true)
+          router.refresh()
+        })
+      }}
+      className="px-3 py-1.5 rounded-full text-sm border border-dashed border-gray-400 text-gray-600 bg-white hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
+      title="Fijar un modelo sin ventas recientes para que aparezca en la lista"
+    >
+      <option value="">{agregando ? 'Agregando…' : '+ Agregar modelo'}</option>
+      {agregables.map(p => (
+        <option key={p.id} value={p.id}>{p.nombre}</option>
+      ))}
+    </select>
+  )
+}
+
+function QuitarFijado({ fila }: { fila: FilaListaPrecios }) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  return (
+    <button
+      onClick={() => startTransition(async () => {
+        await setModeloFijado(fila.productoId, false)
+        router.refresh()
+      })}
+      className="ml-1.5 text-gray-300 hover:text-red-500 text-xs font-bold align-middle"
+      title="Quitar de la lista (agregado a mano)"
+    >
+      ✕
+    </button>
+  )
+}
+
+export default function ListaPreciosTable({ filas, agregables = [] }: { filas: FilaListaPrecios[]; agregables?: { id: string; nombre: string }[] }) {
   const [marca, setMarca] = useState<string | null>(null)
   const marcas = [...new Set(filas.map(f => f.marca))].sort()
   const conBono = filas.filter(f => f.bonoMonto !== null || f.bonoEstado === 'agotado')
   const visibles = marca === '__bonos' ? conBono : marca ? filas.filter(f => f.marca === marca) : filas
 
-  if (filas.length === 0) {
+  if (filas.length === 0 && agregables.length === 0) {
     return <p className="text-sm text-gray-500">No hay modelos con ventas en los últimos 30 días.</p>
   }
 
@@ -159,6 +204,7 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
             {m ?? 'Todas'}
           </button>
         ))}
+        <AgregarModelo agregables={agregables} />
         {conBono.length > 0 && (
           <button
             onClick={() => setMarca('__bonos')}
@@ -195,6 +241,7 @@ export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[]
               <tr key={f.productoId} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5">
                   <span className="font-medium text-gray-900">{f.nombre}</span>
+                  {f.fijado && <QuitarFijado fila={f} />}
                   <span className="block text-xs text-gray-400">
                     {f.codigo && <span className="font-mono">{f.codigo} · </span>}
                     {f.proveedor ? (
