@@ -3,6 +3,7 @@ import {
   armarListaPrecios,
   armarHistorialBonos,
   aplicarTodoBono,
+  bonosParaReajustar,
   elegirCosto,
   recortarVentasACupo,
   type BonoRegistro,
@@ -437,6 +438,55 @@ describe('armarListaPrecios', () => {
         HOY_HIST,
       )
       expect(filas.map(f => f.id)).toEqual(['nuevo', 'viejo'])
+    })
+  })
+
+  describe('bonosParaReajustar (cron de reposición de precio)', () => {
+    const reg = (over: Partial<BonoRegistro> = {}): BonoRegistro => ({
+      id: 'b1',
+      productoId: 'p1',
+      nombreModelo: 'Nubia Music 2 128/4GB',
+      monto: 60000,
+      desde: '2026-08-01',
+      hasta: '2026-08-31',
+      cupo: 300,
+      ...over,
+    })
+    const HOY = '2026-09-01' // el 31/8 acaba de terminar en Argentina
+
+    it('un bono cuyo hasta acaba de terminar se reajusta con motivo vencido', () => {
+      const r = bonosParaReajustar([reg()], [], HOY)
+      expect(r).toEqual([{ registro: reg(), motivo: 'vencido' }])
+    })
+
+    it('uno ya marcado como repuesto no se vuelve a publicar', () => {
+      const r = bonosParaReajustar([reg({ precioRepuestoAt: '2026-09-01T03:00:05.000Z' })], [], HOY)
+      expect(r).toHaveLength(0)
+    })
+
+    it('vencimientos viejos (más de 3 días) no se tocan aunque no tengan marca', () => {
+      const r = bonosParaReajustar([reg({ hasta: '2026-08-20' })], [], HOY)
+      expect(r).toHaveLength(0)
+    })
+
+    it('un bono vigente que agotó el cupo se reajusta con motivo agotado', () => {
+      const ventas: VentaPropiaDiaria[] = [{ fecha: '2026-08-20', modelo: 'Nubia Music 2 128/4GB', ventas: 300 }]
+      const r = bonosParaReajustar([reg({ hasta: '2026-09-15' })], ventas, HOY)
+      expect(r).toEqual([{ registro: reg({ hasta: '2026-09-15' }), motivo: 'agotado' }])
+    })
+
+    it('un bono vigente con cupo sin llenar no se toca', () => {
+      const ventas: VentaPropiaDiaria[] = [{ fecha: '2026-08-20', modelo: 'Nubia Music 2 128/4GB', ventas: 299 }]
+      expect(bonosParaReajustar([reg({ hasta: '2026-09-15' })], ventas, HOY)).toHaveLength(0)
+    })
+
+    it('un bono vigente sin cupo no se toca aunque venda mucho', () => {
+      const ventas: VentaPropiaDiaria[] = [{ fecha: '2026-08-20', modelo: 'Nubia Music 2 128/4GB', ventas: 999 }]
+      expect(bonosParaReajustar([reg({ hasta: '2026-09-15', cupo: undefined })], ventas, HOY)).toHaveLength(0)
+    })
+
+    it('un bono futuro no se toca', () => {
+      expect(bonosParaReajustar([reg({ desde: '2026-09-10', hasta: '2026-09-20' })], [], HOY)).toHaveLength(0)
     })
   })
 

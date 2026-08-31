@@ -70,6 +70,15 @@ export interface TodoNotas {
 
 const DIAS_RECLAMO_NC = 40
 
+/**
+ * "Ahora" corrido a hora argentina (UTC−3): al hacer .toISOString().slice(0,10)
+ * da la fecha de Argentina. Sin esto, los bonos vencían a las 21:00 ART (cuando
+ * UTC ya pasó de día) en vez de a medianoche.
+ */
+export function ahoraArgentina(): Date {
+  return new Date(Date.now() - 3 * 3600000)
+}
+
 function sumarDias(iso: string, dias: number): string {
   const d = new Date(iso + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() + dias)
@@ -225,6 +234,7 @@ export interface BonoRegistro extends BonoModelo {
   nombreModelo: string
   pdfUrl?: string | null
   pdfGeneradoAt?: string | null
+  precioRepuestoAt?: string | null // cuándo el cron repuso el precio pleno en la tienda
 }
 
 export interface FilaHistorialBono extends BonoRegistro {
@@ -265,6 +275,43 @@ export function armarHistorialBonos(
 }
 
 export type EstadoBono = 'futuro' | 'vigente' | 'agotado' | 'vencido'
+
+// El cron no revive vencimientos viejos: si una campaña quedó sin marca (bono
+// anterior al cron, o cron caído varios días) el precio ya se ajustó a mano.
+const DIAS_VENTANA_REAJUSTE = 3
+
+export interface BonoAReajustar {
+  registro: BonoRegistro
+  motivo: 'vencido' | 'agotado'
+}
+
+/**
+ * Campañas cuyo precio pleno hay que reponer en la tienda: las que vencieron
+ * en los últimos días (el cron corre a las 00:00 ART del día siguiente) y las
+ * vigentes que agotaron el cupo (cada unidad vendida de más pierde el bono
+ * entero de MUP). Las ya marcadas (precioRepuestoAt) no se repiten.
+ */
+export function bonosParaReajustar(
+  registros: BonoRegistro[],
+  ventasPropias: VentaPropiaDiaria[],
+  hoyIso: string,
+): BonoAReajustar[] {
+  const corteVentana = sumarDias(hoyIso, -DIAS_VENTANA_REAJUSTE)
+  const resultado: BonoAReajustar[] = []
+  for (const r of registros) {
+    if (r.precioRepuestoAt) continue
+    if (r.hasta && r.hasta < hoyIso) {
+      if (r.hasta >= corteVentana) resultado.push({ registro: r, motivo: 'vencido' })
+      continue
+    }
+    if (r.desde && r.desde > hoyIso) continue // futuro
+    if (r.cupo) {
+      const vendidas = contarVendidasBono(r, normalizarModelo(r.nombreModelo), ventasPropias)
+      if (vendidas >= r.cupo) resultado.push({ registro: r, motivo: 'agotado' })
+    }
+  }
+  return resultado
+}
 
 export function estadoBono(bono: BonoModelo, vendidas: number, hoy: Date): EstadoBono {
   const dia = hoy.toISOString().slice(0, 10)

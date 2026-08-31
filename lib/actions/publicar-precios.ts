@@ -15,7 +15,9 @@ import {
   type LineaPrecio,
   type PricesRespuesta,
 } from '@/lib/gocelular-prices'
-import { getListaPrecios } from './lista-precios-canales'
+import { fetchVentasPropiasPorModelo } from '@/lib/gocelular'
+import { ahoraArgentina, bonosParaReajustar } from '@/lib/lista-precios'
+import { getListaPrecios, getBonosRegistros, marcarPrecioRepuesto, agregarTodosReajuste } from './lista-precios-canales'
 
 const SOURCE = 'consignacion-app'
 
@@ -82,6 +84,94 @@ export async function aplicarPublicacionPrecios(batchReference: string, lineas: 
     lines: lineas,
   })
   return { respuesta: r.body, status: r.status, error: r.ok ? undefined : mensajeError(r.status, r.body) }
+}
+
+export interface ResultadoReajuste {
+  hoy: string
+  pendientes: { modelo: string; motivo: 'vencido' | 'agotado' }[]
+  publicados?: string[]
+  sinPublicar?: string[]
+  dry?: boolean
+  respuesta?: PricesRespuesta | null
+  error?: string
+}
+
+/**
+ * Cron de reposición de precio pleno: campañas vencidas (a la medianoche ART
+ * del día siguiente al `hasta`) o con cupo agotado (chequeado cada corrida)
+ * se publican en la tienda al PVP sin bono. Con dry=true llega hasta el
+ * preview y no escribe ni marca nada.
+ */
+export async function reajustarPreciosBonos(opts?: { dry?: boolean; fecha?: string }): Promise<ResultadoReajuste> {
+  const hoy = opts?.fecha ?? ahoraArgentina().toISOString().slice(0, 10)
+  const [registros, ventasPropias] = await Promise.all([
+    getBonosRegistros(),
+    fetchVentasPropiasPorModelo().catch(() => []),
+  ])
+  const aReajustar = bonosParaReajustar(registros, ventasPropias, hoy)
+  const pendientes = aReajustar.map(p => ({ modelo: p.registro.nombreModelo, motivo: p.motivo }))
+  if (aReajustar.length === 0) return { hoy, pendientes }
+
+  const [filas, cat] = await Promise.all([getListaPrecios(), fetchCatalogoPrecios()])
+  const fallar = async (error: string): Promise<ResultadoReajuste> => {
+    if (!opts?.dry) {
+      await agregarTodosReajuste(aReajustar.map(p => ({
+        id: `cron-reajuste-fail-${p.registro.id}`,
+        texto: `Falló el reajuste automático de precio — ${p.registro.nombreModelo} (${p.motivo}): ${error}. Publicar a mano desde Lista de Precios.`,
+        urgente: true,
+      })))
+    }
+    return { hoy, pendientes, error }
+  }
+
+  if (!cat.ok || !cat.body?.products) return fallar(`catálogo HTTP ${cat.status}${cat.body?.code ? ` ${cat.body.code}` : ''}`)
+
+  const objetivo = new Map(aReajustar.map(p => [p.registro.productoId, p.registro]))
+  const filasObjetivo = filas.filter(f => objetivo.has(f.productoId))
+  const { mapeadas, sinMapear } = mapearProductosTienda(filasObjetivo, cat.body.products)
+  const { lineas, excluidas } = armarLineasPrecios(mapeadas)
+
+  const enLinea = new Set(mapeadas.filter(m => lineas.some(l => l.store_product_id === m.producto.store_product_id)).map(m => m.fila.productoId))
+  const enListaIds = new Set(filasObjetivo.map(f => f.productoId))
+  const sinPublicar = aReajustar
+    .filter(p => !enLinea.has(p.registro.productoId))
+    .map(p => `${p.registro.nombreModelo} (${!enListaIds.has(p.registro.productoId) ? 'no está en la lista' : sinMapear.some(f => f.productoId === p.registro.productoId) ? 'sin producto en la tienda' : excluidas.some(f => f.productoId === p.registro.productoId) ? 'sin PVP calculable' : 'sin línea'})`)
+
+  if (lineas.length === 0) return fallar(`sin líneas publicables: ${sinPublicar.join('; ')}`)
+
+  const ahora = ahoraArgentina()
+  const batchReference = `CRON-${hoy}-${ahora.toISOString().slice(11, 19).replace(/:/g, '')}`
+  const base = { batch_reference: batchReference, source: SOURCE, timestamp: buildTimestamp(), lines: lineas }
+
+  const prev = await enviarListaPrecios({ ...base, mode: 'preview' })
+  if (!prev.ok) return fallar(`preview: ${mensajeError(prev.status, prev.body)}`)
+  if (opts?.dry) return { hoy, pendientes, dry: true, respuesta: prev.body, sinPublicar }
+
+  const r = await enviarListaPrecios({ ...base, mode: 'apply' })
+  if (!r.ok) return fallar(`apply: ${mensajeError(r.status, r.body)}`)
+
+  const publicadosIds = aReajustar.filter(p => enLinea.has(p.registro.productoId)).map(p => p.registro.id)
+  await marcarPrecioRepuesto(publicadosIds)
+  await agregarTodosReajuste([
+    ...aReajustar.filter(p => enLinea.has(p.registro.productoId)).map(p => ({
+      id: `cron-reajuste-ok-${p.registro.id}`,
+      texto: `Precio repuesto en tienda — ${p.registro.nombreModelo} (bono ${p.motivo === 'vencido' ? 'vencido' : 'con cupo agotado'})`,
+      urgente: false,
+    })),
+    ...aReajustar.filter(p => !enLinea.has(p.registro.productoId)).map(p => ({
+      id: `cron-reajuste-fail-${p.registro.id}`,
+      texto: `No se pudo reponer el precio — ${p.registro.nombreModelo}: revisar y publicar a mano.`,
+      urgente: true,
+    })),
+  ])
+
+  return {
+    hoy,
+    pendientes,
+    publicados: aReajustar.filter(p => enLinea.has(p.registro.productoId)).map(p => p.registro.nombreModelo),
+    sinPublicar,
+    respuesta: r.body,
+  }
 }
 
 function mensajeError(status: number, body: PricesRespuesta | null): string {

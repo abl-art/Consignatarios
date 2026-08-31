@@ -17,6 +17,7 @@ import {
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
 import {
+  ahoraArgentina,
   aplicarTodoBono,
   armarHistorialBonos,
   armarListaPrecios,
@@ -56,6 +57,7 @@ interface BonoRow {
   cupo: number | null
   pdf_url: string | null
   pdf_generado_at: string | null
+  precio_repuesto_at: string | null
 }
 
 function mapBonoRow(r: BonoRow): BonoRegistro {
@@ -69,11 +71,13 @@ function mapBonoRow(r: BonoRow): BonoRegistro {
     cupo: r.cupo ?? undefined,
     pdfUrl: r.pdf_url,
     pdfGeneradoAt: r.pdf_generado_at,
+    precioRepuestoAt: r.precio_repuesto_at,
   }
 }
 
 function hoyIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  // fecha argentina: el bono vale hasta las 23:59 ART del día `hasta`
+  return ahoraArgentina().toISOString().slice(0, 10)
 }
 
 // El bono que aplica hoy en la lista: la fila cuya vigencia incluye la fecha
@@ -92,6 +96,47 @@ function bonosVigentesPorProducto(registros: BonoRegistro[]): Record<string, Bon
 async function fetchBonosRegistros(supabase: ReturnType<typeof createAdminClient>): Promise<BonoRegistro[]> {
   const { data } = await supabase.from('lista_precios_bonos').select('*')
   return ((data ?? []) as BonoRow[]).map(mapBonoRow)
+}
+
+/** Todas las campañas de bono (para el cron de reajuste y otros consumidores). */
+export async function getBonosRegistros(): Promise<BonoRegistro[]> {
+  return fetchBonosRegistros(createAdminClient())
+}
+
+/** Marca campañas como "precio repuesto en tienda" (el cron no las repite). */
+export async function marcarPrecioRepuesto(bonoIds: string[]): Promise<void> {
+  if (!bonoIds.length) return
+  const supabase = createAdminClient()
+  await supabase
+    .from('lista_precios_bonos')
+    .update({ precio_repuesto_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .in('id', bonoIds)
+}
+
+/** Agrega ToDos del cron de reajuste a la pestaña ToDo de /notas (best-effort). */
+export async function agregarTodosReajuste(
+  entradas: { id: string; texto: string; urgente: boolean }[],
+): Promise<void> {
+  if (!entradas.length) return
+  const supabase = createAdminClient()
+  try {
+    const { data: cfgTodos } = await supabase.from('flujo_config').select('value').eq('key', 'app_todos').single()
+    const todos = cfgTodos?.value ? JSON.parse(cfgTodos.value) : {}
+    if (Array.isArray(todos)) return
+    const fecha = hoyIso()
+    const items: TodoNotas[] = Array.isArray(todos[fecha]) ? todos[fecha] : []
+    for (const e of entradas) {
+      if (!items.some((t: TodoNotas) => t.id === e.id)) {
+        items.push({ id: e.id, text: e.texto, done: false, prioridad: e.urgente ? 'urgente' : 'normal' })
+      }
+    }
+    todos[fecha] = items
+    await supabase.from('flujo_config').upsert({
+      key: 'app_todos',
+      value: JSON.stringify(todos),
+      updated_at: new Date().toISOString(),
+    })
+  } catch { /* best-effort */ }
 }
 
 // Migración lazy de las keys viejas listaprecios_bono_<id> de flujo_config a
@@ -200,7 +245,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
       const antes = JSON.stringify(todos)
       for (const [id, bono] of Object.entries(bonos)) {
         const nombre = productos.find(p => p.id === id)?.nombre ?? id
-        todos = aplicarTodoBono(todos as Record<string, TodoNotas[]>, id, nombre, bono.hasta, Number(bono.monto))
+        todos = aplicarTodoBono(todos as Record<string, TodoNotas[]>, id, nombre, bono.hasta, Number(bono.monto), ahoraArgentina())
       }
       if (JSON.stringify(todos) !== antes) {
         await supabase.from('flujo_config').upsert({
@@ -213,7 +258,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   } catch { /* best-effort */ }
 
   const incluidos = parseIncluidos((cfg ?? []) as { key: string; value: string }[])
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, new Date(), ventasPropias, incluidos)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahoraArgentina(), ventasPropias, incluidos)
 }
 
 /** Catálogo de celulares (no ocultos) para el desplegable "Agregar modelo". */
@@ -258,7 +303,7 @@ export async function getHistorialBonos(): Promise<FilaHistorialBono[]> {
     const valor = Number(row.value)
     if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
   }
-  return armarHistorialBonos(registros, ventasPropias, multiplos)
+  return armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina())
 }
 
 export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null) {
@@ -272,7 +317,7 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
     const ventasPropias = await fetchVentasPropiasPorModelo().catch(() => [])
     const [resumen] = armarHistorialBonos([vigente], ventasPropias, {})
     if (resumen.estado === 'agotado') {
-      const ayer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const ayer = new Date(ahoraArgentina().getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
       const cierre = vigente.desde && vigente.desde > ayer ? vigente.desde : ayer
       await supabase
         .from('lista_precios_bonos')
@@ -312,6 +357,7 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
       desde,
       hasta: bono.hasta || null,
       cupo: bono.cupo && bono.cupo > 0 ? Math.floor(bono.cupo) : null,
+      precio_repuesto_at: null, // editar/extender el bono rearma el reajuste automático
       updated_at: new Date().toISOString(),
     }
     const { error } = vigente
@@ -335,6 +381,7 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
         nombre,
         bono && Number(bono.monto) > 0 ? bono.hasta || undefined : undefined,
         bono ? Number(bono.monto) : undefined,
+        ahoraArgentina(),
       )
       await supabase.from('flujo_config').upsert({
         key: 'app_todos',
