@@ -84,7 +84,8 @@ export function normalizarModelo(nombre: string): string {
   n = n.replace(/\bmoto\b/g, '')
   n = n.replace(/(\d+)\s*(?:gb)?\s*\/\s*(\d+)\s*(?:gb)?/g, (_, a, b) => `${Math.max(Number(a), Number(b))}gb`)
   n = n.replace(/(\d+)\s+gb\b/g, '$1gb')
-  return n.split(/\s+/).filter(Boolean).sort().join(' ')
+  // tokens que son solo puntuación ("G86 5G - 256GB" trae un "-" suelto) no distinguen modelos
+  return n.split(/\s+/).filter(t => /[a-z0-9]/.test(t)).sort().join(' ')
 }
 
 export interface CoberturaModelo {

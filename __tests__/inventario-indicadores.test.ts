@@ -106,6 +106,9 @@ describe('normalizarModelo', () => {
     // la tienda omite "Moto" en algunos Motorola: mismo equipo con y sin la palabra
     // (bug real 26/8: Edge 60 Fusion con 49 de stock aparecía como stock 0 en Modelos a comprar)
     expect(normalizarModelo('Motorola Edge 60 Fusion 256GB')).toBe(normalizarModelo('Motorola Moto Edge 60 Fusion 256GB'))
+    // guion suelto de la tienda (bug real 31/8: "G86 5G - 256GB/8GB" no mapeaba
+    // contra el catálogo de precios por el token "-")
+    expect(normalizarModelo('Motorola Moto G86 5G - 256GB/8GB')).toBe(normalizarModelo('Motorola Moto G86 5G 256GB/8GB'))
   })
 
   it('no confunde modelos distintos', () => {

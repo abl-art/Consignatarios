@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaListaPrecios } from '@/lib/lista-precios'
 import { setMultiploListaPrecios, setBonoListaPrecios, setModeloFijado } from '@/lib/actions/lista-precios-canales'
+import PublicarPrecios from './PublicarPrecios'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
 
@@ -215,6 +216,7 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
             Bonos ({conBono.length})
           </button>
         )}
+        <span className="ml-auto"><PublicarPrecios /></span>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
