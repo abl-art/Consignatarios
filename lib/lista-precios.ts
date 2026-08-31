@@ -41,6 +41,23 @@ export interface BonoModelo {
   monto: number
   desde?: string // ISO yyyy-mm-dd; sin desde = ya vigente
   hasta?: string // ISO yyyy-mm-dd inclusive; sin hasta = sin vencimiento
+  cupo?: number // unidades máximas que la marca reconoce; sin cupo = ilimitado
+}
+
+// Venta propia (tienda GOcelular) por día y modelo: para contar contra el cupo
+export interface VentaPropiaDiaria {
+  fecha: string // ISO yyyy-mm-dd
+  modelo: string
+  ventas: number
+}
+
+/**
+ * Las unidades que la marca reconoce para la NC son las primeras `cupo`
+ * vendidas dentro de la vigencia, en orden de fecha. Sin cupo van todas.
+ */
+export function recortarVentasACupo<T extends { fecha: string }>(ventas: T[], cupo?: number): T[] {
+  const ordenadas = [...ventas].sort((a, b) => a.fecha.localeCompare(b.fecha))
+  return cupo && cupo > 0 ? ordenadas.slice(0, cupo) : ordenadas
 }
 
 // Item de la pestaña ToDo de /notas (flujo_config 'app_todos', por fecha)
@@ -154,7 +171,11 @@ export interface FilaListaPrecios {
   diferencia: number | null
   ventas30d: number
   bonoMonto: number | null
+  bonoDesde: string | null
   bonoHasta: string | null
+  bonoCupo: number | null
+  bonoVendidas: number | null
+  bonoEstado: 'vigente' | 'agotado' | null
   pvpConBono: number | null
   cuotaConBono: number | null
   ncEsperada: number | null
@@ -182,12 +203,74 @@ function porClaveNormalizada(valores: Record<string, number>): Map<string, numbe
   return m
 }
 
-function bonoVigente(bono: BonoModelo | undefined, hoy: Date): BonoModelo | null {
-  if (!bono || !(bono.monto > 0)) return null
+// Vendidas propias del modelo dentro de la vigencia (hasta inclusive); solo
+// tiene sentido con cupo — sin cupo no se cuenta nada.
+function contarVendidasBono(bono: BonoModelo, claveModelo: string, ventasPropias: VentaPropiaDiaria[]): number {
+  let n = 0
+  for (const v of ventasPropias) {
+    if (normalizarModelo(v.modelo) !== claveModelo) continue
+    if (bono.desde && v.fecha < bono.desde) continue
+    if (bono.hasta && v.fecha > bono.hasta) continue
+    n += v.ventas
+  }
+  return n
+}
+
+// Bono como registro de la tabla lista_precios_bonos: cada campaña es una fila
+// propia con historia (los vencidos no se pisan) y su PDF de prueba de ventas.
+export interface BonoRegistro extends BonoModelo {
+  id: string
+  productoId: string
+  nombreModelo: string
+  pdfUrl?: string | null
+  pdfGeneradoAt?: string | null
+}
+
+export interface FilaHistorialBono extends BonoRegistro {
+  estado: EstadoBono
+  vendidas: number
+  reconocidas: number // min(vendidas, cupo); sin cupo, todas
+  ncUnitaria: number // monto ÷ múltiplo (neto de IVA y margen)
+  ncTotal: number
+}
+
+/**
+ * Filas de la pestaña Bonos: cada campaña con su estado, unidades vendidas en
+ * la vigencia, las que la marca reconoce y la NC total esperada. Más recientes
+ * primero.
+ */
+export function armarHistorialBonos(
+  registros: BonoRegistro[],
+  ventasPropias: VentaPropiaDiaria[],
+  multiplos: Record<string, number>,
+  hoy: Date = new Date(),
+): FilaHistorialBono[] {
+  return registros
+    .map(r => {
+      const clave = normalizarModelo(r.nombreModelo)
+      const vendidas = contarVendidasBono(r, clave, ventasPropias)
+      const reconocidas = r.cupo ? Math.min(vendidas, r.cupo) : vendidas
+      const ncUnitaria = r.monto / (multiplos[r.productoId] ?? MULTIPLO_DEFAULT)
+      return {
+        ...r,
+        estado: estadoBono(r, vendidas, hoy),
+        vendidas,
+        reconocidas,
+        ncUnitaria,
+        ncTotal: reconocidas * ncUnitaria,
+      }
+    })
+    .sort((a, b) => (b.desde ?? '').localeCompare(a.desde ?? ''))
+}
+
+export type EstadoBono = 'futuro' | 'vigente' | 'agotado' | 'vencido'
+
+export function estadoBono(bono: BonoModelo, vendidas: number, hoy: Date): EstadoBono {
   const dia = hoy.toISOString().slice(0, 10)
-  if (bono.desde && dia < bono.desde) return null
-  if (bono.hasta && dia > bono.hasta) return null
-  return bono
+  if (bono.desde && dia < bono.desde) return 'futuro'
+  if (bono.hasta && dia > bono.hasta) return 'vencido'
+  if (bono.cupo && vendidas >= bono.cupo) return 'agotado'
+  return 'vigente'
 }
 
 export function armarListaPrecios(
@@ -198,6 +281,7 @@ export function armarListaPrecios(
   ventas30dPorNombre: Record<string, number>,
   bonos: Record<string, BonoModelo> = {},
   hoy: Date = new Date(),
+  ventasPropiasDiarias: VentaPropiaDiaria[] = [],
 ): FilaListaPrecios[] {
   const tienda = porClaveNormalizada(preciosTienda)
   const ventas = porClaveNormalizada(ventas30dPorNombre)
@@ -224,7 +308,25 @@ export function armarListaPrecios(
       mupPesos = pvp / IVA - eleccion.costo.precio
     }
 
-    const bono = bonoVigente(bonos[p.id], hoy)
+    const bonoDef = bonos[p.id]
+    let bono: BonoModelo | null = null
+    let bonoCupo: number | null = null
+    let bonoVendidas: number | null = null
+    let bonoEstado: 'vigente' | 'agotado' | null = null
+    if (bonoDef && bonoDef.monto > 0) {
+      const vendidas = bonoDef.cupo ? contarVendidasBono(bonoDef, clave, ventasPropiasDiarias) : 0
+      const estado = estadoBono(bonoDef, vendidas, hoy)
+      if (estado === 'vigente') {
+        bono = bonoDef
+        bonoEstado = 'vigente'
+      } else if (estado === 'agotado') {
+        bonoEstado = 'agotado'
+      }
+      if (bonoDef.cupo && (estado === 'vigente' || estado === 'agotado')) {
+        bonoCupo = bonoDef.cupo
+        bonoVendidas = vendidas
+      }
+    }
     let pvpConBono: number | null = null
     let cuotaConBono: number | null = null
     let ncEsperada: number | null = null
@@ -252,7 +354,11 @@ export function armarListaPrecios(
       diferencia: precioTienda !== null && pvpVigente !== null ? precioTienda - pvpVigente : null,
       ventas30d,
       bonoMonto: bono && pvp !== null ? bono.monto : null,
+      bonoDesde: bono && pvp !== null ? bono.desde ?? null : null,
       bonoHasta: bono && pvp !== null ? bono.hasta ?? null : null,
+      bonoCupo,
+      bonoVendidas,
+      bonoEstado,
       pvpConBono,
       cuotaConBono,
       ncEsperada,

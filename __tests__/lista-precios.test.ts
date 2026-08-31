@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { armarListaPrecios, aplicarTodoBono, elegirCosto, type ProductoLista, type TodoNotas } from '@/lib/lista-precios'
+import {
+  armarListaPrecios,
+  armarHistorialBonos,
+  aplicarTodoBono,
+  elegirCosto,
+  recortarVentasACupo,
+  type BonoRegistro,
+  type ProductoLista,
+  type TodoNotas,
+  type VentaPropiaDiaria,
+} from '@/lib/lista-precios'
 
 function producto(over: Partial<ProductoLista> = {}): ProductoLista {
   return { id: 'p1', nombre: 'Motorola Moto G17 4/128GB', codigo: 'MOTO-G17-128', ...over }
@@ -242,6 +252,177 @@ describe('armarListaPrecios', () => {
     expect(todos['2026-09-15'][0].done).toBe(true)
     // el legacy pendiente se migra; la NC nueva cae 15/9+40 = 25/10 domingo → lunes 26/10
     expect(todos['2026-10-26'].map(t => t.id)).toEqual(['bono-nc-p1-2026-09-15'])
+  })
+
+  describe('cupo del bono', () => {
+    const COSTOS = { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }
+    const HOY_CUPO = new Date('2026-08-25')
+    const bonoCupo = { monto: 50000, desde: '2026-08-01', hasta: '2026-09-15', cupo: 10 }
+    const ventasPropias = (n: number, fecha = '2026-08-10', modelo = 'Motorola Moto G17 4/128GB'): VentaPropiaDiaria[] =>
+      [{ fecha, modelo, ventas: n }]
+
+    it('bono con cupo no alcanzado sigue vigente y expone el progreso', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventasPropias(4),
+      )
+      expect(fila.bonoMonto).toBe(50000)
+      expect(fila.pvpConBono).toBe(434700)
+      expect(fila.bonoCupo).toBe(10)
+      expect(fila.bonoVendidas).toBe(4)
+      expect(fila.bonoEstado).toBe('vigente')
+    })
+
+    it('expone el desde del bono vigente para poder editarlo', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventasPropias(4),
+      )
+      expect(fila.bonoDesde).toBe('2026-08-01')
+      const [sinDesde] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: { monto: 50000, hasta: '2026-09-15' } }, HOY_CUPO, [],
+      )
+      expect(sinDesde.bonoDesde).toBeNull()
+    })
+
+    it('cupo alcanzado corta el descuento igual que vencido, con estado agotado visible', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventasPropias(10),
+      )
+      expect(fila.bonoMonto).toBeNull()
+      expect(fila.pvpConBono).toBeNull()
+      expect(fila.cuotaConBono).toBeNull()
+      expect(fila.ncEsperada).toBeNull()
+      expect(fila.bonoEstado).toBe('agotado')
+      expect(fila.bonoCupo).toBe(10)
+      expect(fila.bonoVendidas).toBe(10)
+      // la diferencia vuelve a compararse contra el PVP pleno
+      const [conTienda] = armarListaPrecios(
+        [producto()], COSTOS, {}, { 'Motorola Moto G17 4/128GB': 434700 }, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventasPropias(10),
+      )
+      expect(conTienda.diferencia).toBe(434700 - 484200)
+    })
+
+    it('solo cuentan las ventas dentro de la vigencia del bono', () => {
+      const ventas: VentaPropiaDiaria[] = [
+        { fecha: '2026-07-31', modelo: 'Motorola Moto G17 4/128GB', ventas: 8 }, // antes de desde
+        { fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 3 },
+        { fecha: '2026-09-15', modelo: 'Motorola Moto G17 4/128GB', ventas: 2 }, // hasta inclusive
+        { fecha: '2026-09-16', modelo: 'Motorola Moto G17 4/128GB', ventas: 9 }, // después de hasta
+      ]
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventas,
+      )
+      expect(fila.bonoVendidas).toBe(5)
+      expect(fila.bonoEstado).toBe('vigente')
+    })
+
+    it('matchea el modelo con nombre normalizado y no cuenta otros modelos', () => {
+      const ventas: VentaPropiaDiaria[] = [
+        { fecha: '2026-08-10', modelo: 'Celular Motorola Moto G17 4/128 GB', ventas: 6 },
+        { fecha: '2026-08-10', modelo: 'Motorola Moto G67 4/256GB', ventas: 7 },
+      ]
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: bonoCupo }, HOY_CUPO, ventas,
+      )
+      expect(fila.bonoVendidas).toBe(6)
+    })
+
+    it('un bono sin cupo funciona como siempre y no expone progreso', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], COSTOS, {}, {}, VENTAS,
+        { p1: { monto: 50000, hasta: '2026-09-15' } }, HOY_CUPO, ventasPropias(99),
+      )
+      expect(fila.bonoMonto).toBe(50000)
+      expect(fila.bonoEstado).toBe('vigente')
+      expect(fila.bonoCupo).toBeNull()
+      expect(fila.bonoVendidas).toBeNull()
+    })
+  })
+
+  describe('armarHistorialBonos (pestaña Bonos)', () => {
+    const HOY_HIST = new Date('2026-08-25')
+    const registro = (over: Partial<BonoRegistro> = {}): BonoRegistro => ({
+      id: 'b1',
+      productoId: 'p1',
+      nombreModelo: 'Motorola Moto G17 4/128GB',
+      monto: 50000,
+      desde: '2026-08-01',
+      hasta: '2026-09-15',
+      cupo: 10,
+      pdfUrl: null,
+      ...over,
+    })
+
+    it('calcula vendidas, unidades reconocidas y NC total con el múltiplo del producto', () => {
+      const [fila] = armarHistorialBonos(
+        [registro()],
+        [{ fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 4 }],
+        { p1: 2 },
+        HOY_HIST,
+      )
+      expect(fila.estado).toBe('vigente')
+      expect(fila.vendidas).toBe(4)
+      expect(fila.reconocidas).toBe(4)
+      expect(fila.ncUnitaria).toBe(25000)
+      expect(fila.ncTotal).toBe(100000)
+    })
+
+    it('las reconocidas se cortan en el cupo aunque se haya vendido de más', () => {
+      const [fila] = armarHistorialBonos(
+        [registro()],
+        [{ fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 14 }],
+        { p1: 2 },
+        HOY_HIST,
+      )
+      expect(fila.estado).toBe('agotado')
+      expect(fila.vendidas).toBe(14)
+      expect(fila.reconocidas).toBe(10)
+      expect(fila.ncTotal).toBe(250000)
+    })
+
+    it('un bono vencido queda en el historial con su estado y sus números', () => {
+      const [fila] = armarHistorialBonos(
+        [registro({ hasta: '2026-08-20', cupo: undefined })],
+        [{ fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 6 }],
+        {},
+        HOY_HIST,
+      )
+      expect(fila.estado).toBe('vencido')
+      expect(fila.vendidas).toBe(6)
+      expect(fila.reconocidas).toBe(6) // sin cupo se reconocen todas
+      expect(fila.ncUnitaria).toBe(25000) // múltiplo default 2
+    })
+
+    it('ordena por creación más reciente primero (desde descendente)', () => {
+      const filas = armarHistorialBonos(
+        [registro({ id: 'viejo', desde: '2026-07-01', hasta: '2026-07-15' }), registro({ id: 'nuevo' })],
+        [],
+        {},
+        HOY_HIST,
+      )
+      expect(filas.map(f => f.id)).toEqual(['nuevo', 'viejo'])
+    })
+  })
+
+  describe('recortarVentasACupo (para el PDF de prueba de ventas)', () => {
+    const venta = (fecha: string, imei: string) => ({ fecha, imei, modelo: 'Moto G17', factura: 'B-0001' })
+
+    it('corta en las primeras cupo unidades ordenadas por fecha', () => {
+      const ventas = [venta('2026-08-12', 'C'), venta('2026-08-10', 'A'), venta('2026-08-11', 'B')]
+      const r = recortarVentasACupo(ventas, 2)
+      expect(r.map(v => v.imei)).toEqual(['A', 'B'])
+    })
+
+    it('sin cupo devuelve todas ordenadas', () => {
+      const ventas = [venta('2026-08-12', 'C'), venta('2026-08-10', 'A')]
+      expect(recortarVentasACupo(ventas, undefined).map(v => v.imei)).toEqual(['A', 'C'])
+    })
   })
 
   it('ordena por marca y nombre', () => {

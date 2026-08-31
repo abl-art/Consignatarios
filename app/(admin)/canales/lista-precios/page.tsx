@@ -1,11 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getListaPrecios } from '@/lib/actions/lista-precios-canales'
+import { getListaPrecios, getHistorialBonos } from '@/lib/actions/lista-precios-canales'
 import ListaPreciosTable from './ListaPreciosTable'
+import BonosHistorialTable from './BonosHistorialTable'
+import TabsListaBonos from './TabsListaBonos'
 
 export default async function ListaPreciosPage() {
-  const filas = await getListaPrecios()
+  const [filas, bonos] = await Promise.all([getListaPrecios(), getHistorialBonos()])
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
@@ -17,7 +19,11 @@ export default async function ListaPreciosPage() {
         Costo sin IVA del proveedor de cada marca × múltiplo = PVP con cuota redonda (÷9 en centenas, siempre para
         arriba). Solo modelos con ventas en los últimos 30 días.
       </p>
-      <ListaPreciosTable filas={filas} />
+      <TabsListaBonos
+        cantidadBonos={bonos.length}
+        lista={<ListaPreciosTable filas={filas} />}
+        bonos={<BonosHistorialTable bonos={bonos} />}
+      />
     </div>
   )
 }

@@ -1,17 +1,30 @@
 'use server'
 
 // Datos para /canales/lista-precios: costos por proveedor del gestor de
-// Compras + múltiplos editables (flujo_config) + precio tienda y ventas 30d
-// de GOcelular. El armado puro vive en lib/lista-precios.ts.
+// Compras + múltiplos editables (flujo_config) + precio tienda y ventas de
+// GOcelular. Los bonos viven en la tabla lista_precios_bonos (una fila por
+// campaña, con historial y PDF de prueba de ventas). El armado puro vive en
+// lib/lista-precios.ts.
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchPreciosTiendaCelulares, fetchVentasPorModelo } from '@/lib/gocelular'
+import {
+  fetchPreciosTiendaCelulares,
+  fetchVentasPorModelo,
+  fetchVentasPropiasPorModelo,
+  fetchVentasPropiasConFactura,
+} from '@/lib/gocelular'
+import { normalizarModelo } from '@/lib/inventario-indicadores'
+import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
 import {
   aplicarTodoBono,
+  armarHistorialBonos,
   armarListaPrecios,
+  recortarVentasACupo,
   type BonoModelo,
+  type BonoRegistro,
   type CostoProveedor,
+  type FilaHistorialBono,
   type FilaListaPrecios,
   type ProductoLista,
   type TodoNotas,
@@ -20,17 +33,109 @@ import {
 const MULTIPLO_KEY = 'listaprecios_multiplo_'
 const BONO_KEY = 'listaprecios_bono_'
 
+interface BonoRow {
+  id: string
+  producto_id: string
+  nombre_modelo: string
+  monto: string | number
+  desde: string | null
+  hasta: string | null
+  cupo: number | null
+  pdf_url: string | null
+  pdf_generado_at: string | null
+}
+
+function mapBonoRow(r: BonoRow): BonoRegistro {
+  return {
+    id: r.id,
+    productoId: r.producto_id,
+    nombreModelo: r.nombre_modelo,
+    monto: Number(r.monto),
+    desde: r.desde ?? undefined,
+    hasta: r.hasta ?? undefined,
+    cupo: r.cupo ?? undefined,
+    pdfUrl: r.pdf_url,
+    pdfGeneradoAt: r.pdf_generado_at,
+  }
+}
+
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+// El bono que aplica hoy en la lista: la fila cuya vigencia incluye la fecha
+// actual (si hubiera más de una —no debería, se valida al guardar— gana la de
+// desde más reciente).
+function bonosVigentesPorProducto(registros: BonoRegistro[]): Record<string, BonoRegistro> {
+  const dia = hoyIso()
+  const map: Record<string, BonoRegistro> = {}
+  const cubren = registros
+    .filter(r => (!r.desde || r.desde <= dia) && (!r.hasta || r.hasta >= dia))
+    .sort((a, b) => (a.desde ?? '').localeCompare(b.desde ?? ''))
+  for (const r of cubren) map[r.productoId] = r
+  return map
+}
+
+async function fetchBonosRegistros(supabase: ReturnType<typeof createAdminClient>): Promise<BonoRegistro[]> {
+  const { data } = await supabase.from('lista_precios_bonos').select('*')
+  return ((data ?? []) as BonoRow[]).map(mapBonoRow)
+}
+
+// Migración lazy de las keys viejas listaprecios_bono_<id> de flujo_config a
+// la tabla: corre una sola vez (las keys se borran al migrar). Best-effort.
+async function migrarBonosLegacy(
+  supabase: ReturnType<typeof createAdminClient>,
+  cfg: { key: string; value: string }[],
+  productos: ProductoLista[],
+  registros: BonoRegistro[],
+): Promise<BonoRegistro[]> {
+  const legacy = cfg.filter(row => row.key.startsWith(BONO_KEY))
+  if (legacy.length === 0) return registros
+
+  const nuevos: BonoRegistro[] = []
+  for (const row of legacy) {
+    const productoId = row.key.slice(BONO_KEY.length)
+    try {
+      const bono = JSON.parse(row.value) as BonoModelo
+      const nombre = productos.find(p => p.id === productoId)?.nombre
+      const yaExiste = registros.some(
+        r => r.productoId === productoId && r.monto === Number(bono.monto) && (r.hasta ?? null) === (bono.hasta ?? null),
+      )
+      if (nombre && Number(bono.monto) > 0 && !yaExiste) {
+        const { data } = await supabase
+          .from('lista_precios_bonos')
+          .insert({
+            producto_id: productoId,
+            nombre_modelo: nombre,
+            monto: Number(bono.monto),
+            desde: bono.desde ?? null,
+            hasta: bono.hasta ?? null,
+          })
+          .select()
+          .single()
+        if (data) nuevos.push(mapBonoRow(data as BonoRow))
+      }
+      await supabase.from('flujo_config').delete().eq('key', row.key)
+    } catch {
+      /* valor corrupto: se ignora, la key queda para inspección manual */
+    }
+  }
+  return [...registros, ...nuevos]
+}
+
 export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   const supabase = createAdminClient()
 
-  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, preciosTienda, ventasDiarias] =
+  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, ventasDiarias, ventasPropias] =
     await Promise.all([
       supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto').eq('categoria', 'Celulares'),
       supabase.from('compras_precios').select('producto_id, proveedor_id, precio, created_at').order('created_at', { ascending: false }),
       supabase.from('compras_proveedores').select('id, nombre'),
       supabase.from('flujo_config').select('key, value').like('key', 'listaprecios_%'),
+      fetchBonosRegistros(createAdminClient()),
       fetchPreciosTiendaCelulares().catch(() => ({} as Record<string, number>)),
       fetchVentasPorModelo().catch(() => []),
+      fetchVentasPropiasPorModelo().catch(() => []),
     ])
 
   const productos: ProductoLista[] = (prods ?? [])
@@ -52,19 +157,18 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   }
 
   const multiplos: Record<string, number> = {}
-  const bonos: Record<string, BonoModelo> = {}
   for (const row of cfg ?? []) {
     const key = row.key as string
     if (key.startsWith(MULTIPLO_KEY)) {
       const valor = Number(row.value)
       if (Number.isFinite(valor) && valor > 0) multiplos[key.slice(MULTIPLO_KEY.length)] = valor
-    } else if (key.startsWith(BONO_KEY)) {
-      try {
-        const bono = JSON.parse(row.value as string) as BonoModelo
-        if (bono && Number(bono.monto) > 0) bonos[key.slice(BONO_KEY.length)] = bono
-      } catch { /* valor corrupto: se ignora */ }
     }
   }
+
+  const registros = await migrarBonosLegacy(supabase, (cfg ?? []) as { key: string; value: string }[], productos, registrosBase)
+  const vigentes = bonosVigentesPorProducto(registros)
+  const bonos: Record<string, BonoModelo> = {}
+  for (const [productoId, r] of Object.entries(vigentes)) bonos[productoId] = r
 
   const desde = new Date()
   desde.setDate(desde.getDate() - 30)
@@ -95,24 +199,81 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
     }
   } catch { /* best-effort */ }
 
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, new Date(), ventasPropias)
+}
+
+/** Filas de la pestaña Bonos: historial completo de campañas con estado y NC. */
+export async function getHistorialBonos(): Promise<FilaHistorialBono[]> {
+  const supabase = createAdminClient()
+  const [registros, ventasPropias, { data: cfg }] = await Promise.all([
+    fetchBonosRegistros(supabase),
+    fetchVentasPropiasPorModelo().catch(() => []),
+    supabase.from('flujo_config').select('key, value').like('key', `${MULTIPLO_KEY}%`),
+  ])
+  const multiplos: Record<string, number> = {}
+  for (const row of cfg ?? []) {
+    const valor = Number(row.value)
+    if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
+  }
+  return armarHistorialBonos(registros, ventasPropias, multiplos)
 }
 
 export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null) {
   const supabase = createAdminClient()
-  const key = `${BONO_KEY}${productoId}`
+  const registros = (await fetchBonosRegistros(supabase)).filter(r => r.productoId === productoId)
+  let vigente: BonoRegistro | null = bonosVigentesPorProducto(registros)[productoId] ?? null
+
+  // Una campaña con cupo agotado es historia congelada: no se edita ni se
+  // borra — se cierra (hasta = ayer) y lo nuevo va en una fila aparte.
+  if (vigente?.cupo) {
+    const ventasPropias = await fetchVentasPropiasPorModelo().catch(() => [])
+    const [resumen] = armarHistorialBonos([vigente], ventasPropias, {})
+    if (resumen.estado === 'agotado') {
+      const ayer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const cierre = vigente.desde && vigente.desde > ayer ? vigente.desde : ayer
+      await supabase
+        .from('lista_precios_bonos')
+        .update({ hasta: cierre, updated_at: new Date().toISOString() })
+        .eq('id', vigente.id)
+      vigente.hasta = cierre
+      vigente = null
+    }
+  }
+
   if (!bono || !(Number(bono.monto) > 0)) {
-    const { error } = await supabase.from('flujo_config').delete().eq('key', key)
-    if (error) return { error: error.message }
+    // Quitar = borrar solo la campaña vigente; el historial queda intacto
+    if (vigente) {
+      const { error } = await supabase.from('lista_precios_bonos').delete().eq('id', vigente.id)
+      if (error) return { error: error.message }
+    }
   } else {
-    if (bono.desde && bono.hasta && bono.desde > bono.hasta) {
+    // Sin desde se estampa hoy: sin fecha de inicio no se puede contar el cupo
+    const desde = bono.desde || vigente?.desde || hoyIso()
+    if (bono.hasta && desde > bono.hasta) {
       return { error: 'La vigencia "desde" no puede ser posterior a "hasta"' }
     }
-    const { error } = await supabase.from('flujo_config').upsert({
-      key,
-      value: JSON.stringify({ monto: Number(bono.monto), desde: bono.desde || undefined, hasta: bono.hasta || undefined }),
+    const solapado = registros.find(r =>
+      r.id !== vigente?.id &&
+      (!r.hasta || desde <= r.hasta) &&
+      (!bono.hasta || !r.desde || r.desde <= bono.hasta),
+    )
+    if (solapado) {
+      return { error: `La vigencia se solapa con otro bono del modelo (${solapado.desde ?? '…'} → ${solapado.hasta ?? 'sin vto'})` }
+    }
+
+    const { data: prod } = await supabase.from('compras_productos').select('nombre').eq('id', productoId).single()
+    const valores = {
+      producto_id: productoId,
+      nombre_modelo: (prod?.nombre as string) ?? productoId,
+      monto: Number(bono.monto),
+      desde,
+      hasta: bono.hasta || null,
+      cupo: bono.cupo && bono.cupo > 0 ? Math.floor(bono.cupo) : null,
       updated_at: new Date().toISOString(),
-    })
+    }
+    const { error } = vigente
+      ? await supabase.from('lista_precios_bonos').update(valores).eq('id', vigente.id)
+      : await supabase.from('lista_precios_bonos').insert(valores)
     if (error) return { error: error.message }
   }
   revalidatePath('/canales/lista-precios')
@@ -141,6 +302,56 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
   } catch { /* el recordatorio es best-effort: no bloquea el guardado del bono */ }
 
   return { ok: true }
+}
+
+/**
+ * Genera el PDF de prueba de ventas de una campaña (fecha, IMEI, modelo, nro
+ * de factura; cortado en las primeras `cupo` unidades), lo sube al bucket
+ * 'bonos' y persiste la URL en la fila. Regenerable: pisa el archivo anterior.
+ */
+export async function generarPdfBono(bonoId: string) {
+  const supabase = createAdminClient()
+  const { data: row } = await supabase.from('lista_precios_bonos').select('*').eq('id', bonoId).single()
+  if (!row) return { error: 'Bono no encontrado' }
+  const bono = mapBonoRow(row as BonoRow)
+
+  const hoy = hoyIso()
+  const desde = bono.desde ?? '2026-03-23'
+  const hasta = bono.hasta && bono.hasta < hoy ? bono.hasta : hoy
+
+  let ventas
+  try {
+    ventas = await fetchVentasPropiasConFactura(desde, hasta)
+  } catch (e) {
+    return { error: `No se pudieron leer las ventas de GOcelular: ${e instanceof Error ? e.message : e}` }
+  }
+  const clave = normalizarModelo(bono.nombreModelo)
+  const delModelo = ventas.filter(v => normalizarModelo(v.modelo) === clave)
+  const reconocidas = recortarVentasACupo(delModelo, bono.cupo)
+
+  const buffer = await renderPruebaVentasBono({
+    bono,
+    ventas: reconocidas,
+    vendidasTotales: delModelo.length,
+    generadoEl: hoy,
+  })
+
+  const slug = bono.nombreModelo.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const fileName = `bono-${slug}-${desde}-${bono.hasta ?? 'sin-vto'}-${bono.id.slice(0, 8)}.pdf`
+  const { error: uploadErr } = await supabase.storage
+    .from('bonos')
+    .upload(fileName, buffer, { upsert: true, contentType: 'application/pdf' })
+  if (uploadErr) return { error: uploadErr.message }
+
+  const { data: urlData } = supabase.storage.from('bonos').getPublicUrl(fileName)
+  const { error: updateErr } = await supabase
+    .from('lista_precios_bonos')
+    .update({ pdf_url: urlData.publicUrl, pdf_generado_at: new Date().toISOString() })
+    .eq('id', bonoId)
+  if (updateErr) return { error: updateErr.message }
+
+  revalidatePath('/canales/lista-precios')
+  return { ok: true, url: urlData.publicUrl, unidades: reconocidas.length }
 }
 
 export async function setMultiploListaPrecios(productoId: string, multiplo: number) {

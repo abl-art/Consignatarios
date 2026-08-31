@@ -827,6 +827,102 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
   }
 }
 
+/**
+ * Ventas propias (tienda GOcelular) por día y modelo — para contar unidades
+ * contra el cupo de los bonos. Mismo criterio que fetchVentasPorModelo pero
+ * solo client_ids propios.
+ */
+export async function fetchVentasPropiasPorModelo(): Promise<{ fecha: string; modelo: string; ventas: number }[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ fecha: Date; modelo: string; ventas: number }>(
+      `SELECT o.order_created_at::date AS fecha, so.product_name AS modelo, COUNT(*)::int AS ventas
+       FROM gocuotas_orders o
+       JOIN store_orders so ON so.id::text = o.store_order_id
+       WHERE o.order_delivered_at IS NOT NULL
+         AND o.order_discarded_at IS NULL
+         AND o.client_id::text IN (${SQL_IDS_PROPIOS})
+         AND o.order_created_at >= '2026-03-23'
+         AND so.product_name IS NOT NULL
+       GROUP BY 1, 2`
+    )
+    return res.rows.map((r) => ({
+      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha),
+      modelo: r.modelo,
+      ventas: r.ventas,
+    }))
+  } finally {
+    client.release()
+  }
+}
+
+export interface VentaConFactura {
+  fecha: string
+  imei: string
+  modelo: string
+  factura: string | null // null = factura aún no emitida (demora ~3-7 días)
+}
+
+/**
+ * Detalle de ventas propias en un rango de fechas con IMEI y nro de factura —
+ * la prueba de unidades vendidas que piden las marcas para las NC de bonos.
+ * IMEI desde inventory_items (ecommerce) y devices (union, como fetchNewSales);
+ * factura autorizada desde invoices por gocuotas_order_id (scope device/order,
+ * las de addon y las notas de crédito no cuentan).
+ */
+export async function fetchVentasPropiasConFactura(desde: string, hasta: string): Promise<VentaConFactura[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ fecha: string; imei: string; modelo: string; factura: string | null }>(
+      `SELECT ventas.fecha, ventas.imei, ventas.modelo, i.invoice_number AS factura
+       FROM (
+         SELECT go.order_id, go.order_created_at::date::text AS fecha, ii.imei, so.product_name AS modelo
+         FROM gocuotas_orders go
+         JOIN store_orders so ON so.id::text = go.store_order_id
+         JOIN inventory_items ii ON ii.assigned_to_order_id = go.order_id
+         WHERE go.order_delivered_at IS NOT NULL
+           AND go.order_discarded_at IS NULL
+           AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+           AND go.order_created_at::date BETWEEN $1 AND $2
+           AND so.product_name IS NOT NULL
+
+         UNION
+
+         SELECT go.order_id, go.order_created_at::date::text AS fecha, d.imei, so.product_name AS modelo
+         FROM devices d
+         JOIN gocuotas_orders go ON go.order_id = d.order_id
+         JOIN store_orders so ON so.id::text = go.store_order_id
+         WHERE go.order_delivered_at IS NOT NULL
+           AND go.order_discarded_at IS NULL
+           AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+           AND go.order_created_at::date BETWEEN $1 AND $2
+           AND so.product_name IS NOT NULL
+       ) AS ventas
+       LEFT JOIN LATERAL (
+         SELECT inv.invoice_number
+         FROM invoices inv
+         WHERE inv.gocuotas_order_id = ventas.order_id
+           AND inv.status::text = 'authorized'
+           AND inv.type::text LIKE 'factura%'
+           AND inv.invoice_scope IN ('device', 'order')
+         ORDER BY inv.authorized_at NULLS LAST
+         LIMIT 1
+       ) i ON true
+       ORDER BY ventas.fecha, ventas.imei`,
+      [desde, hasta]
+    )
+    return res.rows
+  } finally {
+    client.release()
+  }
+}
+
 /** Precio de venta publicado en la tienda (store_products.price en centavos) por celular activo. */
 export async function fetchPreciosTiendaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()

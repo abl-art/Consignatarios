@@ -48,28 +48,55 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   const router = useRouter()
   const [editando, setEditando] = useState(false)
   const [monto, setMonto] = useState(fila.bonoMonto ? String(fila.bonoMonto) : '')
+  const [desde, setDesde] = useState(fila.bonoDesde ?? '')
   const [hasta, setHasta] = useState(fila.bonoHasta ?? '')
+  const [cupo, setCupo] = useState(fila.bonoCupo ? String(fila.bonoCupo) : '')
   const [, startTransition] = useTransition()
 
   const guardar = (quitar = false) => {
     const n = Number(monto.replace(/\./g, '').replace(',', '.'))
+    const c = Number(cupo)
     startTransition(async () => {
-      await setBonoListaPrecios(fila.productoId, quitar || !(n > 0) ? null : { monto: n, hasta: hasta || undefined })
+      await setBonoListaPrecios(
+        fila.productoId,
+        quitar || !(n > 0)
+          ? null
+          : { monto: n, desde: desde || undefined, hasta: hasta || undefined, cupo: c > 0 ? Math.floor(c) : undefined },
+      )
       setEditando(false)
       router.refresh()
     })
   }
 
   if (!editando) {
-    return fila.bonoMonto ? (
-      <button
-        onClick={() => setEditando(true)}
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
-        title="Editar bono"
-      >
-        {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
-      </button>
-    ) : (
+    if (fila.bonoMonto) {
+      return (
+        <button
+          onClick={() => setEditando(true)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
+          title="Editar bono"
+        >
+          {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
+          {fila.bonoCupo !== null && ` · ${fila.bonoVendidas}/${fila.bonoCupo} u.`}
+        </button>
+      )
+    }
+    if (fila.bonoEstado === 'agotado') {
+      // El bono llenó el cupo antes del vencimiento: el descuento ya no corre.
+      // El + carga la campaña siguiente (la agotada queda en el historial).
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold"
+            title={`Cupo alcanzado: ${fila.bonoVendidas}/${fila.bonoCupo} unidades — reajustar el precio de la tienda`}
+          >
+            Cupo alcanzado {fila.bonoVendidas}/{fila.bonoCupo}
+          </span>
+          <button onClick={() => setEditando(true)} className="text-gray-300 hover:text-gray-500 text-sm font-bold px-1" title="Agregar bono nuevo">+</button>
+        </span>
+      )
+    }
+    return (
       <button
         onClick={() => setEditando(true)}
         className="text-gray-300 hover:text-gray-500 text-sm font-bold px-2"
@@ -88,9 +115,19 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
         className="w-20 px-2 py-1 border border-gray-300 rounded-lg text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-500"
       />
       <input
+        type="date" value={desde} onChange={e => setDesde(e.target.value)}
+        title="Vigente desde (vacío = desde hoy)"
+        className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+      />
+      <input
         type="date" value={hasta} onChange={e => setHasta(e.target.value)}
         title="Vigente hasta"
         className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+      />
+      <input
+        type="text" inputMode="numeric" value={cupo} onChange={e => setCupo(e.target.value)}
+        placeholder="cupo u." title="Cupo: unidades máximas que reconoce la marca (vacío = sin cupo)"
+        className="w-14 px-2 py-1 border border-gray-300 rounded-lg text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-500"
       />
       <button onClick={() => guardar()} className="px-1.5 py-1 text-xs font-bold text-green-700 hover:bg-green-50 rounded" title="Guardar">✓</button>
       <button onClick={() => guardar(true)} className="px-1.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded" title="Quitar bono">✕</button>
@@ -101,7 +138,7 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
 export default function ListaPreciosTable({ filas }: { filas: FilaListaPrecios[] }) {
   const [marca, setMarca] = useState<string | null>(null)
   const marcas = [...new Set(filas.map(f => f.marca))].sort()
-  const conBono = filas.filter(f => f.bonoMonto !== null)
+  const conBono = filas.filter(f => f.bonoMonto !== null || f.bonoEstado === 'agotado')
   const visibles = marca === '__bonos' ? conBono : marca ? filas.filter(f => f.marca === marca) : filas
 
   if (filas.length === 0) {
