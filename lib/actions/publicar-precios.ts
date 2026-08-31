@@ -112,7 +112,10 @@ export async function reajustarPreciosBonos(opts?: { dry?: boolean; fecha?: stri
   const pendientes = aReajustar.map(p => ({ modelo: p.registro.nombreModelo, motivo: p.motivo }))
   if (aReajustar.length === 0) return { hoy, pendientes }
 
-  const [filas, cat] = await Promise.all([getListaPrecios(), fetchCatalogoPrecios()])
+  const [filas, cat] = await Promise.all([
+    getListaPrecios(opts?.fecha ? { fechaSimulada: opts.fecha } : undefined),
+    fetchCatalogoPrecios(),
+  ])
   const fallar = async (error: string): Promise<ResultadoReajuste> => {
     if (!opts?.dry) {
       await agregarTodosReajuste(aReajustar.map(p => ({

@@ -83,8 +83,7 @@ function hoyIso(): string {
 // El bono que aplica hoy en la lista: la fila cuya vigencia incluye la fecha
 // actual (si hubiera más de una —no debería, se valida al guardar— gana la de
 // desde más reciente).
-function bonosVigentesPorProducto(registros: BonoRegistro[]): Record<string, BonoRegistro> {
-  const dia = hoyIso()
+function bonosVigentesPorProducto(registros: BonoRegistro[], dia: string = hoyIso()): Record<string, BonoRegistro> {
   const map: Record<string, BonoRegistro> = {}
   const cubren = registros
     .filter(r => (!r.desde || r.desde <= dia) && (!r.hasta || r.hasta >= dia))
@@ -181,7 +180,10 @@ async function migrarBonosLegacy(
   return [...registros, ...nuevos]
 }
 
-export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
+export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promise<FilaListaPrecios[]> {
+  // fechaSimulada: solo para el modo dry del cron de reajuste — evalúa la
+  // vigencia de bonos como si fuera ese día (ART)
+  const ahora = opts?.fechaSimulada ? new Date(`${opts.fechaSimulada}T12:00:00Z`) : ahoraArgentina()
   const supabase = createAdminClient()
 
   const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, ventasDiarias, ventasPropias] =
@@ -224,7 +226,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   }
 
   const registros = await migrarBonosLegacy(supabase, (cfg ?? []) as { key: string; value: string }[], productos, registrosBase)
-  const vigentes = bonosVigentesPorProducto(registros)
+  const vigentes = bonosVigentesPorProducto(registros, ahora.toISOString().slice(0, 10))
   const bonos: Record<string, BonoModelo> = {}
   for (const [productoId, r] of Object.entries(vigentes)) bonos[productoId] = r
 
@@ -258,7 +260,7 @@ export async function getListaPrecios(): Promise<FilaListaPrecios[]> {
   } catch { /* best-effort */ }
 
   const incluidos = parseIncluidos((cfg ?? []) as { key: string; value: string }[])
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahoraArgentina(), ventasPropias, incluidos)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos)
 }
 
 /** Catálogo de celulares (no ocultos) para el desplegable "Agregar modelo". */
