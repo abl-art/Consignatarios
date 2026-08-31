@@ -30,7 +30,7 @@
     },
     {
       "path": "/api/cron/publicar-precios",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
