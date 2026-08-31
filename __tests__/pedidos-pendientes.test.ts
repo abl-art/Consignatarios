@@ -120,6 +120,35 @@ describe('pedidos informados cuentan como En tránsito con datos del gestor', ()
     expect(rows[1].pedido).toBe(0)
   })
 
+  it('matchea por productoCodigo == sku aunque el nombre del item sea viejo (Nubia Neo 3GT 31/8)', () => {
+    // El pedido congeló "Nubia Neo 3GT" antes del rename a "Nubia Neo 3GT 12/256 GB":
+    // el nombre no matchea, pero el código NUB-NEO3GT es exactamente el sku de la fila
+    const p = pedido({
+      gocelular: { estado: 'informado', enviadoAt: '2026-08-31T17:22:03.752Z' },
+      items: [{ productoNombre: 'Nubia Neo 3GT', productoCodigo: 'NUB-NEO3GT', cantidad: 100 }],
+    })
+    const rows = aplicarPedidos(
+      [fila({ sku: 'NUB-NEO3GT', nombre: 'Nubia Neo 3GT 12/256 GB', marca: 'Nubia', enTransito: 100 })],
+      [p],
+    )
+    expect(rows).toHaveLength(1) // sin fila fantasma duplicada
+    expect(rows[0].enTransito).toBe(100) // máximo, no suma
+  })
+
+  it('un codigo que no figura como sku cae al match por nombre', () => {
+    const p = pedido({ items: [{ productoNombre: 'Xiaomi Redmi 14C 256/4 GB', productoCodigo: 'CODIGO-INVENTADO', cantidad: 15 }] })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].pedido).toBe(15)
+  })
+
+  it('el match por codigo también aplica a la columna Pedido', () => {
+    const p = pedido({ items: [{ productoNombre: 'Nombre Viejo Cualquiera', productoCodigo: 'XIA-14C', cantidad: 20 }] })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].pedido).toBe(20)
+  })
+
   it('un informado con ingreso completo no cuenta en tránsito ni en pedido', () => {
     const p = pedido({ ingresoStockAt: '2026-08-21', gocelular: { estado: 'informado' } })
     const rows = aplicarPedidos([fila()], [p])
