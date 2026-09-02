@@ -3,6 +3,7 @@ import {
   armarRescates,
   filtrarRescatesPorFecha,
   contarPorEstado,
+  pipelineRescates,
   type RescateRaw,
   type TraceEvento,
 } from '@/lib/rescates'
@@ -128,6 +129,62 @@ describe('filtrarRescatesPorFecha', () => {
     expect(filtrarRescatesPorFecha(rescates, '', '2026-08-14')).toHaveLength(1)
     expect(filtrarRescatesPorFecha(rescates, '2026-08-27', '')).toHaveLength(1)
     expect(filtrarRescatesPorFecha(rescates, '', '')).toHaveLength(3)
+  })
+})
+
+describe('pipelineRescates', () => {
+  it('promedia cada tramo solo con los rescates que pasaron por ambos hitos', () => {
+    const rescates = armarRescates([
+      // flujo completo: 2d a rescate, 1d a viaje, 3d a rendido (total 6)
+      raw('SO-FULL', [
+        ev('SolicitudDeRescate', '2026-08-10T09:00:00-03:00'),
+        ev('Rescate', '2026-08-12T09:00:00-03:00', { ciclo: 'Drop' }),
+        ev('EnvioConsolidado', '2026-08-13T09:00:00-03:00', { ciclo: 'Drop' }),
+        ev('EnvioRendido', '2026-08-16T09:00:00-03:00', { ciclo: 'Drop' }),
+      ]),
+      // flujo completo: 4d a rescate, 2d a viaje, 1d a rendido (total 7)
+      raw('SO-FULL2', [
+        ev('SolicitudDeRescate', '2026-08-10T09:00:00-03:00'),
+        ev('Rescate', '2026-08-14T09:00:00-03:00', { ciclo: 'Drop' }),
+        ev('ExpedicionHojaDeRutaDeViaje', '2026-08-16T09:00:00-03:00', { ciclo: 'Drop' }),
+        ev('EnvioRendido', '2026-08-17T09:00:00-03:00', { ciclo: 'Drop' }),
+      ]),
+      // rescatado sin despacho: solo aporta al tramo solicitado→rescatado (6d)
+      raw('SO-STUCK', [
+        ev('SolicitudDeRescate', '2026-08-20T09:00:00-03:00'),
+        ev('Rescate', '2026-08-26T09:00:00-03:00', { ciclo: 'Drop' }),
+      ]),
+      // entregado igual: no aporta a ningún tramo de vuelta
+      raw('SO-ENTREGADO', [
+        ev('SolicitudDeRescate', '2026-08-20T09:00:00-03:00'),
+        ev('EnvioEntregado', '2026-08-21T09:00:00-03:00', { descripcion: 'Entregado' }),
+      ]),
+    ], AHORA)
+
+    const p = pipelineRescates(rescates)
+    expect(p.tramos).toEqual([
+      { de: 'solicitado', a: 'rescatado', promedioDias: 4, muestras: 3 },
+      { de: 'rescatado', a: 'en_viaje', promedioDias: 1.5, muestras: 2 },
+      { de: 'en_viaje', a: 'rendido', promedioDias: 2, muestras: 2 },
+    ])
+    expect(p.total).toEqual({ promedioDias: 6.5, muestras: 2 })
+  })
+
+  it('redondea a un decimal', () => {
+    const rescates = armarRescates([
+      raw('SO-X', [
+        ev('SolicitudDeRescate', '2026-08-10T09:00:00-03:00'),
+        ev('Rescate', '2026-08-11T17:00:00-03:00', { ciclo: 'Drop' }),
+      ]),
+    ], AHORA)
+    // 32 horas = 1.333… días → 1.3
+    expect(pipelineRescates(rescates).tramos[0].promedioDias).toBe(1.3)
+  })
+
+  it('sin muestras devuelve null', () => {
+    const p = pipelineRescates([])
+    expect(p.tramos.every(t => t.promedioDias === null && t.muestras === 0)).toBe(true)
+    expect(p.total).toEqual({ promedioDias: null, muestras: 0 })
   })
 })
 

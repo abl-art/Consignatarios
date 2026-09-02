@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { Rescate } from '@/lib/gocelular'
 import {
   ESTADOS_RESCATE,
   contarPorEstado,
   filtrarRescatesPorFecha,
   metaEstado,
+  pipelineRescates,
   type EstadoRescate,
 } from '@/lib/rescates'
 
@@ -20,6 +21,52 @@ const CHIP_POR_ESTADO: Record<EstadoRescate, string> = {
 
 function fecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR')
+}
+
+function dias(n: number | null): string {
+  if (n === null) return 'sin datos'
+  return `${n.toLocaleString('es-AR')} ${n === 1 ? 'día' : 'días'}`
+}
+
+function NodoPipeline({ estado }: { estado: EstadoRescate }) {
+  const meta = metaEstado(estado)
+  return (
+    <div className="flex flex-col items-center text-center">
+      <span className="text-2xl leading-none">{meta.emoji}</span>
+      <span className="text-xs text-gray-600 mt-1 whitespace-nowrap">{meta.label}</span>
+    </div>
+  )
+}
+
+function Pipeline({ rescates }: { rescates: Rescate[] }) {
+  const { tramos, total } = pipelineRescates(rescates)
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 overflow-x-auto">
+      <div className="text-xs font-semibold text-gray-900 mb-3">
+        Flujo normal del rescate — tiempo promedio entre estados
+      </div>
+      <div className="flex items-center gap-3 min-w-max">
+        <NodoPipeline estado="solicitado" />
+        {tramos.map((t) => (
+          <Fragment key={t.a}>
+            <div className="flex flex-col items-center px-1">
+              <span className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">{dias(t.promedioDias)}</span>
+              <span className="text-gray-300 leading-none">──────▶</span>
+              <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                {t.muestras} {t.muestras === 1 ? 'envío' : 'envíos'}
+              </span>
+            </div>
+            <NodoPipeline estado={t.a} />
+          </Fragment>
+        ))}
+      </div>
+      <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+        🕐 → ✅ Solicitud a rendido: <span className="font-semibold text-gray-900">{dias(total.promedioDias)}</span> en promedio
+        {total.muestras > 0 && <span className="text-gray-400"> ({total.muestras} {total.muestras === 1 ? 'rescate completado' : 'rescates completados'})</span>}
+        <span className="text-gray-400"> · cada tramo promedia solo los envíos que pasaron por ambos estados</span>
+      </div>
+    </div>
+  )
 }
 
 function EstadoChip({ estado }: { estado: EstadoRescate }) {
@@ -90,6 +137,8 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
           )
         })}
       </div>
+
+      <Pipeline rescates={porFecha} />
 
       {visibles.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">

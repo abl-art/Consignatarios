@@ -38,6 +38,9 @@ export interface Rescate {
   tracking: string | null
   estado: EstadoRescate
   solicitadoAt: string
+  rescatadoAt: string | null
+  enViajeAt: string | null
+  rendidoAt: string | null
   ultimoEvento: string
   ultimoEventoAt: string
   /** Para estados terminales, días de solicitud a resolución; para activos, días corriendo */
@@ -61,14 +64,23 @@ export function metaEstado(estado: EstadoRescate) {
 const DIA_MS = 24 * 60 * 60 * 1000
 const EVENTOS_VIAJE = new Set(['EnvioConsolidado', 'ExpedicionHojaDeRutaCabecera', 'ExpedicionHojaDeRutaDeViaje', 'EnvioDespachado'])
 
-function clasificar(eventos: TraceEvento[], solicitadoAt: string): EstadoRescate {
+function hitos(eventos: TraceEvento[], solicitadoAt: string) {
   const post = eventos.filter(e => e.fecha >= solicitadoAt)
-  if (post.some(e => e.evento === 'EnvioEntregado')) return 'entregado'
-  if (post.some(e => e.evento === 'EnvioRendido')) return 'rendido'
+  const entregado = post.find(e => e.evento === 'EnvioEntregado')
+  const rendido = post.find(e => e.evento === 'EnvioRendido')
   const rescate = post.find(e => e.evento === 'Rescate')
-  if (!rescate) return 'solicitado'
-  if (post.some(e => e.fecha > rescate.fecha && EVENTOS_VIAJE.has(e.evento))) return 'en_viaje'
-  return 'rescatado'
+  const viaje = rescate ? post.find(e => e.fecha > rescate.fecha && EVENTOS_VIAJE.has(e.evento)) : undefined
+  const estado: EstadoRescate = entregado ? 'entregado'
+    : rendido ? 'rendido'
+    : viaje ? 'en_viaje'
+    : rescate ? 'rescatado'
+    : 'solicitado'
+  return {
+    estado,
+    rescatadoAt: rescate?.fecha ?? null,
+    enViajeAt: viaje?.fecha ?? null,
+    rendidoAt: rendido?.fecha ?? null,
+  }
 }
 
 export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
@@ -77,7 +89,7 @@ export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
     const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
     const solicitud = eventos.find(e => e.evento === 'SolicitudDeRescate')
     if (!solicitud) continue
-    const estado = clasificar(eventos, solicitud.fecha)
+    const { estado, rescatadoAt, enViajeAt, rendidoAt } = hitos(eventos, solicitud.fecha)
     const ultimo = eventos[eventos.length - 1]
     const hasta = metaEstado(estado).terminal ? new Date(ultimo.fecha) : ahora
     rescates.push({
@@ -90,6 +102,9 @@ export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
       tracking: r.tracking,
       estado,
       solicitadoAt: solicitud.fecha,
+      rescatadoAt,
+      enViajeAt,
+      rendidoAt,
       ultimoEvento: [ultimo.evento, ultimo.descripcion].filter(Boolean).join(' — '),
       ultimoEventoAt: ultimo.fecha,
       dias: Math.max(0, Math.floor((hasta.getTime() - new Date(solicitud.fecha).getTime()) / DIA_MS)),
@@ -110,6 +125,53 @@ export function filtrarRescatesPorFecha(rescates: Rescate[], desde: string, hast
     if (hasta && dia > hasta) return false
     return true
   })
+}
+
+export interface TramoPipeline {
+  de: EstadoRescate
+  a: EstadoRescate
+  /** Promedio en días con 1 decimal, null si no hay muestras */
+  promedioDias: number | null
+  muestras: number
+}
+
+export interface PipelineRescates {
+  tramos: TramoPipeline[]
+  total: { promedioDias: number | null; muestras: number }
+}
+
+function promedio(dias: number[]): number | null {
+  if (dias.length === 0) return null
+  return Math.round((dias.reduce((s, d) => s + d, 0) / dias.length) * 10) / 10
+}
+
+function diasEntre(desde: string, hasta: string): number {
+  return (new Date(hasta).getTime() - new Date(desde).getTime()) / DIA_MS
+}
+
+/**
+ * Tiempos promedio del flujo normal del rescate:
+ * solicitado → rescatado → en_viaje → rendido, más el total solicitud→rendido.
+ * Cada tramo promedia solo los rescates que pasaron por ambos hitos; los
+ * entregados igual no tienen hitos de vuelta y quedan afuera solos.
+ */
+export function pipelineRescates(rescates: Rescate[]): PipelineRescates {
+  const tramo = (de: EstadoRescate, a: EstadoRescate, pares: [string, string][]): TramoPipeline => {
+    const dias = pares.map(([d, h]) => diasEntre(d, h))
+    return { de, a, promedioDias: promedio(dias), muestras: dias.length }
+  }
+  const conRescate = rescates.filter((r): r is Rescate & { rescatadoAt: string } => r.rescatadoAt !== null)
+  return {
+    tramos: [
+      tramo('solicitado', 'rescatado', conRescate.map(r => [r.solicitadoAt, r.rescatadoAt])),
+      tramo('rescatado', 'en_viaje', conRescate.filter(r => r.enViajeAt).map(r => [r.rescatadoAt, r.enViajeAt!])),
+      tramo('en_viaje', 'rendido', rescates.filter(r => r.enViajeAt && r.rendidoAt).map(r => [r.enViajeAt!, r.rendidoAt!])),
+    ],
+    total: (() => {
+      const dias = rescates.filter(r => r.rendidoAt).map(r => diasEntre(r.solicitadoAt, r.rendidoAt!))
+      return { promedioDias: promedio(dias), muestras: dias.length }
+    })(),
+  }
 }
 
 export function contarPorEstado(rescates: Rescate[]): { estado: EstadoRescate; cantidad: number; pct: number }[] {
