@@ -24,6 +24,9 @@ function raw(orderNumber: string, traces: TraceEvento[], extra: Partial<RescateR
     ciudad: 'Córdoba',
     provincia: 'Córdoba',
     tracking: '360003081525590',
+    gocuotasOrderId: '18774119',
+    gocuotasStatus: 'discarded',
+    gocuotasDiscardedAt: '2026-08-25T10:00:00-03:00',
     traces,
     ...extra,
   }
@@ -110,6 +113,37 @@ describe('armarRescates', () => {
       raw('SO-SOL-NUEVO', [ev('SolicitudDeRescate', '2026-09-01T09:00:00-03:00')]),
     ], AHORA)
     expect(rescates.map(r => r.orderNumber)).toEqual(['SO-SOL-VIEJO', 'SO-SOL-NUEVO', 'SO-REND'])
+  })
+})
+
+describe('orden GOcuotas vinculada', () => {
+  const traces = [ev('SolicitudDeRescate', '2026-08-30T09:00:00-03:00')]
+
+  it('anulada cuando GOcuotas la descartó', () => {
+    const [r] = armarRescates([raw('SO-ANUL', traces)], AHORA)
+    expect(r.gocuotasOrderId).toBe('18774119')
+    expect(r.ordenActiva).toBe(false)
+  })
+
+  it('anulada por status aunque no tenga fecha de descarte', () => {
+    const [r] = armarRescates([raw('SO-CANCEL', traces, {
+      gocuotasStatus: 'cancel', gocuotasDiscardedAt: null,
+    })], AHORA)
+    expect(r.ordenActiva).toBe(false)
+  })
+
+  it('activa cuando no está descartada', () => {
+    const [r] = armarRescates([raw('SO-ACT', traces, {
+      gocuotasStatus: 'approved', gocuotasDiscardedAt: null,
+    })], AHORA)
+    expect(r.ordenActiva).toBe(true)
+  })
+
+  it('null cuando no hay orden GOcuotas vinculada', () => {
+    const [r] = armarRescates([raw('SO-SINGO', traces, {
+      gocuotasOrderId: null, gocuotasStatus: null, gocuotasDiscardedAt: null,
+    })], AHORA)
+    expect(r.ordenActiva).toBeNull()
   })
 })
 

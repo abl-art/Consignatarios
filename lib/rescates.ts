@@ -23,6 +23,9 @@ export interface RescateRaw {
   ciudad: string | null
   provincia: string | null
   tracking: string | null
+  gocuotasOrderId: string | null
+  gocuotasStatus: string | null
+  gocuotasDiscardedAt: string | null
   traces: TraceEvento[]
 }
 
@@ -36,6 +39,10 @@ export interface Rescate {
   producto: string | null
   destino: string
   tracking: string | null
+  gocuotasOrderId: string | null
+  gocuotasStatus: string | null
+  /** true = activa (delivered), false = anulada (discarded), null = sin orden GOcuotas vinculada */
+  ordenActiva: boolean | null
   estado: EstadoRescate
   solicitadoAt: string
   rescatadoAt: string | null
@@ -83,6 +90,16 @@ function hitos(eventos: TraceEvento[], solicitadoAt: string) {
   }
 }
 
+const STATUS_ANULADA = new Set(['discarded', 'cancel'])
+
+/** Anulada si GOcuotas la descartó o el status lo dice; activa en cualquier otro caso */
+export function esOrdenActiva(r: Pick<RescateRaw, 'gocuotasOrderId' | 'gocuotasStatus' | 'gocuotasDiscardedAt'>): boolean | null {
+  if (!r.gocuotasOrderId) return null
+  if (r.gocuotasDiscardedAt) return false
+  if (r.gocuotasStatus && STATUS_ANULADA.has(r.gocuotasStatus)) return false
+  return true
+}
+
 export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
   const rescates: Rescate[] = []
   for (const r of rows) {
@@ -100,6 +117,9 @@ export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
       producto: r.producto,
       destino: [r.ciudad, r.provincia].filter(Boolean).join(', '),
       tracking: r.tracking,
+      gocuotasOrderId: r.gocuotasOrderId,
+      gocuotasStatus: r.gocuotasStatus,
+      ordenActiva: esOrdenActiva(r),
       estado,
       solicitadoAt: solicitud.fecha,
       rescatadoAt,

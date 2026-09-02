@@ -69,6 +69,19 @@ function Pipeline({ rescates }: { rescates: Rescate[] }) {
   )
 }
 
+function OrdenGocuotasChip({ activa, status }: { activa: boolean | null; status: string | null }) {
+  if (activa === null) return <span className="text-gray-400">—</span>
+  const cls = activa ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}
+      title={status ? `Status GOcuotas: ${status}` : undefined}
+    >
+      {activa ? '✅ Activa' : '❌ Anulada'}
+    </span>
+  )
+}
+
 function EstadoChip({ estado }: { estado: EstadoRescate }) {
   const meta = metaEstado(estado)
   return (
@@ -154,6 +167,8 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600" title="Terminados: días de solicitud a resolución. Activos: días corriendo.">Días</th>
@@ -173,6 +188,8 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
                   <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={r.producto ?? undefined}>{r.producto ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{r.destino || '—'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.gocuotasOrderId ?? '—'}</td>
+                  <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
                   <td className="px-4 py-3 text-gray-600">
                     {r.ultimoEvento}

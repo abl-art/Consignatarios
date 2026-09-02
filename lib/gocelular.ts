@@ -264,9 +264,12 @@ export async function fetchRescates(ahora: Date = new Date()): Promise<Rescate[]
               so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
               so.customer_phone AS "clienteTelefono", so.product_name AS producto,
               so.shipping_city AS ciudad, so.shipping_province AS provincia,
-              s.tracking_number AS tracking, s.traces
+              s.tracking_number AS tracking, s.traces,
+              go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
+              go.order_discarded_at::text AS "gocuotasDiscardedAt"
        FROM shipments s
        JOIN store_orders so ON so.id = s.store_order_id
+       LEFT JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
        WHERE s.type = 'outbound'
          AND s.traces @> '[{"evento":"SolicitudDeRescate"}]'`
     )

@@ -29,7 +29,7 @@ export default async function EnviosPage({
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-full mx-auto">
       <Link href="/compras" className="text-gray-400 hover:text-gray-600 text-sm">← Compras</Link>
       <h1 className="text-2xl font-bold text-gray-900 mb-1 mt-2">Control de Envíos</h1>
       <p className="text-sm text-gray-500 mb-6">Conciliación de facturas de Andreani contra envíos de GOcelular</p>
