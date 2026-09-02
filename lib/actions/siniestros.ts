@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { fetchSiniestros, fetchEnviosPorTracking } from '@/lib/gocelular'
 import {
@@ -11,7 +11,7 @@ import {
 } from '@/lib/siniestros'
 
 async function getSeguimientos(): Promise<SeguimientoSiniestro[]> {
-  const supabase = createClient()
+  const supabase = createAdminClient()
   const { data } = await supabase
     .from('siniestros_seguimiento')
     .select('tracking, nota_credito, created_at')
@@ -46,7 +46,7 @@ export async function cargarSiniestro(tracking: string): Promise<{ ok?: true; er
     return { error: `No se encontró ningún envío con tracking ${t} en GOcelular.` }
   }
 
-  const supabase = createClient()
+  const supabase = createAdminClient()
   const { error } = await supabase
     .from('siniestros_seguimiento')
     .upsert({ tracking: t }, { onConflict: 'tracking', ignoreDuplicates: true })
@@ -57,7 +57,7 @@ export async function cargarSiniestro(tracking: string): Promise<{ ok?: true; er
 }
 
 export async function setNotaCredito(tracking: string, emitida: boolean): Promise<{ ok?: true; error?: string }> {
-  const supabase = createClient()
+  const supabase = createAdminClient()
   const { error } = await supabase
     .from('siniestros_seguimiento')
     .upsert(
