@@ -154,10 +154,11 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 import { armarAsns, type AsnResumen } from './asn'
 import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
+import { armarRescates, type Rescate, type RescateRaw } from './rescates'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
-export type { AsnResumen, AlertaEnvio }
+export type { AsnResumen, AlertaEnvio, Rescate }
 
 /**
  * Catálogo de teléfonos vendibles con GOcelular para el buscador público
@@ -242,6 +243,34 @@ export async function fetchAlertasEnvios(
            WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text))`
     )
     return armarAlertasEnvios(res.rows, ahora)
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Envíos con rescate solicitado a Andreani para la pestaña Rescates de
+ * /compras/envios. El rescate no es un envío nuevo: es el pedido de que un
+ * outbound sin entregar vuelva al depósito, y se lee de shipments.traces.
+ */
+export async function fetchRescates(ahora: Date = new Date()): Promise<Rescate[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<RescateRaw>(
+      `SELECT so.order_number AS "orderNumber",
+              so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
+              so.customer_phone AS "clienteTelefono", so.product_name AS producto,
+              so.shipping_city AS ciudad, so.shipping_province AS provincia,
+              s.tracking_number AS tracking, s.traces
+       FROM shipments s
+       JOIN store_orders so ON so.id = s.store_order_id
+       WHERE s.type = 'outbound'
+         AND s.traces @> '[{"evento":"SolicitudDeRescate"}]'`
+    )
+    return armarRescates(res.rows, ahora)
   } finally {
     client.release()
   }

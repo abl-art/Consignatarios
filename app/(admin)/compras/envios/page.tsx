@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
-import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchRescates, type AsnResumen, type AlertaEnvio, type Rescate } from '@/lib/gocelular'
+import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
@@ -8,6 +9,7 @@ import CostoCiudad from './CostoCiudad'
 import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
 import AlertasTable from './AlertasTable'
+import RescatesTable from './RescatesTable'
 
 export default async function EnviosPage({
   searchParams,
@@ -17,12 +19,14 @@ export default async function EnviosPage({
   const facturas = await getFacturasEnvios()
   let asns: AsnResumen[] = []
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
+  let rescates: Rescate[] = []
   try {
-    ;[asns, alertas] = await Promise.all([fetchAsns(), fetchAlertasEnvios()])
+    ;[asns, alertas, rescates] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), fetchRescates()])
   } catch {
     // GOcelular no disponible
   }
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
+  const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -114,6 +118,11 @@ export default async function EnviosPage({
           id: 'alertas',
           label: totalAlertas > 0 ? `Alertas (${totalAlertas})` : 'Alertas',
           content: <AlertasTable requierenAtencion={alertas.requierenAtencion} expedidosSinImei={alertas.expedidosSinImei} />,
+        },
+        {
+          id: 'rescates',
+          label: rescatesActivos > 0 ? `Rescates (${rescatesActivos})` : 'Rescates',
+          content: <RescatesTable rescates={rescates} />,
         },
       ]} />
     </div>
