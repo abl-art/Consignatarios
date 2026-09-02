@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
-import { fetchAsns, fetchAlertasEnvios, fetchRescates, type AsnResumen, type AlertaEnvio, type Rescate } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchRescates, fetchSiniestros, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
 import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
@@ -10,6 +10,7 @@ import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
+import SiniestrosTable from './SiniestrosTable'
 
 export default async function EnviosPage({
   searchParams,
@@ -20,8 +21,9 @@ export default async function EnviosPage({
   let asns: AsnResumen[] = []
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
+  let siniestros: Siniestro[] = []
   try {
-    ;[asns, alertas, rescates] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), fetchRescates()])
+    ;[asns, alertas, rescates, siniestros] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), fetchRescates(), fetchSiniestros()])
   } catch {
     // GOcelular no disponible
   }
@@ -123,6 +125,11 @@ export default async function EnviosPage({
           id: 'rescates',
           label: rescatesActivos > 0 ? `Rescates (${rescatesActivos})` : 'Rescates',
           content: <RescatesTable rescates={rescates} />,
+        },
+        {
+          id: 'siniestros',
+          label: siniestros.length > 0 ? `Siniestros (${siniestros.length})` : 'Siniestros',
+          content: <SiniestrosTable siniestros={siniestros} />,
         },
       ]} />
     </div>
