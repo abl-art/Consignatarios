@@ -155,7 +155,7 @@ import { armarAsns, type AsnResumen } from './asn'
 import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { armarRescates, type Rescate, type RescateRaw } from './rescates'
-import { armarSiniestros, type Siniestro, type SiniestroRaw } from './siniestros'
+import { armarSiniestros, type SeguimientoSiniestro, type Siniestro, type SiniestroRaw } from './siniestros'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
@@ -286,30 +286,59 @@ export async function fetchRescates(ahora: Date = new Date()): Promise<Rescate[]
  * descripciones tipo "Siniestrado / Extravío" en shipments.traces, en envíos
  * de cualquier tipo (outbound o return).
  */
-export async function fetchSiniestros(ahora: Date = new Date()): Promise<Siniestro[]> {
+const SELECT_SINIESTRO_RAW = `
+  SELECT so.order_number AS "orderNumber",
+         so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
+         so.customer_phone AS "clienteTelefono", so.product_name AS producto,
+         so.shipping_city AS ciudad, so.shipping_province AS provincia,
+         s.tracking_number AS tracking, s.imei, s.traces,
+         d.trustonic_status::text AS "trustonicStatus",
+         go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
+         go.order_discarded_at::text AS "gocuotasDiscardedAt"
+  FROM shipments s
+  JOIN store_orders so ON so.id = s.store_order_id
+  LEFT JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+  LEFT JOIN devices d ON d.imei = s.imei`
+
+export async function fetchSiniestros(
+  ahora: Date = new Date(),
+  seguimientos: SeguimientoSiniestro[] = [],
+): Promise<Siniestro[]> {
   const pool = getPool()
   if (!pool) return []
 
   const client = await pool.connect()
   try {
     const res = await client.query<SiniestroRaw>(
-      `SELECT so.order_number AS "orderNumber",
-              so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
-              so.customer_phone AS "clienteTelefono", so.product_name AS producto,
-              so.shipping_city AS ciudad, so.shipping_province AS provincia,
-              s.tracking_number AS tracking, s.imei, s.traces,
-              go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
-              go.order_discarded_at::text AS "gocuotasDiscardedAt"
-       FROM shipments s
-       JOIN store_orders so ON so.id = s.store_order_id
-       LEFT JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+      `${SELECT_SINIESTRO_RAW}
        WHERE EXISTS (
          SELECT 1 FROM jsonb_array_elements(s.traces) t
          WHERE t->>'evento' ILIKE '%siniestr%'
             OR t->>'descripcion' ILIKE '%siniestr%'
             OR t->>'descripcion' ILIKE '%extrav%')`
     )
-    return armarSiniestros(res.rows, ahora)
+    return armarSiniestros(res.rows, ahora, seguimientos)
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Datos completos de envíos por número de tracking, para los siniestros
+ * cargados a mano en la pestaña Siniestros.
+ */
+export async function fetchEnviosPorTracking(trackings: string[]): Promise<SiniestroRaw[]> {
+  const pool = getPool()
+  if (!pool || trackings.length === 0) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<SiniestroRaw>(
+      `${SELECT_SINIESTRO_RAW}
+       WHERE s.tracking_number = ANY($1)`,
+      [trackings]
+    )
+    return res.rows
   } finally {
     client.release()
   }

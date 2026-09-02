@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
-import { fetchAsns, fetchAlertasEnvios, fetchRescates, fetchSiniestros, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchRescates, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
+import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
@@ -23,7 +24,7 @@ export default async function EnviosPage({
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
   try {
-    ;[asns, alertas, rescates, siniestros] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), fetchRescates(), fetchSiniestros()])
+    ;[asns, alertas, rescates, siniestros] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), fetchRescates(), getSiniestrosCompletos()])
   } catch {
     // GOcelular no disponible
   }
