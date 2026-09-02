@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, type ReactNode } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 interface Tab {
   id: string
@@ -11,8 +11,17 @@ interface Tab {
 
 export default function EnviosTabs({ tabs }: { tabs: Tab[] }) {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const tabParam = searchParams.get('tab')
   const [active, setActive] = useState(tabParam && tabs.some(t => t.id === tabParam) ? tabParam : tabs[0]?.id ?? '')
+
+  // La pestaña activa vive también en la URL: un refresh (p. ej. tras cargar
+  // un siniestro) no te devuelve a la primera pestaña
+  const elegir = (id: string) => {
+    setActive(id)
+    router.replace(`${pathname}?tab=${id}`, { scroll: false })
+  }
 
   useEffect(() => {
     if (tabParam && tabs.some(t => t.id === tabParam)) {
@@ -26,7 +35,7 @@ export default function EnviosTabs({ tabs }: { tabs: Tab[] }) {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActive(tab.id)}
+            onClick={() => elegir(tab.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               active === tab.id
                 ? 'border-magenta-600 text-magenta-600'
