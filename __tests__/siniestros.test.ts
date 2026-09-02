@@ -29,6 +29,7 @@ function raw(orderNumber: string, traces: TraceEvento[], extra: Partial<Siniestr
     gocuotasOrderId: '18381863',
     gocuotasStatus: 'discarded',
     gocuotasDiscardedAt: '2026-08-28T10:00:00-03:00',
+    envioAt: '2026-08-12T09:00:00-03:00',
     traces,
     ...extra,
   }
@@ -131,16 +132,31 @@ describe('armarSiniestrosManuales', () => {
 })
 
 describe('ordenarSiniestros', () => {
-  it('mezcla automáticos y manuales por fecha de siniestro o de carga', () => {
+  it('ordena por fecha del siniestro, o del envío para los manuales', () => {
     const autos = armarSiniestros([
       raw('SO-AUTO', [ev('Siniestro', '2026-08-28T09:00:00-03:00', 'Siniestrado / Extravío')]),
     ], AHORA)
     const manuales = armarSiniestrosManuales(
-      [raw('SO-MANUAL', [], { tracking: 'T2' })],
+      [
+        raw('SO-MAN-VIEJO', [], { tracking: 'T2', envioAt: '2026-04-10T09:00:00-03:00' }),
+        raw('SO-MAN-NUEVO', [], { tracking: 'T3', envioAt: '2026-08-30T09:00:00-03:00' }),
+      ],
       AHORA,
-      [seg('T2', { createdAt: '2026-09-01T10:00:00-03:00' })],
+      [seg('T2'), seg('T3')],
     )
     const orden = ordenarSiniestros([...autos, ...manuales]).map(s => s.orderNumber)
-    expect(orden).toEqual(['SO-MANUAL', 'SO-AUTO'])
+    expect(orden).toEqual(['SO-MAN-NUEVO', 'SO-AUTO', 'SO-MAN-VIEJO'])
+  })
+
+  it('las cargas masivas con la misma fecha de envío desempatan por tracking descendente', () => {
+    const manuales = armarSiniestrosManuales(
+      [
+        raw('SO-A', [], { tracking: '360002000000001', envioAt: '2026-08-01T09:00:00-03:00' }),
+        raw('SO-B', [], { tracking: '360003000000001', envioAt: '2026-08-01T09:00:00-03:00' }),
+      ],
+      AHORA,
+      [seg('360002000000001'), seg('360003000000001')],
+    )
+    expect(ordenarSiniestros(manuales).map(s => s.orderNumber)).toEqual(['SO-B', 'SO-A'])
   })
 })

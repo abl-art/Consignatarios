@@ -292,6 +292,7 @@ const SELECT_SINIESTRO_RAW = `
          so.customer_phone AS "clienteTelefono", so.product_name AS producto,
          so.shipping_city AS ciudad, so.shipping_province AS provincia,
          s.tracking_number AS tracking, s.imei, s.traces,
+         s.created_at::text AS "envioAt",
          d.trustonic_status::text AS "trustonicStatus",
          go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
          go.order_discarded_at::text AS "gocuotasDiscardedAt"

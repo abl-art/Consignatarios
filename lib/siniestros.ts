@@ -24,6 +24,7 @@ export interface SiniestroRaw {
   gocuotasOrderId: string | null
   gocuotasStatus: string | null
   gocuotasDiscardedAt: string | null
+  envioAt: string | null
   traces: TraceEvento[]
 }
 
@@ -58,6 +59,8 @@ export interface Siniestro {
   notaCredito: boolean
   /** Fecha de carga manual (fila de seguimiento), si existe */
   cargadoAt: string | null
+  /** Fecha de creación del envío en GOcelular */
+  envioAt: string | null
   /** Días desde el siniestro (o desde la carga manual si Andreani no lo informó) */
   dias: number
 }
@@ -95,6 +98,7 @@ function armarSiniestro(r: SiniestroRaw, seg: SeguimientoSiniestro | undefined, 
     informadoAndreani: siniestro !== undefined,
     notaCredito: seg?.notaCredito ?? false,
     cargadoAt: seg?.createdAt ?? null,
+    envioAt: r.envioAt,
     dias: base ? Math.max(0, Math.floor((ahora.getTime() - new Date(base).getTime()) / DIA_MS)) : 0,
   }
 }
@@ -135,8 +139,13 @@ export function armarSiniestrosManuales(
   )
 }
 
-/** Más recientes primero, por fecha de siniestro o de carga manual */
+/**
+ * Más recientes primero, por la fecha real del caso: la del siniestro si
+ * Andreani lo declaró, si no la del envío (las cargas masivas comparten la
+ * misma fecha de carga y no sirven para ordenar). Desempata por tracking.
+ */
 export function ordenarSiniestros(siniestros: Siniestro[]): Siniestro[] {
-  const ref = (s: Siniestro) => s.siniestroAt ?? s.cargadoAt ?? ''
-  return [...siniestros].sort((a, b) => ref(b).localeCompare(ref(a)))
+  const ref = (s: Siniestro) => s.siniestroAt ?? s.envioAt ?? s.cargadoAt ?? ''
+  return [...siniestros].sort((a, b) =>
+    ref(b).localeCompare(ref(a)) || (b.tracking ?? '').localeCompare(a.tracking ?? ''))
 }
