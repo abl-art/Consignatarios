@@ -29,7 +29,19 @@ export interface RescateRaw {
   traces: TraceEvento[]
 }
 
-export type EstadoRescate = 'solicitado' | 'rescatado' | 'en_viaje' | 'rendido' | 'entregado'
+export type EstadoRescate = 'pendiente' | 'solicitado' | 'rescatado' | 'en_viaje' | 'rendido' | 'entregado'
+
+export const MOTIVOS_RESCATE = ['Fraude', 'Arrepentimiento', 'Devolución', 'Falla'] as const
+export type MotivoRescate = (typeof MOTIVOS_RESCATE)[number]
+
+// Fila de rescates_seguimiento (Supabase): carga manual de un rescate
+// solicitado + su motivo. Cuando la SolicitudDeRescate aparece en traces, la
+// fila solo aporta el motivo y el estado lo maneja el flujo automático.
+export interface SeguimientoRescate {
+  tracking: string
+  motivo: string | null
+  createdAt: string
+}
 
 export interface Rescate {
   orderNumber: string
@@ -43,6 +55,7 @@ export interface Rescate {
   gocuotasStatus: string | null
   /** true = activa (delivered), false = anulada (discarded), null = sin orden GOcuotas vinculada */
   ordenActiva: boolean | null
+  motivo: string | null
   estado: EstadoRescate
   solicitadoAt: string
   rescatadoAt: string | null
@@ -55,6 +68,7 @@ export interface Rescate {
 }
 
 export const ESTADOS_RESCATE: { estado: EstadoRescate; emoji: string; label: string; descripcion: string; terminal: boolean }[] = [
+  { estado: 'pendiente', emoji: '🕓', label: 'Pendientes de aceptación', descripcion: 'Cargado a mano: la solicitud todavía no aparece en el tracking de Andreani', terminal: false },
   { estado: 'solicitado', emoji: '🕐', label: 'Solicitados', descripcion: 'Rescate pedido, Andreani aún no lo ejecutó', terminal: false },
   { estado: 'rescatado', emoji: '⏸️', label: 'En sucursal', descripcion: 'Rescatado en sucursal, sin despacho de vuelta todavía', terminal: false },
   { estado: 'en_viaje', emoji: '🚚', label: 'En viaje de vuelta', descripcion: 'Rescatado y viajando de regreso al depósito', terminal: false },
@@ -100,7 +114,33 @@ export function esOrdenActiva(r: Pick<RescateRaw, 'gocuotasOrderId' | 'gocuotasS
   return true
 }
 
-export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
+function motivosPorTracking(seguimientos: SeguimientoRescate[]): Map<string, SeguimientoRescate> {
+  return new Map(seguimientos.map(s => [s.tracking, s]))
+}
+
+function base(r: RescateRaw, seguimiento: SeguimientoRescate | undefined) {
+  return {
+    orderNumber: r.orderNumber,
+    cliente: (r.clienteNombre ?? '').replace(/\s+/g, ' ').trim(),
+    dni: r.clienteDni,
+    telefono: r.clienteTelefono,
+    producto: r.producto,
+    destino: [r.ciudad, r.provincia].filter(Boolean).join(', '),
+    tracking: r.tracking,
+    gocuotasOrderId: r.gocuotasOrderId,
+    gocuotasStatus: r.gocuotasStatus,
+    ordenActiva: esOrdenActiva(r),
+    motivo: seguimiento?.motivo ?? null,
+  }
+}
+
+function ordenar(rescates: Rescate[]): Rescate[] {
+  const orden = new Map(ESTADOS_RESCATE.map((e, i) => [e.estado, i]))
+  return rescates.sort((a, b) => (orden.get(a.estado)! - orden.get(b.estado)!) || b.dias - a.dias)
+}
+
+export function armarRescates(rows: RescateRaw[], ahora: Date, seguimientos: SeguimientoRescate[] = []): Rescate[] {
+  const segs = motivosPorTracking(seguimientos)
   const rescates: Rescate[] = []
   for (const r of rows) {
     const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
@@ -110,16 +150,7 @@ export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
     const ultimo = eventos[eventos.length - 1]
     const hasta = metaEstado(estado).terminal ? new Date(ultimo.fecha) : ahora
     rescates.push({
-      orderNumber: r.orderNumber,
-      cliente: (r.clienteNombre ?? '').replace(/\s+/g, ' ').trim(),
-      dni: r.clienteDni,
-      telefono: r.clienteTelefono,
-      producto: r.producto,
-      destino: [r.ciudad, r.provincia].filter(Boolean).join(', '),
-      tracking: r.tracking,
-      gocuotasOrderId: r.gocuotasOrderId,
-      gocuotasStatus: r.gocuotasStatus,
-      ordenActiva: esOrdenActiva(r),
+      ...base(r, r.tracking ? segs.get(r.tracking) : undefined),
       estado,
       solicitadoAt: solicitud.fecha,
       rescatadoAt,
@@ -130,8 +161,42 @@ export function armarRescates(rows: RescateRaw[], ahora: Date): Rescate[] {
       dias: Math.max(0, Math.floor((hasta.getTime() - new Date(solicitud.fecha).getTime()) / DIA_MS)),
     })
   }
-  const orden = new Map(ESTADOS_RESCATE.map((e, i) => [e.estado, i]))
-  return rescates.sort((a, b) => (orden.get(a.estado)! - orden.get(b.estado)!) || b.dias - a.dias)
+  return ordenar(rescates)
+}
+
+/**
+ * Rescates cargados a mano cuyo envío todavía no muestra la SolicitudDeRescate
+ * en el tracking de Andreani: quedan "Pendientes de aceptación" con la fecha
+ * de carga como solicitud. excluir = trackings ya listados como automáticos
+ * (cuando la API los muestra, esta fila desaparece y el estado sigue solo).
+ */
+export function armarRescatesManuales(
+  rows: RescateRaw[],
+  seguimientos: SeguimientoRescate[],
+  ahora: Date,
+  excluir: Set<string> = new Set(),
+): Rescate[] {
+  const segs = motivosPorTracking(seguimientos)
+  const rescates: Rescate[] = []
+  for (const r of rows) {
+    if (!r.tracking || excluir.has(r.tracking)) continue
+    const seguimiento = segs.get(r.tracking)
+    if (!seguimiento) continue
+    const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
+    const ultimo = eventos[eventos.length - 1]
+    rescates.push({
+      ...base(r, seguimiento),
+      estado: 'pendiente',
+      solicitadoAt: seguimiento.createdAt,
+      rescatadoAt: null,
+      enViajeAt: null,
+      rendidoAt: null,
+      ultimoEvento: ultimo ? [ultimo.evento, ultimo.descripcion].filter(Boolean).join(' — ') : 'Cargado a mano',
+      ultimoEventoAt: ultimo?.fecha ?? seguimiento.createdAt,
+      dias: Math.max(0, Math.floor((ahora.getTime() - new Date(seguimiento.createdAt).getTime()) / DIA_MS)),
+    })
+  }
+  return ordenar(rescates)
 }
 
 /**

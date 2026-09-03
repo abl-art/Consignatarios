@@ -1,17 +1,21 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Rescate } from '@/lib/gocelular'
 import {
   ESTADOS_RESCATE,
+  MOTIVOS_RESCATE,
   contarPorEstado,
   filtrarRescatesPorFecha,
   metaEstado,
   pipelineRescates,
   type EstadoRescate,
 } from '@/lib/rescates'
+import { cargarRescate, setMotivoRescate } from '@/lib/actions/rescates'
 
 const CHIP_POR_ESTADO: Record<EstadoRescate, string> = {
+  pendiente: 'bg-violet-50 text-violet-700 border-violet-200',
   solicitado: 'bg-gray-50 text-gray-600 border-gray-200',
   rescatado: 'bg-amber-50 text-amber-700 border-amber-200',
   en_viaje: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -91,6 +95,103 @@ function EstadoChip({ estado }: { estado: EstadoRescate }) {
   )
 }
 
+function CargarRescate() {
+  const router = useRouter()
+  const [abierto, setAbierto] = useState(false)
+  const [tracking, setTracking] = useState('')
+  const [motivo, setMotivo] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [guardando, startTransition] = useTransition()
+
+  const guardar = () => {
+    setError(null)
+    startTransition(async () => {
+      const r = await cargarRescate(tracking, motivo)
+      if (r.error) {
+        setError(r.error)
+        return
+      }
+      setTracking('')
+      setMotivo('')
+      setAbierto(false)
+      router.refresh()
+    })
+  }
+
+  if (!abierto) {
+    return (
+      <button
+        onClick={() => setAbierto(true)}
+        className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700"
+      >
+        + Cargar rescate
+      </button>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-2 flex-wrap">
+      <input
+        type="text"
+        value={tracking}
+        onChange={e => setTracking(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && guardar()}
+        placeholder="Nº de seguimiento"
+        autoFocus
+        className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg font-mono w-44 focus:outline-none focus:ring-2 focus:ring-gray-900"
+      />
+      <select
+        value={motivo}
+        onChange={e => setMotivo(e.target.value)}
+        className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
+      >
+        <option value="">Motivo…</option>
+        {MOTIVOS_RESCATE.map(m => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+      <button
+        onClick={guardar}
+        disabled={guardando}
+        className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-50"
+      >
+        {guardando ? 'Validando…' : 'Guardar'}
+      </button>
+      <button onClick={() => { setAbierto(false); setError(null) }} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </span>
+  )
+}
+
+function SelectMotivo({ rescate }: { rescate: Rescate }) {
+  const router = useRouter()
+  const [guardando, startTransition] = useTransition()
+
+  if (!rescate.tracking) return <span className="text-gray-400">—</span>
+  const tracking = rescate.tracking
+
+  return (
+    <select
+      value={rescate.motivo ?? ''}
+      disabled={guardando}
+      onChange={e =>
+        startTransition(async () => {
+          await setMotivoRescate(tracking, e.target.value)
+          router.refresh()
+        })
+      }
+      className={`px-1.5 py-1 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50 ${
+        rescate.motivo ? 'border-gray-300 text-gray-900' : 'border-dashed border-gray-300 text-gray-400'
+      }`}
+      title="Motivo del rescate"
+    >
+      <option value="">—</option>
+      {MOTIVOS_RESCATE.map(m => (
+        <option key={m} value={m}>{m}</option>
+      ))}
+    </select>
+  )
+}
+
 export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
@@ -102,18 +203,26 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
 
   if (rescates.length === 0) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-        <p className="text-sm text-gray-600">No hay envíos con rescate solicitado a Andreani.</p>
+      <div>
+        <div className="flex justify-end mb-4"><CargarRescate /></div>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+          <p className="text-sm text-gray-600">No hay envíos con rescate solicitado a Andreani.</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-4">
-        Envíos sin entregar cuyo rescate se pidió a Andreani para que el equipo vuelva al depósito.
-        Las tarjetas filtran la tabla al hacer click; el rango de fechas es sobre el día de la solicitud del rescate.
-      </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <p className="text-xs text-gray-500 max-w-2xl">
+          Envíos sin entregar cuyo rescate se pidió a Andreani para que el equipo vuelva al depósito.
+          Las tarjetas filtran la tabla al hacer click; el rango de fechas es sobre el día de la solicitud del rescate.
+          Un rescate cargado a mano queda 🕓 Pendiente de aceptación hasta que la solicitud aparezca en el tracking;
+          de ahí en más el estado avanza solo.
+        </p>
+        <CargarRescate />
+      </div>
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-xs text-gray-500">Solicitado entre</span>
@@ -130,7 +239,7 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         {ESTADOS_RESCATE.map(({ estado, emoji, label, descripcion }) => {
           const { cantidad, pct } = resumen.find(r => r.estado === estado)!
           const activa = estadoFiltro === estado
@@ -169,6 +278,7 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600" title="Terminados: días de solicitud a resolución. Activos: días corriendo.">Días</th>
@@ -190,6 +300,7 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.gocuotasOrderId ?? '—'}</td>
                   <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
+                  <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
                   <td className="px-4 py-3 text-gray-600">
                     {r.ultimoEvento}

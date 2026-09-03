@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   armarRescates,
+  armarRescatesManuales,
   filtrarRescatesPorFecha,
   contarPorEstado,
   pipelineRescates,
   type RescateRaw,
+  type SeguimientoRescate,
   type TraceEvento,
 } from '@/lib/rescates'
 
@@ -144,6 +146,59 @@ describe('orden GOcuotas vinculada', () => {
       gocuotasOrderId: null, gocuotasStatus: null, gocuotasDiscardedAt: null,
     })], AHORA)
     expect(r.ordenActiva).toBeNull()
+  })
+})
+
+describe('rescates cargados a mano (pendientes de aceptación)', () => {
+  const seg = (tracking: string, extra: Partial<SeguimientoRescate> = {}): SeguimientoRescate => ({
+    tracking,
+    motivo: 'Fraude',
+    createdAt: '2026-09-01T10:00:00-03:00',
+    ...extra,
+  })
+
+  it('un tracking cargado a mano sin SolicitudDeRescate en traces queda pendiente con su motivo', () => {
+    const [r] = armarRescatesManuales(
+      [raw('SO-MANUAL', [ev('OrdenDeEnvioCreada', '2026-08-28T10:00:00-03:00')])],
+      [seg('360003081525590')],
+      AHORA,
+    )
+    expect(r.estado).toBe('pendiente')
+    expect(r.motivo).toBe('Fraude')
+    expect(r.solicitadoAt).toBe('2026-09-01T10:00:00-03:00') // fecha de carga
+    expect(r.dias).toBe(1)
+    expect(r.orderNumber).toBe('SO-MANUAL')
+  })
+
+  it('excluye los trackings que ya aparecieron en el flujo automático', () => {
+    const r = armarRescatesManuales(
+      [raw('SO-MANUAL', [])],
+      [seg('360003081525590')],
+      AHORA,
+      new Set(['360003081525590']),
+    )
+    expect(r).toHaveLength(0)
+  })
+
+  it('el flujo automático hereda el motivo del seguimiento por tracking', () => {
+    const [r] = armarRescates(
+      [raw('SO-AUTO', [ev('SolicitudDeRescate', '2026-08-20T09:00:00-03:00')])],
+      AHORA,
+      [seg('360003081525590', { motivo: 'Falla' })],
+    )
+    expect(r.estado).toBe('solicitado')
+    expect(r.motivo).toBe('Falla')
+  })
+
+  it('sin seguimiento el motivo queda null', () => {
+    const [r] = armarRescates([raw('SO-AUTO', [ev('SolicitudDeRescate', '2026-08-20T09:00:00-03:00')])], AHORA)
+    expect(r.motivo).toBeNull()
+  })
+
+  it('los pendientes cuentan en el resumen por estado', () => {
+    const pendientes = armarRescatesManuales([raw('SO-MANUAL', [])], [seg('360003081525590')], AHORA)
+    const conteo = contarPorEstado(pendientes)
+    expect(conteo.find(c => c.estado === 'pendiente')).toEqual({ estado: 'pendiente', cantidad: 1, pct: 100 })
   })
 })
 

@@ -154,7 +154,7 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 import { armarAsns, type AsnResumen } from './asn'
 import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
-import { armarRescates, type Rescate, type RescateRaw } from './rescates'
+import { armarRescates, type Rescate, type RescateRaw, type SeguimientoRescate } from './rescates'
 import { armarSiniestros, type SeguimientoSiniestro, type Siniestro, type SiniestroRaw } from './siniestros'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
@@ -254,7 +254,7 @@ export async function fetchAlertasEnvios(
  * /compras/envios. El rescate no es un envío nuevo: es el pedido de que un
  * outbound sin entregar vuelva al depósito, y se lee de shipments.traces.
  */
-export async function fetchRescates(ahora: Date = new Date()): Promise<Rescate[]> {
+export async function fetchRescates(ahora: Date = new Date(), seguimientos: SeguimientoRescate[] = []): Promise<Rescate[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -274,7 +274,7 @@ export async function fetchRescates(ahora: Date = new Date()): Promise<Rescate[]
        WHERE s.type = 'outbound'
          AND s.traces @> '[{"evento":"SolicitudDeRescate"}]'`
     )
-    return armarRescates(res.rows, ahora)
+    return armarRescates(res.rows, ahora, seguimientos)
   } finally {
     client.release()
   }
