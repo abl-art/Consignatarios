@@ -124,8 +124,16 @@ export default function ListaPreciosClient({ productos, mupInicial }: Props) {
                   key={p.id}
                   className={`hover:bg-gray-50 transition-colors ${oculto ? 'opacity-40' : ''}`}
                 >
-                  <td className="px-6 py-3 font-medium text-gray-900">
-                    {p.nombre}
+                  <td className="px-6 py-3">
+                    <span className="font-medium text-gray-900">{p.nombre}</span>
+                    <span className="block text-xs text-gray-400">
+                      <span
+                        className={p.proveedor_preferido ? undefined : 'text-amber-600 font-medium'}
+                        title={p.proveedor_preferido ? undefined : 'El proveedor preferido de la marca no tiene precio: se usa el más barato del resto'}
+                      >
+                        {p.proveedor}{!p.proveedor_preferido && ' *'}
+                      </span>
+                    </span>
                   </td>
                   <td className="px-6 py-3 text-right text-gray-700 tabular-nums">
                     {formatearMoneda(p.mejor_precio)}
