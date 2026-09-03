@@ -64,13 +64,47 @@ function PdfCell({ bono }: { bono: FilaHistorialBono }) {
   )
 }
 
+// Agotado cuenta como vigente para el filtro: la campaña sigue dentro de su
+// vigencia aunque el cupo ya no descuente
+type FiltroEstado = 'vigente' | 'vencido' | 'futuro'
+const FILTROS: { valor: FiltroEstado; label: string }[] = [
+  { valor: 'vigente', label: 'Vigentes' },
+  { valor: 'vencido', label: 'Vencidos' },
+  { valor: 'futuro', label: 'Futuros' },
+]
+
+function coincide(estado: FilaHistorialBono['estado'], filtro: FiltroEstado): boolean {
+  return filtro === 'vigente' ? estado === 'vigente' || estado === 'agotado' : estado === filtro
+}
+
 export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBono[] }) {
+  const [filtro, setFiltro] = useState<FiltroEstado | null>(null)
+
   if (bonos.length === 0) {
     return <p className="text-sm text-gray-500">Todavía no hay bonos cargados. Se cargan desde la columna Bono de la pestaña Lista.</p>
   }
 
+  const visibles = filtro ? bonos.filter(b => coincide(b.estado, filtro)) : bonos
+
   return (
     <div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[null, ...FILTROS.map(f => f.valor)].map(v => {
+          const label = v === null ? 'Todos' : FILTROS.find(f => f.valor === v)!.label
+          const cantidad = v === null ? bonos.length : bonos.filter(b => coincide(b.estado, v)).length
+          return (
+            <button
+              key={v ?? 'todos'}
+              onClick={() => setFiltro(v)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                filtro === v ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              {label} ({cantidad})
+            </button>
+          )
+        })}
+      </div>
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -88,7 +122,7 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {bonos.map(b => (
+            {visibles.map(b => (
               <tr key={b.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-gray-900">{b.nombreModelo}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{peso(b.monto)}</td>
