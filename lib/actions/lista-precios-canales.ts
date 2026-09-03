@@ -10,12 +10,14 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   fetchPreciosTiendaCelulares,
+  fetchVentasAccionConMonto,
   fetchVentasPorModelo,
   fetchVentasPropiasPorModelo,
   fetchVentasPropiasConFactura,
 } from '@/lib/gocelular'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
-import { armarNotasCredito, type GrupoNC } from '@/lib/notas-credito'
+import { armarNotasCredito, marcaNC, resumenVentasAccion, PROVEEDOR_NC, type GrupoNC } from '@/lib/notas-credito'
+import { renderNcAccion } from '@/lib/pdf/nc-accion'
 import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
 import {
   ahoraArgentina,
@@ -350,6 +352,42 @@ export async function getNotasCredito(): Promise<GrupoNC[]> {
     if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
   }
   return armarNotasCredito(armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina()))
+}
+
+/**
+ * PDF de detalle de una acción (grupo de la pestaña Notas de crédito): por
+ * modelo, cantidad vendida en la vigencia y precio de venta. Se genera al
+ * momento y viaja en base64 (queda detrás del login, no se publica a un
+ * bucket). Acción en curso: ventas hasta hoy.
+ */
+export async function generarPdfAccion(bonoIds: string[]) {
+  if (!bonoIds.length) return { error: 'Acción vacía' }
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('lista_precios_bonos').select('*').in('id', bonoIds)
+  if (!data || data.length === 0) return { error: 'Acción no encontrada' }
+  const registros = (data as BonoRow[]).map(mapBonoRow).sort((a, b) => a.nombreModelo.localeCompare(b.nombreModelo))
+
+  const marca = marcaNC(registros[0].nombreModelo)
+  const proveedor = PROVEEDOR_NC[marca] ?? marca
+  const desde = registros[0].desde
+  const hasta = registros[0].hasta
+  const hoy = hoyIso()
+
+  let ventas
+  try {
+    ventas = await fetchVentasAccionConMonto(desde ?? '2026-03-23', hasta ?? hoy)
+  } catch (e) {
+    return { error: `No se pudieron leer las ventas de GOcelular: ${e instanceof Error ? e.message : e}` }
+  }
+  const filas = resumenVentasAccion(registros, ventas)
+
+  const buffer = await renderNcAccion({ marca, proveedor, desde, hasta, filas, generadoEl: hoy })
+  const slug = marca.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  return {
+    ok: true,
+    fileName: `nc-accion-${slug}-${desde ?? 'inicio'}-${hasta ?? 'sin-vto'}.pdf`,
+    base64: buffer.toString('base64'),
+  }
 }
 
 /** Checkbox Emitida de una NC: marca/desmarca todas las campañas del grupo. */

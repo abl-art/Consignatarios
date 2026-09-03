@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarNotasCredito } from '@/lib/notas-credito'
+import { armarNotasCredito, resumenVentasAccion } from '@/lib/notas-credito'
 import type { FilaHistorialBono } from '@/lib/lista-precios'
 
 // Campaña como sale de armarHistorialBonos; los números de NC ya vienen
@@ -104,5 +104,51 @@ describe('armarNotasCredito', () => {
       campania({ id: 'b' }),
     ])
     expect(grupos[0].desde).toBe('2026-09-03')
+  })
+})
+
+describe('resumenVentasAccion (PDF de detalle por acción)', () => {
+  const venta = (modelo: string, monto: number) => ({ modelo, monto })
+
+  it('cuenta las vendidas por modelo y toma el precio de venta más frecuente', () => {
+    const filas = resumenVentasAccion(
+      [{ nombreModelo: 'Motorola Moto G17 4/128GB' }],
+      [
+        venta('Motorola Moto G17 4/128GB', 434700),
+        venta('Motorola Moto G17 4/128GB', 434700),
+        venta('Motorola Moto G17 4/128GB', 484200), // vendida antes del cambio de precio
+      ],
+    )
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 3, precioVenta: 434700 }])
+  })
+
+  it('matchea variantes de nombre y no cuenta otros modelos', () => {
+    const filas = resumenVentasAccion(
+      [{ nombreModelo: 'Motorola Moto G17 4/128GB' }],
+      [venta('Celular Motorola Moto G17 128GB', 434700), venta('Motorola Moto G06 64GB', 200000)],
+    )
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 1, precioVenta: 434700 }])
+  })
+
+  it('un modelo de la acción sin ventas sale con 0 y sin precio', () => {
+    const filas = resumenVentasAccion([{ nombreModelo: 'Motorola Moto G77 8/256GB 5G' }], [])
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G77 8/256GB 5G', vendidas: 0, precioVenta: null }])
+  })
+
+  it('en empate de frecuencia gana el precio más alto (el vigente suele ser el de la lista)', () => {
+    const filas = resumenVentasAccion(
+      [{ nombreModelo: 'Nubia Music 2 128/4GB' }],
+      [venta('Nubia Music 2 128/4GB', 100000), venta('Nubia Music 2 128/4GB', 120000)],
+    )
+    expect(filas[0].precioVenta).toBe(120000)
+  })
+
+  it('ignora centavos raros: el precio se redondea a pesos para agrupar', () => {
+    const filas = resumenVentasAccion(
+      [{ nombreModelo: 'Nubia Music 2 128/4GB' }],
+      [venta('Nubia Music 2 128/4GB', 120000.01), venta('Nubia Music 2 128/4GB', 119999.99)],
+    )
+    expect(filas[0].vendidas).toBe(2)
+    expect(filas[0].precioVenta).toBe(120000)
   })
 })

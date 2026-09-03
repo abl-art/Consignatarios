@@ -3,7 +3,7 @@
 import { Fragment, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { PROVEEDOR_NC, type GrupoNC } from '@/lib/notas-credito'
-import { setNcEmitida } from '@/lib/actions/lista-precios-canales'
+import { generarPdfAccion, setNcEmitida } from '@/lib/actions/lista-precios-canales'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
 
@@ -63,6 +63,43 @@ function CheckEmitida({ grupo }: { grupo: GrupoNC }) {
       </span>
       {error && <span className="text-xs text-red-600" title={error}>⚠</span>}
     </label>
+  )
+}
+
+function PdfAccion({ grupo }: { grupo: GrupoNC }) {
+  const [generando, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const descargar = () => {
+    setError(null)
+    startTransition(async () => {
+      const r = await generarPdfAccion(grupo.campanias.map(c => c.id))
+      if (r.error || !r.base64) {
+        setError(r.error ?? 'No se pudo generar el PDF')
+        return
+      }
+      const bytes = Uint8Array.from(atob(r.base64), ch => ch.charCodeAt(0))
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = r.fileName ?? 'nc-accion.pdf'
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+  }
+
+  if (generando) return <span className="text-xs text-gray-400">Generando…</span>
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <button
+        onClick={descargar}
+        className="px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
+        title="PDF con cantidad vendida y precio de venta por modelo de la acción"
+      >
+        Descargar
+      </button>
+      {error && <span className="text-xs text-red-600" title={error}>⚠</span>}
+    </span>
   )
 }
 
@@ -164,6 +201,7 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC total</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">NC emitida</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">PDF ventas</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -200,6 +238,9 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
                   <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                     <CheckEmitida grupo={g} />
                   </td>
+                  <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                    <PdfAccion grupo={g} />
+                  </td>
                 </tr>
                 {abiertos.has(g.key) &&
                   g.campanias.map(c => (
@@ -216,6 +257,7 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
                           {ESTADO_CAMPANIA[c.estado].label}
                         </span>
                       </td>
+                      <td className="px-4 py-1.5" />
                       <td className="px-4 py-1.5" />
                     </tr>
                   ))}

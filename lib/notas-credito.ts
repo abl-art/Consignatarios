@@ -4,6 +4,7 @@
 // vigencia vienen en una única NC de Newsan). Cada acción sabe qué meses toca
 // su vigencia para poder filtrar por mes en la UI.
 
+import { normalizarModelo } from './inventario-indicadores'
 import { normalizarMarca } from './marca'
 import type { FilaHistorialBono } from './lista-precios'
 
@@ -61,6 +62,51 @@ function mesesDeVigencia(desde?: string, hasta?: string): string[] {
     if (m > 12) { m = 1; y += 1 }
   }
   return meses
+}
+
+// Una venta propia dentro de la vigencia de la acción, con el monto real de
+// la orden (precio que pagó el cliente)
+export interface VentaAccion {
+  modelo: string
+  monto: number
+}
+
+export interface FilaVentasAccion {
+  modelo: string
+  vendidas: number
+  precioVenta: number | null // el precio más frecuente del período; null sin ventas
+}
+
+/**
+ * Detalle por modelo para el PDF de una acción: cantidad vendida en la
+ * vigencia y precio de venta. Como el precio puede cambiar dentro del período
+ * (ej. arrancó el bono a mitad de día), se informa el MÁS FRECUENTE
+ * redondeado a pesos; en empate gana el más alto.
+ */
+export function resumenVentasAccion(
+  campanias: { nombreModelo: string }[],
+  ventas: VentaAccion[],
+): FilaVentasAccion[] {
+  return campanias.map(c => {
+    const clave = normalizarModelo(c.nombreModelo)
+    const frecuencia = new Map<number, number>()
+    let vendidas = 0
+    for (const v of ventas) {
+      if (normalizarModelo(v.modelo) !== clave) continue
+      vendidas += 1
+      const precio = Math.round(v.monto)
+      frecuencia.set(precio, (frecuencia.get(precio) ?? 0) + 1)
+    }
+    let precioVenta: number | null = null
+    let mejor = 0
+    for (const [precio, veces] of frecuencia) {
+      if (veces > mejor || (veces === mejor && precio > (precioVenta ?? 0))) {
+        mejor = veces
+        precioVenta = precio
+      }
+    }
+    return { modelo: c.nombreModelo, vendidas, precioVenta }
+  })
 }
 
 export function armarNotasCredito(bonos: FilaHistorialBono[]): GrupoNC[] {
