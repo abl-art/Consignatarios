@@ -110,16 +110,18 @@ describe('armarNotasCredito', () => {
 describe('resumenVentasAccion (PDF de detalle por acción)', () => {
   const venta = (modelo: string, monto: number) => ({ modelo, monto })
 
-  it('cuenta las vendidas por modelo y toma el precio de venta más frecuente', () => {
+  it('cuenta las vendidas por modelo, con cupo y % de utilización, y toma el precio más frecuente', () => {
     const filas = resumenVentasAccion(
-      [{ nombreModelo: 'Motorola Moto G17 4/128GB' }],
+      [{ nombreModelo: 'Motorola Moto G17 4/128GB', cupo: 100 }],
       [
         venta('Motorola Moto G17 4/128GB', 434700),
         venta('Motorola Moto G17 4/128GB', 434700),
         venta('Motorola Moto G17 4/128GB', 484200), // vendida antes del cambio de precio
       ],
     )
-    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 3, precioVenta: 434700 }])
+    expect(filas).toEqual([
+      { modelo: 'Motorola Moto G17 4/128GB', vendidas: 3, cupo: 100, utilizacion: 0.03, precioVenta: 434700 },
+    ])
   })
 
   it('matchea variantes de nombre y no cuenta otros modelos', () => {
@@ -127,12 +129,24 @@ describe('resumenVentasAccion (PDF de detalle por acción)', () => {
       [{ nombreModelo: 'Motorola Moto G17 4/128GB' }],
       [venta('Celular Motorola Moto G17 128GB', 434700), venta('Motorola Moto G06 64GB', 200000)],
     )
-    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 1, precioVenta: 434700 }])
+    expect(filas).toEqual([
+      { modelo: 'Motorola Moto G17 4/128GB', vendidas: 1, cupo: null, utilizacion: null, precioVenta: 434700 },
+    ])
   })
 
-  it('un modelo de la acción sin ventas sale con 0 y sin precio', () => {
-    const filas = resumenVentasAccion([{ nombreModelo: 'Motorola Moto G77 8/256GB 5G' }], [])
-    expect(filas).toEqual([{ modelo: 'Motorola Moto G77 8/256GB 5G', vendidas: 0, precioVenta: null }])
+  it('un modelo de la acción sin ventas sale con 0, 0% de utilización y sin precio', () => {
+    const filas = resumenVentasAccion([{ nombreModelo: 'Motorola Moto G77 8/256GB 5G', cupo: 50 }], [])
+    expect(filas).toEqual([
+      { modelo: 'Motorola Moto G77 8/256GB 5G', vendidas: 0, cupo: 50, utilizacion: 0, precioVenta: null },
+    ])
+  })
+
+  it('vender más que el cupo supera el 100% (se informa igual)', () => {
+    const filas = resumenVentasAccion(
+      [{ nombreModelo: 'Nubia Music 2 128/4GB', cupo: 2 }],
+      [venta('Nubia Music 2 128/4GB', 100000), venta('Nubia Music 2 128/4GB', 100000), venta('Nubia Music 2 128/4GB', 100000)],
+    )
+    expect(filas[0].utilizacion).toBe(1.5)
   })
 
   it('en empate de frecuencia gana el precio más alto (el vigente suele ser el de la lista)', () => {

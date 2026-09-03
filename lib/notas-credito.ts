@@ -74,17 +74,19 @@ export interface VentaAccion {
 export interface FilaVentasAccion {
   modelo: string
   vendidas: number
+  cupo: number | null
+  utilizacion: number | null // vendidas ÷ cupo (0.5 = 50%); null sin cupo, puede superar 1
   precioVenta: number | null // el precio más frecuente del período; null sin ventas
 }
 
 /**
  * Detalle por modelo para el PDF de una acción: cantidad vendida en la
- * vigencia y precio de venta. Como el precio puede cambiar dentro del período
- * (ej. arrancó el bono a mitad de día), se informa el MÁS FRECUENTE
- * redondeado a pesos; en empate gana el más alto.
+ * vigencia, cupo, % de utilización y precio de venta. Como el precio puede
+ * cambiar dentro del período (ej. arrancó el bono a mitad de día), se informa
+ * el MÁS FRECUENTE redondeado a pesos; en empate gana el más alto.
  */
 export function resumenVentasAccion(
-  campanias: { nombreModelo: string }[],
+  campanias: { nombreModelo: string; cupo?: number }[],
   ventas: VentaAccion[],
 ): FilaVentasAccion[] {
   return campanias.map(c => {
@@ -105,7 +107,14 @@ export function resumenVentasAccion(
         precioVenta = precio
       }
     }
-    return { modelo: c.nombreModelo, vendidas, precioVenta }
+    const cupo = c.cupo && c.cupo > 0 ? c.cupo : null
+    return {
+      modelo: c.nombreModelo,
+      vendidas,
+      cupo,
+      utilizacion: cupo ? vendidas / cupo : null,
+      precioVenta,
+    }
   })
 }
 

@@ -77,8 +77,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
   },
   colModelo: { flex: 1 },
-  colCantidad: { width: 110, textAlign: 'right' },
-  colPrecio: { width: 130, textAlign: 'right' },
+  colCantidad: { width: 90, textAlign: 'right' },
+  colCupo: { width: 60, textAlign: 'right' },
+  colUtilizacion: { width: 75, textAlign: 'right' },
+  colPrecio: { width: 100, textAlign: 'right' },
   sinVentas: { color: '#9ca3af' },
   footer: {
     marginTop: 12,
@@ -111,8 +113,11 @@ export async function renderNcAccion(props: NcAccionProps): Promise<Buffer> {
   return renderToBuffer(<NcAccionPDF {...props} />)
 }
 
+const porcentaje = (n: number) => `${Math.round(n * 100)}%`
+
 export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl }: NcAccionProps) {
   const totalVendidas = filas.reduce((acc, f) => acc + f.vendidas, 0)
+  const totalCupo = filas.reduce((acc, f) => acc + (f.cupo ?? 0), 0)
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -144,7 +149,9 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
 
         <View style={styles.tableHeader} fixed>
           <Text style={[styles.th, styles.colModelo]}>Modelo</Text>
-          <Text style={[styles.th, styles.colCantidad]}>Cantidad vendida</Text>
+          <Text style={[styles.th, styles.colCantidad]}>Cant. vendida</Text>
+          <Text style={[styles.th, styles.colCupo]}>Cupo</Text>
+          <Text style={[styles.th, styles.colUtilizacion]}>Utilización</Text>
           <Text style={[styles.th, styles.colPrecio]}>Precio de venta</Text>
         </View>
         {filas.map((f, i) => (
@@ -152,6 +159,12 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
             <Text style={styles.colModelo}>{f.modelo}</Text>
             <Text style={f.vendidas === 0 ? [styles.colCantidad, styles.sinVentas] : styles.colCantidad}>
               {f.vendidas}
+            </Text>
+            <Text style={f.cupo === null ? [styles.colCupo, styles.sinVentas] : styles.colCupo}>
+              {f.cupo ?? '—'}
+            </Text>
+            <Text style={f.utilizacion === null ? [styles.colUtilizacion, styles.sinVentas] : styles.colUtilizacion}>
+              {f.utilizacion !== null ? porcentaje(f.utilizacion) : '—'}
             </Text>
             <Text style={f.precioVenta === null ? [styles.colPrecio, styles.sinVentas] : styles.colPrecio}>
               {f.precioVenta !== null ? peso(f.precioVenta) : '—'}
@@ -161,6 +174,8 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
         <View style={styles.totalRow}>
           <Text style={styles.colModelo}>Total</Text>
           <Text style={styles.colCantidad}>{totalVendidas}</Text>
+          <Text style={styles.colCupo}>{totalCupo || '—'}</Text>
+          <Text style={styles.colUtilizacion}>{totalCupo ? porcentaje(totalVendidas / totalCupo) : '—'}</Text>
           <Text style={styles.colPrecio} />
         </View>
 
