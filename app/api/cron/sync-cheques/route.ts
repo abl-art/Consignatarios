@@ -132,33 +132,38 @@ export async function GET(request: Request) {
       })
     }
 
-    // 3. Full replace in cheques_proveedor
+    // 3. Reemplazo por generaciones: primero se inserta TODO con el synced_at
+    // de esta corrida y recién al final se borra la generación anterior. Si la
+    // función muere a mitad de camino (el sheet creció a ~90k filas y el
+    // delete-primero de antes dejó la tabla truncada el 2/9/2026), la data
+    // vieja queda intacta y la corrida siguiente lo reintenta.
     const admin = createAdminClient()
     const now = new Date().toISOString()
 
-    // Delete all existing rows
-    const { error: delErr } = await admin
-      .from('cheques_proveedor')
-      .delete()
-      .gte('id', '00000000-0000-0000-0000-000000000000') // need a filter for supabase delete
+    const BATCH = 1000
+    const CONCURRENCIA = 8
+    const rollback = () => admin.from('cheques_proveedor').delete().eq('synced_at', now)
 
-    if (delErr) {
-      return NextResponse.json({ error: `Delete failed: ${delErr.message}` }, { status: 500 })
-    }
-
-    // Insert in batches of 500
-    for (let i = 0; i < rows.length; i += 500) {
-      const batch = rows.slice(i, i + 500).map(r => ({
-        ...r,
-        synced_at: now,
-      }))
-      const { error: insErr } = await admin.from('cheques_proveedor').insert(batch)
-      if (insErr) {
+    for (let i = 0; i < rows.length; i += BATCH * CONCURRENCIA) {
+      const ola = []
+      for (let j = i; j < Math.min(i + BATCH * CONCURRENCIA, rows.length); j += BATCH) {
+        ola.push(admin.from('cheques_proveedor').insert(rows.slice(j, j + BATCH).map(r => ({ ...r, synced_at: now }))))
+      }
+      const resultados = await Promise.all(ola)
+      const fallo = resultados.find(r => r.error)
+      if (fallo?.error) {
+        await rollback()
         return NextResponse.json(
-          { error: `Insert batch failed at offset ${i}: ${insErr.message}` },
+          { error: `Insert batch failed at offset ${i}: ${fallo.error.message}` },
           { status: 500 }
         )
       }
+    }
+
+    // Swap: la generación anterior desaparece recién con la nueva completa
+    const { error: delErr } = await admin.from('cheques_proveedor').delete().lt('synced_at', now)
+    if (delErr) {
+      return NextResponse.json({ error: `Delete failed: ${delErr.message}` }, { status: 500 })
     }
 
     // 4. Upsert last sync timestamp in flujo_config
