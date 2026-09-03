@@ -79,6 +79,9 @@ const styles = StyleSheet.create({
   colModelo: { flex: 1 },
   colCantidad: { width: 110, textAlign: 'right' },
   colCupo: { width: 80, textAlign: 'right' },
+  // La cantidad que aplica al bono en cada fila: la venta si no se llegó al
+  // cupo, el cupo si se lo sobrepasó
+  aplica: { textDecoration: 'underline', fontFamily: 'Helvetica-Bold' },
   sinVentas: { color: '#9ca3af' },
   footer: {
     marginTop: 12,
@@ -146,17 +149,32 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
           <Text style={[styles.th, styles.colCantidad]}>Cantidad vendida</Text>
           <Text style={[styles.th, styles.colCupo]}>Cupo</Text>
         </View>
-        {filas.map((f, i) => (
-          <View style={styles.row} key={`${f.modelo}-${i}`} wrap={false}>
-            <Text style={styles.colModelo}>{f.modelo}</Text>
-            <Text style={f.vendidas === 0 ? [styles.colCantidad, styles.sinVentas] : styles.colCantidad}>
-              {f.vendidas}
-            </Text>
-            <Text style={f.cupo === null ? [styles.colCupo, styles.sinVentas] : styles.colCupo}>
-              {f.cupo ?? '—'}
-            </Text>
-          </View>
-        ))}
+        {filas.map((f, i) => {
+          const aplicaCupo = f.cupo !== null && f.vendidas >= f.cupo
+          return (
+            <View style={styles.row} key={`${f.modelo}-${i}`} wrap={false}>
+              <Text style={styles.colModelo}>{f.modelo}</Text>
+              <Text
+                style={
+                  f.vendidas === 0 ? [styles.colCantidad, styles.sinVentas]
+                  : aplicaCupo ? styles.colCantidad
+                  : [styles.colCantidad, styles.aplica]
+                }
+              >
+                {f.vendidas}
+              </Text>
+              <Text
+                style={
+                  f.cupo === null ? [styles.colCupo, styles.sinVentas]
+                  : aplicaCupo ? [styles.colCupo, styles.aplica]
+                  : styles.colCupo
+                }
+              >
+                {f.cupo ?? '—'}
+              </Text>
+            </View>
+          )
+        })}
         <View style={styles.totalRow}>
           <Text style={styles.colModelo}>Total</Text>
           <Text style={styles.colCantidad}>{totalVendidas}</Text>
@@ -165,7 +183,8 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
 
         <View style={styles.footer}>
           <Text>
-            Ventas propias en tienda GOcelular dentro de la vigencia de la acción.
+            Ventas propias en tienda GOcelular dentro de la vigencia de la acción. El número subrayado es la
+            cantidad que aplica al bono en cada modelo: la venta, o el cupo cuando se lo sobrepasó.
           </Text>
           <Text style={{ marginTop: 2 }}>Generado el {fechaLarga(generadoEl)} — GOcelular / Grupo GO</Text>
         </View>
