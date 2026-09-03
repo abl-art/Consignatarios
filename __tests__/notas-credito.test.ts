@@ -110,21 +110,19 @@ describe('armarNotasCredito', () => {
 describe('resumenVentasAccion (PDF de detalle por acción)', () => {
   const venta = (fecha: string, modelo: string, ventas: number) => ({ fecha, modelo, ventas })
 
-  it('cuenta las vendidas por modelo con cupo, % de utilización y NC bruta (bono × vendidas)', () => {
+  it('cuenta las vendidas por modelo dentro de la vigencia, con su cupo', () => {
     const filas = resumenVentasAccion(
-      [{ nombreModelo: 'Motorola Moto G17 4/128GB', monto: 50000, cupo: 100 }],
+      [{ nombreModelo: 'Motorola Moto G17 4/128GB', cupo: 100 }],
       [venta('2026-09-03', 'Motorola Moto G17 4/128GB', 2), venta('2026-09-04', 'Motorola Moto G17 4/128GB', 1)],
       '2026-09-03',
       '2026-09-10',
     )
-    expect(filas).toEqual([
-      { modelo: 'Motorola Moto G17 4/128GB', vendidas: 3, cupo: 100, utilizacion: 0.03, ncBruta: 150000 },
-    ])
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 3, cupo: 100 }])
   })
 
   it('solo cuenta las ventas dentro de la vigencia y matchea variantes de nombre', () => {
     const filas = resumenVentasAccion(
-      [{ nombreModelo: 'Motorola Moto G17 4/128GB', monto: 50000 }],
+      [{ nombreModelo: 'Motorola Moto G17 4/128GB' }],
       [
         venta('2026-09-02', 'Motorola Moto G17 4/128GB', 5), // antes del desde
         venta('2026-09-03', 'Celular Motorola Moto G17 128GB', 1),
@@ -133,24 +131,11 @@ describe('resumenVentasAccion (PDF de detalle por acción)', () => {
       '2026-09-03',
       '2026-09-10',
     )
-    expect(filas).toEqual([
-      { modelo: 'Motorola Moto G17 4/128GB', vendidas: 1, cupo: null, utilizacion: null, ncBruta: 50000 },
-    ])
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G17 4/128GB', vendidas: 1, cupo: null }])
   })
 
-  it('un modelo sin ventas sale con 0, 0% de utilización y NC bruta 0', () => {
-    const filas = resumenVentasAccion([{ nombreModelo: 'Motorola Moto G77 8/256GB 5G', monto: 60000, cupo: 50 }], [])
-    expect(filas).toEqual([
-      { modelo: 'Motorola Moto G77 8/256GB 5G', vendidas: 0, cupo: 50, utilizacion: 0, ncBruta: 0 },
-    ])
-  })
-
-  it('la NC bruta se corta en el cupo: lo vendido de más no genera crédito', () => {
-    const filas = resumenVentasAccion(
-      [{ nombreModelo: 'Nubia Music 2 128/4GB', monto: 50000, cupo: 2 }],
-      [venta('2026-09-03', 'Nubia Music 2 128/4GB', 3)],
-    )
-    expect(filas[0].utilizacion).toBe(1.5) // el exceso se ve en la utilización
-    expect(filas[0].ncBruta).toBe(100000) // pero el bruto queda en cupo × bono
+  it('un modelo sin ventas sale con 0', () => {
+    const filas = resumenVentasAccion([{ nombreModelo: 'Motorola Moto G77 8/256GB 5G', cupo: 50 }], [])
+    expect(filas).toEqual([{ modelo: 'Motorola Moto G77 8/256GB 5G', vendidas: 0, cupo: 50 }])
   })
 })

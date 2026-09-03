@@ -68,17 +68,15 @@ export interface FilaVentasAccion {
   modelo: string
   vendidas: number
   cupo: number | null
-  utilizacion: number | null // vendidas ÷ cupo (0.5 = 50%); null sin cupo, puede superar 1
-  ncBruta: number // bono × vendidas, cortada en el cupo (la marca no reconoce de más)
 }
 
 /**
  * Detalle por modelo para el PDF de una acción: cantidad vendida en la
- * vigencia, cupo, % de utilización y NC bruta = bono por unidad (c/IVA) ×
- * vendidas, con tope en el cupo.
+ * vigencia y cupo — sin ninguna otra variable numérica (pedido de Emiliano,
+ * el documento viaja a la marca).
  */
 export function resumenVentasAccion(
-  campanias: { nombreModelo: string; monto: number; cupo?: number }[],
+  campanias: { nombreModelo: string; cupo?: number }[],
   ventasPropias: VentaPropiaDiaria[],
   desde?: string,
   hasta?: string,
@@ -92,13 +90,10 @@ export function resumenVentasAccion(
       if (hasta && v.fecha > hasta) continue
       vendidas += v.ventas
     }
-    const cupo = c.cupo && c.cupo > 0 ? c.cupo : null
     return {
       modelo: c.nombreModelo,
       vendidas,
-      cupo,
-      utilizacion: cupo ? vendidas / cupo : null,
-      ncBruta: c.monto * (cupo ? Math.min(vendidas, cupo) : vendidas),
+      cupo: c.cupo && c.cupo > 0 ? c.cupo : null,
     }
   })
 }

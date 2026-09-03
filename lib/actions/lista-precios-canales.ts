@@ -378,10 +378,7 @@ export async function generarPdfAccion(bonoIds: string[]) {
   } catch (e) {
     return { error: `No se pudieron leer las ventas de GOcelular: ${e instanceof Error ? e.message : e}` }
   }
-  const filas = resumenVentasAccion(registros, ventas, desde, hasta).map((f, i) => ({
-    ...f,
-    bono: registros[i].monto,
-  }))
+  const filas = resumenVentasAccion(registros, ventas, desde, hasta)
 
   const buffer = await renderNcAccion({ marca, proveedor, desde, hasta, filas, generadoEl: hoy })
   const slug = marca.toLowerCase().replace(/[^a-z0-9]+/g, '-')
