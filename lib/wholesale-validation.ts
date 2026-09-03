@@ -97,6 +97,44 @@ function normalizar(s: string): string {
 }
 
 /**
+ * Nombre comercial "base" para comparar cliente vs store de GOcelular: normalizado y sin el
+ * sufijo " - GOcelular" que GOcelular agrega al merchant_name de sus locales (ej. el merchant
+ * "XOXO TECNO - GOcelular" y el cliente "XOXO TECNO" son el mismo comercio).
+ */
+export function nombreComercialBase(s: string): string {
+  return normalizar(s).replace(/\s*-\s*gocelular$/, '').trim()
+}
+
+export interface StoreCatalogoRow {
+  gocuotas_store_id: string
+  store_name: string
+  merchant_name: string | null
+  is_active: boolean
+}
+
+/**
+ * Locales de GOcelular que matchean a un cliente mayorista por nombre (para auto-completar el
+ * gocuotas_store_id al informar una venta). Compara nombre_comercial y razon_social del cliente
+ * contra merchant_name y store_name de cada local activo, via nombreComercialBase.
+ * Puede devolver mas de uno (un merchant con varios locales): esa ambiguedad la resuelve el
+ * usuario, no el codigo.
+ */
+export function candidatosStoreCliente(
+  cliente: { nombre_comercial: string; razon_social: string | null },
+  stores: StoreCatalogoRow[]
+): StoreCatalogoRow[] {
+  const nombresCliente = [cliente.nombre_comercial, cliente.razon_social ?? '']
+    .map(nombreComercialBase)
+    .filter(n => n.length > 0)
+  if (nombresCliente.length === 0) return []
+  return stores.filter(s => {
+    if (!s.is_active) return false
+    const nombresStore = [s.merchant_name ?? '', s.store_name].map(nombreComercialBase)
+    return nombresCliente.some(nc => nombresStore.includes(nc))
+  })
+}
+
+/**
  * Valida un CUIT argentino: 11 digitos + digito verificador AFIP
  * (pesos [5,4,3,2,7,6,5,4,3,2], mod 11).
  */
@@ -135,7 +173,7 @@ export function validarVenta(input: VentaInput, catalogo: CatalogoVenta): Valida
     errores.push(`El store "${input.storeId}" no existe en GOcelular`)
   } else if (!catalogo.store.activo) {
     errores.push(`El store "${input.storeId}" existe en GOcelular pero está inactivo`)
-  } else if (catalogo.store.nombre !== null && normalizar(catalogo.store.nombre) !== normalizar(input.consignatario)) {
+  } else if (catalogo.store.nombre !== null && nombreComercialBase(catalogo.store.nombre) !== nombreComercialBase(input.consignatario)) {
     errores.push(
       `El consignatario "${input.consignatario}" no coincide con el nombre del store en GOcelular ("${catalogo.store.nombre}") — posible venta cruzada entre stores (anti-XOXO)`
     )

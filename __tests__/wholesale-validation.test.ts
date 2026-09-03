@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   cuitValido,
   validarVenta,
+  nombreComercialBase,
+  candidatosStoreCliente,
   PROVINCIAS_AR,
   type CatalogoVenta,
   type VentaLinea,
   type DeliveryInput,
+  type StoreCatalogoRow,
 } from '@/lib/wholesale-validation'
 
 const IMEI_A = '354581531507664'
@@ -112,6 +115,57 @@ describe('validarVenta - store y consignatario (anti-XOXO)', () => {
     const cat = { ...catalogoBase, store: { existe: true, activo: true, nombre: 'Distribución Córdoba' } }
     const r = validarVenta({ ...inputStockBase, consignatario: '  DISTRIBUCION CORDOBA  ' }, cat)
     expect(r.errores).toEqual([])
+  })
+
+  it('consignatario matchea aunque el merchant de GOcelular lleve el sufijo " - GOcelular" (caso XOXO real)', () => {
+    const cat = { ...catalogoBase, store: { existe: true, activo: true, nombre: 'XOXO TECNO - GOcelular' } }
+    const r = validarVenta({ ...inputStockBase, consignatario: 'XOXO TECNO' }, cat)
+    expect(r.errores).toEqual([])
+  })
+})
+
+describe('nombreComercialBase', () => {
+  it('quita el sufijo " - GOcelular" del merchant, normalizando', () => {
+    expect(nombreComercialBase('XOXO TECNO - GOcelular')).toBe('xoxo tecno')
+    expect(nombreComercialBase('XOXO TECNO')).toBe('xoxo tecno')
+  })
+
+  it('no toca un guion que no es el sufijo', () => {
+    expect(nombreComercialBase('Fono - Centro')).toBe('fono - centro')
+  })
+})
+
+describe('candidatosStoreCliente', () => {
+  const stores: StoreCatalogoRow[] = [
+    { gocuotas_store_id: '225252', store_name: 'XOXO Tecno 1', merchant_name: 'XOXO TECNO - GOcelular', is_active: true },
+    { gocuotas_store_id: '229518', store_name: 'FONO Cardeñosa', merchant_name: 'XOXO TECNO - GOcelular', is_active: true },
+    { gocuotas_store_id: '111111', store_name: 'Distribuidora Norte SA', merchant_name: null, is_active: true },
+    { gocuotas_store_id: '222222', store_name: 'Local Viejo', merchant_name: 'XOXO TECNO - GOcelular', is_active: false },
+  ]
+
+  it('devuelve TODOS los locales activos del merchant que matchea (la ambigüedad la resuelve el usuario)', () => {
+    const r = candidatosStoreCliente({ nombre_comercial: 'XOXO TECNO', razon_social: null }, stores)
+    expect(r.map(s => s.gocuotas_store_id).sort()).toEqual(['225252', '229518'])
+  })
+
+  it('matchea por store_name cuando no hay merchant_name', () => {
+    const r = candidatosStoreCliente({ nombre_comercial: 'distribuidora norte sa', razon_social: null }, stores)
+    expect(r.map(s => s.gocuotas_store_id)).toEqual(['111111'])
+  })
+
+  it('matchea por razon_social si el nombre comercial no coincide', () => {
+    const r = candidatosStoreCliente({ nombre_comercial: 'El Kiosco', razon_social: 'Distribuidora Norte SA' }, stores)
+    expect(r.map(s => s.gocuotas_store_id)).toEqual(['111111'])
+  })
+
+  it('excluye locales inactivos y no matchea nombres distintos', () => {
+    const r = candidatosStoreCliente({ nombre_comercial: 'Comercio Inexistente SRL', razon_social: null }, stores)
+    expect(r).toEqual([])
+  })
+
+  it('cliente sin nombres utilizables no matchea nada', () => {
+    const r = candidatosStoreCliente({ nombre_comercial: '  ', razon_social: null }, stores)
+    expect(r).toEqual([])
   })
 })
 

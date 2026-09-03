@@ -4,7 +4,7 @@ import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendWholesaleWebhook, buildTimestamp } from '@/lib/gocelular-webhook'
-import { validarVenta, type CatalogoVenta, type DeliveryInput } from '@/lib/wholesale-validation'
+import { validarVenta, candidatosStoreCliente, type CatalogoVenta, type DeliveryInput, type StoreCatalogoRow } from '@/lib/wholesale-validation'
 import type { GocelularVentaEstado, ProformaConItems, ProformaItem } from '@/lib/actions/proformas'
 import type { ClienteMayorista } from '@/lib/types'
 
@@ -83,6 +83,24 @@ async function cargarCatalogoVenta(storeId: string, imeis: string[]): Promise<Ca
       // validarVenta cae a PROVINCIAS_AR cuando la lista viene vacía.
       provincias: [],
     }
+  } finally {
+    client.release()
+  }
+}
+
+// Locales activos de GOcelular, para auto-completar el gocuotas_store_id de un cliente que no lo
+// tiene cargado (matching puro por nombre en candidatosStoreCliente). Son ~260 filas, se traen
+// todas y se filtra en memoria.
+async function cargarStoresActivos(): Promise<StoreCatalogoRow[] | null> {
+  const pool = getPool()
+  if (!pool) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<StoreCatalogoRow>(
+      `SELECT gocuotas_store_id, store_name, merchant_name, is_active
+       FROM gocuotas_stores WHERE is_active = true`
+    )
+    return res.rows
   } finally {
     client.release()
   }
@@ -177,11 +195,37 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
 
   // El gocuotas_store_id vive en el CLIENTE (no en la proforma): cada cliente mayorista vende
   // siempre a través del mismo local de GOcelular (decisión del controller, fix-review 2026-08-12).
-  const storeId = cliente.gocuotas_store_id ?? ''
+  // Si falta, se intenta auto-completar buscando el local por nombre en GOcelular; solo con match
+  // ÚNICO se usa y se persiste en la ficha (queda estable para las próximas ventas). Con varios
+  // candidatos (un merchant con más de un local) la elección es del usuario: se listan los IDs.
+  let storeId = cliente.gocuotas_store_id ?? ''
+  const storeWarnings: string[] = []
   if (!storeId) {
-    return {
-      estado: 'validacion_fallida',
-      errores: ['El cliente no tiene configurado el gocuotas_store_id — cargalo en la ficha del cliente'],
+    const stores = await cargarStoresActivos()
+    if (!stores) {
+      return { estado: 'error_reintentable', errores: ['No pude conectar a la base de GOcelular para buscar el store del cliente'] }
+    }
+    const candidatos = candidatosStoreCliente(cliente, stores)
+    if (candidatos.length === 1) {
+      storeId = candidatos[0].gocuotas_store_id
+      const { error: updError } = await supabase
+        .from('clientes_mayoristas')
+        .update({ gocuotas_store_id: storeId })
+        .eq('id', cliente.id)
+      if (updError) console.error(`construirPayload: no pude persistir el gocuotas_store_id auto-completado del cliente ${cliente.id}`, updError)
+      storeWarnings.push(`gocuotas_store_id ${storeId} ("${candidatos[0].store_name}") auto-completado desde GOcelular y guardado en la ficha del cliente`)
+    } else if (candidatos.length > 1) {
+      return {
+        estado: 'validacion_fallida',
+        errores: [
+          `El cliente no tiene gocuotas_store_id y en GOcelular hay ${candidatos.length} locales que coinciden por nombre — elegí el correcto y cargalo en la ficha del cliente: ${candidatos.map(c => `${c.gocuotas_store_id} ("${c.store_name}")`).join(', ')}`,
+        ],
+      }
+    } else {
+      return {
+        estado: 'validacion_fallida',
+        errores: ['El cliente no tiene configurado el gocuotas_store_id y no encontré ningún local de GOcelular que coincida por nombre — cargalo en la ficha del cliente'],
+      }
     }
   }
 
@@ -303,7 +347,7 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
   }, catalogo)
 
   if (val.errores.length > 0) {
-    return { estado: 'validacion_fallida', errores: val.errores, warnings: [...val.warnings, ...catalogoWarnings] }
+    return { estado: 'validacion_fallida', errores: val.errores, warnings: [...storeWarnings, ...val.warnings, ...catalogoWarnings] }
   }
 
   // 5. Armar payload final
@@ -328,7 +372,7 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
     timestamp: buildTimestamp(),
   }
 
-  return { payload, warnings: [...val.warnings, ...catalogoWarnings] }
+  return { payload, warnings: [...storeWarnings, ...val.warnings, ...catalogoWarnings] }
 }
 
 // ---------------------------------------------------------------------------
