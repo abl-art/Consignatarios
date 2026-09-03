@@ -2,8 +2,20 @@
 
 import { useState, type ReactNode } from 'react'
 
-export default function TabsListaBonos({ lista, bonos, cantidadBonos }: { lista: ReactNode; bonos: ReactNode; cantidadBonos: number }) {
-  const [tab, setTab] = useState<'lista' | 'bonos'>('lista')
+export default function TabsListaBonos({
+  lista,
+  bonos,
+  notasCredito,
+  cantidadBonos,
+  ncPendientes,
+}: {
+  lista: ReactNode
+  bonos: ReactNode
+  notasCredito: ReactNode
+  cantidadBonos: number
+  ncPendientes: number
+}) {
+  const [tab, setTab] = useState<'lista' | 'bonos' | 'nc'>('lista')
 
   const btn = (activo: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
@@ -17,9 +29,13 @@ export default function TabsListaBonos({ lista, bonos, cantidadBonos }: { lista:
         <button className={btn(tab === 'bonos')} onClick={() => setTab('bonos')}>
           Bonos{cantidadBonos > 0 && ` (${cantidadBonos})`}
         </button>
+        <button className={btn(tab === 'nc')} onClick={() => setTab('nc')}>
+          Notas de crédito{ncPendientes > 0 && ` (${ncPendientes})`}
+        </button>
       </div>
       <div className={tab === 'lista' ? '' : 'hidden'}>{lista}</div>
       <div className={tab === 'bonos' ? '' : 'hidden'}>{bonos}</div>
+      <div className={tab === 'nc' ? '' : 'hidden'}>{notasCredito}</div>
     </div>
   )
 }

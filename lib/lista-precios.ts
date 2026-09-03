@@ -236,6 +236,7 @@ export interface BonoRegistro extends BonoModelo {
   pdfGeneradoAt?: string | null
   precioRepuestoAt?: string | null // cuándo el cron repuso el precio pleno en la tienda
   precioBonoPublicadoAt?: string | null // cuándo se publicó el precio CON bono en la tienda
+  ncEmitidaAt?: string | null // la marca ya emitió la NC de esta campaña (pestaña Notas de crédito)
 }
 
 export interface FilaHistorialBono extends BonoRegistro {

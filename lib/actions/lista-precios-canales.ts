@@ -15,6 +15,7 @@ import {
   fetchVentasPropiasConFactura,
 } from '@/lib/gocelular'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
+import { armarNotasCredito, type ResumenNC } from '@/lib/notas-credito'
 import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
 import {
   ahoraArgentina,
@@ -59,6 +60,7 @@ interface BonoRow {
   pdf_generado_at: string | null
   precio_repuesto_at: string | null
   precio_bono_publicado_at: string | null
+  nc_emitida_at: string | null
 }
 
 function mapBonoRow(r: BonoRow): BonoRegistro {
@@ -74,6 +76,7 @@ function mapBonoRow(r: BonoRow): BonoRegistro {
     pdfGeneradoAt: r.pdf_generado_at,
     precioRepuestoAt: r.precio_repuesto_at,
     precioBonoPublicadoAt: r.precio_bono_publicado_at,
+    ncEmitidaAt: r.nc_emitida_at,
   }
 }
 
@@ -331,6 +334,35 @@ export interface ResultadoSetBono {
   // guardado/editado o bono vigente quitado) o avisar que queda programado
   publicarAhora?: boolean
   bonoFuturo?: string // desde de un bono que todavía no arranca
+}
+
+/** Resumen de la pestaña Notas de crédito: NC agrupadas por proveedor+vigencia. */
+export async function getNotasCredito(): Promise<ResumenNC> {
+  const supabase = createAdminClient()
+  const [registros, ventasPropias, { data: cfg }] = await Promise.all([
+    fetchBonosRegistros(supabase),
+    fetchVentasPropiasPorModelo().catch(() => []),
+    supabase.from('flujo_config').select('key, value').like('key', `${MULTIPLO_KEY}%`),
+  ])
+  const multiplos: Record<string, number> = {}
+  for (const row of cfg ?? []) {
+    const valor = Number(row.value)
+    if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
+  }
+  return armarNotasCredito(armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina()), ventasPropias)
+}
+
+/** Checkbox Emitida de una NC: marca/desmarca todas las campañas del grupo. */
+export async function setNcEmitida(bonoIds: string[], emitida: boolean) {
+  if (!bonoIds.length) return { error: 'Grupo vacío' }
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('lista_precios_bonos')
+    .update({ nc_emitida_at: emitida ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .in('id', bonoIds)
+  if (error) return { error: error.message }
+  revalidatePath('/canales/lista-precios')
+  return { ok: true }
 }
 
 export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null): Promise<ResultadoSetBono> {
