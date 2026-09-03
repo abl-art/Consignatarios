@@ -3,6 +3,7 @@ import {
   armarListaPrecios,
   armarHistorialBonos,
   aplicarTodoBono,
+  bonosParaPublicar,
   bonosParaReajustar,
   elegirCosto,
   recortarVentasACupo,
@@ -165,7 +166,7 @@ describe('armarListaPrecios', () => {
       [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
       { p1: { monto: 50000, desde: '2026-09-01' } }, new Date('2026-08-25'),
     )[0]
-    expect(futuro.bonoMonto).toBeNull()
+    expect(futuro.pvpConBono).toBeNull() // se muestra como futuro pero no descuenta
   })
 
   it('con bono vigente la diferencia vs tienda compara contra el PVP con bono', () => {
@@ -487,6 +488,76 @@ describe('armarListaPrecios', () => {
 
     it('un bono futuro no se toca', () => {
       expect(bonosParaReajustar([reg({ desde: '2026-09-10', hasta: '2026-09-20' })], [], HOY)).toHaveLength(0)
+    })
+  })
+
+  describe('bonosParaPublicar (cron de publicación del precio con bono)', () => {
+    const reg = (over: Partial<BonoRegistro> = {}): BonoRegistro => ({
+      id: 'b1',
+      productoId: 'p1',
+      nombreModelo: 'Nubia Music 2 128/4GB',
+      monto: 50000,
+      desde: '2026-09-03',
+      hasta: '2026-09-14',
+      cupo: 350,
+      ...over,
+    })
+
+    it('un bono que arranca hoy y no fue publicado se publica', () => {
+      expect(bonosParaPublicar([reg()], [], '2026-09-03')).toEqual([reg()])
+    })
+
+    it('uno ya publicado no se repite', () => {
+      expect(bonosParaPublicar([reg({ precioBonoPublicadoAt: '2026-09-03T03:05:00Z' })], [], '2026-09-03')).toHaveLength(0)
+    })
+
+    it('un bono futuro espera a su fecha de inicio', () => {
+      expect(bonosParaPublicar([reg()], [], '2026-09-02')).toHaveLength(0)
+    })
+
+    it('un bono vencido no se publica (eso es del reajuste)', () => {
+      expect(bonosParaPublicar([reg()], [], '2026-09-15')).toHaveLength(0)
+    })
+
+    it('un bono vigente con cupo agotado no se publica: rige el precio pleno', () => {
+      const ventas: VentaPropiaDiaria[] = [{ fecha: '2026-09-03', modelo: 'Nubia Music 2 128/4GB', ventas: 350 }]
+      expect(bonosParaPublicar([reg()], ventas, '2026-09-04')).toHaveLength(0)
+    })
+
+    it('un bono vigente con cupo sin llenar se publica', () => {
+      const ventas: VentaPropiaDiaria[] = [{ fecha: '2026-09-03', modelo: 'Nubia Music 2 128/4GB', ventas: 349 }]
+      expect(bonosParaPublicar([reg()], ventas, '2026-09-04')).toHaveLength(1)
+    })
+
+    it('un bono sin desde ni hasta cuenta como vigente', () => {
+      expect(bonosParaPublicar([reg({ desde: undefined, hasta: undefined, cupo: undefined })], [], '2026-09-03')).toHaveLength(1)
+    })
+  })
+
+  describe('bonos futuros visibles en la lista', () => {
+    it('un bono futuro se expone con estado futuro, monto y desde, sin tocar el PVP', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {},
+        { 'Motorola Moto G17 4/128GB': 484200 }, VENTAS,
+        { p1: { monto: 50000, desde: '2026-09-03', hasta: '2026-09-14' } }, new Date('2026-09-02'),
+      )
+      expect(fila.bonoEstado).toBe('futuro')
+      expect(fila.bonoMonto).toBe(50000)
+      expect(fila.bonoDesde).toBe('2026-09-03')
+      expect(fila.pvpConBono).toBeNull()
+      expect(fila.cuotaConBono).toBeNull()
+      expect(fila.ncEsperada).toBeNull()
+      // la diferencia vs tienda compara contra el PVP pleno: el bono aún no rige
+      expect(fila.diferencia).toBe(0)
+    })
+
+    it('al llegar el desde pasa a vigente y aplica', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+        { p1: { monto: 50000, desde: '2026-09-03', hasta: '2026-09-14' } }, new Date('2026-09-03'),
+      )
+      expect(fila.bonoEstado).toBe('vigente')
+      expect(fila.pvpConBono).toBe(434700)
     })
   })
 

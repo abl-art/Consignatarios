@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaListaPrecios } from '@/lib/lista-precios'
 import { setMultiploListaPrecios, setBonoListaPrecios, setModeloFijado } from '@/lib/actions/lista-precios-canales'
+import { publicarPrecioProducto } from '@/lib/actions/publicar-precios'
 import PublicarPrecios from './PublicarPrecios'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
@@ -45,6 +46,8 @@ function fechaCorta(iso: string): string {
   return `${Number(d)}/${Number(m)}`
 }
 
+type AvisoBono = { tipo: 'ok' | 'info' | 'error'; texto: string }
+
 function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   const router = useRouter()
   const [editando, setEditando] = useState(false)
@@ -52,34 +55,92 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   const [desde, setDesde] = useState(fila.bonoDesde ?? '')
   const [hasta, setHasta] = useState(fila.bonoHasta ?? '')
   const [cupo, setCupo] = useState(fila.bonoCupo ? String(fila.bonoCupo) : '')
+  const [aviso, setAviso] = useState<AvisoBono | null>(null)
   const [, startTransition] = useTransition()
+
+  const avisar = (a: AvisoBono) => {
+    setAviso(a)
+    if (a.tipo !== 'error') setTimeout(() => setAviso(actual => (actual === a ? null : actual)), 10000)
+  }
 
   const guardar = (quitar = false) => {
     const n = Number(monto.replace(/\./g, '').replace(',', '.'))
     const c = Number(cupo)
     startTransition(async () => {
-      await setBonoListaPrecios(
+      const r = await setBonoListaPrecios(
         fila.productoId,
         quitar || !(n > 0)
           ? null
           : { monto: n, desde: desde || undefined, hasta: hasta || undefined, cupo: c > 0 ? Math.floor(c) : undefined },
       )
+      if (r.error) {
+        avisar({ tipo: 'error', texto: r.error })
+        return
+      }
       setEditando(false)
+      if (r.bonoFuturo) {
+        avisar({ tipo: 'info', texto: `Bono guardado — ${fila.nombre}. El precio con bono se publica solo en la tienda el ${fechaCorta(r.bonoFuturo)} a la madrugada.` })
+      } else if (r.publicarAhora) {
+        avisar({ tipo: 'info', texto: `Publicando precio en la tienda — ${fila.nombre}…` })
+        const p = await publicarPrecioProducto(fila.productoId, fila.nombre)
+        if (p.error) {
+          avisar({
+            tipo: 'error',
+            texto: quitar || !(n > 0)
+              ? `Bono quitado, pero no se pudo reponer el precio pleno en la tienda: ${p.error} Publicalo con el botón Publicar precios.`
+              : `Bono guardado, pero no se pudo publicar el precio en la tienda: ${p.error} El sistema reintenta cada 10 minutos.`,
+          })
+        } else {
+          avisar({ tipo: 'ok', texto: `${p.conBono ? 'Precio con bono' : 'Precio pleno'} publicado en la tienda — ${p.nombre}: ${peso(p.precio!)}` })
+        }
+      }
       router.refresh()
     })
   }
 
+  const toast = aviso && (
+    <div
+      className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-xl border px-4 py-3 text-sm shadow-lg ${
+        aviso.tipo === 'error' ? 'bg-red-50 border-red-300 text-red-800'
+        : aviso.tipo === 'ok' ? 'bg-green-50 border-green-300 text-green-800'
+        : 'bg-white border-gray-300 text-gray-700'
+      }`}
+    >
+      {aviso.texto}
+      <button onClick={() => setAviso(null)} className="ml-3 font-bold align-middle" title="Cerrar">✕</button>
+    </div>
+  )
+
   if (!editando) {
+    if (fila.bonoEstado === 'futuro' && fila.bonoMonto) {
+      // Bono cargado que todavía no rige: se ve (no "desaparece" de la lista)
+      // pero no descuenta al PVP hasta su fecha de inicio
+      return (
+        <>
+          {toast}
+          <button
+            onClick={() => setEditando(true)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-violet-300 bg-white text-violet-600 text-xs font-semibold hover:border-violet-500"
+            title={`Bono cargado: arranca el ${fechaCorta(fila.bonoDesde!)} — el precio con bono se publica solo en la tienda ese día`}
+          >
+            {peso(fila.bonoMonto)} · desde {fechaCorta(fila.bonoDesde!)}
+          </button>
+        </>
+      )
+    }
     if (fila.bonoMonto) {
       return (
-        <button
-          onClick={() => setEditando(true)}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
-          title="Editar bono"
-        >
-          {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
-          {fila.bonoCupo !== null && ` · ${fila.bonoVendidas}/${fila.bonoCupo} u.`}
-        </button>
+        <>
+          {toast}
+          <button
+            onClick={() => setEditando(true)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
+            title="Editar bono"
+          >
+            {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
+            {fila.bonoCupo !== null && ` · ${fila.bonoVendidas}/${fila.bonoCupo} u.`}
+          </button>
+        </>
       )
     }
     if (fila.bonoEstado === 'agotado') {
@@ -87,6 +148,7 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
       // El + carga la campaña siguiente (la agotada queda en el historial).
       return (
         <span className="inline-flex items-center gap-1">
+          {toast}
           <span
             className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold"
             title={`Cupo alcanzado: ${fila.bonoVendidas}/${fila.bonoCupo} unidades — reajustar el precio de la tienda`}
@@ -98,18 +160,22 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
       )
     }
     return (
-      <button
-        onClick={() => setEditando(true)}
-        className="text-gray-300 hover:text-gray-500 text-sm font-bold px-2"
-        title="Agregar bono"
-      >
-        +
-      </button>
+      <>
+        {toast}
+        <button
+          onClick={() => setEditando(true)}
+          className="text-gray-300 hover:text-gray-500 text-sm font-bold px-2"
+          title="Agregar bono"
+        >
+          +
+        </button>
+      </>
     )
   }
 
   return (
     <div className="flex items-center gap-1 justify-end">
+      {toast}
       <input
         type="text" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)}
         placeholder="$ c/IVA" autoFocus
@@ -284,6 +350,8 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
         vigente (con bono si hay): en rojo, la tienda está vendiendo abajo del precio objetivo. Bono = monto con
         IVA a nivel PVP, por modelo y con vencimiento; la cuota con bono también se redondea a centenas para
         arriba. NC/u = nota de crédito esperada de la marca por unidad (bono ÷ múltiplo, neto de IVA y margen).
+        Al guardar un bono ya vigente (o quitarlo) el precio se publica solo en la tienda; un bono con inicio
+        futuro se muestra punteado y su precio se publica automáticamente el día que arranca, a la madrugada.
       </p>
     </div>
   )

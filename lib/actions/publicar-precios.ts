@@ -16,8 +16,8 @@ import {
   type PricesRespuesta,
 } from '@/lib/gocelular-prices'
 import { fetchVentasPropiasPorModelo } from '@/lib/gocelular'
-import { ahoraArgentina, bonosParaReajustar } from '@/lib/lista-precios'
-import { getListaPrecios, getBonosRegistros, marcarPrecioRepuesto, agregarTodosReajuste } from './lista-precios-canales'
+import { ahoraArgentina, bonosParaPublicar, bonosParaReajustar } from '@/lib/lista-precios'
+import { getListaPrecios, getBonosRegistros, marcarPrecioRepuesto, marcarBonoPublicado, agregarTodosReajuste } from './lista-precios-canales'
 
 const SOURCE = 'consignacion-app'
 
@@ -84,6 +84,139 @@ export async function aplicarPublicacionPrecios(batchReference: string, lineas: 
     lines: lineas,
   })
   return { respuesta: r.body, status: r.status, error: r.ok ? undefined : mensajeError(r.status, r.body) }
+}
+
+/**
+ * Núcleo compartido de publicación puntual: manda a la tienda el precio
+ * vigente de la lista (con bono si corresponde) SOLO para los productos
+ * objetivo. Preview + apply en un paso, sin intervención del usuario.
+ */
+async function publicarFilasDeProductos(
+  objetivos: { productoId: string; nombre: string }[],
+  prefijo: string,
+): Promise<{
+  publicadas: { productoId: string; nombre: string; precio: number; conBono: boolean }[]
+  sinPublicar: string[]
+  error?: string
+}> {
+  const ids = new Set(objetivos.map(o => o.productoId))
+  const [filas, cat] = await Promise.all([getListaPrecios(), fetchCatalogoPrecios()])
+  if (!cat.ok || !cat.body?.products) {
+    return { publicadas: [], sinPublicar: [], error: `catálogo HTTP ${cat.status}${cat.body?.code ? ` ${cat.body.code}` : ''}` }
+  }
+
+  const filasObjetivo = filas.filter(f => ids.has(f.productoId))
+  const enListaIds = new Set(filasObjetivo.map(f => f.productoId))
+  const { mapeadas, sinMapear } = mapearProductosTienda(filasObjetivo, cat.body.products)
+  const { lineas, excluidas } = armarLineasPrecios(mapeadas)
+
+  const enLinea = new Set(
+    mapeadas.filter(m => lineas.some(l => l.store_product_id === m.producto.store_product_id)).map(m => m.fila.productoId),
+  )
+  const sinPublicar = objetivos
+    .filter(o => !enLinea.has(o.productoId))
+    .map(o => `${o.nombre} (${
+      !enListaIds.has(o.productoId) ? 'no está en la lista'
+      : sinMapear.some(f => f.productoId === o.productoId) ? 'sin producto en la tienda'
+      : excluidas.some(f => f.productoId === o.productoId) ? 'sin PVP calculable'
+      : 'sin línea'})`)
+  if (lineas.length === 0) return { publicadas: [], sinPublicar, error: `sin líneas publicables: ${sinPublicar.join('; ')}` }
+
+  const ahora = ahoraArgentina()
+  const batchReference = `${prefijo}-${ahora.toISOString().slice(0, 10)}-${ahora.toISOString().slice(11, 19).replace(/:/g, '')}`
+  const base = { batch_reference: batchReference, source: SOURCE, timestamp: buildTimestamp(), lines: lineas }
+  const prev = await enviarListaPrecios({ ...base, mode: 'preview' })
+  if (!prev.ok) return { publicadas: [], sinPublicar, error: mensajeError(prev.status, prev.body) }
+  const r = await enviarListaPrecios({ ...base, mode: 'apply' })
+  if (!r.ok) return { publicadas: [], sinPublicar, error: mensajeError(r.status, r.body) }
+
+  const publicadas = mapeadas
+    .filter(m => enLinea.has(m.fila.productoId))
+    .map(m => ({
+      productoId: m.fila.productoId,
+      nombre: m.fila.nombre,
+      precio: (m.fila.pvpConBono ?? m.fila.pvp)!,
+      conBono: m.fila.pvpConBono !== null,
+    }))
+  return { publicadas, sinPublicar }
+}
+
+/**
+ * Publica ya mismo el precio vigente de UN modelo (con bono si hay; pleno si
+ * se quitó) — lo llama la UI al guardar o quitar un bono. Si lo publicado fue
+ * el precio con bono, marca la campaña para que el cron no la repita.
+ */
+export async function publicarPrecioProducto(
+  productoId: string,
+  nombre: string,
+): Promise<{ nombre?: string; precio?: number; conBono?: boolean; error?: string }> {
+  const r = await publicarFilasDeProductos([{ productoId, nombre }], 'BONO')
+  if (r.error) return { error: r.error }
+  const p = r.publicadas.find(x => x.productoId === productoId)
+  if (!p) return { error: r.sinPublicar[0] ?? 'sin línea publicable' }
+
+  if (p.conBono) {
+    const registros = (await getBonosRegistros()).filter(b => b.productoId === productoId)
+    const hoy = ahoraArgentina().toISOString().slice(0, 10)
+    await marcarBonoPublicado(bonosParaPublicar(registros, [], hoy).map(b => b.id))
+  }
+  return { nombre: p.nombre, precio: p.precio, conBono: p.conBono }
+}
+
+export interface ResultadoPublicacionBonos {
+  hoy: string
+  pendientes: string[]
+  publicados?: string[]
+  sinPublicar?: string[]
+  dry?: boolean
+  error?: string
+}
+
+/**
+ * Cron de publicación del precio con bono: campañas que ya arrancaron y no
+ * tienen el precio publicado en la tienda (el caso típico: bono cargado ayer
+ * con desde hoy — sale en la corrida de las 00:05 ART). También es la red de
+ * seguridad si la publicación inline al guardar falló.
+ */
+export async function publicarBonosIniciados(opts?: { dry?: boolean; fecha?: string }): Promise<ResultadoPublicacionBonos> {
+  const hoy = opts?.fecha ?? ahoraArgentina().toISOString().slice(0, 10)
+  const [registros, ventasPropias] = await Promise.all([
+    getBonosRegistros(),
+    fetchVentasPropiasPorModelo().catch(() => []),
+  ])
+  const aPublicar = bonosParaPublicar(registros, ventasPropias, hoy)
+  const pendientes = aPublicar.map(b => b.nombreModelo)
+  if (aPublicar.length === 0) return { hoy, pendientes }
+  if (opts?.dry) return { hoy, pendientes, dry: true }
+
+  const r = await publicarFilasDeProductos(
+    aPublicar.map(b => ({ productoId: b.productoId, nombre: b.nombreModelo })),
+    'BONO-CRON',
+  )
+  if (r.error) {
+    await agregarTodosReajuste(aPublicar.map(b => ({
+      id: `cron-bono-fail-${b.id}`,
+      texto: `Falló la publicación automática del precio con bono — ${b.nombreModelo}: ${r.error}. Publicar a mano desde Lista de Precios.`,
+      urgente: true,
+    })))
+    return { hoy, pendientes, error: r.error }
+  }
+
+  const okIds = new Set(r.publicadas.map(p => p.productoId))
+  await marcarBonoPublicado(aPublicar.filter(b => okIds.has(b.productoId)).map(b => b.id))
+  await agregarTodosReajuste([
+    ...r.publicadas.map(p => ({
+      id: `cron-bono-ok-${aPublicar.find(b => b.productoId === p.productoId)!.id}`,
+      texto: `Precio con bono publicado en la tienda — ${p.nombre}: $${Math.round(p.precio).toLocaleString('es-AR')}`,
+      urgente: false,
+    })),
+    ...aPublicar.filter(b => !okIds.has(b.productoId)).map(b => ({
+      id: `cron-bono-fail-${b.id}`,
+      texto: `No se pudo publicar el precio con bono — ${b.nombreModelo}: revisar y publicar a mano.`,
+      urgente: true,
+    })),
+  ])
+  return { hoy, pendientes, publicados: r.publicadas.map(p => p.nombre), sinPublicar: r.sinPublicar }
 }
 
 export interface ResultadoReajuste {

@@ -58,6 +58,7 @@ interface BonoRow {
   pdf_url: string | null
   pdf_generado_at: string | null
   precio_repuesto_at: string | null
+  precio_bono_publicado_at: string | null
 }
 
 function mapBonoRow(r: BonoRow): BonoRegistro {
@@ -72,6 +73,7 @@ function mapBonoRow(r: BonoRow): BonoRegistro {
     pdfUrl: r.pdf_url,
     pdfGeneradoAt: r.pdf_generado_at,
     precioRepuestoAt: r.precio_repuesto_at,
+    precioBonoPublicadoAt: r.precio_bono_publicado_at,
   }
 }
 
@@ -82,13 +84,17 @@ function hoyIso(): string {
 
 // El bono que aplica hoy en la lista: la fila cuya vigencia incluye la fecha
 // actual (si hubiera más de una —no debería, se valida al guardar— gana la de
-// desde más reciente).
+// desde más reciente). Sin vigente, el próximo futuro: la lista lo muestra
+// como "arranca el X" y el editor lo edita en vez de chocar por solapamiento.
 function bonosVigentesPorProducto(registros: BonoRegistro[], dia: string = hoyIso()): Record<string, BonoRegistro> {
   const map: Record<string, BonoRegistro> = {}
+  const futuros = registros
+    .filter(r => r.desde && r.desde > dia)
+    .sort((a, b) => (b.desde ?? '').localeCompare(a.desde ?? '')) // el más próximo pisa al final
   const cubren = registros
     .filter(r => (!r.desde || r.desde <= dia) && (!r.hasta || r.hasta >= dia))
     .sort((a, b) => (a.desde ?? '').localeCompare(b.desde ?? ''))
-  for (const r of cubren) map[r.productoId] = r
+  for (const r of [...futuros, ...cubren]) map[r.productoId] = r
   return map
 }
 
@@ -109,6 +115,16 @@ export async function marcarPrecioRepuesto(bonoIds: string[]): Promise<void> {
   await supabase
     .from('lista_precios_bonos')
     .update({ precio_repuesto_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .in('id', bonoIds)
+}
+
+/** Marca campañas con el precio con bono ya publicado (el cron no las repite). */
+export async function marcarBonoPublicado(bonoIds: string[]): Promise<void> {
+  if (!bonoIds.length) return
+  const supabase = createAdminClient()
+  await supabase
+    .from('lista_precios_bonos')
+    .update({ precio_bono_publicado_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .in('id', bonoIds)
 }
 
@@ -308,10 +324,21 @@ export async function getHistorialBonos(): Promise<FilaHistorialBono[]> {
   return armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina())
 }
 
-export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null) {
+export interface ResultadoSetBono {
+  ok?: true
+  error?: string
+  // Guía para la UI: publicar el precio del modelo ya mismo (bono vigente
+  // guardado/editado o bono vigente quitado) o avisar que queda programado
+  publicarAhora?: boolean
+  bonoFuturo?: string // desde de un bono que todavía no arranca
+}
+
+export async function setBonoListaPrecios(productoId: string, bono: BonoModelo | null): Promise<ResultadoSetBono> {
   const supabase = createAdminClient()
   const registros = (await fetchBonosRegistros(supabase)).filter(r => r.productoId === productoId)
   let vigente: BonoRegistro | null = bonosVigentesPorProducto(registros)[productoId] ?? null
+  // bonosVigentesPorProducto también devuelve el próximo futuro (para editarlo)
+  const vigenteEsFuturo = !!vigente?.desde && vigente.desde > hoyIso()
 
   // Una campaña con cupo agotado es historia congelada: no se edita ni se
   // borra — se cierra (hasta = ayer) y lo nuevo va en una fila aparte.
@@ -330,11 +357,15 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
     }
   }
 
+  let publicarAhora = false
+  let bonoFuturo: string | undefined
   if (!bono || !(Number(bono.monto) > 0)) {
     // Quitar = borrar solo la campaña vigente; el historial queda intacto
     if (vigente) {
       const { error } = await supabase.from('lista_precios_bonos').delete().eq('id', vigente.id)
       if (error) return { error: error.message }
+      // Se quitó un bono que estaba rigiendo: hay que reponer el precio pleno
+      publicarAhora = !vigenteEsFuturo
     }
   } else {
     // Sin desde se estampa hoy: sin fecha de inicio no se puede contar el cupo
@@ -360,12 +391,15 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
       hasta: bono.hasta || null,
       cupo: bono.cupo && bono.cupo > 0 ? Math.floor(bono.cupo) : null,
       precio_repuesto_at: null, // editar/extender el bono rearma el reajuste automático
+      precio_bono_publicado_at: null, // y la publicación del precio con bono
       updated_at: new Date().toISOString(),
     }
     const { error } = vigente
       ? await supabase.from('lista_precios_bonos').update(valores).eq('id', vigente.id)
       : await supabase.from('lista_precios_bonos').insert(valores)
     if (error) return { error: error.message }
+    if (desde > hoyIso()) bonoFuturo = desde
+    else publicarAhora = true
   }
   revalidatePath('/canales/lista-precios')
 
@@ -393,7 +427,7 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
     }
   } catch { /* el recordatorio es best-effort: no bloquea el guardado del bono */ }
 
-  return { ok: true }
+  return { ok: true, publicarAhora, bonoFuturo }
 }
 
 /**

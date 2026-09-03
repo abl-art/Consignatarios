@@ -185,7 +185,7 @@ export interface FilaListaPrecios {
   bonoHasta: string | null
   bonoCupo: number | null
   bonoVendidas: number | null
-  bonoEstado: 'vigente' | 'agotado' | null
+  bonoEstado: 'vigente' | 'agotado' | 'futuro' | null
   pvpConBono: number | null
   cuotaConBono: number | null
   ncEsperada: number | null
@@ -235,6 +235,7 @@ export interface BonoRegistro extends BonoModelo {
   pdfUrl?: string | null
   pdfGeneradoAt?: string | null
   precioRepuestoAt?: string | null // cuándo el cron repuso el precio pleno en la tienda
+  precioBonoPublicadoAt?: string | null // cuándo se publicó el precio CON bono en la tienda
 }
 
 export interface FilaHistorialBono extends BonoRegistro {
@@ -313,6 +314,27 @@ export function bonosParaReajustar(
   return resultado
 }
 
+/**
+ * Campañas cuyo precio CON bono hay que publicar en la tienda: vigentes hoy y
+ * todavía sin publicar. Un cupo agotado no se publica — ahí rige el precio
+ * pleno y lo maneja bonosParaReajustar. El cron corre cada 10 min: un bono que
+ * arranca hoy sale en la corrida de la madrugada; uno cargado ya vigente, en
+ * la corrida siguiente (además del intento inmediato al guardarlo).
+ */
+export function bonosParaPublicar(
+  registros: BonoRegistro[],
+  ventasPropias: VentaPropiaDiaria[],
+  hoyIso: string,
+): BonoRegistro[] {
+  return registros.filter(r => {
+    if (r.precioBonoPublicadoAt) return false
+    if (r.desde && r.desde > hoyIso) return false
+    if (r.hasta && r.hasta < hoyIso) return false
+    if (r.cupo && contarVendidasBono(r, normalizarModelo(r.nombreModelo), ventasPropias) >= r.cupo) return false
+    return true
+  })
+}
+
 export function estadoBono(bono: BonoModelo, vendidas: number, hoy: Date): EstadoBono {
   const dia = hoy.toISOString().slice(0, 10)
   if (bono.desde && dia < bono.desde) return 'futuro'
@@ -362,7 +384,7 @@ export function armarListaPrecios(
     let bono: BonoModelo | null = null
     let bonoCupo: number | null = null
     let bonoVendidas: number | null = null
-    let bonoEstado: 'vigente' | 'agotado' | null = null
+    let bonoEstado: 'vigente' | 'agotado' | 'futuro' | null = null
     if (bonoDef && bonoDef.monto > 0) {
       const vendidas = bonoDef.cupo ? contarVendidasBono(bonoDef, clave, ventasPropiasDiarias) : 0
       const estado = estadoBono(bonoDef, vendidas, hoy)
@@ -371,12 +393,18 @@ export function armarListaPrecios(
         bonoEstado = 'vigente'
       } else if (estado === 'agotado') {
         bonoEstado = 'agotado'
+      } else if (estado === 'futuro') {
+        // Se muestra en la lista ("arranca el X") pero no descuenta al PVP
+        bonoEstado = 'futuro'
       }
       if (bonoDef.cupo && (estado === 'vigente' || estado === 'agotado')) {
         bonoCupo = bonoDef.cupo
         bonoVendidas = vendidas
       }
     }
+    // El bono se muestra en la lista si está vigente o por arrancar; solo el
+    // vigente (bono) descuenta al PVP
+    const bonoVisible = bonoEstado === 'vigente' || bonoEstado === 'futuro' ? bonoDef : null
     let pvpConBono: number | null = null
     let cuotaConBono: number | null = null
     let ncEsperada: number | null = null
@@ -404,9 +432,9 @@ export function armarListaPrecios(
       diferencia: precioTienda !== null && pvpVigente !== null ? precioTienda - pvpVigente : null,
       ventas30d,
       fijado: fijados.has(p.id),
-      bonoMonto: bono && pvp !== null ? bono.monto : null,
-      bonoDesde: bono && pvp !== null ? bono.desde ?? null : null,
-      bonoHasta: bono && pvp !== null ? bono.hasta ?? null : null,
+      bonoMonto: bonoVisible && pvp !== null ? bonoVisible.monto : null,
+      bonoDesde: bonoVisible && pvp !== null ? bonoVisible.desde ?? null : null,
+      bonoHasta: bonoVisible && pvp !== null ? bonoVisible.hasta ?? null : null,
       bonoCupo,
       bonoVendidas,
       bonoEstado,
