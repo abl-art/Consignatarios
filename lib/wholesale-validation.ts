@@ -172,6 +172,53 @@ export function matchDeviceSku(nombreProducto: string, devices: DeviceSkuCatalog
   return { tipo: 'match', device: candidatos[0] }
 }
 
+export interface LineaSkuPendiente {
+  lineRef: string
+  producto: string
+  cantidad: number
+  skus: string[]
+}
+
+export interface SeleccionSkusResult {
+  /** lineRef -> sku elegido (solo si no hubo errores para esa linea) */
+  asignaciones: Map<string, string>
+  errores: string[]
+}
+
+/**
+ * Elige el SKU concreto para cada linea de venta segun stock del warehouse. El chequeo de
+ * GOcelular es POR SKU, no por modelo: las variantes de color comparten model_code pero el WH
+ * valida disponibilidad del SKU exacto (rechazo real del 3/9: pedimos SM-A165MZAMARO con 0
+ * disponibles cuando el modelo tenia 185 en otros colores). Regla: para cada linea, el SKU con
+ * MAS stock disponible que cubra la cantidad completa; lineas que comparten SKU descuentan del
+ * mismo pool. Sin ningun SKU que alcance, error con el detalle por SKU (no se parte la linea).
+ */
+export function elegirSkusConStock(
+  lineas: LineaSkuPendiente[],
+  stockPorSku: Map<string, number>
+): SeleccionSkusResult {
+  const restante = new Map(stockPorSku)
+  const disp = (sku: string) => restante.get(sku) ?? 0
+  const asignaciones = new Map<string, string>()
+  const errores: string[] = []
+  for (const linea of lineas) {
+    let mejor: string | null = null
+    for (const sku of linea.skus) {
+      if (disp(sku) >= linea.cantidad && (mejor === null || disp(sku) > disp(mejor))) mejor = sku
+    }
+    if (mejor === null) {
+      const detalle = linea.skus.map(s => `${s}: ${disp(s)}`).join(', ')
+      errores.push(
+        `Stock insuficiente en el warehouse para "${linea.producto}" (pedido ${linea.cantidad}): ningún SKU del modelo alcanza — ${detalle}`
+      )
+      continue
+    }
+    asignaciones.set(linea.lineRef, mejor)
+    restante.set(mejor, disp(mejor) - linea.cantidad)
+  }
+  return { asignaciones, errores }
+}
+
 /**
  * Valida un CUIT argentino: 11 digitos + digito verificador AFIP
  * (pesos [5,4,3,2,7,6,5,4,3,2], mod 11).

@@ -137,16 +137,25 @@ export async function sendWholesaleWebhook(rawBody: string): Promise<WholesaleRe
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Gocelular-Signature': sig, 'X-Gocelular-Timestamp': ts },
         body: rawBody,
-        signal: AbortSignal.timeout(10000),
+        // 45s: medido el 3/9 contra prod, un rechazo de negocio de GOcelular tarda ~30s en salir
+        // (request_id 5b308cbe) — con 10s abortabamos antes de leer el 400 y lo reportabamos como
+        // "HTTP 0 no respondio". Las pages que disparan esto ya tienen maxDuration=60.
+        signal: AbortSignal.timeout(45000),
       })
       const body = (await res.json().catch(() => null)) as WholesaleResponseBody | null
       if (res.status === 200) return { ok: true, status: 200, body, retryable: false }
       const retryable = res.status >= 500
       last = { ok: false, status: res.status, body, retryable }
       if (!retryable) return last
-    } catch {
-      // Timeout o red caida ("sin respuesta" segun retry policy de GOcelular): reintentable
-      last = { ok: false, status: 0, body: null, retryable: true }
+    } catch (e) {
+      // Timeout o red caida: reintentable, pero NUNCA en silencio — el detalle del error viaja en
+      // body.error para que quede persistido en la proforma y en los logs de Vercel.
+      const detalle = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+      console.error(`sendWholesaleWebhook: intento ${attempt + 1}/4 sin respuesta — ${detalle}`)
+      last = { ok: false, status: 0, body: { error: detalle }, retryable: true }
+      // Un timeout de 45s no se reintenta en la misma invocacion: volveria a esperar 45s y se
+      // comeria el maxDuration de la server action sin chances de exito.
+      if (e instanceof Error && e.name === 'TimeoutError') break
     }
     if (attempt < 3) await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000))
   }

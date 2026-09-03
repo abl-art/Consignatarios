@@ -5,6 +5,7 @@ import {
   nombreComercialBase,
   candidatosStoreCliente,
   matchDeviceSku,
+  elegirSkusConStock,
   type DeviceSkuCatalogo,
   PROVINCIAS_AR,
   type CatalogoVenta,
@@ -217,6 +218,66 @@ describe('matchDeviceSku', () => {
 
   it('sin coincidencia ni exacta ni normalizada es sin_match', () => {
     expect(matchDeviceSku('iPhone 15 Pro', devices)).toEqual({ tipo: 'sin_match' })
+  })
+})
+
+describe('elegirSkusConStock', () => {
+  // Stock real del WH al 3/9: el A16 en color MZAMARO tenia 0 y GOcelular rechazo la venta
+  const stock = new Map([
+    ['SM-A165MZKMARO', 170],
+    ['SM-A165MLGMARO', 15],
+    ['NM2L15G', 118],
+    ['NM2L15GMW', 1],
+  ])
+
+  it('elige el SKU con mas stock que cubra la cantidad (caso real A16: MZAMARO con 0 no se elige)', () => {
+    const r = elegirSkusConStock(
+      [{ lineRef: 'L1', producto: 'Samsung Galaxy A16 4/128GB', cantidad: 2, skus: ['SM-A165MLGMARO', 'SM-A165MZAMARO', 'SM-A165MZKMARO'] }],
+      stock
+    )
+    expect(r.errores).toEqual([])
+    expect(r.asignaciones.get('L1')).toBe('SM-A165MZKMARO')
+  })
+
+  it('un SKU con stock pero insuficiente para la cantidad no se elige (caso real Nubia: 1 disponible, pedido 2)', () => {
+    const r = elegirSkusConStock(
+      [{ lineRef: 'L1', producto: 'Nubia Music 2 128/4GB', cantidad: 2, skus: ['NM2L15GMW', 'NM2L15G'] }],
+      stock
+    )
+    expect(r.asignaciones.get('L1')).toBe('NM2L15G')
+  })
+
+  it('lineas que comparten SKU descuentan del mismo pool', () => {
+    const poco = new Map([['SKU-A', 3]])
+    const r = elegirSkusConStock(
+      [
+        { lineRef: 'L1', producto: 'Modelo X', cantidad: 2, skus: ['SKU-A'] },
+        { lineRef: 'L2', producto: 'Modelo X', cantidad: 2, skus: ['SKU-A'] },
+      ],
+      poco
+    )
+    expect(r.asignaciones.get('L1')).toBe('SKU-A')
+    expect(r.asignaciones.has('L2')).toBe(false)
+    expect(r.errores).toHaveLength(1)
+    expect(r.errores[0]).toContain('SKU-A: 1')
+  })
+
+  it('sin ningun SKU que alcance, error con detalle por SKU', () => {
+    const r = elegirSkusConStock(
+      [{ lineRef: 'L1', producto: 'Samsung Galaxy A16 4/128GB', cantidad: 500, skus: ['SM-A165MLGMARO', 'SM-A165MZKMARO'] }],
+      stock
+    )
+    expect(r.asignaciones.size).toBe(0)
+    expect(r.errores[0]).toContain('pedido 500')
+    expect(r.errores[0]).toContain('SM-A165MZKMARO: 170')
+  })
+
+  it('SKU ausente del mapa de stock cuenta como 0', () => {
+    const r = elegirSkusConStock(
+      [{ lineRef: 'L1', producto: 'Modelo Y', cantidad: 1, skus: ['SKU-INEXISTENTE'] }],
+      stock
+    )
+    expect(r.errores[0]).toContain('SKU-INEXISTENTE: 0')
   })
 })
 

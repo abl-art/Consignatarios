@@ -18,6 +18,8 @@ export interface GocelularVentaEstado {
   warnings?: string[]
   errores?: string[]
   codigoError?: string
+  /** request_id de la respuesta de GOcelular — la referencia que Pedro necesita para buscar en sus logs */
+  requestId?: string
   payloadEnviado?: string
 }
 

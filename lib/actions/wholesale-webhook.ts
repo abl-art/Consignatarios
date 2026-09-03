@@ -4,7 +4,7 @@ import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendWholesaleWebhook, buildTimestamp } from '@/lib/gocelular-webhook'
-import { validarVenta, candidatosStoreCliente, matchDeviceSku, type CatalogoVenta, type DeliveryInput, type StoreCatalogoRow } from '@/lib/wholesale-validation'
+import { validarVenta, candidatosStoreCliente, matchDeviceSku, elegirSkusConStock, type CatalogoVenta, type DeliveryInput, type StoreCatalogoRow } from '@/lib/wholesale-validation'
 import type { GocelularVentaEstado, ProformaConItems, ProformaItem } from '@/lib/actions/proformas'
 import type { ClienteMayorista } from '@/lib/types'
 
@@ -139,19 +139,21 @@ async function cargarSkusAndreani(): Promise<{ devices: DeviceSkuRow[]; addons: 
   }
 }
 
-async function cargarStockAndreani(modelCodes: string[]): Promise<Map<string, number>> {
+// Stock POR SKU, no por modelo: el gate de GOcelular valida el SKU exacto de la linea (las
+// variantes de color comparten model_code pero cada una tiene su propia disponibilidad).
+async function cargarStockPorSku(skus: string[]): Promise<Map<string, number>> {
   const map = new Map<string, number>()
   const pool = getPool()
-  if (!pool || modelCodes.length === 0) return map
+  if (!pool || skus.length === 0) return map
   const client = await pool.connect()
   try {
-    const res = await client.query<{ model_code: string; cnt: string }>(
-      `SELECT model_code, COUNT(*)::text AS cnt FROM inventory_items
-       WHERE status = 'available' AND physical_location = 'andreani_wh' AND model_code = ANY($1)
-       GROUP BY model_code`,
-      [modelCodes]
+    const res = await client.query<{ sku: string; cnt: string }>(
+      `SELECT sku, COUNT(*)::text AS cnt FROM inventory_items
+       WHERE status = 'available' AND physical_location = 'andreani_wh' AND sku = ANY($1)
+       GROUP BY sku`,
+      [skus]
     )
-    for (const row of res.rows) map.set(row.model_code, parseInt(row.cnt, 10))
+    for (const row of res.rows) map.set(row.sku, parseInt(row.cnt, 10))
     return map
   } finally {
     client.release()
@@ -265,7 +267,8 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
     const skuErrors: string[] = []
     let refN = 0
     const nextRef = () => `L${++refN}`
-    const resoluciones: { item: ProformaItem; itemType: 'device' | 'addon'; sku: string; modelCode?: string }[] = []
+    // Devices quedan con sku pendiente: el SKU concreto se elige despues, por stock del WH.
+    const resoluciones: { item: ProformaItem; itemType: 'device' | 'addon'; sku?: string; modelCode?: string }[] = []
 
     for (const item of proforma.proforma_items) {
       // Sin categoria conocida se asume 'Celulares' (default seguro, mismo criterio que compras).
@@ -280,40 +283,47 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
           continue
         }
         if (match.tipo === 'sin_match') { skuErrors.push(`Mapeá el producto "${item.producto_nombre}" a un SKU de GOcelular`); continue }
-        resoluciones.push({ item, itemType: 'device', sku: match.device.sku, modelCode: match.device.modelCode })
+        resoluciones.push({ item, itemType: 'device', modelCode: match.device.modelCode })
       } else {
         const match = skus.addons.find(a => normalizarNombre(a.nombre) === needle)
         if (!match) { skuErrors.push(`Mapeá el producto "${item.producto_nombre}" a un SKU de GOcelular`); continue }
         resoluciones.push({ item, itemType: 'addon', sku: match.sku })
+        catalogoWarnings.push(`Stock de accesorio "${item.producto_nombre}" no verificable localmente`)
       }
     }
     if (skuErrors.length > 0) return { estado: 'validacion_fallida', errores: skuErrors }
 
-    // Stock: solo se verifica localmente para devices (el gate real de GOcelular cubre addons).
-    const modelCodes = [...new Set(resoluciones.filter(r => r.itemType === 'device').map(r => r.modelCode as string))]
-    const stockMap = await cargarStockAndreani(modelCodes)
-    const pedidoPorModelo = new Map<string, number>()
-    for (const r of resoluciones) {
-      if (r.itemType === 'device' && r.modelCode) {
-        pedidoPorModelo.set(r.modelCode, (pedidoPorModelo.get(r.modelCode) ?? 0) + r.item.cantidad)
-      } else {
-        catalogoWarnings.push(`Stock de accesorio "${r.item.producto_nombre}" no verificable localmente`)
-      }
+    // Eleccion de SKU por stock (devices): el gate de GOcelular valida POR SKU — rechazo real del
+    // 3/9 (request_id 5b308cbe): mandamos un color con 0 unidades cuando el modelo tenia stock de
+    // sobra en otros. Se elige, por linea, el SKU del modelo con mas disponibilidad que cubra la
+    // cantidad; addons los cubre el gate real de GOcelular.
+    const skusPorModelo = new Map<string, string[]>()
+    for (const d of skus.devices) {
+      const lista = skusPorModelo.get(d.modelCode)
+      if (lista) lista.push(d.sku)
+      else skusPorModelo.set(d.modelCode, [d.sku])
     }
-    const stockErrors: string[] = []
-    for (const [modelCode, pedido] of pedidoPorModelo) {
-      const disponible = stockMap.get(modelCode) ?? 0
-      if (pedido > disponible) {
-        const nombreModelo = skus.devices.find(d => d.modelCode === modelCode)?.nombre ?? modelCode
-        stockErrors.push(`Stock insuficiente en el warehouse para "${nombreModelo}": pedido ${pedido}, disponible ${disponible}`)
-      }
+    const devicesResol = resoluciones.filter(r => r.itemType === 'device')
+    const skusCandidatos = [...new Set(devicesResol.flatMap(r => skusPorModelo.get(r.modelCode!) ?? []))]
+    const stockPorSku = await cargarStockPorSku(skusCandidatos)
+    const seleccion = elegirSkusConStock(
+      devicesResol.map((r, i) => ({
+        lineRef: `D${i}`,
+        producto: r.item.producto_nombre,
+        cantidad: r.item.cantidad,
+        skus: skusPorModelo.get(r.modelCode!) ?? [],
+      })),
+      stockPorSku
+    )
+    if (seleccion.errores.length > 0) {
+      return { estado: 'validacion_fallida', errores: seleccion.errores, warnings: catalogoWarnings }
     }
-    if (stockErrors.length > 0) return { estado: 'validacion_fallida', errores: stockErrors, warnings: catalogoWarnings }
+    devicesResol.forEach((r, i) => { r.sku = seleccion.asignaciones.get(`D${i}`) })
 
     lineas = resoluciones.map(r => ({
       line_reference: nextRef(),
       item_type: r.itemType,
-      sku: r.sku,
+      sku: r.sku!,
       description: r.item.producto_nombre,
       quantity: r.item.cantidad,
       gross_subtotal: r.item.subtotal_con_iva.toFixed(2),
@@ -497,6 +507,7 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
       await persistir(proformaId, {
         estado: 'informado',
         saleId: res.body?.sale_id,
+        requestId: res.body?.request_id,
         faStatus: res.body?.fa_status,
         dispatchId: res.body?.dispatch?.id,
         numeroOrdenExterna: res.body?.dispatch?.numero_orden_externa,
@@ -511,9 +522,10 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
       await persistir(proformaId, {
         estado: 'error_reintentable',
         codigoError: res.body?.code,
+        requestId: res.body?.request_id,
         errores: [res.body?.code === 'secret_no_configurado'
           ? 'Falta configurar GOCELULAR_WEBHOOK_SECRET'
-          : `GOcelular no respondió (HTTP ${res.status}) tras 4 intentos — reintentá en unos minutos`],
+          : `GOcelular no respondió (HTTP ${res.status})${res.body?.error ? ` — ${res.body.error}` : ''} — reintentá en unos minutos`],
         payloadEnviado: rawBody,
       })
       return { ok: false, estado: 'error_reintentable' }
@@ -526,6 +538,8 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
         if (e && typeof e === 'object') {
           const eo = e as Record<string, unknown>
           const partes = [eo.path, eo.line_reference, eo.sku, eo.imei].filter((v): v is string => typeof v === 'string' && v.length > 0)
+          // Los rechazos de stock traen requested/available por SKU — sin esto el error no dice cuanto habia
+          if (eo.requested !== undefined) partes.push(`pedido ${eo.requested}, disponible ${eo.available ?? '?'}`)
           detalles.push(partes.length > 0 ? partes.join(' · ') : JSON.stringify(e))
         } else {
           detalles.push(String(e))
@@ -554,6 +568,7 @@ export async function informarVentaGocelular(proformaId: string, opts?: { replay
     await persistir(proformaId, {
       estado: 'rechazado',
       codigoError: codigo || undefined,
+      requestId: res.body?.request_id,
       errores: [MENSAJES[codigo] ?? `GOcelular rechazó la venta (${codigo || 'HTTP ' + res.status})`, ...detalles],
       payloadEnviado: rawBody,
     })
