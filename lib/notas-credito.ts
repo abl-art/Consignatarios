@@ -6,7 +6,7 @@
 
 import { normalizarModelo } from './inventario-indicadores'
 import { normalizarMarca } from './marca'
-import type { FilaHistorialBono } from './lista-precios'
+import type { FilaHistorialBono, VentaPropiaDiaria } from './lista-precios'
 
 // La NC del bono la emite el proveedor preferido de la marca (el que factura
 // los equipos). Estas 4 marcas se muestran siempre en el resumen por marca.
@@ -64,48 +64,33 @@ function mesesDeVigencia(desde?: string, hasta?: string): string[] {
   return meses
 }
 
-// Una venta propia dentro de la vigencia de la acción, con el monto real de
-// la orden (precio que pagó el cliente)
-export interface VentaAccion {
-  modelo: string
-  monto: number
-}
-
 export interface FilaVentasAccion {
   modelo: string
   vendidas: number
   cupo: number | null
   utilizacion: number | null // vendidas ÷ cupo (0.5 = 50%); null sin cupo, puede superar 1
-  precioVenta: number | null // el precio más frecuente del período; null sin ventas
+  ncBruta: number // bono × vendidas, cortada en el cupo (la marca no reconoce de más)
 }
 
 /**
  * Detalle por modelo para el PDF de una acción: cantidad vendida en la
- * vigencia, cupo, % de utilización y precio de venta. Como el precio puede
- * cambiar dentro del período (ej. arrancó el bono a mitad de día), se informa
- * el MÁS FRECUENTE redondeado a pesos; en empate gana el más alto.
+ * vigencia, cupo, % de utilización y NC bruta = bono por unidad (c/IVA) ×
+ * vendidas, con tope en el cupo.
  */
 export function resumenVentasAccion(
-  campanias: { nombreModelo: string; cupo?: number }[],
-  ventas: VentaAccion[],
+  campanias: { nombreModelo: string; monto: number; cupo?: number }[],
+  ventasPropias: VentaPropiaDiaria[],
+  desde?: string,
+  hasta?: string,
 ): FilaVentasAccion[] {
   return campanias.map(c => {
     const clave = normalizarModelo(c.nombreModelo)
-    const frecuencia = new Map<number, number>()
     let vendidas = 0
-    for (const v of ventas) {
+    for (const v of ventasPropias) {
       if (normalizarModelo(v.modelo) !== clave) continue
-      vendidas += 1
-      const precio = Math.round(v.monto)
-      frecuencia.set(precio, (frecuencia.get(precio) ?? 0) + 1)
-    }
-    let precioVenta: number | null = null
-    let mejor = 0
-    for (const [precio, veces] of frecuencia) {
-      if (veces > mejor || (veces === mejor && precio > (precioVenta ?? 0))) {
-        mejor = veces
-        precioVenta = precio
-      }
+      if (desde && v.fecha < desde) continue
+      if (hasta && v.fecha > hasta) continue
+      vendidas += v.ventas
     }
     const cupo = c.cupo && c.cupo > 0 ? c.cupo : null
     return {
@@ -113,7 +98,7 @@ export function resumenVentasAccion(
       vendidas,
       cupo,
       utilizacion: cupo ? vendidas / cupo : null,
-      precioVenta,
+      ncBruta: c.monto * (cupo ? Math.min(vendidas, cupo) : vendidas),
     }
   })
 }

@@ -1021,39 +1021,6 @@ export async function fetchVentasPropiasConFactura(desde: string, hasta: string)
   }
 }
 
-/**
- * Ventas propias entregadas dentro de un rango, con el monto real de cada
- * orden (corregido el problema de centavos >5M). Para el PDF de detalle por
- * acción de Notas de crédito: cantidad vendida y precio de venta por modelo.
- */
-export async function fetchVentasAccionConMonto(
-  desde: string,
-  hasta: string,
-): Promise<{ modelo: string; monto: number }[]> {
-  const pool = getPool()
-  if (!pool) return []
-
-  const client = await pool.connect()
-  try {
-    const res = await client.query<{ modelo: string; monto: string }>(
-      `SELECT so.product_name AS modelo,
-              (CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END)::text AS monto
-       FROM gocuotas_orders go
-       JOIN store_orders so ON so.id::text = go.store_order_id
-       WHERE go.order_delivered_at IS NOT NULL
-         AND go.order_discarded_at IS NULL
-         AND go.client_id::text IN (${SQL_IDS_PROPIOS})
-         AND go.order_created_at::date BETWEEN $1 AND $2
-         AND so.product_name IS NOT NULL
-         AND go.total_order_amount IS NOT NULL`,
-      [desde, hasta]
-    )
-    return res.rows.map(r => ({ modelo: r.modelo, monto: Number(r.monto) }))
-  } finally {
-    client.release()
-  }
-}
-
 /** Precio de venta publicado en la tienda (store_products.price en centavos) por celular activo. */
 export async function fetchPreciosTiendaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()

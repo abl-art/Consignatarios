@@ -10,7 +10,6 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   fetchPreciosTiendaCelulares,
-  fetchVentasAccionConMonto,
   fetchVentasPorModelo,
   fetchVentasPropiasPorModelo,
   fetchVentasPropiasConFactura,
@@ -375,11 +374,14 @@ export async function generarPdfAccion(bonoIds: string[]) {
 
   let ventas
   try {
-    ventas = await fetchVentasAccionConMonto(desde ?? '2026-03-23', hasta ?? hoy)
+    ventas = await fetchVentasPropiasPorModelo()
   } catch (e) {
     return { error: `No se pudieron leer las ventas de GOcelular: ${e instanceof Error ? e.message : e}` }
   }
-  const filas = resumenVentasAccion(registros, ventas)
+  const filas = resumenVentasAccion(registros, ventas, desde, hasta).map((f, i) => ({
+    ...f,
+    bono: registros[i].monto,
+  }))
 
   const buffer = await renderNcAccion({ marca, proveedor, desde, hasta, filas, generadoEl: hoy })
   const slug = marca.toLowerCase().replace(/[^a-z0-9]+/g, '-')

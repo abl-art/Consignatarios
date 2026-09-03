@@ -77,10 +77,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
   },
   colModelo: { flex: 1 },
-  colCantidad: { width: 90, textAlign: 'right' },
-  colCupo: { width: 60, textAlign: 'right' },
-  colUtilizacion: { width: 75, textAlign: 'right' },
-  colPrecio: { width: 100, textAlign: 'right' },
+  colCantidad: { width: 80, textAlign: 'right' },
+  colCupo: { width: 50, textAlign: 'right' },
+  colUtilizacion: { width: 70, textAlign: 'right' },
+  colBono: { width: 70, textAlign: 'right' },
+  colNcBruta: { width: 95, textAlign: 'right' },
   sinVentas: { color: '#9ca3af' },
   footer: {
     marginTop: 12,
@@ -104,7 +105,7 @@ export interface NcAccionProps {
   proveedor: string
   desde?: string
   hasta?: string
-  filas: FilaVentasAccion[]
+  filas: (FilaVentasAccion & { bono: number })[]
   generadoEl: string
 }
 
@@ -118,6 +119,7 @@ const porcentaje = (n: number) => `${Math.round(n * 100)}%`
 export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl }: NcAccionProps) {
   const totalVendidas = filas.reduce((acc, f) => acc + f.vendidas, 0)
   const totalCupo = filas.reduce((acc, f) => acc + (f.cupo ?? 0), 0)
+  const totalNcBruta = filas.reduce((acc, f) => acc + f.ncBruta, 0)
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -138,12 +140,12 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
             </Text>
           </View>
           <View style={styles.metaBox}>
-            <Text style={styles.metaLabel}>Modelos</Text>
-            <Text style={styles.metaValue}>{filas.length}</Text>
-          </View>
-          <View style={styles.metaBox}>
             <Text style={styles.metaLabel}>Unidades vendidas</Text>
             <Text style={styles.metaValue}>{totalVendidas}</Text>
+          </View>
+          <View style={styles.metaBox}>
+            <Text style={styles.metaLabel}>NC bruta (c/IVA)</Text>
+            <Text style={styles.metaValue}>{peso(totalNcBruta)}</Text>
           </View>
         </View>
 
@@ -152,7 +154,8 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
           <Text style={[styles.th, styles.colCantidad]}>Cant. vendida</Text>
           <Text style={[styles.th, styles.colCupo]}>Cupo</Text>
           <Text style={[styles.th, styles.colUtilizacion]}>Utilización</Text>
-          <Text style={[styles.th, styles.colPrecio]}>Precio de venta</Text>
+          <Text style={[styles.th, styles.colBono]}>Bono/u</Text>
+          <Text style={[styles.th, styles.colNcBruta]}>NC bruta</Text>
         </View>
         {filas.map((f, i) => (
           <View style={styles.row} key={`${f.modelo}-${i}`} wrap={false}>
@@ -166,8 +169,9 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
             <Text style={f.utilizacion === null ? [styles.colUtilizacion, styles.sinVentas] : styles.colUtilizacion}>
               {f.utilizacion !== null ? porcentaje(f.utilizacion) : '—'}
             </Text>
-            <Text style={f.precioVenta === null ? [styles.colPrecio, styles.sinVentas] : styles.colPrecio}>
-              {f.precioVenta !== null ? peso(f.precioVenta) : '—'}
+            <Text style={styles.colBono}>{peso(f.bono)}</Text>
+            <Text style={f.ncBruta === 0 ? [styles.colNcBruta, styles.sinVentas] : styles.colNcBruta}>
+              {peso(f.ncBruta)}
             </Text>
           </View>
         ))}
@@ -176,13 +180,14 @@ export function NcAccionPDF({ marca, proveedor, desde, hasta, filas, generadoEl 
           <Text style={styles.colCantidad}>{totalVendidas}</Text>
           <Text style={styles.colCupo}>{totalCupo || '—'}</Text>
           <Text style={styles.colUtilizacion}>{totalCupo ? porcentaje(totalVendidas / totalCupo) : '—'}</Text>
-          <Text style={styles.colPrecio} />
+          <Text style={styles.colBono} />
+          <Text style={styles.colNcBruta}>{peso(totalNcBruta)}</Text>
         </View>
 
         <View style={styles.footer}>
           <Text>
-            Ventas propias en tienda GOcelular dentro de la vigencia de la acción. Precio de venta: el precio
-            al público más frecuente del período.
+            Ventas propias en tienda GOcelular dentro de la vigencia de la acción. NC bruta = bono por unidad
+            (c/IVA) × unidades vendidas, con tope en el cupo.
           </Text>
           <Text style={{ marginTop: 2 }}>Generado el {fechaLarga(generadoEl)} — GOcelular / Grupo GO</Text>
         </View>
