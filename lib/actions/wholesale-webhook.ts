@@ -4,7 +4,7 @@ import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendWholesaleWebhook, buildTimestamp } from '@/lib/gocelular-webhook'
-import { validarVenta, candidatosStoreCliente, type CatalogoVenta, type DeliveryInput, type StoreCatalogoRow } from '@/lib/wholesale-validation'
+import { validarVenta, candidatosStoreCliente, matchDeviceSku, type CatalogoVenta, type DeliveryInput, type StoreCatalogoRow } from '@/lib/wholesale-validation'
 import type { GocelularVentaEstado, ProformaConItems, ProformaItem } from '@/lib/actions/proformas'
 import type { ClienteMayorista } from '@/lib/types'
 
@@ -272,9 +272,15 @@ async function construirPayload(proforma: ProformaConItems): Promise<ConstruirPa
       const categoria = categorias.get(item.producto_id) ?? 'Celulares'
       const needle = normalizarNombre(item.producto_nombre)
       if (categoria === 'Celulares') {
-        const match = skus.devices.find(d => normalizarNombre(d.nombre) === needle)
-        if (!match) { skuErrors.push(`Mapeá el producto "${item.producto_nombre}" a un SKU de GOcelular`); continue }
-        resoluciones.push({ item, itemType: 'device', sku: match.sku, modelCode: match.modelCode })
+        // matchDeviceSku tolera variantes de nombre ("4/128GB" vs "4/128 GB", prefijo "Celular")
+        // via normalizarModelo; con match a mas de un modelo no adivina y lista los candidatos.
+        const match = matchDeviceSku(item.producto_nombre, skus.devices)
+        if (match.tipo === 'ambiguo') {
+          skuErrors.push(`El producto "${item.producto_nombre}" coincide con varios modelos de GOcelular (${match.modelos.join(' / ')}) — renombralo en compras para que sea inequívoco`)
+          continue
+        }
+        if (match.tipo === 'sin_match') { skuErrors.push(`Mapeá el producto "${item.producto_nombre}" a un SKU de GOcelular`); continue }
+        resoluciones.push({ item, itemType: 'device', sku: match.device.sku, modelCode: match.device.modelCode })
       } else {
         const match = skus.addons.find(a => normalizarNombre(a.nombre) === needle)
         if (!match) { skuErrors.push(`Mapeá el producto "${item.producto_nombre}" a un SKU de GOcelular`); continue }

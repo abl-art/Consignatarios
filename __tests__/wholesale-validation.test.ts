@@ -4,6 +4,8 @@ import {
   validarVenta,
   nombreComercialBase,
   candidatosStoreCliente,
+  matchDeviceSku,
+  type DeviceSkuCatalogo,
   PROVINCIAS_AR,
   type CatalogoVenta,
   type VentaLinea,
@@ -166,6 +168,55 @@ describe('candidatosStoreCliente', () => {
   it('cliente sin nombres utilizables no matchea nada', () => {
     const r = candidatosStoreCliente({ nombre_comercial: '  ', razon_social: null }, stores)
     expect(r).toEqual([])
+  })
+})
+
+describe('matchDeviceSku', () => {
+  // Nombres reales del catalogo de GOcelular (device_model_skus JOIN device_models, 3 sep 2026)
+  const devices: DeviceSkuCatalogo[] = [
+    { modelCode: 'SM-A075M', nombre: 'Celular Samsung Galaxy A07 4/64 GB', sku: 'SM-A075MLVAARO' },
+    { modelCode: 'SM-A075M', nombre: 'Celular Samsung Galaxy A07 4/64 GB', sku: 'SM-A075MLVVARO' },
+    { modelCode: 'SM-A075M (128gb)', nombre: 'Samsung Galaxy A07 4/128 GB', sku: 'SM-A075MLVWARO' },
+    { modelCode: 'SM-A075M (128gb)', nombre: 'Samsung Galaxy A07 4/128 GB', sku: 'SM-A075MZGWARO' },
+    { modelCode: 'SMA16', nombre: 'Samsung Galaxy A16 4/128GB', sku: 'SM-A165MLGMARO' },
+    { modelCode: 'XT2535 (g06)', nombre: 'Motorola Moto G06 64gb', sku: 'PB970103AR' },
+    { modelCode: 'XT2536 (g06)', nombre: 'Motorola Moto G06 4/128GB', sku: 'PB970104AR' },
+  ]
+
+  it('match exacto (case-insensitive) tiene prioridad', () => {
+    const r = matchDeviceSku('Motorola Moto G06 64GB', devices)
+    expect(r).toEqual({ tipo: 'match', device: devices[5] })
+  })
+
+  it('cae a normalizarModelo cuando el nombre difiere en espaciado (caso real A07 "4/128GB" vs "4/128 GB")', () => {
+    const r = matchDeviceSku('Samsung Galaxy A07 4/128GB', devices)
+    expect(r.tipo).toBe('match')
+    if (r.tipo === 'match') expect(r.device.modelCode).toBe('SM-A075M (128gb)')
+  })
+
+  it('tolera el prefijo "Celular" del catalogo de GOcelular', () => {
+    const r = matchDeviceSku('Samsung Galaxy A07 4/64GB', devices)
+    expect(r.tipo).toBe('match')
+    if (r.tipo === 'match') expect(r.device.modelCode).toBe('SM-A075M')
+  })
+
+  it('con match unico toma el PRIMER SKU del modelo (variantes de color comparten stock)', () => {
+    const r = matchDeviceSku('Samsung Galaxy A07 4/128GB', devices)
+    if (r.tipo === 'match') expect(r.device.sku).toBe('SM-A075MLVWARO')
+  })
+
+  it('normalizado que matchea mas de un model_code es ambiguo, no adivina', () => {
+    const conDuplicado: DeviceSkuCatalogo[] = [
+      ...devices,
+      { modelCode: 'OTRO-CODE', nombre: 'Samsung Galaxy A07 128GB', sku: 'SKU-RARO' },
+    ]
+    const r = matchDeviceSku('Samsung Galaxy A07 4/128GB', conDuplicado)
+    expect(r.tipo).toBe('ambiguo')
+    if (r.tipo === 'ambiguo') expect(r.modelos).toContain('Samsung Galaxy A07 4/128 GB')
+  })
+
+  it('sin coincidencia ni exacta ni normalizada es sin_match', () => {
+    expect(matchDeviceSku('iPhone 15 Pro', devices)).toEqual({ tipo: 'sin_match' })
   })
 })
 

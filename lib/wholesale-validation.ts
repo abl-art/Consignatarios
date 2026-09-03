@@ -1,4 +1,5 @@
 import { luhnValido } from '@/lib/imei-excel-parser'
+import { normalizarModelo } from '@/lib/inventario-indicadores'
 
 export interface VentaLinea {
   description: string
@@ -132,6 +133,43 @@ export function candidatosStoreCliente(
     const nombresStore = [s.merchant_name ?? '', s.store_name].map(nombreComercialBase)
     return nombresCliente.some(nc => nombresStore.includes(nc))
   })
+}
+
+export interface DeviceSkuCatalogo {
+  modelCode: string
+  nombre: string
+  sku: string
+}
+
+export type MatchDeviceSkuResult =
+  | { tipo: 'match'; device: DeviceSkuCatalogo }
+  | { tipo: 'ambiguo'; modelos: string[] }
+  | { tipo: 'sin_match' }
+
+/**
+ * Resuelve el SKU de GOcelular para un producto de proforma. Primero por nombre exacto
+ * (minusculas/espacios); si no hay, cae a la clave de normalizarModelo — la misma que unifica
+ * variantes tipo "4/128GB" vs "4/128 GB" o el prefijo "Celular" en el resto del sistema (caso
+ * real: "Samsung Galaxy A07 4/128GB" en compras vs "Samsung Galaxy A07 4/128 GB" en GOcelular).
+ * Si la clave normalizada matchea MAS de un model_code distinto no se adivina: se devuelven los
+ * nombres candidatos para que el error los liste. Con match unico se toma el primer SKU activo
+ * del modelo (todas las variantes de color comparten model_code y por ende stock).
+ */
+export function matchDeviceSku(nombreProducto: string, devices: DeviceSkuCatalogo[]): MatchDeviceSkuResult {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const needle = norm(nombreProducto)
+  const exacto = devices.find(d => norm(d.nombre) === needle)
+  if (exacto) return { tipo: 'match', device: exacto }
+
+  const clave = normalizarModelo(nombreProducto)
+  const candidatos = devices.filter(d => normalizarModelo(d.nombre) === clave)
+  if (candidatos.length === 0) return { tipo: 'sin_match' }
+
+  const modelCodes = [...new Set(candidatos.map(d => d.modelCode))]
+  if (modelCodes.length > 1) {
+    return { tipo: 'ambiguo', modelos: [...new Set(candidatos.map(d => d.nombre))] }
+  }
+  return { tipo: 'match', device: candidatos[0] }
 }
 
 /**
