@@ -29,10 +29,10 @@ export default async function ListaPreciosPage() {
       </p>
       <TabsListaBonos
         cantidadBonos={bonos.length}
-        ncPendientes={notasCredito.grupos.filter(g => !g.emitida).length}
+        ncPendientes={notasCredito.filter(g => !g.emitida).length}
         lista={<ListaPreciosTable filas={filas} agregables={agregables} />}
         bonos={<BonosHistorialTable bonos={bonos} />}
-        notasCredito={<NotasCreditoTable resumen={notasCredito} />}
+        notasCredito={<NotasCreditoTable grupos={notasCredito} />}
       />
     </div>
   )

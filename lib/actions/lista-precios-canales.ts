@@ -15,7 +15,7 @@ import {
   fetchVentasPropiasConFactura,
 } from '@/lib/gocelular'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
-import { armarNotasCredito, type ResumenNC } from '@/lib/notas-credito'
+import { armarNotasCredito, type GrupoNC } from '@/lib/notas-credito'
 import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
 import {
   ahoraArgentina,
@@ -336,8 +336,8 @@ export interface ResultadoSetBono {
   bonoFuturo?: string // desde de un bono que todavía no arranca
 }
 
-/** Resumen de la pestaña Notas de crédito: NC agrupadas por proveedor+vigencia. */
-export async function getNotasCredito(): Promise<ResumenNC> {
+/** Pestaña Notas de crédito: acciones (NC) agrupadas por marca+vigencia. */
+export async function getNotasCredito(): Promise<GrupoNC[]> {
   const supabase = createAdminClient()
   const [registros, ventasPropias, { data: cfg }] = await Promise.all([
     fetchBonosRegistros(supabase),
@@ -349,7 +349,7 @@ export async function getNotasCredito(): Promise<ResumenNC> {
     const valor = Number(row.value)
     if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
   }
-  return armarNotasCredito(armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina()), ventasPropias)
+  return armarNotasCredito(armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina()))
 }
 
 /** Checkbox Emitida de una NC: marca/desmarca todas las campañas del grupo. */

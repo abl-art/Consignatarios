@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import type { GrupoNC, ResumenNC } from '@/lib/notas-credito'
+import { PROVEEDOR_NC, type GrupoNC } from '@/lib/notas-credito'
 import { setNcEmitida } from '@/lib/actions/lista-precios-canales'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
@@ -66,12 +66,24 @@ function CheckEmitida({ grupo }: { grupo: GrupoNC }) {
   )
 }
 
-export default function NotasCreditoTable({ resumen }: { resumen: ResumenNC }) {
+// Las 4 marcas con bono sell-out se muestran siempre, tengan o no acciones
+const MARCAS_FIJAS = Object.keys(PROVEEDOR_NC)
+
+export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
+  const [mes, setMes] = useState<string | null>(null)
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
 
-  if (resumen.grupos.length === 0) {
+  if (grupos.length === 0) {
     return <p className="text-sm text-gray-500">Todavía no hay bonos cargados, así que no hay notas de crédito que reclamar.</p>
   }
+
+  const mesesDisponibles = [...new Set(grupos.flatMap(g => g.meses))].sort().reverse()
+  const visibles = mes ? grupos.filter(g => g.meses.includes(mes)) : grupos
+
+  const total = visibles.reduce((acc, g) => acc + g.ncTotal, 0)
+  const emitidas = visibles.filter(g => g.emitida).reduce((acc, g) => acc + g.ncTotal, 0)
+
+  const marcas = [...MARCAS_FIJAS, ...new Set(visibles.map(g => g.marca).filter(m => !MARCAS_FIJAS.includes(m)))]
 
   const toggleAbierto = (key: string) => {
     setAbiertos(prev => {
@@ -84,42 +96,68 @@ export default function NotasCreditoTable({ resumen }: { resumen: ResumenNC }) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <Tarjeta titulo="Total NC a recibir" monto={resumen.totales.total} detalle="Todas las campañas, al día de hoy" />
-        <Tarjeta titulo="Ya emitidas" monto={resumen.totales.emitidas} detalle="NC que la marca ya emitió" cls="text-green-700" />
-        <Tarjeta titulo="Pendientes de reclamo" monto={resumen.totales.pendientes} detalle="Todavía sin emitir — a reclamar" cls="text-amber-600" />
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[null, ...mesesDisponibles].map(m => (
+          <button
+            key={m ?? 'todos'}
+            onClick={() => setMes(m)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              mes === m ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {m ? mesLabel(m) : 'Todos'}
+          </button>
+        ))}
       </div>
 
-      <h2 className="text-sm font-semibold text-gray-700 mb-2">Imputación mensual</h2>
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-6 max-w-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Tarjeta titulo="Total NC a recibir" monto={total} detalle={mes ? `Acciones de ${mesLabel(mes)}` : 'Todas las acciones, al día de hoy'} />
+        <Tarjeta titulo="Ya emitidas" monto={emitidas} detalle="NC que la marca ya emitió" cls="text-green-700" />
+        <Tarjeta titulo="Pendientes de reclamo" monto={total - emitidas} detalle="Todavía sin emitir — a reclamar" cls="text-amber-600" />
+      </div>
+
+      <h2 className="text-sm font-semibold text-gray-700 mb-2">Acciones por marca</h2>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-6 max-w-2xl">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-600">Mes</th>
-              <th className="text-right px-4 py-2.5 font-medium text-gray-600">NC del mes</th>
-              <th className="text-right px-4 py-2.5 font-medium text-gray-600">Emitidas</th>
-              <th className="text-right px-4 py-2.5 font-medium text-gray-600">Pendientes</th>
+              <th className="text-left px-4 py-2.5 font-medium text-gray-600">Marca</th>
+              <th className="text-right px-4 py-2.5 font-medium text-gray-600">Acciones</th>
+              <th className="text-right px-4 py-2.5 font-medium text-gray-600">Unidades</th>
+              <th className="text-right px-4 py-2.5 font-medium text-gray-600">NC total</th>
+              <th className="text-right px-4 py-2.5 font-medium text-gray-600">Pendiente</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {resumen.meses.map(m => (
-              <tr key={m.mes} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium text-gray-900">{mesLabel(m.mes)}</td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold">{peso(m.total)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-green-700">{m.emitidas ? peso(m.emitidas) : '—'}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-amber-600">{m.pendientes ? peso(m.pendientes) : '—'}</td>
-              </tr>
-            ))}
+            {marcas.map(marca => {
+              const deMarca = visibles.filter(g => g.marca === marca)
+              const ncMarca = deMarca.reduce((acc, g) => acc + g.ncTotal, 0)
+              const pendMarca = deMarca.filter(g => !g.emitida).reduce((acc, g) => acc + g.ncTotal, 0)
+              return (
+                <tr key={marca} className={`hover:bg-gray-50 ${deMarca.length === 0 ? 'text-gray-300' : ''}`}>
+                  <td className="px-4 py-2">
+                    <span className={`font-medium ${deMarca.length ? 'text-gray-900' : 'text-gray-400'}`}>{marca}</span>
+                    <span className="block text-xs text-gray-400">{PROVEEDOR_NC[marca] ?? marca}</span>
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums">{deMarca.length || '—'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{deMarca.length ? deMarca.reduce((a, g) => a + g.unidades, 0) : '—'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{deMarca.length ? peso(ncMarca) : '—'}</td>
+                  <td className={`px-4 py-2 text-right tabular-nums ${pendMarca > 0 ? 'text-amber-600 font-semibold' : ''}`}>
+                    {deMarca.length ? (pendMarca > 0 ? peso(pendMarca) : '✓') : '—'}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
-      <h2 className="text-sm font-semibold text-gray-700 mb-2">Notas de crédito por proveedor</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-2">Detalle por acción</h2>
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Proveedor</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Marca / Proveedor</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Vigencia (acción)</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Modelos</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Unidades</th>
@@ -129,12 +167,13 @@ export default function NotasCreditoTable({ resumen }: { resumen: ResumenNC }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {resumen.grupos.map(g => (
+            {visibles.map(g => (
               <Fragment key={g.key}>
                 <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleAbierto(g.key)}>
-                  <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">
+                  <td className="px-4 py-2.5 whitespace-nowrap">
                     <span className="text-gray-400 mr-1.5 text-xs">{abiertos.has(g.key) ? '▾' : '▸'}</span>
-                    {g.proveedor}
+                    <span className="font-medium text-gray-900">{g.marca}</span>
+                    <span className="text-xs text-gray-400 ml-1.5">{g.proveedor}</span>
                   </td>
                   <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
                     {g.desde ? fechaCorta(g.desde) : '—'} → {g.hasta ? fechaCorta(g.hasta) : 'sin vto'}
@@ -186,10 +225,10 @@ export default function NotasCreditoTable({ resumen }: { resumen: ResumenNC }) {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Una NC = un proveedor + una vigencia: los bonos de la misma acción comercial (ej. los 6 Motorola del
-        3/9) vienen juntos en una única nota de crédito de Newsan. La imputación mensual reparte cada NC por el
-        mes de venta de las unidades reconocidas, respetando el corte del cupo. NC emitida = la marca ya la
-        emitió, no hay que reclamarla; las NC en curso siguen sumando con cada venta.
+        Una NC = una marca + una vigencia: los bonos de la misma acción comercial (ej. los 6 Motorola del 3/9)
+        vienen juntos en una única nota de crédito del proveedor de la marca. El filtro de mes muestra las
+        acciones cuya vigencia toca ese mes. NC emitida = la marca ya la emitió, no hay que reclamarla; las NC
+        en curso siguen sumando con cada venta.
       </p>
     </div>
   )
