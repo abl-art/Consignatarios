@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaHistorialBono } from '@/lib/lista-precios'
+import { marcaNC } from '@/lib/notas-credito'
 import { generarPdfBono } from '@/lib/actions/lista-precios-canales'
 
 const peso = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
@@ -79,27 +80,36 @@ function coincide(estado: FilaHistorialBono['estado'], filtro: FiltroEstado): bo
 
 export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBono[] }) {
   const [filtro, setFiltro] = useState<FiltroEstado | null>(null)
+  const [marca, setMarca] = useState<string | null>(null)
 
   if (bonos.length === 0) {
     return <p className="text-sm text-gray-500">Todavía no hay bonos cargados. Se cargan desde la columna Bono de la pestaña Lista.</p>
   }
 
-  const visibles = filtro ? bonos.filter(b => coincide(b.estado, filtro)) : bonos
+  const marcas = [...new Set(bonos.map(b => marcaNC(b.nombreModelo)))].sort()
+  const deMarca = marca ? bonos.filter(b => marcaNC(b.nombreModelo) === marca) : bonos
+  const visibles = filtro ? deMarca.filter(b => coincide(b.estado, filtro)) : deMarca
+
+  const pill = (activo: boolean) =>
+    `px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+      activo ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+    }`
 
   return (
     <div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {[null, ...marcas].map(m => (
+          <button key={m ?? 'todas'} onClick={() => setMarca(m)} className={pill(marca === m)}>
+            {m ?? 'Todas'}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2 mb-4">
         {[null, ...FILTROS.map(f => f.valor)].map(v => {
           const label = v === null ? 'Todos' : FILTROS.find(f => f.valor === v)!.label
-          const cantidad = v === null ? bonos.length : bonos.filter(b => coincide(b.estado, v)).length
+          const cantidad = v === null ? deMarca.length : deMarca.filter(b => coincide(b.estado, v)).length
           return (
-            <button
-              key={v ?? 'todos'}
-              onClick={() => setFiltro(v)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                filtro === v ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-              }`}
-            >
+            <button key={v ?? 'todos'} onClick={() => setFiltro(v)} className={pill(filtro === v)}>
               {label} ({cantidad})
             </button>
           )
