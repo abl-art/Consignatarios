@@ -590,6 +590,19 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
     row.in_proyectado += p.in_proyectado
   }
 
+  // Calendario completo: los días sin movimiento (típicamente sábados y
+  // domingos, que ya no reciben pagos ni acreditaciones) quedan en cero pero
+  // se muestran igual — el flujo se lee corrido, sin saltos de fechas
+  const fechas = [...map.keys()].sort()
+  if (fechas.length > 0) {
+    const d = new Date(fechas[0] + 'T00:00:00Z')
+    const fin = new Date(fechas[fechas.length - 1] + 'T00:00:00Z')
+    while (d <= fin) {
+      getOrCreate(map, d.toISOString().slice(0, 10))
+      d.setUTCDate(d.getUTCDate() + 1)
+    }
+  }
+
   // Sort by cash_date
   const sorted = Array.from(map.values()).sort((a, b) =>
     a.cash_date.localeCompare(b.cash_date)
