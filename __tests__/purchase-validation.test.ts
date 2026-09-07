@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validarCompra, type CatalogoGocelular } from '@/lib/purchase-validation'
+import { validarCompra, verificarAliasVsPedido, type CatalogoGocelular } from '@/lib/purchase-validation'
 import type { PurchaseLine } from '@/lib/gocelular-webhook'
 
 const IMEI_A = '354581531507664'
@@ -111,5 +111,80 @@ describe('validarCompra', () => {
     expect(r.errores.some(e => e.includes('500.000.000'))).toBe(true)
     // Verify it only has the aggregate error, not the unit cost error or qty error
     expect(r.errores.length).toBe(1)
+  })
+})
+
+describe('verificarAliasVsPedido (dry run contra la tabla de alias, lineamiento de Pedro)', () => {
+  const alias = new Map([
+    ['SM-A075MZKVARO', 'Celular Samsung Galaxy A07 4/64 GB'],
+    ['SM-A0756ZKUARO', 'Celular Samsung Galaxy A07 4/128 GB'],
+  ])
+
+  it('ataja el caso A07: el SKU es de 64GB según el alias pero el pedido declara 128GB', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'SM-A075MZKVARO', unidades: 40 }],
+      alias,
+      [{ productoNombre: 'Samsung Galaxy A07 4/128GB', cantidad: 40 }],
+    )
+    expect(r.errores).toHaveLength(2) // el alias no matchea el pedido + el pedido queda sin cubrir
+    expect(r.errores[0]).toContain('SM-A075MZKVARO')
+    expect(r.errores[0]).toContain('A07 4/64')
+  })
+
+  it('pasa limpio cuando alias y pedido coinciden en modelo y cantidad', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'SM-A075MZKVARO', unidades: 40 }, { sku: 'SM-A0756ZKUARO', unidades: 25 }],
+      alias,
+      [
+        { productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 40 },
+        { productoNombre: 'Samsung Galaxy A07 4/128GB', cantidad: 25 },
+      ],
+    )
+    expect(r.errores).toHaveLength(0)
+    expect(r.warnings).toHaveLength(0)
+  })
+
+  it('detecta diferencia de cantidades del mismo modelo', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'SM-A075MZKVARO', unidades: 38 }],
+      alias,
+      [{ productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 40 }],
+    )
+    expect(r.errores).toHaveLength(1)
+    expect(r.errores[0]).toContain('38')
+    expect(r.errores[0]).toContain('40')
+  })
+
+  it('suma variantes de nombre que normalizan al mismo modelo', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'SM-A075MZKVARO', unidades: 15 }],
+      new Map([['SM-A075MZKVARO', 'Celular Samsung Galaxy A07 64 GB']]),
+      [{ productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 15 }],
+    )
+    expect(r.errores).toHaveLength(0)
+  })
+
+  it('un SKU sin alias no bloquea pero avisa que se verifique a mano', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'MZB0NUEVO', unidades: 50 }],
+      alias,
+      [{ productoNombre: 'Xiaomi Redmi Note 15 Pro 256/8GB', cantidad: 50 }],
+    )
+    expect(r.errores).toHaveLength(0)
+    expect(r.warnings.length).toBeGreaterThanOrEqual(2) // modelo sin cubrir (posible sin-alias) + aviso del SKU
+    expect(r.warnings.join(' ')).toContain('MZB0NUEVO')
+  })
+
+  it('modelo del pedido sin SKU que lo cubra es error si todos los SKUs tienen alias', () => {
+    const r = verificarAliasVsPedido(
+      [{ sku: 'SM-A075MZKVARO', unidades: 40 }],
+      alias,
+      [
+        { productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 40 },
+        { productoNombre: 'Motorola Moto G06 64GB', cantidad: 10 },
+      ],
+    )
+    expect(r.errores).toHaveLength(1)
+    expect(r.errores[0]).toContain('Moto G06')
   })
 })

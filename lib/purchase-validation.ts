@@ -92,3 +92,94 @@ export function validarCompra(
 
   return { errores, warnings }
 }
+
+// ---------------------------------------------------------------------------
+// Dry run contra la tabla de alias de GOcelular (lineamiento de Pedro, 7 sep
+// 2026): antes de informar una compra se verifica que las cantidades por
+// modelo SEGÚN EL ALIAS (sku → modelo en device_model_skus) coincidan con lo
+// que declara el pedido del gestor. Ataja el caso del A07: el Excel traía el
+// SKU correcto pero el modelo mal informado por el proveedor, y el alias se
+// creó con ese modelo equivocado (64GB aliasado como 128GB).
+// ---------------------------------------------------------------------------
+
+import { normalizarModelo } from './inventario-indicadores'
+
+export interface LineaDeviceResumen {
+  sku: string
+  unidades: number
+}
+
+export function verificarAliasVsPedido(
+  lineas: LineaDeviceResumen[],
+  aliasSkuANombre: Map<string, string>,
+  itemsDevice: { productoNombre: string; cantidad: number }[],
+): ValidacionResult {
+  const errores: string[] = []
+  const warnings: string[] = []
+
+  // Unidades por modelo según el ALIAS de GOcelular (solo SKUs ya mapeados)
+  const porAlias = new Map<string, { nombre: string; unidades: number; skus: string[] }>()
+  const sinAlias: LineaDeviceResumen[] = []
+  for (const l of lineas) {
+    const nombre = aliasSkuANombre.get(l.sku)
+    if (!nombre) {
+      sinAlias.push(l)
+      continue
+    }
+    const clave = normalizarModelo(nombre)
+    const e = porAlias.get(clave) ?? { nombre, unidades: 0, skus: [] }
+    e.unidades += l.unidades
+    e.skus.push(l.sku)
+    porAlias.set(clave, e)
+  }
+
+  // Unidades por modelo según el PEDIDO
+  const porPedido = new Map<string, { nombre: string; cantidad: number }>()
+  for (const i of itemsDevice) {
+    const clave = normalizarModelo(i.productoNombre)
+    const e = porPedido.get(clave) ?? { nombre: i.productoNombre, cantidad: 0 }
+    e.cantidad += i.cantidad
+    porPedido.set(clave, e)
+  }
+
+  for (const [clave, alias] of porAlias) {
+    const pedido = porPedido.get(clave)
+    if (!pedido) {
+      errores.push(
+        `Según el alias de GOcelular, ${alias.skus.join(', ')} (${alias.unidades} u.) corresponde a ` +
+        `"${alias.nombre}", pero el pedido no incluye ese modelo — revisar el alias o el pedido antes de enviar`,
+      )
+      continue
+    }
+    if (alias.unidades !== pedido.cantidad) {
+      errores.push(
+        `"${pedido.nombre}": el Excel trae ${alias.unidades} unidades según el alias de GOcelular ` +
+        `(${alias.skus.join(', ')}) pero el pedido declara ${pedido.cantidad}`,
+      )
+    }
+  }
+
+  // Modelos del pedido sin ningún SKU que les corresponda según los alias
+  for (const [clave, pedido] of porPedido) {
+    if (porAlias.has(clave)) continue
+    const msj =
+      `El pedido declara "${pedido.nombre}" (${pedido.cantidad} u.) pero ningún SKU del Excel ` +
+      `corresponde a ese modelo según los alias de GOcelular`
+    if (sinAlias.length > 0) {
+      warnings.push(`${msj} — puede ser uno de los SKUs sin alias (${sinAlias.map(s => s.sku).join(', ')}), verificá a mano`)
+    } else {
+      errores.push(msj)
+    }
+  }
+
+  // SKUs sin alias: GOcelular va a crear el alias confiando en el modelo que
+  // informó el proveedor — exactamente cómo nació el error del A07
+  for (const l of sinAlias) {
+    warnings.push(
+      `El SKU ${l.sku} (${l.unidades} u.) no tiene alias en GOcelular: el alias se va a crear con el ` +
+      `modelo que informó el proveedor — verificá a mano que el modelo del archivo sea el correcto antes de que Pedro lo mapee`,
+    )
+  }
+
+  return { errores, warnings }
+}

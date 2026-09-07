@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendPurchaseWebhook, buildTimestamp, type PurchaseLine, type PurchasePayload } from '@/lib/gocelular-webhook'
 import { parseImeiExcel } from '@/lib/imei-excel-parser'
-import { validarCompra, type CatalogoGocelular } from '@/lib/purchase-validation'
+import { validarCompra, verificarAliasVsPedido, type CatalogoGocelular } from '@/lib/purchase-validation'
 import type { Pedido, GocelularEstado } from '@/lib/actions/compras'
 
 type PedidoItem = Pedido['items'][number]
@@ -176,6 +176,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
     const lines: PurchaseLine[] = []
     let refN = 0
     const nextRef = () => `L${++refN}`
+    const warningsAlias: string[] = []
 
     if (tieneCelulares) {
       if (!pedido.imeiFile) {
@@ -188,6 +189,21 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         await persistir(pedidoId, { estado: 'validacion_fallida', errores: parsed.errores })
         return { ok: false, estado: 'validacion_fallida' }
       }
+
+      // Dry run contra la tabla de alias de GOcelular (lineamiento de Pedro):
+      // las cantidades por modelo según el alias tienen que calzar con el
+      // pedido ANTES de enviar — ataja alias creados con el modelo equivocado
+      const dryRun = verificarAliasVsPedido(
+        parsed.lines.map(l => ({ sku: l.sku, unidades: l.imeis.length })),
+        skuToNombre,
+        itemsDevice.map(i => ({ productoNombre: i.productoNombre, cantidad: i.cantidad })),
+      )
+      if (dryRun.errores.length > 0) {
+        await persistir(pedidoId, { estado: 'validacion_fallida', errores: dryRun.errores, warnings: dryRun.warnings })
+        return { ok: false, estado: 'validacion_fallida' }
+      }
+      warningsAlias.push(...dryRun.warnings)
+
       const costos = costosDevices(itemsDevice, parsed.lines.map(l => l.sku), skuToNombre)
       for (const l of parsed.lines) {
         lines.push({
@@ -224,7 +240,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
     }
     const val = validarCompra(pedido.proveedorNombre, lines, catalogo)
     if (val.errores.length > 0) {
-      await persistir(pedidoId, { estado: 'validacion_fallida', errores: val.errores, warnings: val.warnings })
+      await persistir(pedidoId, { estado: 'validacion_fallida', errores: val.errores, warnings: [...warningsAlias, ...val.warnings] })
       return { ok: false, estado: 'validacion_fallida' }
     }
 
@@ -250,7 +266,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         enviadoAt: new Date().toISOString(),
         batches: (res.body?.batches ?? []).map(b => ({ type: b.type, lines: b.lines, units: b.units })),
         pendingAliases: (res.body?.lineas_pendientes_alias ?? []).map(a => ({ lineReference: a.line_reference, sku: a.sku })),
-        warnings: val.warnings,
+        warnings: [...warningsAlias, ...val.warnings],
       })
       return { ok: true, estado: 'informado' }
     }
@@ -262,7 +278,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         errores: [res.body?.code === 'secret_no_configurado'
           ? 'Falta configurar GOCELULAR_WEBHOOK_SECRET'
           : `GOcelular no respondió (HTTP ${res.status}) tras 4 intentos — reintentá en unos minutos`],
-        warnings: val.warnings,
+        warnings: [...warningsAlias, ...val.warnings],
       })
       return { ok: false, estado: 'error_reintentable' }
     }
@@ -285,7 +301,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       estado: 'rechazado',
       codigoError: res.body?.code,
       errores: [mensajes[res.body?.code ?? ''] ?? `GOcelular rechazó la compra (${res.body?.code ?? 'HTTP ' + res.status})`, ...detalles],
-      warnings: val.warnings,
+      warnings: [...warningsAlias, ...val.warnings],
     })
     return { ok: false, estado: 'rechazado' }
   } finally {
