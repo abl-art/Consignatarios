@@ -1,16 +1,19 @@
-import { getCostoPorCiudad, getProvinciasDisponibles, getFacturasEnvios } from '@/lib/actions/envios'
+import { getCostoPorCiudad, getProvinciasDisponibles, getFacturasEnvios, getSobrecostoSeguros } from '@/lib/actions/envios'
 import { formatearMoneda } from '@/lib/utils'
 import ProvinciaFilter from './ProvinciaFilter'
 
 export default async function CostoCiudad({ provincia }: { provincia?: string }) {
-  const [datos, provincias, facturas] = await Promise.all([
+  const [datos, provincias, facturas, sobrecostoSeguros] = await Promise.all([
     getCostoPorCiudad(provincia),
     getProvinciasDisponibles(),
     getFacturasEnvios(),
+    getSobrecostoSeguros(),
   ])
 
-  // Costo por envío: total facturado / total envíos de todas las facturas
-  const totalFacturado = facturas.reduce((s, f) => s + f.total_facturado, 0)
+  // Costo por envío: total facturado / total envíos de todas las facturas.
+  // Los seguros del mes del valor declarado erróneo (ago 2026) se normalizan
+  // a $2.800: se descuenta lo facturado de más (NC de Andreani pendiente).
+  const totalFacturado = facturas.reduce((s, f) => s + f.total_facturado, 0) - sobrecostoSeguros
   const totalEnviosFacturas = facturas.reduce((s, f) => s + f.total_envios, 0)
   const costoPromedioEnvio = totalEnviosFacturas > 0 ? Math.round(totalFacturado / totalEnviosFacturas) : 0
 
@@ -65,6 +68,11 @@ export default async function CostoCiudad({ provincia }: { provincia?: string })
               <p className="text-xs text-orange-600 uppercase tracking-wide">Costo promedio por envío</p>
               <p className="text-3xl font-bold text-orange-700 mt-1">{formatearMoneda(costoPromedioEnvio)}</p>
               <p className="text-xs text-gray-400 mt-1">Total facturado sin IVA / cantidad de envíos</p>
+              {sobrecostoSeguros > 0 && (
+                <p className="text-xs text-amber-600 mt-1" title="Valor declarado erróneo en la factura de agosto 2026: los seguros se normalizan a $2.800 hasta que llegue la NC de Andreani">
+                  Seguros de ago 2026 normalizados a $2.800 (−{formatearMoneda(sobrecostoSeguros)}, NC pendiente)
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-sm text-gray-500">{totalEnviosFacturas.toLocaleString('es-AR')} envíos</p>

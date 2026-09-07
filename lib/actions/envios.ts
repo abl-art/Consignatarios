@@ -252,6 +252,27 @@ interface DetalleRow {
   sucursal_destino: string | null
 }
 
+/**
+ * Sobrecosto de seguros del mes del valor declarado erróneo: lo facturado por
+ * encima de los $2.800 normales. La tarjeta "Costo promedio por envío" lo
+ * descuenta del total facturado (normaliza el seguro a $2.800) hasta que
+ * llegue la NC de Andreani y se reprocese la factura.
+ */
+export async function getSobrecostoSeguros(): Promise<number> {
+  const supabase = createClient()
+  const rows = await fetchDetalleCompleto<{ importe: number }>((from, to) =>
+    supabase
+      .from('facturas_envios_detalle')
+      .select('importe')
+      .ilike('concepto', '%seguro%')
+      .gte('fecha_envio', `${MES_VALOR_DECLARADO_ERRONEO}-01`)
+      .lte('fecha_envio', `${MES_VALOR_DECLARADO_ERRONEO}-31`)
+      .gt('importe', SEGURO_NORMAL)
+      .range(from, to),
+  )
+  return rows.reduce((s, r) => s + (r.importe - SEGURO_NORMAL), 0)
+}
+
 export async function getCostoPorCiudad(provincia?: string): Promise<CostoCiudadResumen[]> {
   const supabase = createClient()
   const data = await fetchDetalleCompleto<DetalleRow>((from, to) => {
