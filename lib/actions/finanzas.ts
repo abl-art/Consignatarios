@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
-import { SQL_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
+import { SQL_IDS_TODOS, CLIENT_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { getPedidos, getMejorPrecio } from './compras'
 import { buscarPrecio, diaHabilSiguiente } from '@/lib/utils'
@@ -193,11 +193,24 @@ function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
 
 // ---- Data source fetchers -------------------------------------------------
 
-async function fetchIncomeFromGocelular(): Promise<
+// Los ingresos del flujo salen de la base DIRECTA de GOcuotas (no de la
+// réplica de GOcelular) porque solo ahí están income_at (acreditación real)
+// y expected_income_at. Imputación por fecha de acreditación (7 sep 2026,
+// regla de Emiliano — las cuotas se cobran con ese delay y no debería haber
+// ingresos en días no hábiles):
+//   - Cobradas:   income_on (real) → expected_income_on → cobro + 2 hábiles
+//     (income_on tarda unos días en estamparse tras el cobro)
+//   - Pendientes: expected_income_on → vencimiento + 2 hábiles
+//     (GOcuotas estampa expected recién cerca del vencimiento: 64% vacías)
+//   - Vencidas:   al vencimiento (solo se muestran, no suman al saldo)
+async function fetchIncomeFromGocuotas(): Promise<
   { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number; in_vencida: number }[]
 > {
-  const pool = getPool()
+  const pool = getGocuotasPool()
   if (!pool) return []
+
+  const clientIds = CLIENT_IDS_TODOS.map(Number)
+  const placeholders = clientIds.map((_, i) => `$${i + 1}`).join(',')
 
   const client = await pool.connect()
   try {
@@ -209,34 +222,41 @@ async function fetchIncomeFromGocelular(): Promise<
       in_pendiente: string
       in_vencida: string
     }>(`
+      WITH base AS (
+        SELECT
+          i.collected_at, i.collected_on, i.due_on, i.income_on, i.expected_income_on,
+          i.discarded_at, i.amount_in_cents / 100.0 AS monto
+        FROM installments i
+        JOIN orders o ON o.id = i.order_id
+        WHERE o.delivered_at IS NOT NULL
+          AND o.discarded_at IS NULL
+          AND o.client_id IN (${placeholders})
+      )
       SELECT
         CASE
-          WHEN i.installment_collected_at IS NOT NULL THEN (
-            SELECT d::date
-            FROM generate_series(
-              (i.installment_collected_at::date + INTERVAL '1 day'),
-              (i.installment_collected_at::date + INTERVAL '14 day'),
-              INTERVAL '1 day'
-            ) AS d
-            WHERE EXTRACT(DOW FROM d) NOT IN (0, 6)
-            ORDER BY d
-            OFFSET 1
-            LIMIT 1
+          WHEN b.collected_at IS NOT NULL THEN COALESCE(
+            b.income_on,
+            b.expected_income_on,
+            (SELECT d::date FROM generate_series(
+               b.collected_on + INTERVAL '1 day', b.collected_on + INTERVAL '14 day', INTERVAL '1 day') AS d
+             WHERE EXTRACT(DOW FROM d) NOT IN (0, 6) ORDER BY d OFFSET 1 LIMIT 1)
           )
-          ELSE i.installment_due_at::date
+          WHEN b.due_on >= CURRENT_DATE THEN COALESCE(
+            b.expected_income_on,
+            (SELECT d::date FROM generate_series(
+               b.due_on + INTERVAL '1 day', b.due_on + INTERVAL '14 day', INTERVAL '1 day') AS d
+             WHERE EXTRACT(DOW FROM d) NOT IN (0, 6) ORDER BY d OFFSET 1 LIMIT 1)
+          )
+          ELSE b.due_on
         END AS cash_date,
-        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_adelantado,
-        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_en_termino,
-        SUM(CASE WHEN i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date THEN i.installment_amount ELSE 0 END) AS in_atrasado,
-        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at >= CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS in_pendiente,
-        SUM(CASE WHEN i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND i.installment_due_at < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS in_vencida
-      FROM gocuotas_installments i
-      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
-      WHERE o.order_delivered_at IS NOT NULL
-        AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${SQL_IDS_TODOS})
+        SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on < b.due_on THEN b.monto ELSE 0 END) AS in_adelantado,
+        SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on = b.due_on THEN b.monto ELSE 0 END) AS in_en_termino,
+        SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on > b.due_on THEN b.monto ELSE 0 END) AS in_atrasado,
+        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on >= CURRENT_DATE THEN b.monto ELSE 0 END) AS in_pendiente,
+        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on < CURRENT_DATE THEN b.monto ELSE 0 END) AS in_vencida
+      FROM base b
       GROUP BY 1
-    `)
+    `, clientIds)
     return res.rows
       .filter((r) => r.cash_date != null)
       .map((r) => ({
@@ -516,7 +536,7 @@ async function fetchPagosMayoristasParaFlujo(): Promise<{ cash_date: string; in_
 
 export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
   const [income, vta3ero, asistencias, egresos, baseDiario, pagosMay] = await Promise.all([
-    fetchIncomeFromGocelular(),
+    fetchIncomeFromGocuotas(),
     fetchVta3eroFromGocuotas(),
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
