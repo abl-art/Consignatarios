@@ -196,55 +196,127 @@ export interface CostoCiudadResumen {
   variacion_pct: number | null
 }
 
+// Supabase corta en 1.000 filas por request: el detalle de facturas ya pasa
+// las 19.000 y sin paginar la métrica se calculaba sobre una muestra parcial
+const PAGINA = 1000
+async function fetchDetalleCompleto<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+): Promise<T[]> {
+  const todas: T[] = []
+  for (let from = 0; ; from += PAGINA) {
+    const { data } = await build(from, from + PAGINA - 1)
+    if (!data || data.length === 0) break
+    todas.push(...data)
+    if (data.length < PAGINA) break
+  }
+  return todas
+}
+
 export async function getProvinciasDisponibles(): Promise<string[]> {
   const supabase = createClient()
-  const { data } = await supabase
-    .from('facturas_envios_detalle')
-    .select('sucursal_destino')
-    .not('sucursal_destino', 'is', null)
-    .in('estado', ['conciliado', 'ya_pagado'])
-
-  if (!data) return []
+  const data = await fetchDetalleCompleto<{ sucursal_destino: string | null }>((from, to) =>
+    supabase
+      .from('facturas_envios_detalle')
+      .select('sucursal_destino')
+      .not('sucursal_destino', 'is', null)
+      .in('estado', ['conciliado', 'ya_pagado'])
+      .range(from, to),
+  )
   const unique = [...new Set(data.map(r => r.sucursal_destino).filter(Boolean))] as string[]
   return unique.sort()
 }
 
+// Agosto 2026: el archivo de Andreani vino con el valor declarado inflado por
+// error. La tarifa de distribución escala por RANGOS de valor declarado, así
+// que además del seguro (que se excluye siempre) la distribución de esos
+// envíos saltó de escalón (~$6.850 → $25.586 en la misma ciudad). Para la
+// métrica se normaliza: a los envíos con seguro > $2.800 se les imputa la
+// tarifa de su localidad según los envíos correctos del mismo mes (idéntica a
+// julio, verificado). La conciliación de la factura NO se toca — cuando
+// llegue la NC de Andreani (~$42M) y se reprocese, borrar esta corrección.
+const MES_VALOR_DECLARADO_ERRONEO = '2026-08'
+const SEGURO_NORMAL = 2800
+
+function mediana(valores: number[]): number | null {
+  if (valores.length === 0) return null
+  const s = [...valores].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
+}
+
+interface DetalleRow {
+  nro_envio: string
+  localidad_destino: string | null
+  fecha_envio: string
+  importe: number
+  concepto: string
+  sucursal_destino: string | null
+}
+
 export async function getCostoPorCiudad(provincia?: string): Promise<CostoCiudadResumen[]> {
   const supabase = createClient()
-  let query = supabase
-    .from('facturas_envios_detalle')
-    .select('localidad_destino, fecha_envio, importe, concepto, estado, sucursal_destino')
-    .in('estado', ['conciliado', 'ya_pagado'])
+  const data = await fetchDetalleCompleto<DetalleRow>((from, to) => {
+    let query = supabase
+      .from('facturas_envios_detalle')
+      .select('nro_envio, localidad_destino, fecha_envio, importe, concepto, estado, sucursal_destino')
+      .in('estado', ['conciliado', 'ya_pagado'])
+    if (provincia) query = query.eq('sucursal_destino', provincia)
+    return query.range(from, to)
+  })
 
-  if (provincia) {
-    query = query.eq('sucursal_destino', provincia)
+  if (data.length === 0) return []
+
+  const esSeguro = (r: DetalleRow) => r.concepto.toLowerCase().includes('seguro')
+  const mesDe = (r: DetalleRow) => r.fecha_envio.slice(0, 7)
+
+  // Envíos del mes del error con el valor declarado inflado (seguro > normal)
+  const infladosMesError = new Set(
+    data
+      .filter(r => esSeguro(r) && mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && r.importe > SEGURO_NORMAL)
+      .map(r => r.nro_envio),
+  )
+
+  // Tarifa correcta por localidad: mediana de los envíos SANOS del mes del
+  // error; fallback la mediana de julio de esa localidad; fallback la global
+  const porLocalidad = new Map<string, number[]>()
+  const porLocalidadJulio = new Map<string, number[]>()
+  const sanasGlobal: number[] = []
+  for (const r of data) {
+    if (esSeguro(r)) continue
+    const loc = r.localidad_destino || 'Sin datos'
+    if (mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && !infladosMesError.has(r.nro_envio)) {
+      if (!porLocalidad.has(loc)) porLocalidad.set(loc, [])
+      porLocalidad.get(loc)!.push(r.importe)
+      sanasGlobal.push(r.importe)
+    } else if (mesDe(r) === '2026-07') {
+      if (!porLocalidadJulio.has(loc)) porLocalidadJulio.set(loc, [])
+      porLocalidadJulio.get(loc)!.push(r.importe)
+    }
   }
+  const tarifaCorrecta = (loc: string): number | null =>
+    mediana(porLocalidad.get(loc) ?? []) ?? mediana(porLocalidadJulio.get(loc) ?? []) ?? mediana(sanasGlobal)
 
-  const { data } = await query
-
-  if (!data || data.length === 0) return []
-
-  // Group by city + month, only distribution costs (seguro always $2800)
-  const SEGURO = 2800
   const grouped = new Map<string, Map<string, { envios: Set<string>; costo: number }>>()
 
   for (const row of data) {
     // Group by provincia (sucursal) when no filter, by ciudad when filtering
-    const agrupador = provincia
+    const ciudad = provincia
       ? (row.localidad_destino || 'Sin datos')
       : (row.sucursal_destino || row.localidad_destino || 'Sin datos')
-    const ciudad = agrupador
-    const mes = row.fecha_envio.slice(0, 7) // YYYY-MM
+    const mes = mesDe(row)
 
     if (!grouped.has(ciudad)) grouped.set(ciudad, new Map())
     const cityMap = grouped.get(ciudad)!
     if (!cityMap.has(mes)) cityMap.set(mes, { envios: new Set(), costo: 0 })
     const entry = cityMap.get(mes)!
 
-    // Exclude seguro rows (concepto contains "Seguro")
-    if (!row.concepto.toLowerCase().includes('seguro')) {
-      entry.costo += row.importe
-      entry.envios.add(row.fecha_envio + row.importe) // approximate unique count
+    // Solo distribución: el seguro nunca entra en el costo por envío
+    if (!esSeguro(row)) {
+      let importe = row.importe
+      if (mes === MES_VALOR_DECLARADO_ERRONEO && infladosMesError.has(row.nro_envio)) {
+        importe = tarifaCorrecta(row.localidad_destino || 'Sin datos') ?? row.importe
+      }
+      entry.costo += importe
+      entry.envios.add(row.nro_envio)
     }
   }
 
