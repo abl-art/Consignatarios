@@ -1,4 +1,5 @@
 import { formatearMoneda } from '@/lib/utils'
+import { esFinde, letraDia } from '@/lib/dias-habiles'
 import { fetchFlujoDeFondos, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis } from '@/lib/actions/finanzas'
 import { simularDeuda } from '@/lib/simular-deuda'
 import { fetchPrestamos, fetchMovimientos, getDeudaConfig, fetchInteresesPagadosMes } from '@/lib/actions/deuda'
@@ -186,6 +187,7 @@ export default async function FinanzasPage({
             <table className="w-full table-fixed text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
+                  <th className="text-center px-1 py-2.5 font-semibold text-gray-500 w-[26px]" title="Día de la semana">D</th>
                   <th className="text-left px-1.5 py-2.5 font-semibold text-gray-500 w-[56px]">Fecha</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Adel</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Térm</th>
@@ -213,6 +215,9 @@ export default async function FinanzasPage({
                   const esHoy = row.cash_date === hoy
                   return (
                   <tr key={i} className={`hover:bg-gray-50 ${esHoy ? 'bg-yellow-100' : ''}`}>
+                    <td className={`px-1 py-2 text-center font-bold ${esFinde(row.cash_date) ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {letraDia(row.cash_date)}
+                    </td>
                     <td className="px-1.5 py-2 text-gray-700 font-medium whitespace-nowrap">{formatFecha(row.cash_date)}</td>
                     <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_adelantado)}</td>
                     <td className="px-1.5 py-2 text-right text-green-700">{fmtCompact(row.in_en_termino)}</td>

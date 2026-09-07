@@ -1,4 +1,5 @@
 import type { DeudaPrestamo, DeudaConfig, DeudaAlerta } from '@/lib/types'
+import { aDiaHabilSiguiente } from '@/lib/dias-habiles'
 
 interface FlujoDiario {
   cash_date: string
@@ -78,14 +79,16 @@ export function simularDeuda(
       // Interés mensual: cada 30 días desde la toma
       const tasaDiaria = p.tasa_anual / 365
       const interesMensual = p.saldo_capital * tasaDiaria * 30
+      // Los pagos no caen en finde: la cadencia de 30 días se mantiene sobre
+      // la fecha original, solo se corre la imputación al día hábil siguiente
       let fechaInteres = addDays(p.fecha_toma, 30)
       while (fechaInteres <= flujo[flujo.length - 1].cash_date) {
-        getOrCreateRow(fechaInteres).out_interes += -interesMensual
+        getOrCreateRow(aDiaHabilSiguiente(fechaInteres)).out_interes += -interesMensual
         fechaInteres = addDays(fechaInteres, 30)
       }
       // Devolución de capital al vencimiento
       if (p.fecha_vencimiento) {
-        getOrCreateRow(p.fecha_vencimiento).out_dev_capital += -p.saldo_capital
+        getOrCreateRow(aDiaHabilSiguiente(p.fecha_vencimiento)).out_dev_capital += -p.saldo_capital
       }
     }
     if (p.tipo === 'descubierto') {

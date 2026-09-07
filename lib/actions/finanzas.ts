@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
+import { aDiaHabilSiguiente } from '@/lib/dias-habiles'
 import { SQL_IDS_TODOS, CLIENT_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { getPedidos, getMejorPrecio } from './compras'
@@ -562,15 +563,15 @@ export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
     row.in_asistencia += r.in_asistencia
   }
 
-  // Merge egresos
+  // Merge egresos — no pagamos en fin de semana: sábado/domingo → lunes
   for (const r of egresos) {
-    const row = getOrCreate(map, r.cash_date)
+    const row = getOrCreate(map, aDiaHabilSiguiente(r.cash_date))
     ;(row[r.column] as number) += r.amount
   }
 
-  // Merge vta3ero
+  // Merge vta3ero (también es un pago nuestro: se corre a día hábil)
   for (const r of vta3ero) {
-    const row = getOrCreate(map, r.cash_date)
+    const row = getOrCreate(map, aDiaHabilSiguiente(r.cash_date))
     row.out_vta3ero += r.out_vta3ero
   }
 
