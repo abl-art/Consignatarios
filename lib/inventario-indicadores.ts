@@ -147,10 +147,20 @@ export function coberturaPorModelos(
 }
 
 /**
+ * Umbrales de cobertura (regla de Emiliano, 8 sep 2026): bajo dos semanas
+ * completas la venta está en riesgo (ámbar); a 10 días o menos es crítico
+ * (rojo). Validados contra el lead time real de reposición de los pedidos del
+ * gestor: mediana 3,4 días, p90 12,6 — a los 14 días todavía se llega a
+ * reponer; a 10 ya se está por debajo del peor decil.
+ */
+export const DIAS_RIESGO = 14
+export const DIAS_CRITICO = 10
+
+/**
  * Qué parte de la venta (u/día 30d de todos los modelos) está respaldada por
  * stock sano y cuánta está por quebrar. Modelos sin ventas no aportan.
- * - saludable: cobertura > 20 días
- * - riesgo: cobertura ≤ 20 días (incluye los que venden con stock 0)
+ * - saludable: cobertura ≥ 14 días (dos semanas completas)
+ * - riesgo: cobertura < 14 días (incluye los que venden con stock 0)
  * Complementarios: saludable + riesgo = 100% de la venta.
  */
 export function ventasPorCobertura(
@@ -162,7 +172,7 @@ export function ventasPorCobertura(
   let riesgo = 0
   for (const m of modelos) {
     if (m.cobertura === null) continue
-    if (m.cobertura > 20) saludable += m.ventaDiaria30
+    if (m.cobertura >= DIAS_RIESGO) saludable += m.ventaDiaria30
     else riesgo += m.ventaDiaria30
   }
   return { pctSaludable: (saludable / total) * 100, pctRiesgo: (riesgo / total) * 100 }
@@ -220,7 +230,7 @@ export interface ModeloAComprar {
 }
 
 /**
- * Lista de compra: todos los modelos con cobertura menor a 20 días (incluye
+ * Lista de compra: todos los modelos con cobertura menor a 14 días (incluye
  * los que venden con stock 0), con su peso en la venta total y las unidades
  * vendidas en 30 días. Ordenada por peso descendente: primero lo que más
  * venta salva. Con `reposiciones` marca lo que ya viene en camino
@@ -250,7 +260,7 @@ export function modelosAComprar(
         proximaCobertura: diasCobertura(m.stock + repo.enTransito + repo.pedido, m.ventaDiaria30),
       }
     })
-    .filter(m => m.cobertura !== null && m.cobertura < 20)
+    .filter(m => m.cobertura !== null && m.cobertura < DIAS_RIESGO)
     .sort((a, b) => b.pctVentasTotal - a.pctVentasTotal)
 }
 

@@ -11,6 +11,8 @@ import {
   ventasPorCobertura,
   coberturaProyectada,
   modelosAComprar,
+  DIAS_RIESGO,
+  DIAS_CRITICO,
 } from '@/lib/inventario-indicadores'
 import InventarioChart from '@/components/inventario/InventarioChart'
 import IndicadoresProducto from '@/components/inventario/IndicadoresProducto'
@@ -84,7 +86,7 @@ export default async function InventarioPage() {
           <div className="p-4 text-center">
             <p className="text-2xl font-bold text-green-700">{cobVentas.pctSaludable !== null ? `${fmtPct.format(cobVentas.pctSaludable)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas con Cobertura</p>
-            <p className="text-[10px] text-gray-400 mt-1">venta 30d con más de 20 días de stock, contando lo en tránsito y pedido</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con 14 días o más de stock, contando lo en tránsito y pedido</p>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -94,7 +96,7 @@ export default async function InventarioPage() {
           <div className="p-4 text-center">
             <p className="text-2xl font-bold text-red-700">{cobVentas.pctRiesgo !== null ? `${fmtPct.format(cobVentas.pctRiesgo)}%` : '—'}</p>
             <p className="text-sm font-semibold text-gray-900">Ventas en Riesgo</p>
-            <p className="text-[10px] text-gray-400 mt-1">venta 30d con 20 días o menos, aun con la reposición en camino</p>
+            <p className="text-[10px] text-gray-400 mt-1">venta 30d con menos de 14 días, aun con la reposición en camino</p>
           </div>
         </div>
       </div>
@@ -111,10 +113,10 @@ export default async function InventarioPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
               <h2 className="text-base font-semibold text-gray-900">🛒 Modelos a comprar</h2>
-              <p className="text-xs text-gray-400">todos los modelos con cobertura menor a 20 días</p>
+              <p className="text-xs text-gray-400">todos los modelos con cobertura menor a {DIAS_RIESGO} días</p>
             </div>
             {aComprar.length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">Sin urgencias: ningún modelo con menos de 20 días de cobertura.</p>
+              <p className="text-sm text-gray-400 py-2">Sin urgencias: ningún modelo con menos de {DIAS_RIESGO} días de cobertura.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -137,12 +139,12 @@ export default async function InventarioPage() {
                         <td className="py-1.5 px-2 text-right font-semibold text-red-600">{fmtPct1.format(m.pctVentasTotal)}%</td>
                         <td className="py-1.5 px-2 text-right">{Math.round(m.ventas30d).toLocaleString('es-AR')}</td>
                         <td className={`py-1.5 px-2 text-right ${m.stock === 0 ? 'text-red-600 font-medium' : ''}`}>{m.stock.toLocaleString('es-AR')}</td>
-                        <td className="py-1.5 px-2 text-right text-red-600 font-medium">
+                        <td className={`py-1.5 px-2 text-right font-medium ${m.cobertura !== null && m.cobertura <= DIAS_CRITICO ? 'text-red-600' : 'text-amber-600'}`}>
                           {m.cobertura !== null ? `${fmtPct1.format(m.cobertura)} días` : '—'}
                         </td>
                         <td className="py-1.5 px-2 text-right text-emerald-600">{m.enTransito > 0 ? `🚚 ${m.enTransito.toLocaleString('es-AR')}` : '—'}</td>
                         <td className="py-1.5 px-2 text-right text-blue-600">{m.pedido > 0 ? `📦 ${m.pedido.toLocaleString('es-AR')}` : '—'}</td>
-                        <td className={`py-1.5 px-2 text-right font-medium ${m.proximaCobertura !== null && m.proximaCobertura > 20 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        <td className={`py-1.5 px-2 text-right font-medium ${m.proximaCobertura !== null && m.proximaCobertura >= DIAS_RIESGO ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {m.proximaCobertura !== null ? `${fmtPct1.format(m.proximaCobertura)} días` : '—'}
                         </td>
                       </tr>
@@ -152,7 +154,7 @@ export default async function InventarioPage() {
               </div>
             )}
             <p className="text-[10px] text-gray-400 mt-2">
-              Ordenados por peso en la venta: lo primero que conviene reponer es lo que más venta salva · En tránsito: informado a GOcelular, viajando a Andreani · Pedidos: comprados en el gestor, aún sin informar · Próx. cobertura: días de stock cuando ingrese lo en tránsito + pedido (verde si supera 20 días; ámbar = aun así hay que comprar)
+              Ordenados por peso en la venta: lo primero que conviene reponer es lo que más venta salva · Stock: disponible real, neto de pendientes de picking GO y Andreani (igual que Stock por Depósito) · Cobertura en rojo si quedan {DIAS_CRITICO} días o menos · En tránsito: informado a GOcelular, viajando a Andreani · Pedidos: comprados en el gestor, aún sin informar · Próx. cobertura: días de stock cuando ingrese lo en tránsito + pedido (verde si alcanza {DIAS_RIESGO} días; ámbar = aun así hay que comprar)
             </p>
           </div>
 

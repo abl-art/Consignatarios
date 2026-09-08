@@ -8,9 +8,11 @@ import {
   fetchVentasPorModelo,
   fetchVentasUlt30d,
   fetchStockPorWarehouse,
+  fetchPendientesPicking,
   type VentaPorModelo,
 } from '@/lib/gocelular'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
+import { descontarPendientes } from '@/lib/disponibilidad'
 import {
   fetchAccesorioData,
   SMARTWATCHES_CONFIG,
@@ -99,6 +101,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       auriculares,
       stockWarehouse,
       pedidos,
+      pendientes,
     ] = await Promise.all([
       fetchStockPropio(),
       fetchStockPropioDetalle(),
@@ -115,6 +118,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       fetchAccesorioData(AURICULARES_CONFIG),
       fetchStockPorWarehouse(),
       getPedidos().catch(() => []),
+      fetchPendientesPicking().catch(() => ({ gocuotas: {}, andreani: {} })),
     ])
 
     // Reposición en camino por modelo (misma fuente que /inventario/stock)
@@ -178,11 +182,15 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         ventas30PorModelo.set(v.modelo, (ventas30PorModelo.get(v.modelo) ?? 0) + v.ventas)
       }
     }
+    const stockBrutoPorNombre = new Map<string, number>()
+    for (const s of stockDetalle) {
+      stockBrutoPorNombre.set(s.model_name, (stockBrutoPorNombre.get(s.model_name) ?? 0) + s.qty)
+    }
     const sinMovimiento = stockSinMovimiento(
-      stockDetalle.map(s => ({
-        modelo: s.model_name,
-        qty: s.qty,
-        valorUnit: buscarPrecio(costosCelulares, s.model_name) || precioVentaDe(s.model_name) || 0,
+      Array.from(stockBrutoPorNombre.entries()).map(([modelo, qty]) => ({
+        modelo,
+        qty,
+        valorUnit: buscarPrecio(costosCelulares, modelo) || precioVentaDe(modelo) || 0,
       })),
       Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
     )
@@ -208,9 +216,12 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       }))
     } catch { /* cierres no disponibles */ }
 
-    // Desglose por modelo de celulares (cobertura para compras)
+    // Desglose por modelo de celulares (cobertura para compras). El stock se
+    // netea de pendientes de picking GO/Andreani: una unidad con orden paga
+    // esperando salir no está disponible para vender (misma regla que la
+    // columna Disponible real de /inventario/stock).
     const modelosCelulares = coberturaPorModelos(
-      stockDetalle.map(s => ({ modelo: s.model_name, qty: s.qty })),
+      descontarPendientes(stockDetalle, pendientes).map(s => ({ modelo: s.model_name, qty: s.qty })),
       Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
     )
 

@@ -827,20 +827,20 @@ export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
   }
 }
 
-export async function fetchStockPropioDetalle(): Promise<{model_name: string; qty: number}[]> {
+export async function fetchStockPropioDetalle(): Promise<{model_code: string; model_name: string; qty: number}[]> {
   const pool = getPool()
   if (!pool) return []
   const client = await pool.connect()
   try {
-    const res = await client.query<{model_name: string; qty: string}>(
-      `SELECT COALESCE(dm.name, ii.model_code) AS model_name, COUNT(*)::text AS qty
+    const res = await client.query<{model_code: string; model_name: string; qty: string}>(
+      `SELECT ii.model_code, COALESCE(dm.name, ii.model_code) AS model_name, COUNT(*)::text AS qty
        FROM inventory_items ii
        LEFT JOIN device_models dm ON dm.model_code = ii.model_code
        WHERE ii.status = 'available'
          AND ii.physical_location IS DISTINCT FROM 'in_transit_andreani'
-       GROUP BY model_name`
+       GROUP BY ii.model_code, dm.name`
     )
-    return res.rows.map(r => ({ model_name: r.model_name, qty: Number(r.qty) }))
+    return res.rows.map(r => ({ model_code: r.model_code, model_name: r.model_name, qty: Number(r.qty) }))
   } finally {
     client.release()
   }

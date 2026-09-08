@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { CoberturaModelo } from '@/lib/inventario-indicadores'
+import { DIAS_RIESGO, DIAS_CRITICO, type CoberturaModelo } from '@/lib/inventario-indicadores'
 
 export interface FilaIndicador {
   key: string
@@ -21,11 +21,19 @@ interface Props {
 const fmt1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 const fmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
-/** El % se pinta de rojo cuando el modelo pesa en las ventas y está por quebrar:
+/** Semáforo de cobertura: ámbar bajo dos semanas, rojo a 10 días o menos. */
+function coberturaClase(cobertura: number | null, base = 'text-gray-700'): string {
+  if (cobertura === null) return base
+  if (cobertura <= DIAS_CRITICO) return 'text-red-600'
+  if (cobertura < DIAS_RIESGO) return 'text-amber-600'
+  return base
+}
+
+/** El % se pinta cuando el modelo pesa en las ventas y está por quebrar:
  *  ahí el número ES la pérdida de ventas si no se repone. */
 function pctClase(pct: number | null, cobertura: number | null): string {
-  if (pct !== null && pct >= 5 && cobertura !== null && cobertura < 15) return 'text-red-600 font-semibold'
-  return 'text-gray-700'
+  if (pct === null || pct < 5 || cobertura === null || cobertura >= DIAS_RIESGO) return 'text-gray-700'
+  return `${coberturaClase(cobertura)} font-semibold`
 }
 
 export default function IndicadoresProducto({ meses, filas }: Props) {
@@ -73,7 +81,7 @@ export default function IndicadoresProducto({ meses, filas }: Props) {
         </table>
       </div>
       <p className="text-[10px] text-gray-400 mt-2">
-        Cobertura: stock ÷ venta diaria 30d (en rojo si &lt;15 días) · Rotación: vendidas 30d ÷ stock promedio del mes · Meses de Stock pondera cada producto por su valor · Click en un producto para ver el detalle por modelo · % ventas 30d: peso del modelo en las ventas del producto — en rojo si está por quebrar (esa es la venta que se pierde sin reposición)
+        Cobertura: stock disponible (neto de pendientes de picking) ÷ venta diaria 30d — ámbar si &lt;{DIAS_RIESGO} días, rojo si ≤{DIAS_CRITICO} · Rotación: vendidas 30d ÷ stock promedio del mes · Meses de Stock pondera cada producto por su valor · Click en un producto para ver el detalle por modelo · % ventas 30d: peso del modelo en las ventas del producto — pintado si está por quebrar (esa es la venta que se pierde sin reposición)
       </p>
     </div>
   )
@@ -93,7 +101,7 @@ function FilaProducto({ fila, abierto, onToggle }: { fila: FilaIndicador; abiert
         </td>
         <td className="py-1.5 px-2 text-right">{fmt1.format(fila.vel7)}</td>
         <td className="py-1.5 px-2 text-right">{fmt1.format(fila.vel30)}</td>
-        <td className={`py-1.5 px-2 text-right font-medium ${fila.cobertura !== null && fila.cobertura < 15 ? 'text-red-600' : 'text-gray-900'}`}>
+        <td className={`py-1.5 px-2 text-right font-medium ${coberturaClase(fila.cobertura, 'text-gray-900')}`}>
           {fila.cobertura !== null ? `${fmt1.format(fila.cobertura)} días` : '—'}
         </td>
         <td className="py-1.5 px-2 text-right">{fila.rotacion !== null ? `${fmt2.format(fila.rotacion)}×` : '—'}</td>
@@ -123,7 +131,7 @@ function FilaProducto({ fila, abierto, onToggle }: { fila: FilaIndicador; abiert
                       <td className={`py-1 px-2 text-right ${pctClase(m.pctVentas30, m.cobertura)}`}>
                         {m.pctVentas30 !== null && m.pctVentas30 > 0 ? `${fmt1.format(m.pctVentas30)}%` : '—'}
                       </td>
-                      <td className={`py-1 px-2 text-right font-medium ${m.cobertura !== null && m.cobertura < 15 ? 'text-red-600' : 'text-gray-700'}`}>
+                      <td className={`py-1 px-2 text-right font-medium ${coberturaClase(m.cobertura)}`}>
                         {m.cobertura !== null ? `${fmt1.format(m.cobertura)} días` : '—'}
                       </td>
                     </tr>

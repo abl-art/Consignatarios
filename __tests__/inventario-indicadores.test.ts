@@ -177,12 +177,12 @@ describe('coberturaPorModelos', () => {
 })
 
 describe('ventasPorCobertura', () => {
-  it('separa la venta respaldada (+20d) de la venta en riesgo (≤20d) y suman 100%', () => {
+  it('separa la venta respaldada (≥14d) de la venta en riesgo (<14d) y suman 100%', () => {
     const modelos = [
       { ventaDiaria30: 6, cobertura: 60 },   // saludable
       { ventaDiaria30: 3, cobertura: 2 },    // riesgo
       { ventaDiaria30: 1, cobertura: 0 },    // riesgo (stock 0)
-      { ventaDiaria30: 2, cobertura: 12 },   // riesgo (bajo 20d)
+      { ventaDiaria30: 2, cobertura: 12 },   // riesgo (bajo 14d)
       { ventaDiaria30: 0, cobertura: null }, // sin ventas: no aporta
     ]
     const r = ventasPorCobertura(modelos)
@@ -191,13 +191,13 @@ describe('ventasPorCobertura', () => {
     expect(r.pctSaludable! + r.pctRiesgo!).toBeCloseTo(100)
   })
 
-  it('el borde exacto de 20d cuenta como riesgo, no como saludable', () => {
+  it('dos semanas completas (14d justos) cuentan como saludable; menos, riesgo', () => {
     const r = ventasPorCobertura([
-      { ventaDiaria30: 1, cobertura: 20 },
-      { ventaDiaria30: 1, cobertura: 5 },
+      { ventaDiaria30: 1, cobertura: 14 },
+      { ventaDiaria30: 1, cobertura: 13.9 },
     ])
-    expect(r.pctSaludable).toBe(0)
-    expect(r.pctRiesgo).toBe(100)
+    expect(r.pctSaludable).toBe(50)
+    expect(r.pctRiesgo).toBe(50)
   })
 
   it('sin ventas devuelve null', () => {
@@ -244,10 +244,10 @@ describe('modelosAComprar', () => {
     { modelo: 'B', stock: 10, ventaDiaria30: 5, cobertura: 2 },      // 5%
     { modelo: 'C', stock: 2, ventaDiaria30: 3, cobertura: 0.7 },     // 3%: entra igual, sin umbral de peso
     { modelo: 'D', stock: 500, ventaDiaria30: 60, cobertura: 8.3 },  // 60%
-    { modelo: 'E', stock: 50, ventaDiaria30: 2, cobertura: 25 },     // sano (≥20d) → afuera
+    { modelo: 'E', stock: 50, ventaDiaria30: 2, cobertura: 15 },     // sano (≥14d) → afuera
   ]
 
-  it('lista todos los modelos con cobertura <20d ordenados por peso, con ventas 30d', () => {
+  it('lista todos los modelos con cobertura <14d ordenados por peso, con ventas 30d', () => {
     const res = modelosAComprar(modelos)
     expect(res.map(m => m.modelo)).toEqual(['D', 'A', 'B', 'C'])
     expect(res[0].pctVentasTotal).toBeCloseTo(60)

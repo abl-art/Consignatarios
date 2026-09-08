@@ -1,55 +1,45 @@
 import { describe, it, expect } from 'vitest'
-import { completarDisponibilidad } from '@/lib/disponibilidad'
-import type { StockWarehouseRow } from '@/lib/gocelular'
+import { descontarPendientes } from '@/lib/disponibilidad'
 
-function fila(over: Partial<StockWarehouseRow> = {}): StockWarehouseRow {
-  return {
-    sku: 'XT2536 (g06)',
-    nombre: 'Moto G06 4/128GB',
-    whAndreani: 100,
-    whGocuotas: 10,
-    enTransito: 340,
-    enTransitoDesde: null,
-    total: 110,
-    tipo: 'celular',
-    marca: 'Motorola',
-    ...over,
-  }
-}
-
-describe('completarDisponibilidad', () => {
-  it('aplica la fórmula: WH A + WH GO − pend GO − pend Andreani = disponible real; + tránsito = próxima', () => {
-    const [r] = completarDisponibilidad([fila()], {
-      gocuotas: { 'XT2536 (g06)': 5 },
-      andreani: { 'XT2536 (g06)': 20 },
-    })
-    expect(r.pendGocuotas).toBe(5)
-    expect(r.pendAndreani).toBe(20)
-    expect(r.disponibleReal).toBe(85) // 100 + 10 - 5 - 20
-    expect(r.proximaDisponibilidad).toBe(425) // 85 + 340
+describe('descontarPendientes', () => {
+  it('resta pendientes GO y Andreani por model_code y agrupa por nombre', () => {
+    const res = descontarPendientes(
+      [
+        { model_code: 'MC-A', model_name: 'Moto G06', qty: 20 },
+        { model_code: 'MC-B', model_name: 'Galaxy A17', qty: 10 },
+      ],
+      { gocuotas: { 'MC-A': 3 }, andreani: { 'MC-A': 2, 'MC-B': 1 } },
+    )
+    expect(res).toEqual([
+      { model_name: 'Moto G06', qty: 15 },
+      { model_name: 'Galaxy A17', qty: 9 },
+    ])
   })
 
-  it('sin pendientes para el SKU quedan en cero y disponible = stock físico', () => {
-    const [r] = completarDisponibilidad([fila()], { gocuotas: {}, andreani: {} })
-    expect(r.pendGocuotas).toBe(0)
-    expect(r.pendAndreani).toBe(0)
-    expect(r.disponibleReal).toBe(110)
-    expect(r.proximaDisponibilidad).toBe(450)
+  it('no baja de cero aunque los pendientes superen el stock', () => {
+    const res = descontarPendientes(
+      [{ model_code: 'MC-A', model_name: 'Moto G06', qty: 2 }],
+      { gocuotas: { 'MC-A': 5 }, andreani: {} },
+    )
+    expect(res).toEqual([{ model_name: 'Moto G06', qty: 0 }])
   })
 
-  it('el pedido del gestor suma a la próxima disponibilidad', () => {
-    const [r] = completarDisponibilidad([{ ...fila(), pedido: 100 }], { gocuotas: {}, andreani: {} })
-    expect(r.pedido).toBe(100)
-    expect(r.disponibleReal).toBe(110) // el pedido no toca el disponible de hoy
-    expect(r.proximaDisponibilidad).toBe(550) // 110 + 340 tránsito + 100 pedido
+  it('sin pendientes el stock queda igual', () => {
+    const res = descontarPendientes(
+      [{ model_code: 'MC-A', model_name: 'Moto G06', qty: 7 }],
+      { gocuotas: {}, andreani: {} },
+    )
+    expect(res).toEqual([{ model_name: 'Moto G06', qty: 7 }])
   })
 
-  it('la sobreventa da disponible real negativo (no se recorta)', () => {
-    const [r] = completarDisponibilidad([fila({ whAndreani: 1, whGocuotas: 0, enTransito: 10 })], {
-      gocuotas: { 'XT2536 (g06)': 5 },
-      andreani: {},
-    })
-    expect(r.disponibleReal).toBe(-4)
-    expect(r.proximaDisponibilidad).toBe(6)
+  it('dos model_codes con el mismo nombre suman su neto en una sola fila', () => {
+    const res = descontarPendientes(
+      [
+        { model_code: 'MC-A1', model_name: 'Moto G06', qty: 10 },
+        { model_code: 'MC-A2', model_name: 'Moto G06', qty: 5 },
+      ],
+      { gocuotas: { 'MC-A1': 4 }, andreani: { 'MC-A2': 1 } },
+    )
+    expect(res).toEqual([{ model_name: 'Moto G06', qty: 10 }])
   })
 })

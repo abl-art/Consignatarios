@@ -22,6 +22,25 @@ export interface StockDisponibilidadRow extends StockWarehouseRow {
   proximaDisponibilidad: number
 }
 
+/**
+ * Stock por modelo neto de pendientes de picking, para las coberturas de
+ * /inventario (Modelos a comprar, Indicadores por producto): a cada model_code
+ * se le restan sus pendientes GO y Andreani (piso 0, misma semántica que la
+ * columna Disponible real de /inventario/stock) y se agrupa por nombre.
+ */
+export function descontarPendientes(
+  rows: { model_code: string; model_name: string; qty: number }[],
+  pendientes: PendientesPorClave,
+): { model_name: string; qty: number }[] {
+  const porNombre = new Map<string, number>()
+  for (const r of rows) {
+    const pend = (pendientes.gocuotas[r.model_code] ?? 0) + (pendientes.andreani[r.model_code] ?? 0)
+    const neto = Math.max(0, r.qty - pend)
+    porNombre.set(r.model_name, (porNombre.get(r.model_name) ?? 0) + neto)
+  }
+  return Array.from(porNombre.entries()).map(([model_name, qty]) => ({ model_name, qty }))
+}
+
 export function completarDisponibilidad(
   rows: (StockWarehouseRow & { pedido?: number })[],
   pendientes: PendientesPorClave
