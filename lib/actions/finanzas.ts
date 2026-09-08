@@ -201,9 +201,13 @@ function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
 // ingresos en días no hábiles):
 //   - Cobradas:   income_on (real) → expected_income_on → cobro + 2 hábiles
 //     (income_on tarda unos días en estamparse tras el cobro)
-//   - Pendientes: expected_income_on → vencimiento + 2 hábiles
-//     (GOcuotas estampa expected recién cerca del vencimiento: 64% vacías)
-//   - Vencidas:   al vencimiento (solo se muestran, no suman al saldo)
+//   - Pendientes: expected_income_on → vencimiento + 2 hábiles. Una cuota con
+//     vencimiento pasado sigue pendiente mientras su acreditación esperada no
+//     haya pasado (regla de Emiliano 8 sep 2026): el cobro del lunes se
+//     registra en la base con 1-2 días de lag, así que "no cobrada ayer" no
+//     es info firme hasta que la fecha de acreditación quedó atrás
+//   - Vencidas:   al vencimiento, recién cuando la acreditación esperada ya
+//     pasó sin cobro (solo se muestran, no suman al saldo)
 async function fetchIncomeFromGocuotas(): Promise<
   { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number; in_vencida: number }[]
 > {
@@ -226,7 +230,13 @@ async function fetchIncomeFromGocuotas(): Promise<
       WITH base AS (
         SELECT
           i.collected_at, i.collected_on, i.due_on, i.income_on, i.expected_income_on,
-          i.discarded_at, i.amount_in_cents / 100.0 AS monto
+          i.discarded_at, i.amount_in_cents / 100.0 AS monto,
+          COALESCE(
+            i.expected_income_on,
+            (SELECT d::date FROM generate_series(
+               i.due_on + INTERVAL '1 day', i.due_on + INTERVAL '14 day', INTERVAL '1 day') AS d
+             WHERE EXTRACT(DOW FROM d) NOT IN (0, 6) ORDER BY d OFFSET 1 LIMIT 1)
+          ) AS acreditacion_esperada
         FROM installments i
         JOIN orders o ON o.id = i.order_id
         WHERE o.delivered_at IS NOT NULL
@@ -242,19 +252,15 @@ async function fetchIncomeFromGocuotas(): Promise<
                b.collected_on + INTERVAL '1 day', b.collected_on + INTERVAL '14 day', INTERVAL '1 day') AS d
              WHERE EXTRACT(DOW FROM d) NOT IN (0, 6) ORDER BY d OFFSET 1 LIMIT 1)
           )
-          WHEN b.due_on >= CURRENT_DATE THEN COALESCE(
-            b.expected_income_on,
-            (SELECT d::date FROM generate_series(
-               b.due_on + INTERVAL '1 day', b.due_on + INTERVAL '14 day', INTERVAL '1 day') AS d
-             WHERE EXTRACT(DOW FROM d) NOT IN (0, 6) ORDER BY d OFFSET 1 LIMIT 1)
-          )
+          WHEN b.due_on >= CURRENT_DATE OR b.acreditacion_esperada >= CURRENT_DATE
+            THEN b.acreditacion_esperada
           ELSE b.due_on
         END AS cash_date,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on < b.due_on THEN b.monto ELSE 0 END) AS in_adelantado,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on = b.due_on THEN b.monto ELSE 0 END) AS in_en_termino,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on > b.due_on THEN b.monto ELSE 0 END) AS in_atrasado,
-        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on >= CURRENT_DATE THEN b.monto ELSE 0 END) AS in_pendiente,
-        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on < CURRENT_DATE THEN b.monto ELSE 0 END) AS in_vencida
+        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND (b.due_on >= CURRENT_DATE OR b.acreditacion_esperada >= CURRENT_DATE) THEN b.monto ELSE 0 END) AS in_pendiente,
+        SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on < CURRENT_DATE AND b.acreditacion_esperada < CURRENT_DATE THEN b.monto ELSE 0 END) AS in_vencida
       FROM base b
       GROUP BY 1
     `, clientIds)
