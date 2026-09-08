@@ -52,6 +52,14 @@ const canales = [
     color: 'indigo',
     iconPath: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
   },
+  {
+    href: 'https://drive.google.com/drive/folders/1Yr4u9OjJ6r4ct90Au3_yy47RFkhWOlbC',
+    title: 'Material Publicitario',
+    description: 'Piezas de marketing y material gráfico en Drive',
+    color: 'orange',
+    iconPath: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z',
+    external: true,
+  },
 ]
 
 const colorClasses: Record<string, { bg: string; badge: string }> = {
@@ -62,6 +70,7 @@ const colorClasses: Record<string, { bg: string; badge: string }> = {
   amber: { bg: 'bg-amber-600', badge: 'bg-amber-100 text-amber-700' },
   teal: { bg: 'bg-teal-600', badge: 'bg-teal-100 text-teal-700' },
   indigo: { bg: 'bg-indigo-600', badge: 'bg-indigo-100 text-indigo-700' },
+  orange: { bg: 'bg-orange-600', badge: 'bg-orange-100 text-orange-700' },
 }
 
 export default function CanalesPage() {
@@ -73,12 +82,8 @@ export default function CanalesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {canales.map((canal) => {
           const c = colorClasses[canal.color]
-          return (
-            <Link
-              key={canal.href}
-              href={canal.href}
-              className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group"
-            >
+          const contenido = (
+            <>
               <div className={`${c.bg} px-5 py-4 flex items-center gap-3`}>
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={canal.iconPath} />
@@ -88,6 +93,16 @@ export default function CanalesPage() {
               <div className="p-5">
                 <p className="text-sm text-gray-500">{canal.description}</p>
               </div>
+            </>
+          )
+          const clase = 'bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group'
+          return 'external' in canal && canal.external ? (
+            <a key={canal.href} href={canal.href} target="_blank" rel="noopener noreferrer" className={clase}>
+              {contenido}
+            </a>
+          ) : (
+            <Link key={canal.href} href={canal.href} className={clase}>
+              {contenido}
             </Link>
           )
         })}
