@@ -10,6 +10,7 @@ const navItems: AdminNavItem[] = [
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
   { href: 'https://admin.gocuotas.com/admin/users', label: 'Administrador GOcuotas', icon: 'consignatarios', external: true },
   { href: '/canales', label: 'Canales de Comercialización', icon: 'tienda' },
+  { href: '/upselling', label: 'Upselling', icon: 'tienda' },
   { href: 'https://drive.google.com/drive/folders/1Yr4u9OjJ6r4ct90Au3_yy47RFkhWOlbC', label: 'Marketing', icon: 'tienda', external: true },
   { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
   { href: '/compras', label: 'Compras', icon: 'fabrica' },
