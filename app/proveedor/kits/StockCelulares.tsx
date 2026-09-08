@@ -59,8 +59,9 @@ export default function StockCelulares({ rows }: { rows: StockDisponibilidadRow[
                 <th className="px-4 py-3 text-right font-medium">WH GOcuotas</th>
                 <th className="px-4 py-3 text-right font-medium" title="Órdenes pagas esperando picking (GO + Andreani)">Pendientes</th>
                 <th className="px-4 py-3 text-right font-medium" title="Depósitos − pendientes">Disponible real</th>
-                <th className="px-4 py-3 text-right font-medium">En tránsito</th>
-                <th className="px-4 py-3 text-right font-medium" title="Disponible real + en tránsito">Próxima disponib.</th>
+                <th className="px-4 py-3 text-right font-medium" title="Informado a GOcelular, viajando al warehouse de Andreani">En tránsito</th>
+                <th className="px-4 py-3 text-right font-medium" title="Comprado al proveedor, aún sin informar a GOcelular">Pedido</th>
+                <th className="px-4 py-3 text-right font-medium" title="Disponible real + en tránsito + pedido">Próxima disponib.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -75,12 +76,13 @@ export default function StockCelulares({ rows }: { rows: StockDisponibilidadRow[
                     {r.disponibleReal}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{r.enTransito || '—'}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{r.disponibleReal + r.enTransito}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{r.pedido || '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{r.proximaDisponibilidad}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">Sin modelos para ese filtro</td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">Sin modelos para ese filtro</td>
                 </tr>
               )}
             </tbody>
@@ -92,14 +94,15 @@ export default function StockCelulares({ rows }: { rows: StockDisponibilidadRow[
                 <td className="px-4 py-3 text-right tabular-nums text-gray-500">{total(r => r.pendGocuotas + r.pendAndreani).toLocaleString('es-AR')}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{total(r => r.disponibleReal).toLocaleString('es-AR')}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-amber-600">{total(r => r.enTransito).toLocaleString('es-AR')}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{total(r => r.disponibleReal + r.enTransito).toLocaleString('es-AR')}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-blue-600">{total(r => r.pedido).toLocaleString('es-AR')}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{total(r => r.proximaDisponibilidad).toLocaleString('es-AR')}</td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
       <p className="text-xs text-gray-400 mt-2">
-        Solo celulares · Pendientes = órdenes pagas esperando salir del depósito · Disponible real = depósitos − pendientes · En tránsito = viajando al warehouse de Andreani
+        Solo celulares · Pendientes = órdenes pagas esperando salir del depósito · Disponible real = depósitos − pendientes · En tránsito = viajando al warehouse de Andreani · Pedido = comprado, aún sin despachar · Próxima disponibilidad = disponible + tránsito + pedido
       </p>
     </div>
   )

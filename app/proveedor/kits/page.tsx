@@ -7,6 +7,7 @@ import { getPreciosKitsMil200 } from '@/lib/actions/proveedor-kits'
 import { fetchKitsStockAndreani, type KitStockAndreani } from '@/lib/gocelular-kits'
 import { fetchStockPorWarehouse, fetchPendientesPicking } from '@/lib/gocelular'
 import { completarDisponibilidad, type StockDisponibilidadRow } from '@/lib/disponibilidad'
+import { aplicarPedidos } from '@/lib/pedidos-pendientes'
 import FinanzasTabs from '@/app/(admin)/finanzas/FinanzasTabs'
 import EntregaForm from './EntregaForm'
 import StockCelulares from './StockCelulares'
@@ -56,14 +57,15 @@ export default async function ProveedorKitsPage({
   const totalAndreani = kits.reduce((s, k) => s + (stockAndreani[k.codigo]?.stockAndreani ?? 0), 0)
   const totalTransito = kits.reduce((s, k) => s + (enTransito[k.codigo] ?? 0), 0)
 
-  // Stock por depósito SOLO celulares (misma fuente que /inventario/stock; sin pedidos del gestor)
+  // Stock por depósito SOLO celulares (misma fuente y columnas que /inventario/stock,
+  // incluidos pedidos del gestor y tránsito: el proveedor los usa para anticipar kits)
   let celulares: StockDisponibilidadRow[] = []
   try {
     const [baseRows, pendientes] = await Promise.all([
       fetchStockPorWarehouse(),
       fetchPendientesPicking().catch(() => ({ gocuotas: {}, andreani: {} })),
     ])
-    celulares = completarDisponibilidad(baseRows, pendientes).filter(r => r.tipo === 'celular')
+    celulares = completarDisponibilidad(aplicarPedidos(baseRows, pedidos), pendientes).filter(r => r.tipo === 'celular')
   } catch {
     // DB de GOcelular no disponible: la pestaña muestra el aviso vacío
   }
