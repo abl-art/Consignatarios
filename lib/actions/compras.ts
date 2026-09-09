@@ -696,6 +696,12 @@ export async function getUltimosCostos(): Promise<UltimoCosto[]> {
 // Cheques & Líneas disponibles
 // ---------------------------------------------------------------------------
 
+// Un mismo proveedor puede facturar con más de una razón social: los cheques
+// emitidos a estos CUITs extra consumen la línea del proveedor titular.
+const CUITS_EXTRA: Record<string, string[]> = {
+  '30709453250': ['33569389009'], // SOLNIK SA ← ETERCRO
+}
+
 export async function getLineasDisponibles() {
   const supabase = createAdminClient()
 
@@ -709,7 +715,7 @@ export async function getLineasDisponibles() {
 
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const cuits = proveedores.map(p => p.cuit).filter(Boolean)
+  const cuits = proveedores.flatMap(p => (p.cuit ? [p.cuit, ...(CUITS_EXTRA[p.cuit] ?? [])] : []))
   const { data: cheques } = await supabase
     .from('cheques_proveedor')
     .select('cuit, importe, fecha_pago')
@@ -724,7 +730,9 @@ export async function getLineasDisponibles() {
   }
 
   return proveedores.map(p => {
-    const chequesProveedor = chequesByCuit[p.cuit] || []
+    const chequesProveedor = [p.cuit, ...(CUITS_EXTRA[p.cuit] ?? [])]
+      .flatMap(c => chequesByCuit[c] || [])
+      .sort((a, b) => a.fecha_pago.localeCompare(b.fecha_pago))
     const totalPendiente = chequesProveedor.reduce((s, c) => s + c.importe, 0)
     const limite = p.limite_cuenta_corriente || 0
     const disponible = limite - totalPendiente
