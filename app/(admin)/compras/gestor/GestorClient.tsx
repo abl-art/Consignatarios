@@ -1582,6 +1582,7 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
   const router = useRouter()
   const [enviando, setEnviando] = useState(false)
   const [expandido, setExpandido] = useState(false)
+  const [verAvisos, setVerAvisos] = useState(false)
 
   async function disparar() {
     setEnviando(true)
@@ -1678,11 +1679,22 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
           )}
           {(gocelular.errores ?? []).map((e, i) => <p key={`${i}-${e.slice(0, 40)}`} className="text-red-600">• {e}</p>)}
           {(gocelular.pendingAliases ?? []).length > 0 && (
-            <p className="text-amber-600">
+            <p className={estado === 'informado' ? 'text-gray-500' : 'text-amber-600'}>
               SKUs pendientes de alias (GOcelular los resuelve, no requiere acción): {gocelular.pendingAliases!.map(a => a.sku).join(', ')}
             </p>
           )}
-          {(gocelular.warnings ?? []).map((w, i) => <p key={`${i}-${w.slice(0, 40)}`} className="text-amber-600">• {w}</p>)}
+          {/* Con el envío ya informado los warnings son avisos históricos de la validación
+              previa, no pendientes: van colapsados y en gris para no teñir todo de naranja */}
+          {(gocelular.warnings ?? []).length > 0 && (estado === 'informado' ? (
+            <>
+              <button onClick={() => setVerAvisos(!verAvisos)} className="text-gray-500 hover:text-gray-700">
+                {verAvisos ? '▴' : '▸'} {gocelular.warnings!.length} avisos de la validación previa al envío (sin acción pendiente)
+              </button>
+              {verAvisos && gocelular.warnings!.map((w, i) => <p key={`${i}-${w.slice(0, 40)}`} className="text-gray-500">• {w}</p>)}
+            </>
+          ) : (
+            gocelular.warnings!.map((w, i) => <p key={`${i}-${w.slice(0, 40)}`} className="text-amber-600">• {w}</p>)
+          ))}
         </div>
       )}
     </div>
