@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -11,6 +12,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { formatearMoneda } from '@/lib/utils'
+import CanalPills, { type Canal } from './CanalPills'
 
 interface VintageRow {
   origination_month: string
@@ -42,7 +44,7 @@ interface VintageRow {
 }
 
 interface Props {
-  data: VintageRow[]
+  canales: { total: VintageRow[]; propia: VintageRow[]; terceros: VintageRow[] }
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -72,7 +74,9 @@ const SEGMENTS = [
   { key: 'pct_recupero_120_plus', label: 'Recupero 120+', color: '#065F46' },
 ] as const
 
-export default function VintageTab({ data }: Props) {
+export default function VintageTab({ canales }: Props) {
+  const [canal, setCanal] = useState<Canal>('total')
+  const data = canales[canal]
   const chartData = data.map((r) => ({
     mes: formatMes(r.origination_month),
     pct_cobrada_en_termino: r.pct_cobrada_en_termino,
@@ -91,6 +95,7 @@ export default function VintageTab({ data }: Props) {
 
   return (
     <div className="space-y-6">
+      <CanalPills canal={canal} onChange={setCanal} />
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <div className="max-h-[400px] overflow-auto border border-gray-200 rounded-xl">

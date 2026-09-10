@@ -21,6 +21,7 @@ import SimuladorTab from './SimuladorTab'
 import ProductosTab from './ProductosTab'
 import { fetchProductos } from '@/lib/actions/productos'
 import { getDatosSimulador } from '@/lib/actions/simulador-datos'
+import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS } from '@/lib/client-ids'
 
 export default async function FinanzasPage({
   searchParams,
@@ -51,12 +52,31 @@ export default async function FinanzasPage({
     fetchProductos(),
   ])
 
-  // Datos del simulador: 6 queries propias, corren después del Promise.all para no
-  // saturar el pool. Si fallan, el simulador arranca sin precargas en vez de tirar la página.
+  // Variantes por canal para las píldoras de PD/DPD/Vintage. Corren después del
+  // Promise.all principal para no saturar el pool; si fallan, la píldora del canal
+  // muestra vacío en vez de tirar la página.
+  const PD_VACIO = { byOrigination: [], byDueMonth: [], resumen: [], maxCuota: 0 }
+  const DPD_VACIO = { byOrigination: [], byDueMonth: [] }
+  const [pdPropia, pdTerceros, dpdPropia, dpdTerceros, vintagePropia, vintageTerceros] = await Promise.all([
+    fetchPDIndicadores(CLIENT_IDS_PROPIOS).catch(() => PD_VACIO),
+    fetchPDIndicadores(CLIENT_IDS_TERCEROS).catch(() => PD_VACIO),
+    fetchDPDIndicadores(CLIENT_IDS_PROPIOS).catch(() => DPD_VACIO),
+    fetchDPDIndicadores(CLIENT_IDS_TERCEROS).catch(() => DPD_VACIO),
+    fetchVintageAnalysis(CLIENT_IDS_PROPIOS).catch(() => []),
+    fetchVintageAnalysis(CLIENT_IDS_TERCEROS).catch(() => []),
+  ])
+
+  // Datos del simulador: reusa el vintage/PD por canal ya fetcheado (prefetch) y
+  // corre sus queries propias después. Si falla, arranca sin precargas.
   const SIN_DATOS_CANAL = { incobrabilidad_pct: null, fpd_pct: null, mora_dias: null, ticket_promedio: null }
   let datosSimulador: Awaited<ReturnType<typeof getDatosSimulador>>
   try {
-    datosSimulador = await getDatosSimulador()
+    datosSimulador = await getDatosSimulador({
+      vinPropia: vintagePropia,
+      vinTerceros: vintageTerceros,
+      pdPropia,
+      pdTerceros,
+    })
   } catch {
     datosSimulador = { propia: { ...SIN_DATOS_CANAL }, terceros: { ...SIN_DATOS_CANAL }, modelos: [] }
   }
@@ -302,9 +322,9 @@ export default async function FinanzasPage({
           { id: 'flujo', label: diasEstres.length > 0 ? `Flujo de fondos (${diasEstres.length} estrés)` : 'Flujo de fondos', content: flujoTab },
           { id: 'egresos', label: 'Egresos', content: egresosTab },
           { id: 'deuda', label: 'Deuda', content: <DeudaTab prestamos={prestamos} movimientos={todosMovimientos} config={deudaConfig} interesesMes={interesesMes} /> },
-          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
-          { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
-          { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
+          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} /> },
+          { id: 'dpd', label: 'Days Past Due', content: <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} /> },
+          { id: 'vintage', label: 'Vintage', content: <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} /> },
           { id: 'simulador', label: 'Simulación', content: <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> },
           { id: 'precios', label: 'Productos', content: <ProductosTab productos={productosFinancieros} /> },
           { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },

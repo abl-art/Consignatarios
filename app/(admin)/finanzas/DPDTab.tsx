@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { formatearMoneda } from '@/lib/utils'
+import CanalPills, { type Canal } from './CanalPills'
 
 interface DPDRow {
   mes: string
@@ -28,9 +29,13 @@ interface DPDRow {
   total_vencido: number
 }
 
-interface Props {
+interface DPDData {
   byOrigination: DPDRow[]
   byDueMonth: DPDRow[]
+}
+
+interface Props {
+  canales: { total: DPDData; propia: DPDData; terceros: DPDData }
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -51,7 +56,9 @@ function pctColor(value: number): string {
   return 'text-red-600'
 }
 
-export default function DPDTab({ byOrigination, byDueMonth }: Props) {
+export default function DPDTab({ canales }: Props) {
+  const [canal, setCanal] = useState<Canal>('total')
+  const { byOrigination, byDueMonth } = canales[canal]
   const [view, setView] = useState<'due' | 'orig'>('due')
 
   const data = view === 'due' ? byDueMonth : byOrigination
@@ -67,6 +74,7 @@ export default function DPDTab({ byOrigination, byDueMonth }: Props) {
 
   return (
     <div className="space-y-6">
+      <CanalPills canal={canal} onChange={setCanal} />
       {/* View selector */}
       <div className="flex gap-2">
         <button

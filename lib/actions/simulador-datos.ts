@@ -2,7 +2,7 @@
 
 import { getPool } from '@/lib/db-pool'
 import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, SQL_IDS_TERCEROS } from '@/lib/client-ids'
-import { fetchVintageAnalysis, fetchPDIndicadores } from '@/lib/actions/finanzas'
+import { fetchVintageAnalysis, fetchPDIndicadores, type VintageRow } from '@/lib/actions/finanzas'
 import { fetchOrderIdsConContracargo, fetchOrderIdsTransicion30d } from '@/lib/gocelular'
 import { getListaPrecios } from '@/lib/actions/lista-precios-canales'
 import { type FilaListaPrecios } from '@/lib/lista-precios'
@@ -99,16 +99,25 @@ async function fetchIncobrabilidadCanal(
   }
 }
 
-export async function getDatosSimulador(): Promise<DatosSimulador> {
+// Datos por canal ya fetcheados por el caller (la page los usa también para las
+// píldoras de PD/DPD/Vintage) — evita repetir las mismas queries
+export interface PrefetchSimulador {
+  vinPropia: VintageRow[]
+  vinTerceros: VintageRow[]
+  pdPropia: Awaited<ReturnType<typeof fetchPDIndicadores>>
+  pdTerceros: Awaited<ReturnType<typeof fetchPDIndicadores>>
+}
+
+export async function getDatosSimulador(prefetch?: PrefetchSimulador): Promise<DatosSimulador> {
   const [cbIds, transIds] = await Promise.all([
     fetchOrderIdsConContracargo().catch(() => [] as string[]),
     fetchOrderIdsTransicion30d().catch(() => [] as string[]),
   ])
   const [vinPropia, vinTerceros, pdPropia, pdTerceros, modelos, ticketTerceros, incobPropia, incobTerceros] = await Promise.all([
-    fetchVintageAnalysis(CLIENT_IDS_PROPIOS),
-    fetchVintageAnalysis(CLIENT_IDS_TERCEROS),
-    fetchPDIndicadores(CLIENT_IDS_PROPIOS),
-    fetchPDIndicadores(CLIENT_IDS_TERCEROS),
+    prefetch ? Promise.resolve(prefetch.vinPropia) : fetchVintageAnalysis(CLIENT_IDS_PROPIOS),
+    prefetch ? Promise.resolve(prefetch.vinTerceros) : fetchVintageAnalysis(CLIENT_IDS_TERCEROS),
+    prefetch ? Promise.resolve(prefetch.pdPropia) : fetchPDIndicadores(CLIENT_IDS_PROPIOS),
+    prefetch ? Promise.resolve(prefetch.pdTerceros) : fetchPDIndicadores(CLIENT_IDS_TERCEROS),
     getListaPrecios(),
     fetchTicketPromedioTerceros(),
     fetchIncobrabilidadCanal(CLIENT_IDS_PROPIOS, cbIds, transIds),

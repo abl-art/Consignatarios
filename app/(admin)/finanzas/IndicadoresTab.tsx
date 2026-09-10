@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import CanalPills, { type Canal } from './CanalPills'
 
 interface PDRow {
   mes: string
@@ -16,11 +17,15 @@ interface PDResumen {
   pd_30: number
 }
 
-interface Props {
+interface PDData {
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
   resumen: PDResumen[]
   maxCuota: number
+}
+
+interface Props {
+  canales: { total: PDData; propia: PDData; terceros: PDData }
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -93,7 +98,9 @@ function PDChart({ rows }: { rows: PDRow[] }) {
   )
 }
 
-export default function IndicadoresTab({ byOrigination, byDueMonth, resumen, maxCuota }: Props) {
+export default function IndicadoresTab({ canales }: Props) {
+  const [canal, setCanal] = useState<Canal>('total')
+  const { byOrigination, byDueMonth, resumen, maxCuota } = canales[canal]
   const [selectedCuota, setSelectedCuota] = useState(2)
 
   const cuotas = Array.from({ length: maxCuota }, (_, i) => i + 1)
@@ -110,6 +117,7 @@ export default function IndicadoresTab({ byOrigination, byDueMonth, resumen, max
 
   return (
     <div className="space-y-6">
+      <CanalPills canal={canal} onChange={setCanal} />
       {/* Summary card - FPD for all cuotas */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Payment Default por cuota</p>

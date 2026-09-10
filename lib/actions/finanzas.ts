@@ -954,13 +954,16 @@ interface DPDRow {
   total_vencido: number
 }
 
-export async function fetchDPDIndicadores(): Promise<{
+export async function fetchDPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS): Promise<{
   byOrigination: DPDRow[]
   byDueMonth: DPDRow[]
 }> {
   const empty = { byOrigination: [], byDueMonth: [] }
   const pool = getPool()
   if (!pool) return empty
+  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
+  if (idsSeguros.length === 0) return empty
+  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
 
   // Órdenes incobrables (contracargos ∪ transición 30d): sus cuotas vencidas
   // salen de los buckets por días y van a la columna Incobrable, sin duplicar
@@ -1000,7 +1003,7 @@ export async function fetchDPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN (${SQL_IDS_TODOS})
+      AND o.client_id::text IN (${sqlIds})
     GROUP BY 1
     ORDER BY 1
   `
