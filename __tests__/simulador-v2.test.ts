@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { simularFlujoV2, oaPorOperacion, type ParamsV2 } from '@/lib/simulador-v2'
+import { simularFlujoV2, oaPorOperacion, tirMensual, tirImplicita, type ParamsV2 } from '@/lib/simulador-v2'
 
 export const basePropia: ParamsV2 = {
   schema_version: 2,
@@ -192,5 +192,30 @@ describe('simularFlujoV2 — casos borde', () => {
     expect(fila(r, 'Pago proveedor (c/IVA)')[0]).toBe(-121_000)
     expect(fila(r, 'Pago proveedor (c/IVA)')[1]).toBe(-121_000)
     expect(fila(r, 'Cobro cuotas')[1]).toBe(80_000) // cuota m1 de cohorte 0 + anticipo cohorte 1
+  })
+})
+
+describe('tirMensual', () => {
+  it('crédito sintético de TEM 5% conocida', () => {
+    // PV=100.000, 3 cuotas: pmt = 100.000×0,05/(1−1,05^−3) = 36.720,9
+    expect(tirMensual([-100_000, 36_721, 36_721, 36_721])!).toBeCloseTo(0.05, 3)
+  })
+  it('sin cambio de signo → null', () => {
+    expect(tirMensual([1000, 1000])).toBeNull()
+  })
+})
+
+describe('tirImplicita', () => {
+  it('caso base propia: flujo [−81.000, 40.000×4]', () => {
+    // −121.000 + 40.000 anticipo = −81.000; VAN=0 en tem≈0,3412 (verificado a
+    // mano: VAN(0,34122)=−81.000+40.000×[(1−1,34122^−4)/0,34122]≈2,9e-11≈0;
+    // el 0,3465 de la premisa original del brief no anula el VAN — VAN(0,3465)≈−678)
+    const t = tirImplicita(basePropia)!
+    expect(t.tem).toBeCloseTo(0.3412, 2)
+    expect(t.tna).toBeCloseTo(t.tem * 12, 10)
+    expect(t.tea).toBeCloseTo(Math.pow(1 + t.tem, 12) - 1, 6)
+  })
+  it('terceros → null', () => {
+    expect(tirImplicita({ ...basePropia, modalidad: 'terceros', order_amount: 100_000, tasa_descuento_pct: 10 })).toBeNull()
   })
 })

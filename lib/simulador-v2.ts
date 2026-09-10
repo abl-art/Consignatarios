@@ -51,6 +51,34 @@ export function oaPorOperacion(p: ParamsV2): number {
   return p.modalidad === 'propia' ? p.costo_sin_iva * p.multiplo : p.order_amount
 }
 
+export function tirMensual(flujo: number[]): number | null {
+  const hayPos = flujo.some(v => v > 0)
+  const hayNeg = flujo.some(v => v < 0)
+  if (!hayPos || !hayNeg) return null
+  const van = (i: number) => flujo.reduce((s, f, t) => s + f / Math.pow(1 + i, t), 0)
+  let lo = -0.99, hi = 10
+  if (van(lo) * van(hi) > 0) return null
+  for (let k = 0; k < 200; k++) {
+    const mid = (lo + hi) / 2
+    if (van(lo) * van(mid) <= 0) hi = mid
+    else lo = mid
+  }
+  return (lo + hi) / 2
+}
+
+export function tirImplicita(p: ParamsV2): { tem: number; tna: number; tea: number } | null {
+  if (p.modalidad !== 'propia') return null
+  const oa = oaPorOperacion(p)
+  const anticipo = oa * (p.anticipo_pct / 100)
+  const nRestantes = p.cuotas - 1
+  if (nRestantes <= 0) return null
+  const cuotaResto = (oa - anticipo) / nRestantes
+  const flujo = [anticipo - p.costo_sin_iva * (1 + IVA), ...new Array(nRestantes).fill(cuotaResto)]
+  const tem = tirMensual(flujo)
+  if (tem === null) return null
+  return { tem, tna: tem * 12, tea: Math.pow(1 + tem, 12) - 1 }
+}
+
 export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   const oa = oaPorOperacion(p)
   const incob = p.incobrabilidad_pct / 100
