@@ -11,7 +11,7 @@ export const basePropia: ParamsV2 = {
   flete: 10_000,
   kit_seguridad: 0,
   licencias: 0,
-  adquirencia: 0,
+  adquirencia_pct: 0,
   order_amount: 0,
   tasa_descuento_pct: 0,
   cuotas: 5,
@@ -301,22 +301,24 @@ describe('licencias y adquirencia', () => {
     expect(fila(r, 'Imp. débitos')[2]).toBeCloseTo(fila(sin, 'Imp. débitos')[2] - 8_000 * 0.006, 2)
   })
 
-  it('adquirencia: $ por operación en el mes de la venta', () => {
-    const r = simularFlujoV2({ ...basePropia, adquirencia: 2_000 })
-    expect(fila(r, 'Adquirencia')).toEqual([-2_000, 0, 0, 0, 0])
+  it('adquirencia: % sobre el monto de la operación en el mes de la venta', () => {
+    // OA 200.000 × 1,8% = 3.600 por operación
+    const r = simularFlujoV2({ ...basePropia, adquirencia_pct: 1.8 })
+    expect(fila(r, 'Adquirencia')[0]).toBeCloseTo(-3_600, 6)
+    expect(fila(r, 'Adquirencia').slice(1).every(v => v === 0)).toBe(true)
     const sin = simularFlujoV2(basePropia)
-    expect(fila(r, 'Imp. débitos')[0]).toBeCloseTo(fila(sin, 'Imp. débitos')[0] - 2_000 * 0.006, 2)
+    expect(fila(r, 'Imp. débitos')[0]).toBeCloseTo(fila(sin, 'Imp. débitos')[0] - 3_600 * 0.006, 2)
   })
 
   it('multiplican por las operaciones del mes', () => {
-    const r = simularFlujoV2({ ...basePropia, operaciones_por_mes: [500], licencias: 8_000, adquirencia: 2_000 })
+    const r = simularFlujoV2({ ...basePropia, operaciones_por_mes: [500], licencias: 8_000, adquirencia_pct: 1.8 })
     expect(fila(r, 'Licencias')[2]).toBe(-4_000_000)
-    expect(fila(r, 'Adquirencia')[0]).toBe(-1_000_000)
+    expect(fila(r, 'Adquirencia')[0]).toBeCloseTo(-1_800_000, 4) // 500 × 200.000 × 1,8%
   })
 
   it('terceros: no generan filas', () => {
     const t: ParamsV2 = { ...basePropia, modalidad: 'terceros', order_amount: 100_000,
-      tasa_descuento_pct: 15, cuotas: 4, anticipo_pct: 25, licencias: 8_000, adquirencia: 2_000 }
+      tasa_descuento_pct: 15, cuotas: 4, anticipo_pct: 25, licencias: 8_000, adquirencia_pct: 1.8 }
     const r = simularFlujoV2(t)
     expect(r.filas.some(f => f.concepto === 'Licencias')).toBe(false)
     expect(r.filas.some(f => f.concepto === 'Adquirencia')).toBe(false)

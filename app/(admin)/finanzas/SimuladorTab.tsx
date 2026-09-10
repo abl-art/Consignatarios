@@ -58,7 +58,7 @@ function paramsIniciales(modalidad: Modalidad, datos: DatosSimulador): ParamsV2 
     flete: 0,
     kit_seguridad: 7500,
     licencias: 0,
-    adquirencia: 0,
+    adquirencia_pct: 0,
     order_amount: canal.ticket_promedio ? Math.round(canal.ticket_promedio) : 150_000,
     tasa_descuento_pct: 15,
     cuotas,
@@ -233,7 +233,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
         ...raw,
         kit_seguridad: raw.kit_seguridad ?? 0,
         licencias: raw.licencias ?? 0,
-        adquirencia: raw.adquirencia ?? 0,
+        adquirencia_pct: raw.adquirencia_pct ?? 0,
       }
       setModalidad(loaded.modalidad)
       setParams(loaded)
@@ -424,8 +424,8 @@ export default function SimuladorTab({ productos, datos }: Props) {
                 <Campo label="Licencias ($/equipo)" hint="pago vencido a 60d">
                   <input type="number" value={params.licencias} onChange={e => up('licencias', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
-                <Campo label="Adquirencia ($/operación)">
-                  <input type="number" value={params.adquirencia} onChange={e => up('adquirencia', Number(e.target.value))} className={INPUT_SM} />
+                <Campo label="Adquirencia (%)" hint="% sobre el monto de la operación">
+                  <input type="number" step="0.1" value={params.adquirencia_pct} onChange={e => up('adquirencia_pct', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
               </>
             )}

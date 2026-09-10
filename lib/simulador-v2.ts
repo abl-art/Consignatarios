@@ -19,7 +19,7 @@ export interface ParamsV2 {
   kit_seguridad: number        // $ por operación, solo propia (kit regalado en el bundle);
                                // Mil200 SAS financia: se paga 25% a 30/60/90/120 días
   licencias: number            // $ por equipo, solo propia; pago vencido a 60 días
-  adquirencia: number          // $ por operación, solo propia; mes de la venta
+  adquirencia_pct: number      // % sobre el monto de la operación, solo propia; mes de la venta
   // terceros
   order_amount: number         // $ con IVA, solo terceros (en propia se ignora)
   tasa_descuento_pct: number   // palanca terceros
@@ -167,8 +167,8 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
     }
     // Licencias: $ por equipo, pago vencido a 60 días
     if (p.modalidad === 'propia' && p.licencias > 0) licFila[m0 + 2] -= ops * p.licencias
-    // Adquirencia: $ por operación, mes de la venta
-    if (p.modalidad === 'propia' && p.adquirencia > 0) adqFila[m0] -= ops * p.adquirencia
+    // Adquirencia: % sobre el monto de la operación, mes de la venta
+    if (p.modalidad === 'propia' && p.adquirencia_pct > 0) adqFila[m0] -= ops * oa * (p.adquirencia_pct / 100)
   }
 
   // Pago de IVA a AFIP: la posición del mes se paga al mes siguiente;
