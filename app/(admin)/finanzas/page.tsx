@@ -18,7 +18,7 @@ import DeudaTab from './DeudaTab'
 import DeudaAlerts from './DeudaAlerts'
 import DeudaBalanceChart from './DeudaBalanceChart'
 import SimuladorTab from './SimuladorTab'
-import ListaPreciosTab from './ListaPreciosTab'
+import ProductosTab from './ProductosTab'
 import { fetchProductos } from '@/lib/actions/productos'
 import { getDatosSimulador } from '@/lib/actions/simulador-datos'
 
@@ -306,7 +306,7 @@ export default async function FinanzasPage({
           { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
           { id: 'simulador', label: 'Simulación', content: <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> },
-          { id: 'precios', label: 'Lista de Precios', content: <ListaPreciosTab productos={productosFinancieros} /> },
+          { id: 'precios', label: 'Productos', content: <ProductosTab productos={productosFinancieros} /> },
           { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },
         ]}
       />
