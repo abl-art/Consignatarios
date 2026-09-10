@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { simularFlujoV2, oaPorOperacion, tirMensual, tirImplicita, resolverPalanca, conPalanca, generarNombreV2, type ParamsV2 } from '@/lib/simulador-v2'
+import { simularFlujoV2, oaPorOperacion, tirMensual, tirImplicita, resolverPalanca, conPalanca, generarNombreV2, costoLicenciaUnitario, type ParamsV2 } from '@/lib/simulador-v2'
 
 export const basePropia: ParamsV2 = {
   schema_version: 2,
@@ -10,6 +10,9 @@ export const basePropia: ParamsV2 = {
   modelo_nombre: null,
   flete: 10_000,
   kit_seguridad: 0,
+  licencias_fijo_usd: 0,
+  licencias_usd_equipo: 0,
+  licencias_tc: 1550,
   order_amount: 0,
   tasa_descuento_pct: 0,
   cuotas: 5,
@@ -287,5 +290,41 @@ describe('kit de seguridad', () => {
       tasa_descuento_pct: 15, cuotas: 4, anticipo_pct: 25, kit_seguridad: 7_500 }
     const r = simularFlujoV2(t)
     expect(r.filas.some(f => f.concepto === 'Kit de seguridad')).toBe(false)
+  })
+})
+
+describe('licencias', () => {
+  // 500 ops: (1.000 + 500×3,5) USD × 1.550 = 4.262.500 al m+2.
+  // Unitario: (1.000/500 + 3,5) × 1.550 = 8.525 $/equipo.
+  const conLic: ParamsV2 = { ...basePropia, operaciones_por_mes: [500],
+    licencias_fijo_usd: 1_000, licencias_usd_equipo: 3.5, licencias_tc: 1_550 }
+
+  it('propia: fijo + variable al TC, pagado vencido a 60 días (m+2)', () => {
+    const r = simularFlujoV2(conLic)
+    const lic = r.filas.find(f => f.concepto.startsWith('Licencias'))!
+    expect(lic.valores[0]).toBe(0)
+    expect(lic.valores[1]).toBe(0)
+    expect(lic.valores[2]).toBe(-4_262_500)
+    expect(lic.valores.slice(3).every(v => v === 0)).toBe(true)
+  })
+
+  it('el costo unitario se muestra en el concepto de la fila', () => {
+    expect(costoLicenciaUnitario(conLic)).toBeCloseTo(8_525, 2)
+    const r = simularFlujoV2(conLic)
+    expect(r.filas.some(f => f.concepto === 'Licencias ($8.525/u)')).toBe(true)
+  })
+
+  it('entra en la base de imp. débitos de su mes', () => {
+    const r = simularFlujoV2(conLic)
+    const sin = simularFlujoV2({ ...basePropia, operaciones_por_mes: [500] })
+    const dif = fila(r, 'Imp. débitos')[2] - fila(sin, 'Imp. débitos')[2]
+    expect(dif).toBeCloseTo(-4_262_500 * 0.006, 1)
+  })
+
+  it('terceros: no genera fila', () => {
+    const t: ParamsV2 = { ...conLic, modalidad: 'terceros', order_amount: 100_000,
+      tasa_descuento_pct: 15, cuotas: 4, anticipo_pct: 25 }
+    const r = simularFlujoV2(t)
+    expect(r.filas.some(f => f.concepto.startsWith('Licencias'))).toBe(false)
   })
 })
