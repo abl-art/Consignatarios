@@ -17,17 +17,24 @@ export interface DatosCanal {
   ticket_promedio: number | null
 }
 
-function mesesDesde(origination: string, hoy: Date): number {
-  const [y, m] = origination.split('-').map(Number)
-  return (hoy.getUTCFullYear() - y) * 12 + (hoy.getUTCMonth() + 1 - m)
+export interface IncobrabilidadCanalInput {
+  resueltas: number // cuotas de órdenes sanas vencidas hace 120+ días (tuvieron chance de resolverse)
+  mora120: number // de esas, impagas con 120+ días de mora
+  cbTotal: number // total de cuotas de órdenes con contracargo (el CB revierte hasta lo cobrado)
+  transTotal: number // total de cuotas de órdenes con equipo en transición 30+
+  transNoCobrado: number // de esas, las no cobradas (lo cobrado fue ingreso real de caja)
 }
 
-export function derivarIncobrabilidad(rows: CohorteVintage[], hoy: Date): number | null {
-  const maduras = rows.filter(r => mesesDesde(r.origination_month, hoy) >= 6)
-  const total = maduras.reduce((s, r) => s + r.amt_total, 0)
-  if (total <= 0) return null
-  const incobrable = maduras.reduce((s, r) => s + r.amt_incobrable_120_plus, 0)
-  return (incobrable / total) * 100
+// Pérdida sobre lo RESUELTO, no sobre lo originado: el denominador solo incluye
+// cuotas que ya tuvieron la chance de volverse incobrables, más las órdenes
+// castigadas enteras (contracargo/transición) que se consideran resueltas-malas.
+// Regla de Emiliano (10 sep 2026): CB castiga la orden completa; transición solo
+// lo no cobrado.
+export function incobrabilidadResuelta(d: IncobrabilidadCanalInput): number | null {
+  const den = d.resueltas + d.cbTotal + d.transTotal
+  if (den <= 0) return null
+  const num = d.mora120 + d.cbTotal + d.transNoCobrado
+  return (num / den) * 100
 }
 
 const BUCKETS_MORA: [keyof CohorteVintage, number][] = [

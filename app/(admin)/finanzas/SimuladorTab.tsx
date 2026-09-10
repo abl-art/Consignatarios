@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { guardarProducto, type ProductoFinanciero } from '@/lib/actions/productos'
 import type { DatosSimulador } from '@/lib/actions/simulador-datos'
@@ -27,8 +27,22 @@ const fmtK = (v: number) => {
 const redondear1 = (v: number) => Math.round(v * 10) / 10
 
 const INPUT = 'w-full px-2 py-1.5 border border-gray-300 rounded text-xs'
+const INPUT_SM = 'w-24 px-2 py-1 border border-gray-300 rounded text-xs text-right'
 const LABEL = 'block text-gray-500 mb-1'
 const SUBTITULO = 'text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2'
+
+// Fila compacta label-izquierda / input-derecha para la grilla de parámetros
+function Campo({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-gray-500">
+        {label}
+        {hint && <span className="block text-[10px] text-gray-400">{hint}</span>}
+      </span>
+      {children}
+    </div>
+  )
+}
 
 function paramsIniciales(modalidad: Modalidad, datos: DatosSimulador): ParamsV2 {
   const canal = modalidad === 'propia' ? datos.propia : datos.terceros
@@ -275,15 +289,15 @@ export default function SimuladorTab({ productos, datos }: Props) {
         </span>
       </div>
 
-      {/* Parámetros */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
-        {/* Operación */}
-        <div>
-          <p className={SUBTITULO}>Operación</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      {/* Parámetros: tres columnas compactas */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-5">
+          {/* Col 1: Operación */}
+          <div className="space-y-2">
+            <p className={SUBTITULO}>Operación</p>
             {esPropia ? (
               <>
-                <div className="col-span-2">
+                <div>
                   <label className={LABEL}>Modelo</label>
                   <select
                     value={params.modelo_id ?? ''}
@@ -304,130 +318,95 @@ export default function SimuladorTab({ productos, datos }: Props) {
                     </p>
                   )}
                 </div>
-                <div>
-                  <label className={LABEL}>Costo sin IVA ($)</label>
-                  <input type="number" value={params.costo_sin_iva} onChange={e => up('costo_sin_iva', Number(e.target.value))} className={INPUT} />
-                </div>
-                <div>
-                  <label className={LABEL}>Múltiplo actual</label>
-                  <input type="number" step="0.01" min="0" value={params.multiplo} onChange={e => up('multiplo', Number(e.target.value))} className={INPUT} />
-                  <p className="text-[10px] text-gray-400 mt-1">PVP {fmt$(oa)}</p>
-                </div>
+                <Campo label="Costo sin IVA ($)">
+                  <input type="number" value={params.costo_sin_iva} onChange={e => up('costo_sin_iva', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
+                <Campo label="Múltiplo actual" hint={`PVP ${fmt$(oa)}`}>
+                  <input type="number" step="0.01" min="0" value={params.multiplo} onChange={e => up('multiplo', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
               </>
             ) : (
               <>
-                <div>
-                  <label className={LABEL}>Order amount ($)</label>
-                  <input type="number" value={params.order_amount} onChange={e => up('order_amount', Number(e.target.value))} className={INPUT} />
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    ticket real: {canal.ticket_promedio !== null ? fmt$(canal.ticket_promedio) : 's/d'}
-                  </p>
-                </div>
-                <div>
-                  <label className={LABEL}>Tasa descuento (%)</label>
-                  <input type="number" step="0.1" value={params.tasa_descuento_pct} onChange={e => up('tasa_descuento_pct', Number(e.target.value))} className={INPUT} />
-                </div>
+                <Campo label="Order amount ($)" hint={`ticket real: ${canal.ticket_promedio !== null ? fmt$(canal.ticket_promedio) : 's/d'}`}>
+                  <input type="number" value={params.order_amount} onChange={e => up('order_amount', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
+                <Campo label="Tasa descuento (%)">
+                  <input type="number" step="0.1" value={params.tasa_descuento_pct} onChange={e => up('tasa_descuento_pct', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
               </>
             )}
+            <Campo label="Cuotas">
+              <input type="number" min="1" max="24" value={params.cuotas} onChange={e => setCuotas(Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="Anticipo (%)" hint={`default ${redondear1(100 / params.cuotas)}%`}>
+              <input type="number" step="0.1" value={params.anticipo_pct} onChange={e => up('anticipo_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
             <div>
-              <label className={LABEL}>Cuotas</label>
-              <input type="number" min="1" max="24" value={params.cuotas} onChange={e => setCuotas(Number(e.target.value))} className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Anticipo (%)</label>
-              <input type="number" step="0.1" value={params.anticipo_pct} onChange={e => up('anticipo_pct', Number(e.target.value))} className={INPUT} />
-              <p className="text-[10px] text-gray-400 mt-1">default {redondear1(100 / params.cuotas)}%</p>
-            </div>
-            <div className="col-span-2">
               <label className={LABEL}>Ops/mes (separar con coma)</label>
               <input type="text" value={opsStr} onChange={e => handleOpsChange(e.target.value)} placeholder="500, 500, 500" className={INPUT} />
             </div>
           </div>
-        </div>
 
-        {/* Costos e impuestos */}
-        <div className="pt-4 border-t border-gray-200">
-          <p className={SUBTITULO}>Costos e impuestos</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <div>
-              <label className={LABEL}>Costos op. (%)</label>
-              <input type="number" step="0.1" value={params.costos_operativos_pct} onChange={e => up('costos_operativos_pct', Number(e.target.value))} className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Imp. créditos (%)</label>
-              <input type="number" step="0.01" value={params.imp_creditos_pct} onChange={e => up('imp_creditos_pct', Number(e.target.value))} className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Imp. débitos (%)</label>
-              <input type="number" step="0.01" value={params.imp_debitos_pct} onChange={e => up('imp_debitos_pct', Number(e.target.value))} className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>IIBB (%)</label>
-              <input type="number" step="0.1" value={params.iibb_pct} onChange={e => up('iibb_pct', Number(e.target.value))} className={INPUT} />
-            </div>
+          {/* Col 2: Costos e impuestos */}
+          <div className="space-y-2">
+            <p className={SUBTITULO}>Costos e impuestos</p>
+            <Campo label="Costos op. (%)">
+              <input type="number" step="0.1" value={params.costos_operativos_pct} onChange={e => up('costos_operativos_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="Imp. créditos (%)">
+              <input type="number" step="0.01" value={params.imp_creditos_pct} onChange={e => up('imp_creditos_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="Imp. débitos (%)">
+              <input type="number" step="0.01" value={params.imp_debitos_pct} onChange={e => up('imp_debitos_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="IIBB (%)">
+              <input type="number" step="0.1" value={params.iibb_pct} onChange={e => up('iibb_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
             {esPropia && (
-              <div>
-                <label className={LABEL}>Flete ($)</label>
-                <input type="number" value={params.flete} onChange={e => up('flete', Number(e.target.value))} className={INPUT} />
+              <Campo label="Flete ($)">
+                <input type="number" value={params.flete} onChange={e => up('flete', Number(e.target.value))} className={INPUT_SM} />
+              </Campo>
+            )}
+          </div>
+
+          {/* Col 3: Riesgo del canal + Fondeo y objetivo */}
+          <div className="space-y-2">
+            <p className={SUBTITULO}>Riesgo del canal</p>
+            <Campo label="Incobrabilidad (%)" hint={`real: ${canal.incobrabilidad_pct?.toFixed(1) ?? 's/d'}% · FPD: ${canal.fpd_pct?.toFixed(1) ?? 's/d'}%`}>
+              <input type="number" step="0.1" value={params.incobrabilidad_pct} onChange={e => up('incobrabilidad_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="Mora (días)" hint={`mora real: ${canal.mora_dias?.toFixed(0) ?? 's/d'}d`}>
+              <input type="number" value={params.mora_dias} onChange={e => up('mora_dias', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <p className={`${SUBTITULO} pt-3`}>Fondeo y objetivo</p>
+            <Campo label="TNA fondeo (%)">
+              <input type="number" step="0.1" value={params.tna_fondeo_pct} onChange={e => up('tna_fondeo_pct', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <Campo label="Objetivo (% s/OA)">
+              <input type="number" step="0.1" value={params.objetivo_pct_oa} onChange={e => up('objetivo_pct_oa', Number(e.target.value))} className={INPUT_SM} />
+            </Campo>
+            <div className="pt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-gray-500">
+                  {esPropia ? 'Splits pago proveedor' : 'Splits liq. comercio'}
+                </span>
+                <input type="number" min="1" max="12" value={params.splits.length} onChange={e => setSplitCount(Number(e.target.value) || 1)} className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-xs" />
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Riesgo del canal */}
-        <div className="pt-4 border-t border-gray-200">
-          <p className={SUBTITULO}>Riesgo del canal</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <div>
-              <label className={LABEL}>Incobrabilidad (%)</label>
-              <input type="number" step="0.1" value={params.incobrabilidad_pct} onChange={e => up('incobrabilidad_pct', Number(e.target.value))} className={INPUT} />
-              <p className="text-[10px] text-gray-400 mt-1">
-                vintage: {canal.incobrabilidad_pct?.toFixed(1) ?? 's/d'}% · FPD: {canal.fpd_pct?.toFixed(1) ?? 's/d'}%
-              </p>
+              <div className="space-y-1">
+                {params.splits.map((s, i) => (
+                  <div key={i} className="flex gap-1 items-center">
+                    <span className="text-[10px] text-gray-400 w-4">{i + 1}.</span>
+                    <input type="number" min="0" value={s.plazo_dias} onChange={e => updateSplit(i, 'plazo_dias', Number(e.target.value))} className="w-14 px-1 py-0.5 border border-gray-300 rounded text-[10px] text-right" title="Plazo días" />
+                    <span className="text-[10px] text-gray-400">d</span>
+                    <input type="number" value={s.porcentaje} onChange={e => updateSplit(i, 'porcentaje', Number(e.target.value))} className="w-12 px-1 py-0.5 border border-gray-300 rounded text-[10px] text-right" title="%" />
+                    <span className="text-[10px] text-gray-400">%</span>
+                  </div>
+                ))}
+              </div>
+              {!splitsOk && (
+                <p className="text-[10px] text-red-500 mt-1">Los splits deben sumar 100% (actual: {sumaSplits}%)</p>
+              )}
             </div>
-            <div>
-              <label className={LABEL}>Mora (días)</label>
-              <input type="number" value={params.mora_dias} onChange={e => up('mora_dias', Number(e.target.value))} className={INPUT} />
-              <p className="text-[10px] text-gray-400 mt-1">mora real: {canal.mora_dias?.toFixed(0) ?? 's/d'}d</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Fondeo y objetivo */}
-        <div className="pt-4 border-t border-gray-200">
-          <p className={SUBTITULO}>Fondeo y objetivo</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <div>
-              <label className={LABEL}>TNA fondeo (%)</label>
-              <input type="number" step="0.1" value={params.tna_fondeo_pct} onChange={e => up('tna_fondeo_pct', Number(e.target.value))} className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Objetivo (% s/OA)</label>
-              <input type="number" step="0.1" value={params.objetivo_pct_oa} onChange={e => up('objetivo_pct_oa', Number(e.target.value))} className={INPUT} />
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs font-medium text-gray-600">
-                {esPropia ? 'Splits de pago al proveedor:' : 'Splits de liquidación al comercio:'}
-              </span>
-              <input type="number" min="1" max="12" value={params.splits.length} onChange={e => setSplitCount(Number(e.target.value) || 1)} className="w-14 px-2 py-1 border border-gray-300 rounded text-xs" />
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {params.splits.map((s, i) => (
-                <div key={i} className="flex gap-1 items-center">
-                  <span className="text-[10px] text-gray-400 w-4">{i + 1}.</span>
-                  <input type="number" min="0" value={s.plazo_dias} onChange={e => updateSplit(i, 'plazo_dias', Number(e.target.value))} className="w-14 px-1 py-1 border border-gray-300 rounded text-[10px]" title="Plazo días" />
-                  <span className="text-[10px] text-gray-400">d</span>
-                  <input type="number" value={s.porcentaje} onChange={e => updateSplit(i, 'porcentaje', Number(e.target.value))} className="w-12 px-1 py-1 border border-gray-300 rounded text-[10px]" title="%" />
-                  <span className="text-[10px] text-gray-400">%</span>
-                </div>
-              ))}
-            </div>
-            {!splitsOk && (
-              <p className="text-[10px] text-red-500 mt-1">Los splits deben sumar 100% (actual: {sumaSplits}%)</p>
-            )}
           </div>
         </div>
       </div>

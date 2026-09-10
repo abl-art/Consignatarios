@@ -1,24 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { derivarIncobrabilidad, derivarMoraDias, type CohorteVintage } from '@/lib/simulador-canal'
+import { incobrabilidadResuelta, derivarMoraDias, type CohorteVintage } from '@/lib/simulador-canal'
 
 const cohorte = (over: Partial<CohorteVintage>): CohorteVintage => ({
   origination_month: '2026-01', amt_total: 0, amt_incobrable_120_plus: 0,
   amt_cobrada_en_termino: 0, amt_recupero_1_29: 0, amt_recupero_30_59: 0,
   amt_recupero_60_89: 0, amt_recupero_90_119: 0, amt_recupero_120_plus: 0, ...over,
 })
-const hoy = new Date('2026-09-10T12:00:00Z')
 
-describe('derivarIncobrabilidad', () => {
-  it('pondera cohortes maduras (≥6 meses) y excluye las verdes', () => {
-    const rows = [
-      cohorte({ origination_month: '2026-01', amt_total: 1000, amt_incobrable_120_plus: 40 }),
-      cohorte({ origination_month: '2025-12', amt_total: 500, amt_incobrable_120_plus: 50 }),
-      cohorte({ origination_month: '2026-08', amt_total: 9000, amt_incobrable_120_plus: 0 }), // verde: fuera
-    ]
-    expect(derivarIncobrabilidad(rows, hoy)).toBeCloseTo(6, 5) // (40+50)/1500 = 6%
+describe('incobrabilidadResuelta', () => {
+  it('CB castiga la orden completa; transición solo lo no cobrado; base = resueltas + castigadas', () => {
+    // num = 8 + 100 + 60 = 168; den = 800 + 100 + 100 = 1000 → 16,8%
+    expect(incobrabilidadResuelta({
+      resueltas: 800, mora120: 8, cbTotal: 100, transTotal: 100, transNoCobrado: 60,
+    })).toBeCloseTo(16.8, 5)
   })
-  it('sin cohortes maduras → null', () => {
-    expect(derivarIncobrabilidad([cohorte({ origination_month: '2026-08', amt_total: 100 })], hoy)).toBeNull()
+  it('sin contracargos ni transición queda la mora 120+ pura sobre resueltas', () => {
+    expect(incobrabilidadResuelta({
+      resueltas: 500, mora120: 5, cbTotal: 0, transTotal: 0, transNoCobrado: 0,
+    })).toBeCloseTo(1, 5)
+  })
+  it('sin nada resuelto → null', () => {
+    expect(incobrabilidadResuelta({
+      resueltas: 0, mora120: 0, cbTotal: 0, transTotal: 0, transNoCobrado: 0,
+    })).toBeNull()
   })
 })
 
