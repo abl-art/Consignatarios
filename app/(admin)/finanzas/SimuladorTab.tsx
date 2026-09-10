@@ -6,7 +6,7 @@ import { guardarProducto, type ProductoFinanciero } from '@/lib/actions/producto
 import type { DatosSimulador } from '@/lib/actions/simulador-datos'
 import {
   simularFlujoV2, resolverPalanca, tirImplicita, generarNombreV2,
-  oaPorOperacion, costoLicenciaUnitario, type ParamsV2, type Modalidad, type SplitConfig,
+  oaPorOperacion, type ParamsV2, type Modalidad, type SplitConfig,
 } from '@/lib/simulador-v2'
 
 interface Props {
@@ -57,9 +57,8 @@ function paramsIniciales(modalidad: Modalidad, datos: DatosSimulador): ParamsV2 
     modelo_nombre: null,
     flete: 0,
     kit_seguridad: 7500,
-    licencias_fijo_usd: 1000,
-    licencias_usd_equipo: 3.5,
-    licencias_tc: 1550,
+    licencias: 0,
+    adquirencia: 0,
     order_amount: canal.ticket_promedio ? Math.round(canal.ticket_promedio) : 150_000,
     tasa_descuento_pct: 15,
     cuotas,
@@ -233,9 +232,8 @@ export default function SimuladorTab({ productos, datos }: Props) {
       const loaded = {
         ...raw,
         kit_seguridad: raw.kit_seguridad ?? 0,
-        licencias_fijo_usd: raw.licencias_fijo_usd ?? 0,
-        licencias_usd_equipo: raw.licencias_usd_equipo ?? 0,
-        licencias_tc: raw.licencias_tc ?? 1550,
+        licencias: raw.licencias ?? 0,
+        adquirencia: raw.adquirencia ?? 0,
       }
       setModalidad(loaded.modalidad)
       setParams(loaded)
@@ -423,14 +421,11 @@ export default function SimuladorTab({ productos, datos }: Props) {
                 <Campo label="Kit de seguridad ($)" hint="Mil200: 25% a 30/60/90/120d">
                   <input type="number" value={params.kit_seguridad} onChange={e => up('kit_seguridad', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
-                <Campo label="Licencias fijo (USD/mes)" hint="pago vencido a 60d">
-                  <input type="number" value={params.licencias_fijo_usd} onChange={e => up('licencias_fijo_usd', Number(e.target.value))} className={INPUT_SM} />
+                <Campo label="Licencias ($/equipo)" hint="pago vencido a 60d">
+                  <input type="number" value={params.licencias} onChange={e => up('licencias', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
-                <Campo label="Licencias (USD/equipo)">
-                  <input type="number" step="0.1" value={params.licencias_usd_equipo} onChange={e => up('licencias_usd_equipo', Number(e.target.value))} className={INPUT_SM} />
-                </Campo>
-                <Campo label="Tipo de cambio ($/USD)" hint={`costo licencia: $${Math.round(costoLicenciaUnitario(params)).toLocaleString('es-AR')}/u`}>
-                  <input type="number" value={params.licencias_tc} onChange={e => up('licencias_tc', Number(e.target.value))} className={INPUT_SM} />
+                <Campo label="Adquirencia ($/operación)">
+                  <input type="number" value={params.adquirencia} onChange={e => up('adquirencia', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
               </>
             )}

@@ -18,9 +18,8 @@ export interface ParamsV2 {
   flete: number                // $ por operación, solo propia
   kit_seguridad: number        // $ por operación, solo propia (kit regalado en el bundle);
                                // Mil200 SAS financia: se paga 25% a 30/60/90/120 días
-  licencias_fijo_usd: number   // USD fijos por mes con ventas, solo propia (Trustonic)
-  licencias_usd_equipo: number // USD por equipo vendido, solo propia
-  licencias_tc: number         // tipo de cambio $/USD para licencias
+  licencias: number            // $ por equipo, solo propia; pago vencido a 60 días
+  adquirencia: number          // $ por operación, solo propia; mes de la venta
   // terceros
   order_amount: number         // $ con IVA, solo terceros (en propia se ignora)
   tasa_descuento_pct: number   // palanca terceros
@@ -84,14 +83,6 @@ export function tirImplicita(p: ParamsV2): { tem: number; tna: number; tea: numb
   return { tem, tna: tem * 12, tea: Math.pow(1 + tem, 12) - 1 }
 }
 
-// Costo de licencia por equipo vendido: fijo mensual prorrateado + variable, al TC
-export function costoLicenciaUnitario(p: ParamsV2): number {
-  const totalOps = p.operaciones_por_mes.reduce((s, n) => s + n, 0)
-  if (p.modalidad !== 'propia' || totalOps === 0) return 0
-  const mesesConOps = p.operaciones_por_mes.filter(n => n > 0).length
-  return (p.licencias_fijo_usd * mesesConOps / totalOps + p.licencias_usd_equipo) * p.licencias_tc
-}
-
 export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   const oa = oaPorOperacion(p)
   const incob = p.incobrabilidad_pct / 100
@@ -117,6 +108,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   const fleteFila = zeros(totalMeses)
   const kitFila = zeros(totalMeses)
   const licFila = zeros(totalMeses)
+  const adqFila = zeros(totalMeses)
   const impCred = zeros(totalMeses)
   const impDeb = zeros(totalMeses)
   const moraFila = zeros(totalMeses)
@@ -173,12 +165,10 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
     if (p.modalidad === 'propia' && p.kit_seguridad > 0) {
       for (const c of [1, 2, 3, 4]) kitFila[m0 + c] -= ops * p.kit_seguridad / 4
     }
-    // Licencias (Trustonic): USD fijo del mes + USD por equipo, al TC; vencido a 60 días.
-    // El fijo se imputa solo en meses con ventas (sin ops no hay cohorte que lo cargue)
-    if (p.modalidad === 'propia') {
-      const lic = (p.licencias_fijo_usd + ops * p.licencias_usd_equipo) * p.licencias_tc
-      if (lic > 0) licFila[m0 + 2] -= lic
-    }
+    // Licencias: $ por equipo, pago vencido a 60 días
+    if (p.modalidad === 'propia' && p.licencias > 0) licFila[m0 + 2] -= ops * p.licencias
+    // Adquirencia: $ por operación, mes de la venta
+    if (p.modalidad === 'propia' && p.adquirencia > 0) adqFila[m0] -= ops * p.adquirencia
   }
 
   // Pago de IVA a AFIP: la posición del mes se paga al mes siguiente;
@@ -196,7 +186,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   // bancarios operativos (no sobre fondeo/mora, que son intereses)
   for (let m = 0; m < totalMeses; m++) {
     impCred[m] -= cobroEfectivo[m] * (p.imp_creditos_pct / 100)
-    const debitos = -(pagoPrincipal[m] + ivaFila[m] + iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m])
+    const debitos = -(pagoPrincipal[m] + ivaFila[m] + iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m] + adqFila[m])
     impDeb[m] -= debitos * (p.imp_debitos_pct / 100)
   }
 
@@ -206,7 +196,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   let ultimo = 0
   for (let m = 0; m < totalMeses; m++) {
     const mov = cobroBruto[m] + incobFila[m] + pagoPrincipal[m] + ivaFila[m] +
-      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m] + impCred[m] + impDeb[m] + moraFila[m]
+      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m] + adqFila[m] + impCred[m] + impDeb[m] + moraFila[m]
     if (mov !== 0) ultimo = m
   }
   const meses = ultimo + 1
@@ -216,7 +206,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   let acum = 0
   for (let m = 0; m < meses; m++) {
     subtotal[m] = cobroBruto[m] + incobFila[m] + pagoPrincipal[m] + ivaFila[m] +
-      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m] + impCred[m] + impDeb[m] + moraFila[m]
+      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + licFila[m] + adqFila[m] + impCred[m] + impDeb[m] + moraFila[m]
     if (acum < 0) fondeo[m] = acum * tasaMensual
     subtotal[m] += fondeo[m]
     acum += subtotal[m]
@@ -238,7 +228,8 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   if (p.modalidad === 'propia') {
     filas.push({ concepto: 'Flete', valores: trim(fleteFila) })
     filas.push({ concepto: 'Kit de seguridad', valores: trim(kitFila) })
-    filas.push({ concepto: `Licencias ($${Math.round(costoLicenciaUnitario(p)).toLocaleString('es-AR')}/u)`, valores: trim(licFila) })
+    filas.push({ concepto: 'Licencias', valores: trim(licFila) })
+    filas.push({ concepto: 'Adquirencia', valores: trim(adqFila) })
   }
   filas.push(
     { concepto: 'Imp. créditos', valores: trim(impCred) },
