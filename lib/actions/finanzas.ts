@@ -1076,7 +1076,7 @@ interface PDResumen {
   pd_30: number
 }
 
-export async function fetchPDIndicadores(): Promise<{
+export async function fetchPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS): Promise<{
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
   resumen: PDResumen[]
@@ -1085,6 +1085,8 @@ export async function fetchPDIndicadores(): Promise<{
   const empty = { byOrigination: [], byDueMonth: [], resumen: [], maxCuota: 0 }
   const pool = getPool()
   if (!pool) return empty
+
+  const sqlIds = clientIds.map(id => `'${id}'`).join(', ')
 
   const baseQuery = (mesExpr: string) => `
     SELECT
@@ -1106,7 +1108,7 @@ export async function fetchPDIndicadores(): Promise<{
     JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN (${SQL_IDS_TODOS})
+      AND o.client_id::text IN (${sqlIds})
     GROUP BY 1, 2
     ORDER BY 1, 2
   `
@@ -1137,7 +1139,7 @@ export async function fetchPDIndicadores(): Promise<{
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${SQL_IDS_TODOS})
+          AND o.client_id::text IN (${sqlIds})
         GROUP BY 1
         ORDER BY 1
       `),
@@ -1190,7 +1192,7 @@ export async function fetchPDIndicadores(): Promise<{
 // fetchVintageAnalysis – Vintage analysis by origination month
 // ---------------------------------------------------------------------------
 
-interface VintageRow {
+export interface VintageRow {
   origination_month: string // YYYY-MM
   amt_total: number
   amt_por_vencer: number
@@ -1219,9 +1221,11 @@ interface VintageRow {
   pct_recupero_120_plus: number
 }
 
-export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
+export async function fetchVintageAnalysis(clientIds: string[] = CLIENT_IDS_TODOS): Promise<VintageRow[]> {
   const pool = getPool()
   if (!pool) return []
+
+  const sqlIds = clientIds.map(id => `'${id}'`).join(', ')
 
   // Órdenes incobrables: contracargos (orden completa) + equipos en transición
   // 30+ días (solo sus cuotas pendientes — las cobradas ya entraron)
@@ -1269,7 +1273,7 @@ export async function fetchVintageAnalysis(): Promise<VintageRow[]> {
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${SQL_IDS_TODOS})
+          AND o.client_id::text IN (${sqlIds})
       ),
       classified AS (
         SELECT
