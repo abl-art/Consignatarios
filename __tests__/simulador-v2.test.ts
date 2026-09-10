@@ -149,3 +149,48 @@ describe('simularFlujoV2 — venta de terceros, caso a mano', () => {
     expect(r.indicadores.capital_requerido).toBeCloseTo(66_696, 1)
   })
 })
+
+describe('simularFlujoV2 — casos borde', () => {
+  it('sin capital: liquidación a 90 días con anticipo alto → nunca negativo', () => {
+    const r = simularFlujoV2({
+      ...basePropia,
+      modalidad: 'terceros',
+      order_amount: 100_000,
+      tasa_descuento_pct: 10,
+      cuotas: 4,
+      anticipo_pct: 25,
+      costos_operativos_pct: 0,
+      incobrabilidad_pct: 0,
+      splits: [{ plazo_dias: 90, porcentaje: 100 }],
+    })
+    expect(r.indicadores.sin_capital).toBe(true)
+    expect(r.indicadores.capital_requerido).toBe(0)
+    expect(r.indicadores.rent_anual_capital).toBeNull()
+    expect(r.indicadores.payback).toBeNull() // nunca fue negativo: no hay payback que medir
+  })
+
+  it('1 cuota: todo es anticipo, sin cuotas financiadas ni incobrabilidad', () => {
+    const r = simularFlujoV2({ ...basePropia, cuotas: 1, anticipo_pct: 100 })
+    expect(fila(r, 'Cobro cuotas')[0]).toBe(200_000)
+    expect(fila(r, 'Incobrabilidad').every(v => v === 0)).toBe(true)
+  })
+
+  it('split día 0 vs día 30: pagar antes requiere más capital', () => {
+    const dia0 = simularFlujoV2(basePropia)
+    const dia30 = simularFlujoV2({ ...basePropia, splits: [{ plazo_dias: 30, porcentaje: 100 }] })
+    expect(dia0.indicadores.capital_requerido).toBeGreaterThan(dia30.indicadores.capital_requerido)
+  })
+
+  it('IVA a favor se arrastra: múltiplo 1 (débito < crédito) no paga AFIP', () => {
+    const r = simularFlujoV2({ ...basePropia, multiplo: 1 })
+    // débito = 200k/2×21/121=17.355 < crédito 21.000 → posición a favor, nunca se paga
+    expect(fila(r, 'IVA (pago AFIP)').every(v => v === 0)).toBe(true)
+  })
+
+  it('multi-cohorte: 2 meses de ops duplican el volumen', () => {
+    const r = simularFlujoV2({ ...basePropia, operaciones_por_mes: [1, 1] })
+    expect(fila(r, 'Pago proveedor (c/IVA)')[0]).toBe(-121_000)
+    expect(fila(r, 'Pago proveedor (c/IVA)')[1]).toBe(-121_000)
+    expect(fila(r, 'Cobro cuotas')[1]).toBe(80_000) // cuota m1 de cohorte 0 + anticipo cohorte 1
+  })
+})
