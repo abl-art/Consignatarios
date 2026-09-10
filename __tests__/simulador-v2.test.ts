@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { simularFlujoV2, oaPorOperacion, tirMensual, tirImplicita, type ParamsV2 } from '@/lib/simulador-v2'
+import { simularFlujoV2, oaPorOperacion, tirMensual, tirImplicita, resolverPalanca, conPalanca, generarNombreV2, type ParamsV2 } from '@/lib/simulador-v2'
 
 export const basePropia: ParamsV2 = {
   schema_version: 2,
@@ -217,5 +217,46 @@ describe('tirImplicita', () => {
   })
   it('terceros → null', () => {
     expect(tirImplicita({ ...basePropia, modalidad: 'terceros', order_amount: 100_000, tasa_descuento_pct: 10 })).toBeNull()
+  })
+})
+
+describe('resolverPalanca', () => {
+  it('propia: múltiplo 2 da 13,95% < 15% → el solver devuelve más de 2', () => {
+    const { palanca, alcanzable } = resolverPalanca(basePropia)
+    expect(alcanzable).toBe(true)
+    expect(palanca).toBeGreaterThan(2)
+    // autoconsistencia: en la palanca cumple; un pelo abajo no cumple
+    const en = simularFlujoV2(conPalanca(basePropia, palanca))
+    const bajo = simularFlujoV2(conPalanca(basePropia, palanca - 0.01))
+    expect(en.indicadores.resultado_pct_oa).toBeGreaterThanOrEqual(0.15 - 1e-6)
+    expect(bajo.indicadores.resultado_pct_oa).toBeLessThan(0.15)
+  })
+
+  it('terceros: d=10% pierde plata → el solver devuelve d>10', () => {
+    const t: ParamsV2 = { ...basePropia, modalidad: 'terceros', order_amount: 100_000,
+      tasa_descuento_pct: 10, cuotas: 4, anticipo_pct: 25, costos_operativos_pct: 1,
+      incobrabilidad_pct: 4, flete: 0 }
+    const { palanca, alcanzable } = resolverPalanca(t)
+    expect(alcanzable).toBe(true)
+    expect(palanca).toBeGreaterThan(10)
+    const en = simularFlujoV2(conPalanca(t, palanca))
+    expect(en.indicadores.resultado_pct_oa).toBeGreaterThanOrEqual(0.15 - 1e-6)
+  })
+
+  it('objetivo inalcanzable → flag', () => {
+    const { alcanzable } = resolverPalanca({ ...basePropia, objetivo_pct_oa: 500 })
+    expect(alcanzable).toBe(false)
+  })
+})
+
+describe('generarNombreV2', () => {
+  it('propia con modelo', () => {
+    expect(generarNombreV2({ ...basePropia, cuotas: 9, modelo_nombre: 'Moto G06' }))
+      .toBe('Vta Propia — Moto G06 — 9 cuotas — obj 15%')
+  })
+  it('terceros con splits', () => {
+    expect(generarNombreV2({ ...basePropia, modalidad: 'terceros', cuotas: 9,
+      splits: [{ plazo_dias: 0, porcentaje: 100 }] }))
+      .toBe('Vta Terceros — 9 cuotas — liq 100% a 0d — obj 15%')
   })
 })

@@ -255,3 +255,31 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
 
   return { filas, indicadores, meses }
 }
+
+export function conPalanca(p: ParamsV2, v: number): ParamsV2 {
+  return p.modalidad === 'propia' ? { ...p, multiplo: v } : { ...p, tasa_descuento_pct: v }
+}
+
+export function resolverPalanca(p: ParamsV2): { palanca: number; alcanzable: boolean } {
+  const [lo0, hi0] = p.modalidad === 'propia' ? [1, 5] : [0, 60]
+  const objetivo = p.objetivo_pct_oa / 100
+  const cumple = (v: number) =>
+    simularFlujoV2(conPalanca(p, v)).indicadores.resultado_pct_oa >= objetivo
+  if (!cumple(hi0)) return { palanca: hi0, alcanzable: false }
+  let lo = lo0, hi = hi0
+  for (let k = 0; k < 60; k++) {
+    const mid = (lo + hi) / 2
+    if (cumple(mid)) hi = mid
+    else lo = mid
+  }
+  return { palanca: hi, alcanzable: true }
+}
+
+export function generarNombreV2(p: ParamsV2): string {
+  const obj = `obj ${p.objetivo_pct_oa}%`
+  if (p.modalidad === 'propia') {
+    return `Vta Propia — ${p.modelo_nombre ?? 'genérico'} — ${p.cuotas} cuotas — ${obj}`
+  }
+  const liq = p.splits.map(s => `${s.porcentaje}% a ${s.plazo_dias}d`).join(' / ')
+  return `Vta Terceros — ${p.cuotas} cuotas — liq ${liq} — ${obj}`
+}
