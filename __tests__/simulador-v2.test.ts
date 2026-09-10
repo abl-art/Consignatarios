@@ -85,3 +85,67 @@ describe('simularFlujoV2 — venta propia, caso a mano', () => {
     expect(i.rent_anual_capital).toBeCloseTo(1.5029, 3)
   })
 })
+
+describe('simularFlujoV2 — mora como costo financiero continuo', () => {
+  it('mora 15d a TNA 36 genera fila de costo por cuota financiada, sin mover cobros de mes', () => {
+    const r = simularFlujoV2({ ...basePropia, mora_dias: 15 })
+    // 38.000 × (0,36/365) × 15 = 562,19 por cuota, m1..m4
+    const mora = fila(r, 'Costo de mora')
+    expect(mora[0]).toBe(0)
+    for (const m of [1, 2, 3, 4]) expect(mora[m]).toBeCloseTo(-562.19, 1)
+    expect(fila(r, 'Cobro cuotas')).toEqual([40_000, 40_000, 40_000, 40_000, 40_000])
+    expect(r.meses).toBe(5) // sin salto de mes entero (v1: ceil(15/30)=1 corría todo)
+    const base = simularFlujoV2(basePropia)
+    expect(r.indicadores.resultado).toBeLessThan(base.indicadores.resultado)
+  })
+
+  it('mora 14d y 16d dan costos distintos (continuo, no bucketizado)', () => {
+    const r14 = simularFlujoV2({ ...basePropia, mora_dias: 14 })
+    const r16 = simularFlujoV2({ ...basePropia, mora_dias: 16 })
+    expect(r14.indicadores.resultado).toBeGreaterThan(r16.indicadores.resultado)
+  })
+})
+
+describe('simularFlujoV2 — venta de terceros, caso a mano', () => {
+  // OA 100.000, d 10%, 4 cuotas, anticipo 25%, liq 100% día 0, TNA 36,
+  // op 1%, imp 0,6/0,6, IIBB 4%, incob 4%, mora 0.
+  // m0: +25.000 −90.000 −1.000 −150 −546 = −66.696.
+  // IVA comisión 10.000×21/121 = 1.735,54 (AFIP m1); IIBB (10.000/1,21)×4% = 330,58 (m1).
+  // m1: fondeo −2.000,88 → subtotal 19.776,61, acum −46.919,39.
+  // m3 final: acum −1.349,10 → ¡d=10% pierde plata! (caso real para el solver)
+  const terceros: ParamsV2 = {
+    ...basePropia,
+    modalidad: 'terceros',
+    order_amount: 100_000,
+    tasa_descuento_pct: 10,
+    costo_sin_iva: 0,
+    multiplo: 0,
+    flete: 0,
+    cuotas: 4,
+    anticipo_pct: 25,
+    costos_operativos_pct: 1,
+    incobrabilidad_pct: 4,
+  }
+  const r = simularFlujoV2(terceros)
+
+  it('filas clave', () => {
+    expect(fila(r, 'Liquidación comercio')[0]).toBe(-90_000)
+    expect(fila(r, 'IVA (pago AFIP)')[1]).toBeCloseTo(-1_735.54, 1)
+    expect(fila(r, 'IIBB')[1]).toBeCloseTo(-330.58, 1)
+    expect(fila(r, 'Incobrabilidad')).toEqual([0, -1_000, -1_000, -1_000])
+    expect(fila(r, 'Imp. débitos')[0]).toBeCloseTo(-546, 1)
+    expect(r.filas.find(f => f.concepto === 'Flete')).toBeUndefined()
+  })
+
+  it('acumulado y resultado negativo', () => {
+    const acu = fila(r, 'Acumulado')
+    expect(acu[0]).toBeCloseTo(-66_696, 1)
+    expect(acu[1]).toBeCloseTo(-46_919.39, 1)
+    expect(acu[2]).toBeCloseTo(-24_470.97, 1)
+    expect(acu[3]).toBeCloseTo(-1_349.10, 1)
+    expect(r.meses).toBe(4)
+    expect(r.indicadores.resultado).toBeCloseTo(-1_349.10, 1)
+    expect(r.indicadores.payback).toBeNull()
+    expect(r.indicadores.capital_requerido).toBeCloseTo(66_696, 1)
+  })
+})
