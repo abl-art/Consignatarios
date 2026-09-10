@@ -18,7 +18,9 @@ export default function FinanzasTabs({ tabs }: { tabs: Tab[] }) {
 
   const elegir = (id: string) => {
     setActive(id)
-    router.replace(`${pathname}?tab=${id}`, { scroll: false })
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.set('tab', id)
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
   }
 
   useEffect(() => {

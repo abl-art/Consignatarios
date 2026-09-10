@@ -63,14 +63,14 @@ const MODALIDADES: { id: Modalidad; titulo: string; desc: string; bg: string; ic
     id: 'propia',
     titulo: 'Venta Propia',
     desc: 'Vendés el equipo y originás el crédito. La palanca es el múltiplo sobre el costo.',
-    bg: 'bg-emerald-600',
+    bg: 'bg-indigo-600',
     iconPath: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
   },
   {
     id: 'terceros',
     titulo: 'Venta de Terceros',
     desc: 'El comercio vende, vos originás el crédito y cobrás tasa de descuento.',
-    bg: 'bg-indigo-600',
+    bg: 'bg-emerald-600',
     iconPath: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
   },
 ]
@@ -183,7 +183,10 @@ export default function SimuladorTab({ productos, datos }: Props) {
       setNombre(p.nombre)
       setNombreEditado(true)
     }
-    router.replace(`${pathname}?tab=simulador`, { scroll: false })
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.delete('producto')
+    sp.set('tab', 'simulador')
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
   }, [productoParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nombre sugerido mientras el usuario no lo pise
@@ -267,7 +270,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
         >
           ‹ Cambiar modalidad
         </button>
-        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${esPropia ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${esPropia ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {esPropia ? 'Venta Propia' : 'Venta de Terceros'}
         </span>
       </div>
@@ -452,7 +455,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
                 </p>
                 {tir && (
                   <p className="text-sm text-gray-700">
-                    Tasa implícita del crédito: TNA <span className="font-bold">{fmtPct(tir.tna)}</span> · TEA <span className="font-bold">{fmtPct(tir.tea)}</span>
+                    Con tu múltiplo actual: tasa implícita del crédito: TNA <span className="font-bold">{fmtPct(tir.tna)}</span> · TEA <span className="font-bold">{fmtPct(tir.tea)}</span>
                   </p>
                 )}
               </>
@@ -562,7 +565,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
           />
           <button
             onClick={handleGuardar}
-            disabled={saving || !splitsOk}
+            disabled={saving || !splitsOk || (params.modalidad === 'propia' && params.costo_sin_iva <= 0)}
             className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {saving ? 'Guardando...' : 'Guardar como producto'}

@@ -35,7 +35,11 @@ export default function ProductosTab({ productos }: Props) {
 
   const cargar = (id: string) => router.push(`/finanzas?tab=simulador&producto=${id}`)
   const eliminar = async (id: string) => {
-    await eliminarProducto(id)
+    const { error } = await eliminarProducto(id)
+    if (error) {
+      alert('No se pudo eliminar: ' + error)
+      return
+    }
     router.refresh()
   }
 
@@ -129,7 +133,8 @@ export default function ProductosTab({ productos }: Props) {
               const splitsUnicos = [...new Set(conSplitsKey.map(x => x.splitsKey))]
               const lookup = new Map<string, number>()
               for (const x of conSplitsKey) {
-                lookup.set(`${x.params.cuotas}-${x.splitsKey}`, x.params.tasa_descuento_pct)
+                const key = `${x.params.cuotas}-${x.splitsKey}`
+                if (!lookup.has(key)) lookup.set(key, x.params.tasa_descuento_pct)
               }
               return (
                 <div className="overflow-x-auto border-b border-gray-200">

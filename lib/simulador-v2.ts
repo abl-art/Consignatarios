@@ -132,7 +132,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
       ? p.costo_sin_iva * (1 + IVA)
       : oa * (1 - p.tasa_descuento_pct / 100)
     for (const s of p.splits) {
-      const m = m0 + Math.floor(s.plazo_dias / 30)
+      const m = m0 + Math.max(0, Math.floor(s.plazo_dias / 30))
       pagoPrincipal[m] -= ops * egresoPrincipal * (s.porcentaje / 100)
     }
 

@@ -1083,10 +1083,12 @@ export async function fetchPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS)
   maxCuota: number
 }> {
   const empty = { byOrigination: [], byDueMonth: [], resumen: [], maxCuota: 0 }
+  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
+  if (idsSeguros.length === 0) return empty
   const pool = getPool()
   if (!pool) return empty
 
-  const sqlIds = clientIds.map(id => `'${id}'`).join(', ')
+  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
 
   const baseQuery = (mesExpr: string) => `
     SELECT
@@ -1222,10 +1224,12 @@ export interface VintageRow {
 }
 
 export async function fetchVintageAnalysis(clientIds: string[] = CLIENT_IDS_TODOS): Promise<VintageRow[]> {
+  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
+  if (idsSeguros.length === 0) return []
   const pool = getPool()
   if (!pool) return []
 
-  const sqlIds = clientIds.map(id => `'${id}'`).join(', ')
+  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
 
   // Órdenes incobrables: contracargos (orden completa) + equipos en transición
   // 30+ días (solo sus cuotas pendientes — las cobradas ya entraron)
