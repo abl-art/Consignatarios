@@ -20,6 +20,7 @@ import DeudaBalanceChart from './DeudaBalanceChart'
 import SimuladorTab from './SimuladorTab'
 import ListaPreciosTab from './ListaPreciosTab'
 import { fetchProductos } from '@/lib/actions/productos'
+import { getDatosSimulador } from '@/lib/actions/simulador-datos'
 
 export default async function FinanzasPage({
   searchParams,
@@ -33,7 +34,7 @@ export default async function FinanzasPage({
   const resultadoHasta = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const resultadoDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
-  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros, datosSimulador] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -48,6 +49,7 @@ export default async function FinanzasPage({
     getDeudaConfig(),
     fetchInteresesPagadosMes(),
     fetchProductos(),
+    getDatosSimulador(),
   ])
 
   // Resultado runs after to avoid exhausting the connection pool
@@ -294,7 +296,7 @@ export default async function FinanzasPage({
           { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab byOrigination={pdIndicadores.byOrigination} byDueMonth={pdIndicadores.byDueMonth} resumen={pdIndicadores.resumen} maxCuota={pdIndicadores.maxCuota} /> },
           { id: 'dpd', label: 'Days Past Due', content: <DPDTab byOrigination={dpdIndicadores.byOrigination} byDueMonth={dpdIndicadores.byDueMonth} /> },
           { id: 'vintage', label: 'Vintage', content: <VintageTab data={vintageData} /> },
-          { id: 'simulador', label: 'Productos y Simulación', content: <SimuladorTab productos={productosFinancieros} /> },
+          { id: 'simulador', label: 'Simulación', content: <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> },
           { id: 'precios', label: 'Lista de Precios', content: <ListaPreciosTab productos={productosFinancieros} /> },
           { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },
         ]}
