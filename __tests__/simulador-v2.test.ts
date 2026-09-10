@@ -263,12 +263,18 @@ describe('generarNombreV2', () => {
 })
 
 describe('kit de seguridad', () => {
-  it('propia: descuenta $ por operación a mes vencido, como el flete', () => {
+  it('propia: 4 pagos iguales a 30/60/90/120 días (financiación Mil200)', () => {
     const r = simularFlujoV2({ ...basePropia, kit_seguridad: 7_500 })
-    expect(fila(r, 'Kit de seguridad')).toEqual([0, -7_500, 0, 0, 0])
-    // entra en la base de imp. débitos del m1
+    expect(fila(r, 'Kit de seguridad')).toEqual([0, -1_875, -1_875, -1_875, -1_875])
+    // cada pago entra en la base de imp. débitos de su mes
     const sin = simularFlujoV2(basePropia)
-    expect(fila(r, 'Imp. débitos')[1]).toBeCloseTo(fila(sin, 'Imp. débitos')[1] - 7_500 * 0.006, 2)
+    expect(fila(r, 'Imp. débitos')[1]).toBeCloseTo(fila(sin, 'Imp. débitos')[1] - 1_875 * 0.006, 2)
+  })
+
+  it('el pago a 120d puede extender el horizonte más allá de las cuotas', () => {
+    const r = simularFlujoV2({ ...basePropia, cuotas: 1, anticipo_pct: 100, kit_seguridad: 7_500 })
+    expect(r.meses).toBe(5) // m0 venta + pagos m1..m4
+    expect(fila(r, 'Kit de seguridad')).toEqual([0, -1_875, -1_875, -1_875, -1_875])
   })
 
   it('propia sin kit: fila en cero', () => {

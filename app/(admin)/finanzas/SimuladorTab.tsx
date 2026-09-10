@@ -411,7 +411,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
                 <Campo label="Flete ($)">
                   <input type="number" value={params.flete} onChange={e => up('flete', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
-                <Campo label="Kit de seguridad ($)">
+                <Campo label="Kit de seguridad ($)" hint="Mil200: 25% a 30/60/90/120d">
                   <input type="number" value={params.kit_seguridad} onChange={e => up('kit_seguridad', Number(e.target.value))} className={INPUT_SM} />
                 </Campo>
               </>

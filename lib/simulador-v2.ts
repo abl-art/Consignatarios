@@ -16,7 +16,8 @@ export interface ParamsV2 {
   modelo_id: string | null     // FilaListaPrecios.productoId elegido (null en terceros)
   modelo_nombre: string | null
   flete: number                // $ por operación, solo propia
-  kit_seguridad: number        // $ por operación, solo propia (kit regalado en el bundle)
+  kit_seguridad: number        // $ por operación, solo propia (kit regalado en el bundle);
+                               // Mil200 SAS financia: se paga 25% a 30/60/90/120 días
   // terceros
   order_amount: number         // $ con IVA, solo terceros (en propia se ignora)
   tasa_descuento_pct: number   // palanca terceros
@@ -89,8 +90,10 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   const maxMesSplit = p.splits.length > 0
     ? Math.max(...p.splits.map(s => Math.floor(s.plazo_dias / 30)))
     : 0
-  // +2: lugar para IVA/IIBB/flete a mes vencido de la última cohorte
-  const totalMeses = mesesOps + Math.max(p.cuotas, maxMesSplit + 1) + 2
+  // +2: lugar para IVA/IIBB/flete a mes vencido de la última cohorte.
+  // El kit se paga hasta m+4 (30/60/90/120d) — puede correr el horizonte
+  const kitTail = p.modalidad === 'propia' && p.kit_seguridad > 0 ? 4 : 0
+  const totalMeses = mesesOps + Math.max(p.cuotas, maxMesSplit + 1, kitTail) + 2
 
   const cobroBruto = zeros(totalMeses)     // contractual (fila visible)
   const cobroEfectivo = zeros(totalMeses)  // neto de incobrabilidad (base de imp. créditos)
@@ -154,7 +157,10 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
 
     costosOp[m0] -= ops * oa * (p.costos_operativos_pct / 100)
     if (p.modalidad === 'propia' && p.flete > 0) fleteFila[m0 + 1] -= ops * p.flete
-    if (p.modalidad === 'propia' && p.kit_seguridad > 0) kitFila[m0 + 1] -= ops * p.kit_seguridad
+    // Kit: Mil200 SAS lo financia en 4 pagos iguales a 30/60/90/120 días
+    if (p.modalidad === 'propia' && p.kit_seguridad > 0) {
+      for (const c of [1, 2, 3, 4]) kitFila[m0 + c] -= ops * p.kit_seguridad / 4
+    }
   }
 
   // Pago de IVA a AFIP: la posición del mes se paga al mes siguiente;
