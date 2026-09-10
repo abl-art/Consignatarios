@@ -26,6 +26,7 @@ const fmtK = (v: number) => {
 }
 const redondear1 = (v: number) => Math.round(v * 10) / 10
 
+const PROMEDIO_ID = '__promedio__'
 const INPUT = 'w-full px-2 py-1.5 border border-gray-300 rounded text-xs'
 const INPUT_SM = 'w-24 px-2 py-1 border border-gray-300 rounded text-xs text-right'
 const LABEL = 'block text-gray-500 mb-1'
@@ -130,6 +131,10 @@ export default function SimuladorTab({ productos, datos }: Props) {
     setParams(prev => {
       if (!prev) return prev
       if (!productoId) return { ...prev, modelo_id: null, modelo_nombre: null }
+      if (productoId === PROMEDIO_ID) {
+        if (!promedio) return prev
+        return { ...prev, modelo_id: PROMEDIO_ID, modelo_nombre: 'Venta promedio', costo_sin_iva: Math.round(promedio.costo) }
+      }
       const f = datos.modelos.find(m => m.productoId === productoId)
       if (!f) return prev
       return { ...prev, modelo_id: f.productoId, modelo_nombre: f.nombre, costo_sin_iva: f.costo ?? prev.costo_sin_iva }
@@ -183,6 +188,35 @@ export default function SimuladorTab({ productos, datos }: Props) {
     () => datos.modelos.filter(m => m.costo !== null).sort((a, b) => a.nombre.localeCompare(b.nombre)),
     [datos.modelos],
   )
+
+  // "Venta promedio": costo/PVP/cuota/tienda ponderados por ventas 30d de cada modelo
+  const promedio = useMemo(() => {
+    const conVentas = datos.modelos.filter(m => m.costo !== null && m.ventas30d > 0)
+    const unidades = conVentas.reduce((s, m) => s + m.ventas30d, 0)
+    if (unidades === 0) return null
+    const ponderado = (valor: (m: (typeof conVentas)[number]) => number | null) => {
+      let suma = 0
+      let peso = 0
+      for (const m of conVentas) {
+        const v = valor(m)
+        if (v !== null) {
+          suma += v * m.ventas30d
+          peso += m.ventas30d
+        }
+      }
+      return peso > 0 ? suma / peso : null
+    }
+    const costo = ponderado(m => m.costo)
+    if (costo === null) return null
+    return {
+      costo,
+      pvp: ponderado(m => m.pvp),
+      cuota: ponderado(m => m.cuota),
+      tienda: ponderado(m => m.precioTienda),
+      unidades,
+      modelos: conVentas.length,
+    }
+  }, [datos.modelos])
 
   // Carga desde Productos: ?producto=<id>
   const productoParam = searchParams.get('producto')
@@ -266,9 +300,10 @@ export default function SimuladorTab({ productos, datos }: Props) {
   const esPropia = modalidad === 'propia'
   const canal = esPropia ? datos.propia : datos.terceros
   const ind = sim.indicadores
-  const modeloElegido = params.modelo_id ? modelosDisponibles.find(m => m.productoId === params.modelo_id) : undefined
+  const esPromedio = params.modelo_id === PROMEDIO_ID
+  const modeloElegido = params.modelo_id && !esPromedio ? modelosDisponibles.find(m => m.productoId === params.modelo_id) : undefined
   // Producto guardado con un modelo que hoy no está en la lista: lo mantenemos visible
-  const modeloHuerfano = params.modelo_id !== null && !modeloElegido
+  const modeloHuerfano = params.modelo_id !== null && !esPromedio && !modeloElegido
   const faltaCosto = esPropia && params.costo_sin_iva <= 0
   const objetivo = params.objetivo_pct_oa / 100
   const cumpleObjetivo = ind.resultado_pct_oa >= objetivo
@@ -305,6 +340,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
                     className={INPUT}
                   >
                     <option value="">— modelo genérico —</option>
+                    {promedio && <option value={PROMEDIO_ID}>Venta promedio (ponderada por ventas 30d)</option>}
                     {modeloHuerfano && (
                       <option value={params.modelo_id ?? ''}>{params.modelo_nombre ?? 'modelo guardado'} (sin costo hoy)</option>
                     )}
@@ -315,6 +351,11 @@ export default function SimuladorTab({ productos, datos }: Props) {
                   {modeloElegido && (
                     <p className="text-[10px] text-gray-400 mt-1">
                       Hoy: PVP {modeloElegido.pvp !== null ? fmt$(modeloElegido.pvp) : '—'} · múltiplo {modeloElegido.multiplo} · cuota {modeloElegido.cuota !== null ? fmt$(modeloElegido.cuota) : '—'} · tienda {modeloElegido.precioTienda !== null ? fmt$(modeloElegido.precioTienda) : '—'}
+                    </p>
+                  )}
+                  {esPromedio && promedio && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Ponderado por ventas 30d ({promedio.unidades} u. de {promedio.modelos} modelos): costo {fmt$(promedio.costo)} · PVP {promedio.pvp !== null ? fmt$(promedio.pvp) : '—'} · múltiplo {promedio.pvp !== null ? (promedio.pvp / promedio.costo).toFixed(2) : '—'} · cuota {promedio.cuota !== null ? fmt$(promedio.cuota) : '—'} · tienda {promedio.tienda !== null ? fmt$(promedio.tienda) : '—'}
                     </p>
                   )}
                 </div>
