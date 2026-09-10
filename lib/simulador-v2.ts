@@ -16,6 +16,7 @@ export interface ParamsV2 {
   modelo_id: string | null     // FilaListaPrecios.productoId elegido (null en terceros)
   modelo_nombre: string | null
   flete: number                // $ por operación, solo propia
+  kit_seguridad: number        // $ por operación, solo propia (kit regalado en el bundle)
   // terceros
   order_amount: number         // $ con IVA, solo terceros (en propia se ignora)
   tasa_descuento_pct: number   // palanca terceros
@@ -100,6 +101,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   const iibbFila = zeros(totalMeses)
   const costosOp = zeros(totalMeses)
   const fleteFila = zeros(totalMeses)
+  const kitFila = zeros(totalMeses)
   const impCred = zeros(totalMeses)
   const impDeb = zeros(totalMeses)
   const moraFila = zeros(totalMeses)
@@ -152,6 +154,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
 
     costosOp[m0] -= ops * oa * (p.costos_operativos_pct / 100)
     if (p.modalidad === 'propia' && p.flete > 0) fleteFila[m0 + 1] -= ops * p.flete
+    if (p.modalidad === 'propia' && p.kit_seguridad > 0) kitFila[m0 + 1] -= ops * p.kit_seguridad
   }
 
   // Pago de IVA a AFIP: la posición del mes se paga al mes siguiente;
@@ -169,7 +172,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   // bancarios operativos (no sobre fondeo/mora, que son intereses)
   for (let m = 0; m < totalMeses; m++) {
     impCred[m] -= cobroEfectivo[m] * (p.imp_creditos_pct / 100)
-    const debitos = -(pagoPrincipal[m] + ivaFila[m] + iibbFila[m] + costosOp[m] + fleteFila[m])
+    const debitos = -(pagoPrincipal[m] + ivaFila[m] + iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m])
     impDeb[m] -= debitos * (p.imp_debitos_pct / 100)
   }
 
@@ -179,7 +182,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   let ultimo = 0
   for (let m = 0; m < totalMeses; m++) {
     const mov = cobroBruto[m] + incobFila[m] + pagoPrincipal[m] + ivaFila[m] +
-      iibbFila[m] + costosOp[m] + fleteFila[m] + impCred[m] + impDeb[m] + moraFila[m]
+      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + impCred[m] + impDeb[m] + moraFila[m]
     if (mov !== 0) ultimo = m
   }
   const meses = ultimo + 1
@@ -189,7 +192,7 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
   let acum = 0
   for (let m = 0; m < meses; m++) {
     subtotal[m] = cobroBruto[m] + incobFila[m] + pagoPrincipal[m] + ivaFila[m] +
-      iibbFila[m] + costosOp[m] + fleteFila[m] + impCred[m] + impDeb[m] + moraFila[m]
+      iibbFila[m] + costosOp[m] + fleteFila[m] + kitFila[m] + impCred[m] + impDeb[m] + moraFila[m]
     if (acum < 0) fondeo[m] = acum * tasaMensual
     subtotal[m] += fondeo[m]
     acum += subtotal[m]
@@ -208,7 +211,10 @@ export function simularFlujoV2(p: ParamsV2): ResultadoV2 {
     { concepto: 'IIBB', valores: trim(iibbFila) },
     { concepto: 'Costos operativos', valores: trim(costosOp) },
   ]
-  if (p.modalidad === 'propia') filas.push({ concepto: 'Flete', valores: trim(fleteFila) })
+  if (p.modalidad === 'propia') {
+    filas.push({ concepto: 'Flete', valores: trim(fleteFila) })
+    filas.push({ concepto: 'Kit de seguridad', valores: trim(kitFila) })
+  }
   filas.push(
     { concepto: 'Imp. créditos', valores: trim(impCred) },
     { concepto: 'Imp. débitos', valores: trim(impDeb) },

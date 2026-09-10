@@ -56,6 +56,7 @@ function paramsIniciales(modalidad: Modalidad, datos: DatosSimulador): ParamsV2 
     modelo_id: null,
     modelo_nombre: null,
     flete: 0,
+    kit_seguridad: 7500,
     order_amount: canal.ticket_promedio ? Math.round(canal.ticket_promedio) : 150_000,
     tasa_descuento_pct: 15,
     cuotas,
@@ -224,7 +225,9 @@ export default function SimuladorTab({ productos, datos }: Props) {
     if (!productoParam) return
     const p = productos.find(x => x.id === productoParam)
     if (p && (p.parametros as { schema_version?: number }).schema_version === 2) {
-      const loaded = p.parametros as unknown as ParamsV2
+      const raw = p.parametros as unknown as ParamsV2
+      // Productos guardados antes de existir kit_seguridad: 0 para no cambiar su resultado
+      const loaded = { ...raw, kit_seguridad: raw.kit_seguridad ?? 0 }
       setModalidad(loaded.modalidad)
       setParams(loaded)
       setOpsStr(loaded.operaciones_por_mes.join(', '))
@@ -404,9 +407,14 @@ export default function SimuladorTab({ productos, datos }: Props) {
               <input type="number" step="0.1" value={params.iibb_pct} onChange={e => up('iibb_pct', Number(e.target.value))} className={INPUT_SM} />
             </Campo>
             {esPropia && (
-              <Campo label="Flete ($)">
-                <input type="number" value={params.flete} onChange={e => up('flete', Number(e.target.value))} className={INPUT_SM} />
-              </Campo>
+              <>
+                <Campo label="Flete ($)">
+                  <input type="number" value={params.flete} onChange={e => up('flete', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
+                <Campo label="Kit de seguridad ($)">
+                  <input type="number" value={params.kit_seguridad} onChange={e => up('kit_seguridad', Number(e.target.value))} className={INPUT_SM} />
+                </Campo>
+              </>
             )}
           </div>
 

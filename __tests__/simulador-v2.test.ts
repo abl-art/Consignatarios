@@ -9,6 +9,7 @@ export const basePropia: ParamsV2 = {
   modelo_id: null,
   modelo_nombre: null,
   flete: 10_000,
+  kit_seguridad: 0,
   order_amount: 0,
   tasa_descuento_pct: 0,
   cuotas: 5,
@@ -258,5 +259,27 @@ describe('generarNombreV2', () => {
     expect(generarNombreV2({ ...basePropia, modalidad: 'terceros', cuotas: 9,
       splits: [{ plazo_dias: 0, porcentaje: 100 }] }))
       .toBe('Vta Terceros — 9 cuotas — liq 100% a 0d — obj 15%')
+  })
+})
+
+describe('kit de seguridad', () => {
+  it('propia: descuenta $ por operación a mes vencido, como el flete', () => {
+    const r = simularFlujoV2({ ...basePropia, kit_seguridad: 7_500 })
+    expect(fila(r, 'Kit de seguridad')).toEqual([0, -7_500, 0, 0, 0])
+    // entra en la base de imp. débitos del m1
+    const sin = simularFlujoV2(basePropia)
+    expect(fila(r, 'Imp. débitos')[1]).toBeCloseTo(fila(sin, 'Imp. débitos')[1] - 7_500 * 0.006, 2)
+  })
+
+  it('propia sin kit: fila en cero', () => {
+    const r = simularFlujoV2(basePropia)
+    expect(fila(r, 'Kit de seguridad')).toEqual([0, 0, 0, 0, 0])
+  })
+
+  it('terceros: no genera fila ni egreso', () => {
+    const t: ParamsV2 = { ...basePropia, modalidad: 'terceros', order_amount: 100_000,
+      tasa_descuento_pct: 15, cuotas: 4, anticipo_pct: 25, kit_seguridad: 7_500 }
+    const r = simularFlujoV2(t)
+    expect(r.filas.some(f => f.concepto === 'Kit de seguridad')).toBe(false)
   })
 })
