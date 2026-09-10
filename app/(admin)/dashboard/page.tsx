@@ -278,17 +278,10 @@ async function VentasDelDia() {
           const cifras = resumen.hoy[canal.key]
           const prom = resumen.prom30d[canal.key]
 
-          const Wrapper = canal.key === 'terceros' ? 'a' : 'div'
-          const extraProps = canal.key === 'terceros' ? { href: '/dashboard/terceros' } : {}
           return (
-            <Wrapper key={canal.key} {...extraProps} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-4 block ${canal.key === 'terceros' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
+            <div key={canal.key} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-4`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h3 className={`text-base font-bold ${canal.iconColor}`}>{canal.label}</h3>
-                  {canal.key === 'terceros' && cifras.ventas > 0 && (
-                    <span className="text-xs text-gray-400">ver detalle →</span>
-                  )}
-                </div>
+                <h3 className={`text-base font-bold ${canal.iconColor}`}>{canal.label}</h3>
                 <div className="flex items-center gap-4">
                   <p className={`text-2xl font-bold ${canal.iconColor}`}>{formatearMoneda(cifras.monto)}</p>
                   <div className="text-right min-w-[48px]">
@@ -300,7 +293,7 @@ async function VentasDelDia() {
               <p className="text-sm text-gray-500 mt-2">
                 prom. <span className="font-semibold text-gray-700">{Math.round(prom.ventas)} ventas</span> · <span className="font-semibold text-gray-700">{formatearMoneda(Math.round(prom.monto))}</span> /día
               </p>
-            </Wrapper>
+            </div>
           )
         })}
       </div>
