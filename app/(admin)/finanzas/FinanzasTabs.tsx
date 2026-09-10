@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 interface Tab {
   id: string
@@ -9,7 +10,20 @@ interface Tab {
 }
 
 export default function FinanzasTabs({ tabs }: { tabs: Tab[] }) {
-  const [active, setActive] = useState(tabs[0]?.id ?? '')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const tabParam = searchParams.get('tab')
+  const [active, setActive] = useState(tabParam && tabs.some(t => t.id === tabParam) ? tabParam : tabs[0]?.id ?? '')
+
+  const elegir = (id: string) => {
+    setActive(id)
+    router.replace(`${pathname}?tab=${id}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    if (tabParam && tabs.some(t => t.id === tabParam)) setActive(tabParam)
+  }, [tabParam, tabs])
 
   return (
     <div>
@@ -17,7 +31,7 @@ export default function FinanzasTabs({ tabs }: { tabs: Tab[] }) {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActive(tab.id)}
+            onClick={() => elegir(tab.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               active === tab.id
                 ? 'border-magenta-600 text-magenta-600'
