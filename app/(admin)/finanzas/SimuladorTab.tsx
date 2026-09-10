@@ -86,6 +86,7 @@ export default function SimuladorTab({ productos, datos }: Props) {
   const [nombre, setNombre] = useState('')
   const [nombreEditado, setNombreEditado] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
 
   function up<K extends keyof ParamsV2>(key: K, value: ParamsV2[K]) {
     setParams(prev => (prev ? { ...prev, [key]: value } : prev))
@@ -191,15 +192,28 @@ export default function SimuladorTab({ productos, datos }: Props) {
     setNombre(generarNombreV2(params))
   }, [params, nombreEditado])
 
+  // Un cambio de parámetros invalida el error del intento anterior
+  useEffect(() => { setErrorGuardar(null) }, [params])
+
   async function handleGuardar() {
     if (!params || !sim || !splitsOk) return
     setSaving(true)
-    await guardarProducto(
-      nombre.trim() || generarNombreV2(params),
-      params as unknown as Record<string, unknown>,
-      { ...sim.indicadores, tir } as unknown as Record<string, unknown>,
-    )
+    setErrorGuardar(null)
+    let res: Awaited<ReturnType<typeof guardarProducto>>
+    try {
+      res = await guardarProducto(
+        nombre.trim() || generarNombreV2(params),
+        params as unknown as Record<string, unknown>,
+        { ...sim.indicadores, tir } as unknown as Record<string, unknown>,
+      )
+    } catch (e) {
+      res = { error: e instanceof Error ? e.message : 'Error de red al guardar' }
+    }
     setSaving(false)
+    if (res?.error) {
+      setErrorGuardar(res.error)
+      return
+    }
     router.refresh()
   }
 
@@ -554,6 +568,9 @@ export default function SimuladorTab({ productos, datos }: Props) {
             {saving ? 'Guardando...' : 'Guardar como producto'}
           </button>
         </div>
+        {errorGuardar && (
+          <p className="text-xs text-red-600 mt-2">No se pudo guardar: {errorGuardar}</p>
+        )}
         <p className="text-[10px] text-gray-400 mt-2">
           El nombre se sugiere solo a partir de los parámetros; si lo editás, se respeta lo que escribiste.
         </p>

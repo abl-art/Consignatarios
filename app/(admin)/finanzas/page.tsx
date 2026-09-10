@@ -34,7 +34,7 @@ export default async function FinanzasPage({
   const resultadoHasta = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const resultadoDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
-  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros, datosSimulador] = await Promise.all([
+  const [allFlujoBase, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
     fetchFlujoDeFondos(),
     fetchAsistencias(),
     fetchEgresos(),
@@ -49,8 +49,17 @@ export default async function FinanzasPage({
     getDeudaConfig(),
     fetchInteresesPagadosMes(),
     fetchProductos(),
-    getDatosSimulador(),
   ])
+
+  // Datos del simulador: 6 queries propias, corren después del Promise.all para no
+  // saturar el pool. Si fallan, el simulador arranca sin precargas en vez de tirar la página.
+  const SIN_DATOS_CANAL = { incobrabilidad_pct: null, fpd_pct: null, mora_dias: null, ticket_promedio: null }
+  let datosSimulador: Awaited<ReturnType<typeof getDatosSimulador>>
+  try {
+    datosSimulador = await getDatosSimulador()
+  } catch {
+    datosSimulador = { propia: { ...SIN_DATOS_CANAL }, terceros: { ...SIN_DATOS_CANAL }, modelos: [] }
+  }
 
   // Resultado runs after to avoid exhausting the connection pool
   let resultadoData: Awaited<ReturnType<typeof fetchResultadoTienda>>
