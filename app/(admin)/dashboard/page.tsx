@@ -122,11 +122,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Novedades del sistema GOcelular (webhook de Pedro) */}
-      <div className="mt-4">
-        <NovedadesCard novedades={novedades} />
-      </div>
-
       {/* Contracargos + Bloqueados vs Mora */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
@@ -200,10 +195,11 @@ export default async function DashboardPage() {
         })()}
       </div>
 
-      {/* Trustonic - ancho completo */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+      {/* Trustonic + Novedades GOcelular */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Activos</p>
             <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
@@ -227,6 +223,8 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
           </div>
         </div>
+      </div>
+      <NovedadesCard novedades={novedades} />
       </div>
 
       {/* Soporte: top reclamos de clientes (mails Knox/Trustonic) */}
