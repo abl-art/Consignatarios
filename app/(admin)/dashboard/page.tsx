@@ -11,7 +11,9 @@ import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventar
 import { fetchCuotasStats } from '@/lib/actions/finanzas'
 import { fetchOrdenesIncobrables } from '@/lib/gocelular'
 import Link from 'next/link'
+import { getNovedades } from '@/lib/actions/novedades'
 import VentasHistoricasChart from './VentasHistoricasChart'
+import NovedadesCard from './NovedadesCard'
 import SoporteCard from './SoporteCard'
 import ConversionChart from './ConversionChart'
 import GeografiaVentas from './GeografiaVentas'
@@ -41,6 +43,7 @@ export default async function DashboardPage() {
     fetchCuotasStats().catch(() => ({ monto_contracargos: 0 })),
     fetchOrdenesIncobrables().catch(() => [] as string[]),
   ])
+  const novedades = await getNovedades().catch(() => [])
 
   // Stock disponible: los mismos datos que /inventario (fuente única)
   const inv = (key: ProductoKey) => inventarioResumen.productos.find(p => p.key === key)
@@ -117,6 +120,11 @@ export default async function DashboardPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Novedades del sistema GOcelular (webhook de Pedro) */}
+      <div className="mt-4">
+        <NovedadesCard novedades={novedades} />
       </div>
 
       {/* Contracargos + Bloqueados vs Mora */}
