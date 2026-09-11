@@ -120,12 +120,12 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Modelo</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Bono (c/IVA)</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Vigencia</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Cupo</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Vendidas</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Reconocidas</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Bono (c/IVA)</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC/u</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC total</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">PDF prueba</th>
@@ -135,7 +135,6 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
             {visibles.map(b => (
               <tr key={b.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-gray-900">{b.nombreModelo}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{peso(b.monto)}</td>
                 <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
                   {b.desde ? fechaCorta(b.desde) : '—'} → {b.hasta ? fechaCorta(b.hasta) : 'sin vto'}
                 </td>
@@ -147,6 +146,7 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
                     {ESTADO_BADGE[b.estado].label}
                   </span>
                 </td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{peso(b.monto)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-violet-700 bg-violet-50/40">{peso(b.ncUnitaria)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{peso(b.ncTotal)}</td>
                 <td className="px-4 py-2.5"><PdfCell bono={b} /></td>
