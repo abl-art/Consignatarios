@@ -136,11 +136,15 @@ export default function SimuladorTab({ productos, datos }: Props) {
       if (!productoId) return { ...prev, modelo_id: null, modelo_nombre: null }
       if (productoId === PROMEDIO_ID) {
         if (!promedio) return prev
-        return { ...prev, modelo_id: PROMEDIO_ID, modelo_nombre: 'Venta promedio', costo_sin_iva: Math.round(promedio.costo) }
+        const multProm = promedio.pvp !== null && promedio.costo > 0
+          ? Math.round((promedio.pvp / promedio.costo) * 100) / 100
+          : prev.multiplo
+        return { ...prev, modelo_id: PROMEDIO_ID, modelo_nombre: 'Venta promedio', costo_sin_iva: Math.round(promedio.costo), multiplo: multProm }
       }
       const f = datos.modelos.find(m => m.productoId === productoId)
       if (!f) return prev
-      return { ...prev, modelo_id: f.productoId, modelo_nombre: f.nombre, costo_sin_iva: f.costo ?? prev.costo_sin_iva }
+      // Precarga el múltiplo real del modelo (Lista de Precios), no el default
+      return { ...prev, modelo_id: f.productoId, modelo_nombre: f.nombre, costo_sin_iva: f.costo ?? prev.costo_sin_iva, multiplo: f.multiplo ?? prev.multiplo }
     })
   }
 
