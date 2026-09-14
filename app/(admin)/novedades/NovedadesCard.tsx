@@ -31,43 +31,44 @@ export default function NovedadesCard({ novedades }: { novedades: Novedad[] }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          Novedades GOcelular
-          {noLeidas.length > 0 && (
-            <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-2 py-0.5">{noLeidas.length}</span>
+    <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {noLeidas.length > 0 ? (
+            <span className="bg-indigo-600 text-white text-sm font-bold rounded-full px-2.5 py-0.5">{noLeidas.length} sin leer</span>
+          ) : (
+            <span className="text-sm text-gray-400">Todo leído</span>
           )}
-        </h2>
+        </div>
         {noLeidas.length > 0 && (
           <button
             onClick={marcarTodas}
             disabled={pending}
-            className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50"
+            className="text-sm font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50"
           >
             {pending ? 'Marcando…' : 'Marcar leídas'}
           </button>
         )}
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400">Sin novedades. Los cambios que informe el sistema de GOcelular van a aparecer acá.</p>
+        <p className="text-base text-gray-400">Sin novedades. Los cambios que informe el sistema de GOcelular van a aparecer acá.</p>
       ) : (
         <ul className="divide-y divide-gray-100">
           {items.map(n => (
-            <li key={n.id} className={`py-2 ${n.leida_at ? 'opacity-50' : ''}`}>
-              <div className="flex items-start gap-2">
-                {!n.leida_at && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-900">
+            <li key={n.id} className={`py-3 md:py-4 ${n.leida_at ? 'opacity-50' : ''}`}>
+              <div className="flex items-start gap-3">
+                {!n.leida_at && <span className="mt-2.5 w-2 h-2 rounded-full bg-indigo-600 shrink-0" />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-base md:text-lg font-medium text-gray-900">
                     {n.tipo && (
-                      <span className={`inline-block text-[10px] font-semibold rounded px-1.5 py-0.5 mr-1.5 align-middle ${TIPO_COLOR[n.tipo] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`inline-block text-xs font-semibold rounded px-2 py-0.5 mr-2 align-middle ${TIPO_COLOR[n.tipo] ?? 'bg-gray-100 text-gray-600'}`}>
                         {n.tipo}
                       </span>
                     )}
                     {n.titulo}
                   </p>
-                  {n.detalle && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-wrap">{n.detalle}</p>}
-                  <p className="text-[10px] text-gray-400 mt-0.5">
+                  {n.detalle && <p className="text-sm md:text-base text-gray-600 mt-1 whitespace-pre-wrap">{n.detalle}</p>}
+                  <p className="text-xs md:text-sm text-gray-400 mt-1.5">
                     {fechaCorta(n.created_at)}
                     {n.referencia && <> · {n.referencia}</>}
                   </p>

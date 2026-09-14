@@ -8,11 +8,9 @@ export default async function NovedadesPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Novedades</h1>
-      <p className="text-sm text-gray-500 mb-6">Cambios y avisos que informa el sistema de GOcelular</p>
-      <div className="max-w-3xl">
-        <NovedadesCard novedades={novedades} />
-      </div>
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Novedades</h1>
+      <p className="text-sm md:text-base text-gray-500 mb-6">Cambios y avisos que informa el sistema de GOcelular</p>
+      <NovedadesCard novedades={novedades} />
     </div>
   )
 }
