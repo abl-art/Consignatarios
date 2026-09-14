@@ -24,22 +24,34 @@ const navItems: AdminNavItem[] = [
   { href: '/grupo-go', label: 'Grupo GO', icon: 'dashboard' },
 ]
 
+// Rol visor: acceso de solo consulta a estas tres secciones (el middleware bloquea el resto)
+const navItemsVisor: AdminNavItem[] = [
+  { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
+  { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
+  { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas' },
+]
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user || user.user_metadata?.rol !== 'admin') redirect('/login')
+  const rol = user?.user_metadata?.rol
+  if (!user || (rol !== 'admin' && rol !== 'visor')) redirect('/login')
+
+  const items = rol === 'visor' ? navItemsVisor : navItems
 
   let tacsPendientes = 0
-  try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
+  if (rol === 'admin') {
+    try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - hidden on mobile, visible on md+ */}
-      <AdminSidebar items={navItems} tacsPendientes={tacsPendientes} />
+      <AdminSidebar items={items} tacsPendientes={tacsPendientes} />
 
       {/* Mobile menu */}
-      <MobileMenu items={navItems.map(item => ({
+      <MobileMenu items={items.map(item => ({
         href: item.href,
         label: item.label,
         external: item.external,

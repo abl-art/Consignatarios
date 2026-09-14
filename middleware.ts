@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/login') {
     if (user) {
       const rol = user.user_metadata?.rol
-      return NextResponse.redirect(new URL(rol === 'admin' ? '/dashboard' : '/mi-dashboard', request.url))
+      return NextResponse.redirect(new URL(rol === 'admin' || rol === 'visor' ? '/dashboard' : '/mi-dashboard', request.url))
     }
     return supabaseResponse
   }
@@ -46,6 +46,16 @@ export async function middleware(request: NextRequest) {
   }
 
   const rol = user.user_metadata?.rol
+
+  // Rol visor: solo Dashboard, Alertas y Fraudes y Venta a Terceros; todo lo demás rebota
+  if (rol === 'visor') {
+    const permitidas = ['/dashboard', '/alertas-fraudes', '/terceros']
+    const permitida = permitidas.some(r => pathname === r || pathname.startsWith(r + '/'))
+    if (!permitida) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    return supabaseResponse
+  }
 
   // Rutas admin: solo admins
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/inventario') ||

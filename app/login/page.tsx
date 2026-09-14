@@ -27,7 +27,7 @@ export default function LoginPage() {
     }
 
     const rol = data.user?.user_metadata?.rol
-    router.push(rol === 'admin' ? '/dashboard' : '/stock')
+    router.push(rol === 'admin' || rol === 'visor' ? '/dashboard' : '/stock')
   }
 
   return (
