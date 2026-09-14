@@ -52,7 +52,7 @@ export default function NovedadesCard({ novedades }: { novedades: Novedad[] }) {
       {items.length === 0 ? (
         <p className="text-sm text-gray-400">Sin novedades. Los cambios que informe el sistema de GOcelular van a aparecer acá.</p>
       ) : (
-        <ul className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+        <ul className="divide-y divide-gray-100">
           {items.map(n => (
             <li key={n.id} className={`py-2 ${n.leida_at ? 'opacity-50' : ''}`}>
               <div className="flex items-start gap-2">

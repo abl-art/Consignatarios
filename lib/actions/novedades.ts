@@ -39,6 +39,6 @@ export async function marcarNovedadesLeidas(ids: string[]): Promise<{ ok: boolea
     console.error('marcarNovedadesLeidas:', error.message)
     return { ok: false }
   }
-  revalidatePath('/dashboard')
+  revalidatePath('/novedades')
   return { ok: true }
 }

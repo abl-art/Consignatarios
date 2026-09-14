@@ -5,6 +5,7 @@ import MobileMenu from '@/components/MobileMenu'
 import { contarTacsPendientes } from '@/lib/actions/tacs'
 
 const navItems: AdminNavItem[] = [
+  { href: '/novedades', label: 'Novedades', icon: 'novedades' },
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
   { href: '/celia', label: 'Celia', icon: 'celia' },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },

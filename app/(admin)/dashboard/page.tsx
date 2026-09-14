@@ -11,9 +11,7 @@ import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventar
 import { fetchCuotasStats } from '@/lib/actions/finanzas'
 import { fetchOrdenesIncobrables } from '@/lib/gocelular'
 import Link from 'next/link'
-import { getNovedades } from '@/lib/actions/novedades'
 import VentasHistoricasChart from './VentasHistoricasChart'
-import NovedadesCard from './NovedadesCard'
 import SoporteCard from './SoporteCard'
 import ConversionChart from './ConversionChart'
 import GeografiaVentas from './GeografiaVentas'
@@ -43,7 +41,6 @@ export default async function DashboardPage() {
     fetchCuotasStats().catch(() => ({ monto_contracargos: 0 })),
     fetchOrdenesIncobrables().catch(() => [] as string[]),
   ])
-  const novedades = await getNovedades().catch(() => [])
 
   // Stock disponible: los mismos datos que /inventario (fuente única)
   const inv = (key: ProductoKey) => inventarioResumen.productos.find(p => p.key === key)
@@ -195,11 +192,10 @@ export default async function DashboardPage() {
         })()}
       </div>
 
-      {/* Trustonic + Novedades GOcelular */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      {/* Trustonic - ancho completo */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
         <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Activos</p>
             <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
@@ -223,8 +219,6 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
           </div>
         </div>
-      </div>
-      <NovedadesCard novedades={novedades} />
       </div>
 
       {/* Soporte: top reclamos de clientes (mails Knox/Trustonic) */}
