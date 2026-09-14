@@ -30,7 +30,7 @@ interface Precio {
 }
 
 // Kits de Seguridad no se crean a mano: se sincronizan desde GOcelular (store_products)
-const CATEGORIAS = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Accesorios', 'Otros']
+const CATEGORIAS = ['Celulares', 'Tablets', 'Smartwatches', 'Parlantes', 'Auriculares', 'Accesorios', 'Otros']
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
 const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 

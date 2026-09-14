@@ -17,7 +17,7 @@ interface Proveedor {
   limite_cuenta_corriente: number | null
 }
 
-const TIPOS_PRODUCTO = ['Celulares', 'Smartwatches', 'Parlantes', 'Auriculares', 'Kits de Seguridad']
+const TIPOS_PRODUCTO = ['Celulares', 'Tablets', 'Smartwatches', 'Parlantes', 'Auriculares', 'Kits de Seguridad']
 const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 const PLAZOS_OPTIONS = [
   '30 días',
