@@ -1,10 +1,12 @@
 'use server'
 
+import type { PoolClient } from 'pg'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool } from '@/lib/db-pool'
 import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { diaHabilSiguiente } from '@/lib/utils'
+import { nombreMerchant, type StoreNombreRow } from '@/lib/merchant-nombre'
 
 export interface Prospecto {
   id: string
@@ -45,7 +47,28 @@ export interface VentaDiariaTercero {
   monto: number
 }
 
-// Merchant names se obtienen dinámicamente de gocuotas_stores
+// Merchant names se obtienen dinámicamente de gocuotas_stores; la resolución
+// (merchant_name > segmento común de store_name > primer segmento) vive en lib/merchant-nombre.ts
+
+async function fetchNombresMerchants(client: PoolClient, excl: string): Promise<Map<string, string>> {
+  const res = await client.query<{ client_id: string; merchant_name: string | null; store_name: string; updated_at: string }>(`
+    SELECT client_id, merchant_name, store_name, updated_at::text AS updated_at
+    FROM gocuotas_stores
+    WHERE client_id NOT IN (${excl})
+  `)
+  const porCliente = new Map<string, StoreNombreRow[]>()
+  for (const r of res.rows) {
+    const rows = porCliente.get(r.client_id) ?? []
+    rows.push({ merchantName: r.merchant_name, storeName: r.store_name, updatedAt: r.updated_at })
+    porCliente.set(r.client_id, rows)
+  }
+  const nombres = new Map<string, string>()
+  for (const [clientId, rows] of porCliente) {
+    const nombre = nombreMerchant(rows)
+    if (nombre) nombres.set(clientId, nombre)
+  }
+  return nombres
+}
 
 export async function fetchProspectos(): Promise<Prospecto[]> {
   const sb = createAdminClient()
@@ -192,23 +215,16 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
   try {
     const client = await pool.connect()
     try {
+      const nombres = await fetchNombresMerchants(client, excl)
       const res = await client.query<{
         client_id: string
-        merchant_name: string | null
         tiendas: string
         ventas_cantidad: string
         ventas_monto: string
         ventas_ayer_cantidad: string
         ventas_ayer_monto: string
       }>(`
-        WITH nombres AS (
-          SELECT DISTINCT ON (client_id) client_id,
-            COALESCE(merchant_name, NULLIF(split_part(store_name, ' - ', 1), '')) AS merchant_name
-          FROM gocuotas_stores
-          WHERE client_id NOT IN (${excl})
-          ORDER BY client_id, (merchant_name IS NULL), updated_at DESC
-        ),
-        tiendas AS (
+        WITH tiendas AS (
           SELECT client_id,
             COUNT(DISTINCT store_name) AS tiendas
           FROM gocuotas_orders
@@ -236,13 +252,12 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
             AND order_discarded_at IS NULL
           GROUP BY client_id
         )
-        SELECT t.client_id, n.merchant_name, t.tiendas::text,
+        SELECT t.client_id, t.tiendas::text,
           COALESCE(v.ventas_cantidad, '0') AS ventas_cantidad,
           COALESCE(v.ventas_monto, '0') AS ventas_monto,
           COALESCE(a.ventas_ayer_cantidad, '0') AS ventas_ayer_cantidad,
           COALESCE(a.ventas_ayer_monto, '0') AS ventas_ayer_monto
         FROM tiendas t
-        LEFT JOIN nombres n ON n.client_id = t.client_id
         LEFT JOIN ventas30 v ON v.client_id = t.client_id
         LEFT JOIN ventas_ayer a ON a.client_id = t.client_id
         ORDER BY t.client_id
@@ -250,7 +265,7 @@ export async function fetchTercerosAltas(): Promise<TerceroAlta[]> {
 
       return res.rows.map(r => ({
         clientId: r.client_id,
-        merchantName: r.merchant_name ?? `Cliente ${r.client_id}`,
+        merchantName: nombres.get(r.client_id) ?? `Cliente ${r.client_id}`,
         tiendas: Number(r.tiendas),
         ventasCantidad: Number(r.ventas_cantidad),
         ventasMonto: Number(r.ventas_monto),
@@ -275,36 +290,28 @@ export async function fetchTercerosVentasDiarias(): Promise<VentaDiariaTercero[]
   try {
     const client = await pool.connect()
     try {
+      const nombres = await fetchNombresMerchants(client, excl)
       const res = await client.query<{
         client_id: string
-        merchant_name: string | null
         fecha: string
         cantidad: string
         monto: string
       }>(`
-        WITH nombres AS (
-          SELECT DISTINCT ON (client_id) client_id,
-            COALESCE(merchant_name, NULLIF(split_part(store_name, ' - ', 1), '')) AS merchant_name
-          FROM gocuotas_stores
-          WHERE client_id NOT IN (${excl})
-          ORDER BY client_id, (merchant_name IS NULL), updated_at DESC
-        )
-        SELECT o.client_id, n.merchant_name,
+        SELECT o.client_id,
           o.order_created_at::date::text AS fecha,
           COUNT(*)::text AS cantidad,
           COALESCE(SUM(o.total_order_amount), 0)::text AS monto
         FROM gocuotas_orders o
-        LEFT JOIN nombres n ON n.client_id = o.client_id
         WHERE o.client_id NOT IN (${excl})
           AND o.order_discarded_at IS NULL
           AND o.order_created_at >= now() - interval '90 days'
-        GROUP BY o.client_id, n.merchant_name, o.order_created_at::date
+        GROUP BY o.client_id, o.order_created_at::date
         ORDER BY fecha
       `)
 
       return res.rows.map(r => ({
         clientId: r.client_id,
-        merchantName: r.merchant_name ?? `Cliente ${r.client_id}`,
+        merchantName: nombres.get(r.client_id) ?? `Cliente ${r.client_id}`,
         fecha: r.fecha,
         cantidad: Number(r.cantidad),
         monto: Number(r.monto),
