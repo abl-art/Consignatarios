@@ -155,6 +155,56 @@ describe('armarListaPrecios', () => {
     expect(fila.ncEsperada).toBe(25000)
   })
 
+  describe('traslado parcial del bono al precio', () => {
+    // Bono 50.000 de los cuales se trasladan 30.000: el PVP baja solo el
+    // traslado, la NC sigue por el bono completo y el margen sube la diferencia
+    const filaConTraslado = () => armarListaPrecios(
+      [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+      { p1: { monto: 50000, traslado: 30000, hasta: '2026-09-15' } }, new Date('2026-08-25'),
+    )[0]
+
+    it('el PVP con bono descuenta solo el traslado (con re-redondeo de cuota)', () => {
+      const fila = filaConTraslado()
+      // 484.200 − 30.000 = 454.200 → cuota 50.500 → PVP 454.500
+      expect(fila.cuotaConBono).toBe(50500)
+      expect(fila.pvpConBono).toBe(454500)
+      expect(fila.bonoTraslado).toBe(30000)
+    })
+
+    it('la NC esperada sigue siendo el bono COMPLETO dividido el múltiplo', () => {
+      expect(filaConTraslado().ncEsperada).toBe(25000)
+    })
+
+    it('expone el MUP efectivo sobre el costo neto de NC y el margen extra por unidad', () => {
+      const fila = filaConTraslado()
+      // costo efectivo = 242.000 − 25.000 = 217.000
+      expect(fila.mupConBono).toBeCloseTo(454500 / 1.21 / 217000, 4)
+      expect(fila.mupPesosConBono).toBeCloseTo(454500 / 1.21 - 217000, 2)
+      expect(fila.margenExtraUnitario).toBeCloseTo(20000 / 1.21, 2)
+    })
+
+    it('sin traslado explícito se traslada todo el bono (comportamiento actual)', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+        { p1: { monto: 50000, hasta: '2026-09-15' } }, new Date('2026-08-25'),
+      )
+      expect(fila.pvpConBono).toBe(434700)
+      expect(fila.bonoTraslado).toBeNull()
+      expect(fila.margenExtraUnitario).toBe(0)
+      expect(fila.mupConBono).toBeCloseTo(434700 / 1.21 / 217000, 4)
+    })
+
+    it('un bono futuro con traslado no descuenta ni expone MUP efectivo', () => {
+      const [fila] = armarListaPrecios(
+        [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
+        { p1: { monto: 50000, traslado: 30000, desde: '2026-09-01' } }, new Date('2026-08-25'),
+      )
+      expect(fila.pvpConBono).toBeNull()
+      expect(fila.mupConBono).toBeNull()
+      expect(fila.margenExtraUnitario).toBeNull()
+    })
+  })
+
   it('un bono vencido o futuro no aplica', () => {
     const vencido = armarListaPrecios(
       [producto()], { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] }, {}, {}, VENTAS,
@@ -416,6 +466,29 @@ describe('armarListaPrecios', () => {
       expect(fila.vendidas).toBe(14)
       expect(fila.reconocidas).toBe(10)
       expect(fila.ncTotal).toBe(250000)
+    })
+
+    it('con traslado parcial calcula el margen extra total sobre las reconocidas', () => {
+      const [fila] = armarHistorialBonos(
+        [registro({ traslado: 30000 })],
+        [{ fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 4 }],
+        { p1: 2 },
+        HOY_HIST,
+      )
+      expect(fila.ncUnitaria).toBe(25000) // la NC no cambia por el traslado
+      expect(fila.margenExtraUnitario).toBeCloseTo(20000 / 1.21, 2)
+      expect(fila.margenExtraTotal).toBeCloseTo(4 * (20000 / 1.21), 2)
+    })
+
+    it('sin traslado el margen extra es cero', () => {
+      const [fila] = armarHistorialBonos(
+        [registro()],
+        [{ fecha: '2026-08-10', modelo: 'Motorola Moto G17 4/128GB', ventas: 4 }],
+        { p1: 2 },
+        HOY_HIST,
+      )
+      expect(fila.margenExtraUnitario).toBe(0)
+      expect(fila.margenExtraTotal).toBe(0)
     })
 
     it('un bono vencido queda en el historial con su estado y sus números', () => {

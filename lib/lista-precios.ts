@@ -37,8 +37,14 @@ export interface CostoProveedor {
 // modelo y por plazo. Se descuenta del PVP; la NC que llega de la marca es el
 // bono neto de IVA y del margen (÷1,21 ÷MUP = bono ÷ múltiplo) — la marca
 // cubre la parte del costo, el margen lo absorbe GOcelular.
+//
+// Traslado: opcionalmente se pasa al precio MENOS que el bono completo
+// (bono 100.000, traslado 70.000). La NC sigue siendo por el bono completo
+// (la marca reconoce por unidad vendida, se traslade o no) y la diferencia
+// queda como margen extra: (monto − traslado) ÷ 1,21 sin IVA por unidad.
 export interface BonoModelo {
   monto: number
+  traslado?: number // $ c/IVA que se descuentan del PVP; sin traslado = el monto completo
   desde?: string // ISO yyyy-mm-dd; sin desde = ya vigente
   hasta?: string // ISO yyyy-mm-dd inclusive; sin hasta = sin vencimiento
   cupo?: number // unidades máximas que la marca reconoce; sin cupo = ilimitado
@@ -181,6 +187,7 @@ export interface FilaListaPrecios {
   ventas30d: number
   fijado: boolean // agregado a mano por el desplegable (aparece aunque no venda)
   bonoMonto: number | null
+  bonoTraslado: number | null // traslado parcial; null = se traslada todo el bono
   bonoDesde: string | null
   bonoHasta: string | null
   bonoCupo: number | null
@@ -189,6 +196,9 @@ export interface FilaListaPrecios {
   pvpConBono: number | null
   cuotaConBono: number | null
   ncEsperada: number | null
+  mupConBono: number | null // MUP efectivo: PVP c/bono s/IVA ÷ (costo − NC/u)
+  mupPesosConBono: number | null
+  margenExtraUnitario: number | null // (monto − traslado) ÷ 1,21: lo que se guarda GOcelular por unidad
 }
 
 /**
@@ -245,6 +255,8 @@ export interface FilaHistorialBono extends BonoRegistro {
   reconocidas: number // min(vendidas, cupo); sin cupo, todas
   ncUnitaria: number // monto ÷ múltiplo (neto de IVA y margen)
   ncTotal: number
+  margenExtraUnitario: number // (monto − traslado) ÷ 1,21 sin IVA; 0 si se traslada todo
+  margenExtraTotal: number // reconocidas × margen extra unitario
 }
 
 /**
@@ -264,6 +276,7 @@ export function armarHistorialBonos(
       const vendidas = contarVendidasBono(r, clave, ventasPropias)
       const reconocidas = r.cupo ? Math.min(vendidas, r.cupo) : vendidas
       const ncUnitaria = r.monto / (multiplos[r.productoId] ?? MULTIPLO_DEFAULT)
+      const margenExtraUnitario = (r.monto - (r.traslado ?? r.monto)) / IVA
       return {
         ...r,
         estado: estadoBono(r, vendidas, hoy),
@@ -271,6 +284,8 @@ export function armarHistorialBonos(
         reconocidas,
         ncUnitaria,
         ncTotal: reconocidas * ncUnitaria,
+        margenExtraUnitario,
+        margenExtraTotal: reconocidas * margenExtraUnitario,
       }
     })
     .sort((a, b) => (b.desde ?? '').localeCompare(a.desde ?? ''))
@@ -409,10 +424,20 @@ export function armarListaPrecios(
     let pvpConBono: number | null = null
     let cuotaConBono: number | null = null
     let ncEsperada: number | null = null
+    let mupConBono: number | null = null
+    let mupPesosConBono: number | null = null
+    let margenExtraUnitario: number | null = null
     if (bono && pvp !== null) {
-      cuotaConBono = Math.ceil((pvp - bono.monto) / 9 / 100) * 100
+      const traslado = bono.traslado ?? bono.monto
+      cuotaConBono = Math.ceil((pvp - traslado) / 9 / 100) * 100
       pvpConBono = cuotaConBono * 9
       ncEsperada = bono.monto / multiplo
+      margenExtraUnitario = (bono.monto - traslado) / IVA
+      const costoEfectivo = eleccion ? eleccion.costo.precio - ncEsperada : null
+      if (costoEfectivo !== null && costoEfectivo > 0) {
+        mupConBono = pvpConBono / IVA / costoEfectivo
+        mupPesosConBono = pvpConBono / IVA - costoEfectivo
+      }
     }
     const pvpVigente = pvpConBono ?? pvp
 
@@ -434,6 +459,7 @@ export function armarListaPrecios(
       ventas30d,
       fijado: fijados.has(p.id),
       bonoMonto: bonoVisible && pvp !== null ? bonoVisible.monto : null,
+      bonoTraslado: bonoVisible && pvp !== null ? bonoVisible.traslado ?? null : null,
       bonoDesde: bonoVisible && pvp !== null ? bonoVisible.desde ?? null : null,
       bonoHasta: bonoVisible && pvp !== null ? bonoVisible.hasta ?? null : null,
       bonoCupo,
@@ -442,6 +468,9 @@ export function armarListaPrecios(
       pvpConBono,
       cuotaConBono,
       ncEsperada,
+      mupConBono,
+      mupPesosConBono,
+      margenExtraUnitario,
     })
   }
 

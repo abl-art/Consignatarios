@@ -54,6 +54,7 @@ interface BonoRow {
   producto_id: string
   nombre_modelo: string
   monto: string | number
+  traslado: string | number | null
   desde: string | null
   hasta: string | null
   cupo: number | null
@@ -70,6 +71,7 @@ function mapBonoRow(r: BonoRow): BonoRegistro {
     productoId: r.producto_id,
     nombreModelo: r.nombre_modelo,
     monto: Number(r.monto),
+    traslado: r.traslado !== null && r.traslado !== undefined ? Number(r.traslado) : undefined,
     desde: r.desde ?? undefined,
     hasta: r.hasta ?? undefined,
     cupo: r.cupo ?? undefined,
@@ -442,6 +444,15 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
     if (bono.hasta && desde > bono.hasta) {
       return { error: 'La vigencia "desde" no puede ser posterior a "hasta"' }
     }
+    // Traslado parcial: lo que baja el PVP; el resto queda de margen. Igual al
+    // monto se guarda NULL (= trasladar todo, semántica histórica).
+    let traslado: number | null = null
+    if (bono.traslado !== undefined) {
+      const t = Number(bono.traslado)
+      if (!Number.isFinite(t) || t < 0) return { error: 'El traslado debe ser un monto de 0 o más' }
+      if (t > Number(bono.monto)) return { error: 'El traslado no puede superar el monto del bono' }
+      if (t < Number(bono.monto)) traslado = t
+    }
     const solapado = registros.find(r =>
       r.id !== vigente?.id &&
       (!r.hasta || desde <= r.hasta) &&
@@ -456,6 +467,7 @@ export async function setBonoListaPrecios(productoId: string, bono: BonoModelo |
       producto_id: productoId,
       nombre_modelo: (prod?.nombre as string) ?? productoId,
       monto: Number(bono.monto),
+      traslado,
       desde,
       hasta: bono.hasta || null,
       cupo: bono.cupo && bono.cupo > 0 ? Math.floor(bono.cupo) : null,

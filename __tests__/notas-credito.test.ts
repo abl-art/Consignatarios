@@ -18,6 +18,8 @@ function campania(over: Partial<FilaHistorialBono> = {}): FilaHistorialBono {
     reconocidas: 10,
     ncUnitaria: 25000,
     ncTotal: 250000,
+    margenExtraUnitario: 0,
+    margenExtraTotal: 0,
     ...over,
   }
 }

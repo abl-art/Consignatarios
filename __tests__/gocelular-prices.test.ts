@@ -26,6 +26,7 @@ function fila(over: Partial<FilaListaPrecios> = {}): FilaListaPrecios {
     ventas30d: 10,
     fijado: false,
     bonoMonto: null,
+    bonoTraslado: null,
     bonoDesde: null,
     bonoHasta: null,
     bonoCupo: null,
@@ -34,6 +35,9 @@ function fila(over: Partial<FilaListaPrecios> = {}): FilaListaPrecios {
     pvpConBono: null,
     cuotaConBono: null,
     ncEsperada: null,
+    mupConBono: null,
+    mupPesosConBono: null,
+    margenExtraUnitario: null,
     ...over,
   }
 }

@@ -126,8 +126,10 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
               <th className="text-right px-4 py-3 font-medium text-gray-600">Reconocidas</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Bono (c/IVA)</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Traslado</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC/u</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC total</th>
+              <th className="text-right px-4 py-3 font-medium text-emerald-700 bg-emerald-50">Margen extra</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">PDF prueba</th>
             </tr>
           </thead>
@@ -147,8 +149,17 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{peso(b.monto)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                  {b.traslado !== undefined ? peso(b.traslado) : <span className="text-gray-400">todo</span>}
+                </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-violet-700 bg-violet-50/40">{peso(b.ncUnitaria)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{peso(b.ncTotal)}</td>
+                <td
+                  className="px-4 py-2.5 text-right tabular-nums font-semibold text-emerald-700 bg-emerald-50/40"
+                  title={b.margenExtraTotal > 0 ? `${peso(Math.round(b.margenExtraUnitario))}/u sin IVA × ${b.reconocidas} reconocidas` : undefined}
+                >
+                  {b.margenExtraTotal > 0 ? peso(Math.round(b.margenExtraTotal)) : '—'}
+                </td>
                 <td className="px-4 py-2.5"><PdfCell bono={b} /></td>
               </tr>
             ))}
@@ -157,7 +168,9 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
       </div>
       <p className="text-xs text-gray-400 mt-3">
         Vendidas = unidades propias (tienda GOcelular) dentro de la vigencia. Reconocidas = las que la marca
-        reconoce para la NC (cortadas en el cupo). NC/u = bono ÷ múltiplo, neto de IVA y margen. El PDF lista
+        reconoce para la NC (cortadas en el cupo). NC/u = bono ÷ múltiplo, neto de IVA y margen — siempre sobre
+        el bono completo, se traslade o no. Traslado = cuánto del bono bajó al precio publicado; Margen extra =
+        (bono − traslado) ÷ 1,21 × reconocidas, lo que se guardó GOcelular. El PDF lista
         fecha, IMEI, modelo y nro de factura de cada unidad reconocida; la factura se emite con unos días de
         demora — conviene generar el PDF definitivo unos días después del cierre.
       </p>

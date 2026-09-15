@@ -52,6 +52,7 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   const router = useRouter()
   const [editando, setEditando] = useState(false)
   const [monto, setMonto] = useState(fila.bonoMonto ? String(fila.bonoMonto) : '')
+  const [traslado, setTraslado] = useState(fila.bonoTraslado !== null ? String(fila.bonoTraslado) : '')
   const [desde, setDesde] = useState(fila.bonoDesde ?? '')
   const [hasta, setHasta] = useState(fila.bonoHasta ?? '')
   const [cupo, setCupo] = useState(fila.bonoCupo ? String(fila.bonoCupo) : '')
@@ -65,13 +66,14 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
 
   const guardar = (quitar = false) => {
     const n = Number(monto.replace(/\./g, '').replace(',', '.'))
+    const t = traslado.trim() === '' ? undefined : Number(traslado.replace(/\./g, '').replace(',', '.'))
     const c = Number(cupo)
     startTransition(async () => {
       const r = await setBonoListaPrecios(
         fila.productoId,
         quitar || !(n > 0)
           ? null
-          : { monto: n, desde: desde || undefined, hasta: hasta || undefined, cupo: c > 0 ? Math.floor(c) : undefined },
+          : { monto: n, traslado: t, desde: desde || undefined, hasta: hasta || undefined, cupo: c > 0 ? Math.floor(c) : undefined },
       )
       if (r.error) {
         avisar({ tipo: 'error', texto: r.error })
@@ -129,15 +131,20 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
       )
     }
     if (fila.bonoMonto) {
+      const parcial = fila.bonoTraslado !== null
       return (
         <>
           {toast}
           <button
             onClick={() => setEditando(true)}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold hover:border-violet-400"
-            title="Editar bono"
+            title={parcial && fila.margenExtraUnitario
+              ? `Bono ${peso(fila.bonoMonto)}: al precio van ${peso(fila.bonoTraslado!)} y te guardás ${peso(Math.round(fila.margenExtraUnitario))}/u de margen sin IVA. La NC sigue por el bono completo.`
+              : 'Editar bono'}
           >
-            {peso(fila.bonoMonto)}{fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
+            {peso(fila.bonoMonto)}
+            {parcial && <span className="font-normal">· traslada {peso(fila.bonoTraslado!)}</span>}
+            {fila.bonoHasta && ` → ${fechaCorta(fila.bonoHasta)}`}
             {fila.bonoCupo !== null && ` · ${fila.bonoVendidas}/${fila.bonoCupo} u.`}
           </button>
         </>
@@ -179,6 +186,13 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
       <input
         type="text" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)}
         placeholder="$ c/IVA" autoFocus
+        title="Bono completo que reconoce la marca (base de la NC)"
+        className="w-20 px-2 py-1 border border-gray-300 rounded-lg text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-500"
+      />
+      <input
+        type="text" inputMode="numeric" value={traslado} onChange={e => setTraslado(e.target.value)}
+        placeholder="traslada"
+        title="Cuánto del bono baja al precio (vacío = todo el bono); la diferencia queda de margen extra"
         className="w-20 px-2 py-1 border border-gray-300 rounded-lg text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-500"
       />
       <input
@@ -297,7 +311,6 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Bono</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">PVP c/bono</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Cuota c/bono</th>
-              <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">NC/u</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">MUP</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">MUP $</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Precio Tienda</th>
@@ -331,9 +344,18 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
                 <td className="px-4 py-2.5 text-right bg-violet-50/40"><BonoEditor fila={f} /></td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{f.pvpConBono !== null ? peso(f.pvpConBono) : '—'}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-violet-800 bg-violet-50/40">{f.cuotaConBono !== null ? peso(f.cuotaConBono) : '—'}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-violet-700 bg-violet-50/40">{f.ncEsperada !== null ? peso(f.ncEsperada) : '—'}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mup !== null ? f.mup.toFixed(2) : '—'}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.mupPesos !== null ? peso(f.mupPesos) : '—'}</td>
+                <td
+                  className={`px-4 py-2.5 text-right tabular-nums ${f.mupConBono !== null ? 'text-violet-700 font-semibold' : 'text-gray-600'}`}
+                  title={f.mupConBono !== null && f.mup !== null ? `MUP efectivo con bono (costo neto de NC). Sin bono: ${f.mup.toFixed(2)}` : undefined}
+                >
+                  {f.mupConBono !== null ? f.mupConBono.toFixed(2) : f.mup !== null ? f.mup.toFixed(2) : '—'}
+                </td>
+                <td
+                  className={`px-4 py-2.5 text-right tabular-nums ${f.mupPesosConBono !== null ? 'text-violet-700 font-semibold' : 'text-gray-600'}`}
+                  title={f.mupPesosConBono !== null && f.mupPesos !== null ? `MUP $ efectivo con bono (costo neto de NC). Sin bono: ${peso(f.mupPesos)}` : undefined}
+                >
+                  {f.mupPesosConBono !== null ? peso(f.mupPesosConBono) : f.mupPesos !== null ? peso(f.mupPesos) : '—'}
+                </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{f.precioTienda !== null ? peso(f.precioTienda) : '—'}</td>
                 <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${
                   f.diferencia === null ? 'text-gray-400' : f.diferencia < 0 ? 'text-red-600' : 'text-green-700'
@@ -349,7 +371,9 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
         * Proveedor alternativo (el preferido de la marca no tiene precio cargado). Dif. = Precio Tienda − PVP
         vigente (con bono si hay): en rojo, la tienda está vendiendo abajo del precio objetivo. Bono = monto con
         IVA a nivel PVP, por modelo y con vencimiento; la cuota con bono también se redondea a centenas para
-        arriba. NC/u = nota de crédito esperada de la marca por unidad (bono ÷ múltiplo, neto de IVA y margen).
+        arriba. Traslado: opcionalmente al precio baja menos que el bono completo — la NC de la marca es siempre
+        por el bono completo (verla por campaña en la pestaña Bonos) y la diferencia queda de margen. Con bono
+        vigente, MUP y MUP $ (en violeta) son los efectivos: PVP con bono sin IVA sobre el costo neto de NC.
         Al guardar un bono ya vigente (o quitarlo) el precio se publica solo en la tienda; un bono con inicio
         futuro se muestra punteado y su precio se publica automáticamente el día que arranca, a la madrugada.
       </p>
