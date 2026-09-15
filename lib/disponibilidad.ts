@@ -41,6 +41,17 @@ export function descontarPendientes(
   return Array.from(porNombre.entries()).map(([model_name, qty]) => ({ model_name, qty }))
 }
 
+/**
+ * Disponible real de una fila de stock para las tarjetas de resumen:
+ * WH Andreani + WH GOcuotas − pendientes de picking por SKU, con piso 0
+ * (misma semántica que descontarPendientes; la tabla de /inventario/stock
+ * en cambio muestra el negativo para exponer anomalías).
+ */
+export function disponibleRealFila(r: StockWarehouseRow, pendientes: PendientesPorClave): number {
+  const pend = (pendientes.gocuotas[r.sku] ?? 0) + (pendientes.andreani[r.sku] ?? 0)
+  return Math.max(0, r.whAndreani + r.whGocuotas - pend)
+}
+
 export function completarDisponibilidad(
   rows: (StockWarehouseRow & { pedido?: number })[],
   pendientes: PendientesPorClave

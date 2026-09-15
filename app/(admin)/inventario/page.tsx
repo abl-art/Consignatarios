@@ -196,7 +196,7 @@ export default async function InventarioPage() {
               </table>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Costo de Reposición: stock × costo del proveedor preferido de cada marca en Compras (Mirgor/Samsung, Newsan/Motorola, Solnik/Xiaomi, R.Fueguina/Nubia; sin precio, el más barato) · Valor de Venta: stock × precio publicado en la tienda sin IVA (÷1,21) · Kits a $9.000 por unidad
+              Stock: disponible real, neto de pendientes de picking GO y Andreani (igual que Stock por Depósito) · Costo de Reposición: stock × costo del proveedor preferido de cada marca en Compras (Mirgor/Samsung, Newsan/Motorola, Solnik/Xiaomi, R.Fueguina/Nubia; sin precio, el más barato) · Valor de Venta: stock × precio publicado en la tienda sin IVA (÷1,21) · Kits a $9.000 por unidad
             </p>
           </div>
 

@@ -7,8 +7,8 @@ import {
   AURICULARES_CONFIG,
   type CategoriaConfig,
 } from '@/lib/actions/accesorios-ventas'
-import { getInventarioByCategoria } from '@/lib/actions/compras'
-import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
+import { getUltimosCostos } from '@/lib/actions/compras'
+import { fetchKitsStockAndreani } from '@/lib/gocelular-kits'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,20 +103,23 @@ export async function GET(request: Request) {
   if (kitsExisting) {
     results.push(`${kitsCategoria}: ya existe cierre para ${periodo}`)
   } else {
-    const modelosOcultos = await getModelosOcultos()
-    const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
-    const totalDisponible = kitsItems.reduce((s, r) => s + r.disponible, 0)
-    const totalValuacion = kitsItems.reduce((s, r) => s + r.valuacion, 0)
-    const precioPromedio = kitsItems.length > 0
-      ? Math.round(totalValuacion / Math.max(totalDisponible, 1))
-      : 0
+    // Stock físico según movimientos aceptados por Andreani (calcularStockKit),
+    // la única fuente confiable para kits — el cruce compras − ventas mezclaba
+    // ventas de celulares y podía dar negativo
+    const kitsStock = await fetchKitsStockAndreani()
+    const totalDisponible = Object.values(kitsStock).reduce((s, k) => s + k.stockAndreani, 0)
+    const costosKits = (await getUltimosCostos())
+      .filter(c => c.categoria === 'Kits de Seguridad')
+      .map(c => c.precio)
+    const precioUnitario = costosKits.length > 0 ? Math.min(...costosKits) : 0
+    const totalValuacion = totalDisponible * precioUnitario
 
     const { error: kitsError } = await admin.from('stock_cierre_mensual').insert({
       periodo,
       categoria: kitsCategoria,
       producto: 'Kits de Seguridad',
       stock_final: totalDisponible,
-      precio_unitario: precioPromedio,
+      precio_unitario: precioUnitario,
       valuacion: totalValuacion,
     })
 

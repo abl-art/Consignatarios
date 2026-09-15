@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
-  fetchStockPropio,
   fetchStockPropioDetalle,
   fetchPreciosVentaCelulares,
   fetchPreciosTiendaCelulares,
@@ -12,7 +11,8 @@ import {
   type VentaPorModelo,
 } from '@/lib/gocelular'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
-import { descontarPendientes } from '@/lib/disponibilidad'
+import { descontarPendientes, disponibleRealFila } from '@/lib/disponibilidad'
+import { categoriaAccesorio, type CategoriaAccesorio } from '@/lib/categoria-accesorio'
 import {
   fetchAccesorioData,
   SMARTWATCHES_CONFIG,
@@ -20,7 +20,7 @@ import {
   AURICULARES_CONFIG,
   type CierreMensual,
 } from '@/lib/actions/accesorios-ventas'
-import { getUltimosCostos, getInventarioByCategoria, getPedidos } from '@/lib/actions/compras'
+import { getUltimosCostos, getPedidos } from '@/lib/actions/compras'
 import { getModelosOcultos } from '@/lib/actions/kits-ocultos'
 import { resumenVentasDia } from '@/lib/ventas-dia'
 import { buscarPrecio } from '@/lib/utils'
@@ -86,7 +86,6 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
 
   try {
     const [
-      stockCelulares,
       stockDetalle,
       preciosVenta,
       preciosTienda,
@@ -103,7 +102,6 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       pedidos,
       pendientes,
     ] = await Promise.all([
-      fetchStockPropio(),
       fetchStockPropioDetalle(),
       fetchPreciosVentaCelulares(),
       fetchPreciosTiendaCelulares().catch(() => ({} as Record<string, number>)),
@@ -152,9 +150,16 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     const precioVentaDe = (modelName: string): number =>
       (tiendaPorClave.get(normalizarModelo(modelName)) ?? preciosVenta[modelName] ?? buscarPrecio(preciosVenta, modelName)) / IVA
 
+    // Disponibilidad real: stock en depósitos neto de pendientes de picking
+    // GO/Andreani (una orden paga esperando salir no está disponible para
+    // vender) — misma regla que la columna Disponible real de /inventario/stock.
+    // Stock, valorización y desglose por modelo usan todos el mismo neto.
+    const netoCel = descontarPendientes(stockDetalle, pendientes)
+    const stockCelulares = netoCel.reduce((s, r) => s + r.qty, 0)
+
     let valorVentaCel = 0
     let costoReposicionCel = 0
-    for (const s of stockDetalle) {
+    for (const s of netoCel) {
       const pv = precioVentaDe(s.model_name)
       if (pv) valorVentaCel += s.qty * pv
       const pc = buscarPrecio(costosCelulares, s.model_name)
@@ -196,9 +201,18 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     )
 
     // ── Kits ───────────────────────────────────────────────────────────────
-    const kitsItems = await getInventarioByCategoria('Kits de Seguridad', modelosOcultos)
-    const stockKits = kitsItems.reduce((s, r) => s + r.disponible, 0)
-    const costoKits = kitsItems.reduce((s, r) => s + r.valuacion, 0)
+    // Misma fuente que /inventario/stock: filas KS-* de fetchStockPorWarehouse
+    // (calcularStockKit sobre movimientos aceptados por Andreani), netas de
+    // pendientes de picking. store_products.stock y el cruce compras − ventas
+    // no son confiables para kits (salen de regalo en bundles de celulares).
+    const ocultosKits = new Set(modelosOcultos.map(m => m.toLowerCase()))
+    const kitsRows = stockWarehouse
+      .filter(r => r.sku.toUpperCase().startsWith('KS-'))
+      .filter(r => !ocultosKits.has(r.nombre.toLowerCase()))
+      .map(r => ({ modelo: r.nombre, stock: disponibleRealFila(r, pendientes) }))
+    const stockKits = kitsRows.reduce((s, r) => s + r.stock, 0)
+    const costosKits = Object.values(costosPorCategoria.get('Kits de Seguridad') ?? {})
+    const costoUnitKit = costosKits.length > 0 ? Math.min(...costosKits) : 0
 
     let cierresKits: CierreMensual[] = []
     try {
@@ -216,26 +230,46 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       }))
     } catch { /* cierres no disponibles */ }
 
-    // Desglose por modelo de celulares (cobertura para compras). El stock se
-    // netea de pendientes de picking GO/Andreani: una unidad con orden paga
-    // esperando salir no está disponible para vender (misma regla que la
-    // columna Disponible real de /inventario/stock).
+    // Desglose por modelo de celulares (cobertura para compras), sobre el
+    // mismo neto de pendientes que el stock y la valorización.
     const modelosCelulares = coberturaPorModelos(
-      descontarPendientes(stockDetalle, pendientes).map(s => ({ modelo: s.model_name, qty: s.qty })),
+      netoCel.map(s => ({ modelo: s.model_name, qty: s.qty })),
       Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
     )
 
     // ── Accesorios ─────────────────────────────────────────────────────────
+    // Disponible real por subcategoría y por producto: filas de accesorios de
+    // fetchStockPorWarehouse netas de pendientes de picking (mismas reglas de
+    // clasificación por keywords que las tarjetas). store_products.stock crudo
+    // incluye lo en tránsito y lo ya vendido esperando salir.
+    const netoAccPorNombre = new Map<string, number>()
+    const netoAccPorCategoria = new Map<CategoriaAccesorio, number>()
+    for (const r of stockWarehouse) {
+      if (r.tipo !== 'accesorio') continue
+      const cat = categoriaAccesorio(r.sku, r.nombre)
+      if (cat === 'kit') continue
+      const neto = disponibleRealFila(r, pendientes)
+      const nombreKey = r.nombre.toLowerCase()
+      netoAccPorNombre.set(nombreKey, (netoAccPorNombre.get(nombreKey) ?? 0) + neto)
+      netoAccPorCategoria.set(cat, (netoAccPorCategoria.get(cat) ?? 0) + neto)
+    }
+
     const accesorio = (
       key: ProductoKey,
       label: string,
       categoria: string,
+      subcategoria: CategoriaAccesorio,
       data: Awaited<ReturnType<typeof fetchAccesorioData>>,
     ): ProductoResumen => {
       const costos = costosPorCategoria.get(categoria) ?? {}
       const precios = Object.values(costos)
       // Si la categoría tiene más de un producto cargado en Compras, vale el más barato
       const costoUnit = precios.length > 0 ? Math.min(...precios) : 0
+      const stockNeto = netoAccPorCategoria.get(subcategoria) ?? 0
+      // Stock por producto neto de pendientes; si el nombre no está en el
+      // warehouse (no debería pasar) queda el stock crudo de tienda
+      const stockDe = (nombre: string, crudo: number): number =>
+        netoAccPorNombre.get(nombre.toLowerCase()) ?? crudo
 
       // Desglose por producto de tienda. Con un solo producto la venta de la
       // categoría es suya; con varios se cruza por nombre exacto de variante.
@@ -243,11 +277,12 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       if (data.porProducto.length === 1) {
         const p0 = data.porProducto[0]
         const vel = velocidadVenta(data.ventasDiarias, hoy).diaria30
+        const stock0 = stockDe(p0.nombre, p0.stock)
         modelos = [{
           modelo: p0.nombre,
-          stock: p0.stock,
+          stock: stock0,
           ventaDiaria30: vel,
-          cobertura: diasCobertura(p0.stock, vel),
+          cobertura: diasCobertura(stock0, vel),
           pctVentas30: vel > 0 ? 100 : null,
         }]
       } else {
@@ -257,11 +292,12 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
           .map(p => {
             const cant = ventasPorNombre.get(p.nombre.toLowerCase())
             const vel = cant !== undefined ? cant / 30 : 0
+            const stock = stockDe(p.nombre, p.stock)
             return {
               modelo: p.nombre,
-              stock: p.stock,
+              stock,
               ventaDiaria30: vel,
-              cobertura: cant !== undefined ? diasCobertura(p.stock, vel) : null,
+              cobertura: cant !== undefined ? diasCobertura(stock, vel) : null,
               pctVentas30: cant !== undefined && totalVentas30 > 0 ? (cant / totalVentas30) * 100 : null,
             }
           })
@@ -271,9 +307,9 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
       return {
         key,
         label,
-        stock: data.kpis.stockDisponible,
-        costoReposicion: costoUnit > 0 ? data.kpis.stockDisponible * costoUnit : null,
-        valorVenta: data.kpis.valuacion / IVA,
+        stock: stockNeto,
+        costoReposicion: costoUnit > 0 ? stockNeto * costoUnit : null,
+        valorVenta: stockNeto * data.kpis.precioUnitario / IVA,
         montoVentas30d: monto30d(data.ventasDiarias, hoy),
         ventasDiarias: data.ventasDiarias,
         cierres: data.cierres,
@@ -297,23 +333,23 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
         stockCierreAnterior: null,
         modelos: modelosCelulares,
       },
-      accesorio('smartwatches', 'Smartwatches', 'Smartwatches', smartwatches),
-      accesorio('parlantes', 'Parlantes', 'Parlantes', parlantes),
-      accesorio('auriculares', 'Auriculares', 'Auriculares', auriculares),
+      accesorio('smartwatches', 'Smartwatches', 'Smartwatches', 'smartwatch', smartwatches),
+      accesorio('parlantes', 'Parlantes', 'Parlantes', 'parlante', parlantes),
+      accesorio('auriculares', 'Auriculares', 'Auriculares', 'auricular', auriculares),
       {
         key: 'kits',
         label: 'Kits de Seguridad',
         stock: stockKits,
-        costoReposicion: costoKits > 0 ? costoKits : null,
+        costoReposicion: costoUnitKit > 0 ? stockKits * costoUnitKit : null,
         valorVenta: stockKits * PRECIO_VENTA_KIT,
         montoVentas30d: 0,
         ventasDiarias: salidasKits.map(s => ({ ...s, monto: 0 })),
         cierres: cierresKits,
         stockCierreAnterior: cierresKits[0]?.stock_final ?? null,
         // Los kits salen en bundles de celulares: se muestra el stock por modelo, sin cobertura
-        modelos: kitsItems
-          .filter(k => k.disponible > 0)
-          .map(k => ({ modelo: k.modelo, stock: k.disponible, ventaDiaria30: 0, cobertura: null, pctVentas30: null }))
+        modelos: kitsRows
+          .filter(k => k.stock > 0)
+          .map(k => ({ modelo: k.modelo, stock: k.stock, ventaDiaria30: 0, cobertura: null, pctVentas30: null }))
           .sort((a, b) => b.stock - a.stock),
       },
     ]
