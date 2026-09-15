@@ -159,13 +159,14 @@ export async function conciliarFacturaEnvios(rows: EnvioCSVRow[]) {
     await supabase.from('facturas_envios_detalle').insert(batch)
   }
 
-  // Insert egreso in flujo de fondos: total + 21% IVA, 15 days after last day of period
+  // Insert egreso in flujo de fondos: total + 21% IVA, pago a 30 días de la
+  // fecha de la factura (regla de Emiliano, igual que la factura de warehouse)
   const { createAdminClient } = await import('@/lib/supabase/admin')
   const adminClient = createAdminClient()
 
-  const fechaHastaDate = new Date(formatDate(fechaHasta) + 'T00:00:00')
-  fechaHastaDate.setDate(fechaHastaDate.getDate() + 15)
-  const flujoDia = fechaHastaDate.toISOString().slice(0, 10)
+  const fechaFacturaDate = new Date(formatDate(fechaComprobante) + 'T00:00:00')
+  fechaFacturaDate.setDate(fechaFacturaDate.getDate() + 30)
+  const flujoDia = fechaFacturaDate.toISOString().slice(0, 10)
   const montoSinDuplicados = totalFacturado - montoDuplicado
   const montoConIva = Math.round(montoSinDuplicados * 1.21 * 100) / 100
 
@@ -374,6 +375,75 @@ export async function getCostoPorCiudad(provincia?: string): Promise<CostoCiudad
   })
 
   return result
+}
+
+export interface DistribucionMensual {
+  mes: string
+  envios: number
+  distribucion: number // costo de distribución (normalizado en el mes del error)
+  seguro: number // seguro facturado (normalizado a $2.800 en el mes del error)
+}
+
+/**
+ * Desglose mensual de la factura de distribución para la solapa Costos:
+ * costo de distribución vs seguro, con la cantidad de envíos del mes. Aplica
+ * las mismas normalizaciones del mes del valor declarado erróneo que
+ * getCostoPorCiudad (distribución a tarifa de localidad, seguro a $2.800).
+ */
+export async function getDistribucionMensual(): Promise<DistribucionMensual[]> {
+  const supabase = createClient()
+  const data = await fetchDetalleCompleto<DetalleRow>((from, to) =>
+    supabase
+      .from('facturas_envios_detalle')
+      .select('nro_envio, localidad_destino, fecha_envio, importe, concepto, estado, sucursal_destino')
+      .in('estado', ['conciliado', 'ya_pagado'])
+      .range(from, to),
+  )
+  if (data.length === 0) return []
+
+  const esSeguro = (r: DetalleRow) => r.concepto.toLowerCase().includes('seguro')
+  const mesDe = (r: DetalleRow) => r.fecha_envio.slice(0, 7)
+
+  const infladosMesError = new Set(
+    data
+      .filter(r => esSeguro(r) && mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && r.importe > SEGURO_NORMAL)
+      .map(r => r.nro_envio),
+  )
+  const porLocalidad = new Map<string, number[]>()
+  const porLocalidadJulio = new Map<string, number[]>()
+  const sanasGlobal: number[] = []
+  for (const r of data) {
+    if (esSeguro(r)) continue
+    const loc = r.localidad_destino || 'Sin datos'
+    if (mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && !infladosMesError.has(r.nro_envio)) {
+      if (!porLocalidad.has(loc)) porLocalidad.set(loc, [])
+      porLocalidad.get(loc)!.push(r.importe)
+      sanasGlobal.push(r.importe)
+    } else if (mesDe(r) === '2026-07') {
+      if (!porLocalidadJulio.has(loc)) porLocalidadJulio.set(loc, [])
+      porLocalidadJulio.get(loc)!.push(r.importe)
+    }
+  }
+  const tarifaCorrecta = (loc: string): number | null =>
+    mediana(porLocalidad.get(loc) ?? []) ?? mediana(porLocalidadJulio.get(loc) ?? []) ?? mediana(sanasGlobal)
+
+  const porMes = new Map<string, { envios: Set<string>; distribucion: number; seguro: number }>()
+  for (const r of data) {
+    const mes = mesDe(r)
+    if (!porMes.has(mes)) porMes.set(mes, { envios: new Set(), distribucion: 0, seguro: 0 })
+    const m = porMes.get(mes)!
+    m.envios.add(r.nro_envio)
+    const inflado = mes === MES_VALOR_DECLARADO_ERRONEO && infladosMesError.has(r.nro_envio)
+    if (esSeguro(r)) {
+      m.seguro += inflado ? SEGURO_NORMAL : r.importe
+    } else {
+      m.distribucion += inflado ? (tarifaCorrecta(r.localidad_destino || 'Sin datos') ?? r.importe) : r.importe
+    }
+  }
+
+  return [...porMes.entries()]
+    .map(([mes, m]) => ({ mes, envios: m.envios.size, distribucion: m.distribucion, seguro: m.seguro }))
+    .sort((a, b) => a.mes.localeCompare(b.mes))
 }
 
 export async function eliminarFacturaEnvio(id: string) {

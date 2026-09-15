@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
+import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
 import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
@@ -8,6 +9,9 @@ import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
 import CostoCiudad from './CostoCiudad'
+import CostosResumen from './CostosResumen'
+import WarehouseFacturaUpload from './WarehouseFacturaUpload'
+import FacturasWarehouseTable from './FacturasWarehouseTable'
 import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
 import AlertasTable from './AlertasTable'
@@ -19,7 +23,7 @@ export default async function EnviosPage({
 }: {
   searchParams: { tab?: string; provincia?: string }
 }) {
-  const facturas = await getFacturasEnvios()
+  const [facturas, facturasWarehouse] = await Promise.all([getFacturasEnvios(), getFacturasWarehouse()])
   let asns: AsnResumen[] = []
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
@@ -100,13 +104,26 @@ export default async function EnviosPage({
                   </table>
                 </div>
               )}
+
+              <div className="mt-8">
+                <WarehouseFacturaUpload />
+                <FacturasWarehouseTable facturas={facturasWarehouse} />
+              </div>
             </div>
           ),
         },
         {
           id: 'costos',
-          label: 'Costo por Ciudad',
-          content: <CostoCiudad provincia={searchParams.provincia} />,
+          label: 'Costos',
+          content: (
+            <div className="space-y-6">
+              <CostosResumen />
+              <div>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Distribución por ciudad</h2>
+                <CostoCiudad provincia={searchParams.provincia} />
+              </div>
+            </div>
+          ),
         },
         {
           id: 'warehouse',
