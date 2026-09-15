@@ -15,6 +15,7 @@ import {
   fetchVentasPropiasConFactura,
 } from '@/lib/gocelular'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
+import { armarMargenExtraMensual, type DevengoMensual } from '@/lib/margen-extra'
 import { armarNotasCredito, marcaNC, resumenVentasAccion, PROVEEDOR_NC, type GrupoNC } from '@/lib/notas-credito'
 import { renderNcAccion } from '@/lib/pdf/nc-accion'
 import { renderPruebaVentasBono } from '@/lib/pdf/prueba-ventas-bono'
@@ -337,6 +338,23 @@ export interface ResultadoSetBono {
   // guardado/editado o bono vigente quitado) o avisar que queda programado
   publicarAhora?: boolean
   bonoFuturo?: string // desde de un bono que todavía no arranca
+}
+
+/** Pestaña Margen extra: devengo mensual por bono según mes de venta. */
+export async function getMargenExtra(): Promise<DevengoMensual[]> {
+  const supabase = createAdminClient()
+  const [registros, ventasPropias, { data: cfg }] = await Promise.all([
+    fetchBonosRegistros(supabase),
+    fetchVentasPropiasPorModelo().catch(() => []),
+    supabase.from('flujo_config').select('key, value').like('key', `${MULTIPLO_KEY}%`),
+  ])
+  const multiplos: Record<string, number> = {}
+  for (const row of cfg ?? []) {
+    const valor = Number(row.value)
+    if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
+  }
+  const filas = armarHistorialBonos(registros, ventasPropias, multiplos, ahoraArgentina())
+  return armarMargenExtraMensual(filas, ventasPropias)
 }
 
 /** Pestaña Notas de crédito: acciones (NC) agrupadas por marca+vigencia. */

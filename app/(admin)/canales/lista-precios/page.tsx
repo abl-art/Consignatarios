@@ -1,18 +1,20 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getListaPrecios, getHistorialBonos, getModelosCelulares, getNotasCredito } from '@/lib/actions/lista-precios-canales'
+import { getListaPrecios, getHistorialBonos, getMargenExtra, getModelosCelulares, getNotasCredito } from '@/lib/actions/lista-precios-canales'
 import ListaPreciosTable from './ListaPreciosTable'
 import BonosHistorialTable from './BonosHistorialTable'
 import NotasCreditoTable from './NotasCreditoTable'
+import MargenExtraTable from './MargenExtraTable'
 import TabsListaBonos from './TabsListaBonos'
 
 export default async function ListaPreciosPage() {
-  const [filas, bonos, modelos, notasCredito] = await Promise.all([
+  const [filas, bonos, modelos, notasCredito, margenExtra] = await Promise.all([
     getListaPrecios(),
     getHistorialBonos(),
     getModelosCelulares(),
     getNotasCredito(),
+    getMargenExtra(),
   ])
   const enLista = new Set(filas.map(f => f.productoId))
   const agregables = modelos.filter(m => !enLista.has(m.id))
@@ -33,6 +35,7 @@ export default async function ListaPreciosPage() {
         lista={<ListaPreciosTable filas={filas} agregables={agregables} />}
         bonos={<BonosHistorialTable bonos={bonos} />}
         notasCredito={<NotasCreditoTable grupos={notasCredito} />}
+        margenExtra={<MargenExtraTable devengos={margenExtra} />}
       />
     </div>
   )
