@@ -8,7 +8,6 @@ import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
 import EnviosTabs from './EnviosTabs'
-import CostoCiudad from './CostoCiudad'
 import CostosResumen from './CostosResumen'
 import WarehouseFacturaUpload from './WarehouseFacturaUpload'
 import FacturasWarehouseTable from './FacturasWarehouseTable'
@@ -21,7 +20,7 @@ import SiniestrosTable from './SiniestrosTable'
 export default async function EnviosPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; provincia?: string }
+  searchParams: { tab?: string }
 }) {
   const [facturas, facturasWarehouse] = await Promise.all([getFacturasEnvios(), getFacturasWarehouse()])
   let asns: AsnResumen[] = []
@@ -115,15 +114,7 @@ export default async function EnviosPage({
         {
           id: 'costos',
           label: 'Costos',
-          content: (
-            <div className="space-y-6">
-              <CostosResumen />
-              <div>
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Distribución por ciudad</h2>
-                <CostoCiudad provincia={searchParams.provincia} />
-              </div>
-            </div>
-          ),
+          content: <CostosResumen />,
         },
         {
           id: 'warehouse',

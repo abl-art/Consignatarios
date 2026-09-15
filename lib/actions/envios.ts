@@ -183,20 +183,6 @@ export async function conciliarFacturaEnvios(rows: EnvioCSVRow[]) {
   return { ok: true, facturaId: factura.id, conciliados, sobrantes, montoSobrante, duplicados, montoDuplicado }
 }
 
-export interface CostoCiudadMes {
-  ciudad: string
-  mes: string
-  envios: number
-  costo_distribucion: number
-  costo_promedio: number
-}
-
-export interface CostoCiudadResumen {
-  ciudad: string
-  meses: { mes: string; envios: number; costo_total: number; costo_promedio: number }[]
-  variacion_pct: number | null
-}
-
 // Supabase corta en 1.000 filas por request: el detalle de facturas ya pasa
 // las 19.000 y sin paginar la métrica se calculaba sobre una muestra parcial
 const PAGINA = 1000
@@ -211,20 +197,6 @@ async function fetchDetalleCompleto<T>(
     if (data.length < PAGINA) break
   }
   return todas
-}
-
-export async function getProvinciasDisponibles(): Promise<string[]> {
-  const supabase = createClient()
-  const data = await fetchDetalleCompleto<{ sucursal_destino: string | null }>((from, to) =>
-    supabase
-      .from('facturas_envios_detalle')
-      .select('sucursal_destino')
-      .not('sucursal_destino', 'is', null)
-      .in('estado', ['conciliado', 'ya_pagado'])
-      .range(from, to),
-  )
-  const unique = [...new Set(data.map(r => r.sucursal_destino).filter(Boolean))] as string[]
-  return unique.sort()
 }
 
 // Agosto 2026: el archivo de Andreani vino con el valor declarado inflado por
@@ -253,129 +225,6 @@ interface DetalleRow {
   sucursal_destino: string | null
 }
 
-/**
- * Sobrecosto de seguros del mes del valor declarado erróneo: lo facturado por
- * encima de los $2.800 normales. La tarjeta "Costo promedio por envío" lo
- * descuenta del total facturado (normaliza el seguro a $2.800) hasta que
- * llegue la NC de Andreani y se reprocese la factura.
- */
-export async function getSobrecostoSeguros(): Promise<number> {
-  const supabase = createClient()
-  const rows = await fetchDetalleCompleto<{ importe: number }>((from, to) =>
-    supabase
-      .from('facturas_envios_detalle')
-      .select('importe')
-      .ilike('concepto', '%seguro%')
-      .gte('fecha_envio', `${MES_VALOR_DECLARADO_ERRONEO}-01`)
-      .lte('fecha_envio', `${MES_VALOR_DECLARADO_ERRONEO}-31`)
-      .gt('importe', SEGURO_NORMAL)
-      .range(from, to),
-  )
-  return rows.reduce((s, r) => s + (r.importe - SEGURO_NORMAL), 0)
-}
-
-export async function getCostoPorCiudad(provincia?: string): Promise<CostoCiudadResumen[]> {
-  const supabase = createClient()
-  const data = await fetchDetalleCompleto<DetalleRow>((from, to) => {
-    let query = supabase
-      .from('facturas_envios_detalle')
-      .select('nro_envio, localidad_destino, fecha_envio, importe, concepto, estado, sucursal_destino')
-      .in('estado', ['conciliado', 'ya_pagado'])
-    if (provincia) query = query.eq('sucursal_destino', provincia)
-    return query.range(from, to)
-  })
-
-  if (data.length === 0) return []
-
-  const esSeguro = (r: DetalleRow) => r.concepto.toLowerCase().includes('seguro')
-  const mesDe = (r: DetalleRow) => r.fecha_envio.slice(0, 7)
-
-  // Envíos del mes del error con el valor declarado inflado (seguro > normal)
-  const infladosMesError = new Set(
-    data
-      .filter(r => esSeguro(r) && mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && r.importe > SEGURO_NORMAL)
-      .map(r => r.nro_envio),
-  )
-
-  // Tarifa correcta por localidad: mediana de los envíos SANOS del mes del
-  // error; fallback la mediana de julio de esa localidad; fallback la global
-  const porLocalidad = new Map<string, number[]>()
-  const porLocalidadJulio = new Map<string, number[]>()
-  const sanasGlobal: number[] = []
-  for (const r of data) {
-    if (esSeguro(r)) continue
-    const loc = r.localidad_destino || 'Sin datos'
-    if (mesDe(r) === MES_VALOR_DECLARADO_ERRONEO && !infladosMesError.has(r.nro_envio)) {
-      if (!porLocalidad.has(loc)) porLocalidad.set(loc, [])
-      porLocalidad.get(loc)!.push(r.importe)
-      sanasGlobal.push(r.importe)
-    } else if (mesDe(r) === '2026-07') {
-      if (!porLocalidadJulio.has(loc)) porLocalidadJulio.set(loc, [])
-      porLocalidadJulio.get(loc)!.push(r.importe)
-    }
-  }
-  const tarifaCorrecta = (loc: string): number | null =>
-    mediana(porLocalidad.get(loc) ?? []) ?? mediana(porLocalidadJulio.get(loc) ?? []) ?? mediana(sanasGlobal)
-
-  const grouped = new Map<string, Map<string, { envios: Set<string>; costo: number }>>()
-
-  for (const row of data) {
-    // Group by provincia (sucursal) when no filter, by ciudad when filtering
-    const ciudad = provincia
-      ? (row.localidad_destino || 'Sin datos')
-      : (row.sucursal_destino || row.localidad_destino || 'Sin datos')
-    const mes = mesDe(row)
-
-    if (!grouped.has(ciudad)) grouped.set(ciudad, new Map())
-    const cityMap = grouped.get(ciudad)!
-    if (!cityMap.has(mes)) cityMap.set(mes, { envios: new Set(), costo: 0 })
-    const entry = cityMap.get(mes)!
-
-    // Solo distribución: el seguro nunca entra en el costo por envío
-    if (!esSeguro(row)) {
-      let importe = row.importe
-      if (mes === MES_VALOR_DECLARADO_ERRONEO && infladosMesError.has(row.nro_envio)) {
-        importe = tarifaCorrecta(row.localidad_destino || 'Sin datos') ?? row.importe
-      }
-      entry.costo += importe
-      entry.envios.add(row.nro_envio)
-    }
-  }
-
-  // Build result with monthly variation
-  const result: CostoCiudadResumen[] = []
-  for (const [ciudad, mesesMap] of grouped) {
-    const meses = [...mesesMap.entries()]
-      .map(([mes, d]) => ({
-        mes,
-        envios: d.envios.size,
-        costo_total: d.costo,
-        costo_promedio: d.envios.size > 0 ? Math.round(d.costo / d.envios.size) : 0,
-      }))
-      .sort((a, b) => a.mes.localeCompare(b.mes))
-
-    // Calculate % variation between last two months
-    let variacion_pct: number | null = null
-    if (meses.length >= 2) {
-      const prev = meses[meses.length - 2].costo_promedio
-      const curr = meses[meses.length - 1].costo_promedio
-      if (prev > 0) variacion_pct = Math.round(((curr - prev) / prev) * 1000) / 10
-    }
-
-    if (meses.some(m => m.envios > 0)) {
-      result.push({ ciudad, meses, variacion_pct })
-    }
-  }
-
-  // Sort by total shipments descending
-  result.sort((a, b) => {
-    const totalA = a.meses.reduce((s, m) => s + m.envios, 0)
-    const totalB = b.meses.reduce((s, m) => s + m.envios, 0)
-    return totalB - totalA
-  })
-
-  return result
-}
 
 export interface DistribucionMensual {
   mes: string
@@ -386,9 +235,9 @@ export interface DistribucionMensual {
 
 /**
  * Desglose mensual de la factura de distribución para la solapa Costos:
- * costo de distribución vs seguro, con la cantidad de envíos del mes. Aplica
- * las mismas normalizaciones del mes del valor declarado erróneo que
- * getCostoPorCiudad (distribución a tarifa de localidad, seguro a $2.800).
+ * costo de distribución vs seguro, con la cantidad de envíos del mes. En el
+ * mes del valor declarado erróneo normaliza la distribución de los envíos
+ * inflados a la tarifa de su localidad y el seguro a $2.800.
  */
 export async function getDistribucionMensual(): Promise<DistribucionMensual[]> {
   const supabase = createClient()
