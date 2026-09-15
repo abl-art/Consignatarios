@@ -60,6 +60,17 @@ describe('aplicarPedidos', () => {
     expect(rows[0].pedido).toBe(130)
   })
 
+  it('ignora el prefijo de categoría que GOcelular antepone a los accesorios (Buds 6 Play 14/9)', () => {
+    // Caso real: pedido NP-1789422348616 con codigo interno del gestor (no matchea sku)
+    // y nombre sin el "Auriculares" que GOcelular antepone → creaba fila fantasma duplicada
+    const rows = aplicarPedidos(
+      [fila({ sku: 'BHR8776GL', nombre: 'Auriculares Redmi Buds 6 Play', tipo: 'accesorio', marca: 'Xiaomi' })],
+      [pedido({ items: [{ productoNombre: 'Redmi Buds 6 Play ', productoCodigo: 'ACC-BUDS6', cantidad: 540 }] })]
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].pedido).toBe(540)
+  })
+
   it('un modelo nuevo sin stock genera fila propia con solo el pedido cargado', () => {
     const rows = aplicarPedidos([fila()], [pedido({ items: [{ productoNombre: 'Nubia Air', cantidad: 150 }] })])
     expect(rows).toHaveLength(2)

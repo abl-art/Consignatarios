@@ -12,7 +12,9 @@
 // cae al nombre normalizado cuando el código no figura — los productoCodigo
 // del gestor no siempre coinciden con GOcelular. En el nombre se tolera el
 // prefijo de RAM que el gestor incluye y GOcelular no ("Galaxy A17 4/128GB" ≈
-// "Galaxy A17 128GB"). Un modelo sin fila de stock genera una fila nueva.
+// "Galaxy A17 128GB") y el prefijo de categoría que GOcelular antepone y el
+// gestor no ("Auriculares Redmi Buds 6 Play" ≈ "Redmi Buds 6 Play").
+// Un modelo sin fila de stock genera una fila nueva.
 
 import type { StockWarehouseRow } from './gocelular'
 import { categoriaAccesorio } from './categoria-accesorio'
@@ -29,8 +31,9 @@ export interface PedidoGestor {
 export type StockConPedidoRow = StockWarehouseRow & { pedido: number }
 
 function claves(nombre: string): string[] {
-  // GOcelular antepone "Celular" en algunos modelos; el gestor no
-  const base = nombre.toLowerCase().replace(/^celular\s+/, '')
+  // GOcelular antepone la categoría en algunos productos ("Celular Samsung...",
+  // "Auriculares Redmi Buds..."); el gestor no
+  const base = nombre.toLowerCase().replace(/^(celular(es)?|auricular(es)?|parlantes?|smart\s?watch(es)?)\s+/, '')
   const sinRam = base.replace(/\b\d+\s*\/\s*(?=\d)/g, '')
   const limpiar = (s: string) => s.replace(/[^a-z0-9]/g, '')
   const c1 = limpiar(base)
