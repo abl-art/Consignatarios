@@ -3,6 +3,7 @@ import {
   parseFacturaWarehouse,
   conciliarOutWarehouse,
   desgloseWarehouse,
+  controlOutPedidos,
   serialAFecha,
   type Celda,
   type FacturaWarehouseParseada,
@@ -135,6 +136,52 @@ describe('conciliarOutWarehouse', () => {
     const r = conciliarOutWarehouse(out, new Map([['SO-AAA111', 'expedido']]))
     expect(r.revisar).toBe(1)
     expect(r.filas[2].motivo).toBe('no_existe')
+  })
+})
+
+describe('controlOutPedidos', () => {
+  // Regla de Emiliano: la preparación se cobra por PEDIDO expedido según
+  // GOcelular, no por artículo. Andreani factura Q = artículos.
+  const conceptos = parse().conceptos // OUT UNIDAD: 3 × 2799,81 = 8399,43
+  const total = parse().totalFacturado // 1.810.589,85
+
+  it('recalcula el OUT por pedidos de GOcelular y expone la sobrefacturación', () => {
+    const c = controlOutPedidos(conceptos, total, 2)
+    expect(c).not.toBeNull()
+    expect(c!.precioUnitario).toBe(2799.81)
+    expect(c!.outFacturado).toBeCloseTo(8399.43)
+    expect(c!.outCorrecto).toBeCloseTo(5599.62)
+    expect(c!.sobrefacturado).toBeCloseTo(2799.81)
+    expect(c!.totalCorrecto).toBeCloseTo(total - 2799.81)
+  })
+
+  it('con la cantidad de pedidos igual a lo facturado no hay diferencia', () => {
+    const c = controlOutPedidos(conceptos, total, 3)
+    expect(c!.sobrefacturado).toBeCloseTo(0)
+    expect(c!.totalCorrecto).toBeCloseTo(total)
+  })
+
+  it('si cobraron de menos la diferencia es negativa', () => {
+    const c = controlOutPedidos(conceptos, total, 4)
+    expect(c!.sobrefacturado).toBeCloseTo(-2799.81)
+  })
+
+  it('sin concepto OUT o sin pedidos devuelve null', () => {
+    expect(controlOutPedidos([{ item: 'INSUMOS', detalle: '', cantidad: 1, precio_unitario: 1, total: 1 }], 1, 5)).toBeNull()
+    expect(controlOutPedidos(conceptos, total, 0)).toBeNull()
+  })
+
+  it('no confunde el concepto OUT con otros que empiezan igual', () => {
+    const c = controlOutPedidos(
+      [
+        { item: 'OUTLET', detalle: '', cantidad: 10, precio_unitario: 5, total: 50 },
+        { item: 'OUT UNIDAD', detalle: 'Unidad', cantidad: 10, precio_unitario: 100, total: 1000 },
+      ],
+      1050,
+      4,
+    )
+    expect(c!.outFacturado).toBe(1000)
+    expect(c!.outCorrecto).toBe(400)
   })
 })
 

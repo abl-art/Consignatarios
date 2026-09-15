@@ -11,7 +11,7 @@ export default function WarehouseFacturaUpload() {
   const [fechaFactura, setFechaFactura] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ conciliadas: number; revisar: number } | null>(null)
+  const [result, setResult] = useState<{ conciliadas: number; revisar: number; pedidosGocelular: number | null; sobrefacturado: number | null } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -55,7 +55,12 @@ export default function WarehouseFacturaUpload() {
       const res = await guardarFacturaWarehouse(parseada, fechaFactura)
       if ('error' in res && res.error) { setError(res.error); return }
       if ('ok' in res) {
-        setResult({ conciliadas: res.conciliadas ?? 0, revisar: res.revisar ?? 0 })
+        setResult({
+          conciliadas: res.conciliadas ?? 0,
+          revisar: res.revisar ?? 0,
+          pedidosGocelular: res.pedidosGocelular ?? null,
+          sobrefacturado: res.sobrefacturado ?? null,
+        })
         setParseada(null)
         setFechaFactura('')
         if (fileRef.current) fileRef.current.value = ''
@@ -170,9 +175,16 @@ export default function WarehouseFacturaUpload() {
 
       {result && (
         <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-          Factura procesada: {result.conciliadas} pedidos conciliados
-          {result.revisar > 0 && (
-            <span className="text-amber-700 font-semibold"> · {result.revisar} para revisar</span>
+          <p>
+            Factura procesada: {result.conciliadas} pedidos conciliados
+            {result.revisar > 0 && (
+              <span className="text-amber-700 font-semibold"> · {result.revisar} para revisar</span>
+            )}
+          </p>
+          {result.sobrefacturado !== null && Math.abs(result.sobrefacturado) > 1 && (
+            <p className="text-red-600 font-semibold mt-1">
+              ⚠ OUT cobrado por artículo: {formatearMoneda(Math.round(Math.abs(result.sobrefacturado)))} de {result.sobrefacturado > 0 ? 'más' : 'menos'} vs {result.pedidosGocelular?.toLocaleString('es-AR')} pedidos expedidos según GOcelular — a reclamar
+            </p>
           )}
         </div>
       )}

@@ -250,6 +250,47 @@ export function conciliarOutWarehouse(
   return { filas, conciliadas, revisar }
 }
 
+// ── Control del OUT por pedidos ────────────────────────────────────────────
+
+export interface ControlOut {
+  precioUnitario: number
+  pedidosGocelular: number
+  outFacturado: number
+  outCorrecto: number
+  /** OUT facturado − OUT correcto. Positivo = Andreani cobró de más. */
+  sobrefacturado: number
+  totalCorrecto: number
+}
+
+/**
+ * Regla de Emiliano (15 sep 2026): la preparación (OUT) se cobra por PEDIDO
+ * expedido, no por artículo — el precio unitario está bien pero Andreani
+ * factura Q = artículos. El costo correcto se recalcula con la cantidad de
+ * pedidos expedidos según la BASE DE GOCELULAR en el período (no el detalle
+ * de Andreani). Devuelve null si no hay concepto OUT o no hay dato de pedidos.
+ */
+export function controlOutPedidos(
+  conceptos: ConceptoFactura[],
+  totalFacturado: number,
+  pedidosGocelular: number,
+): ControlOut | null {
+  if (pedidosGocelular <= 0) return null
+  const outs = conceptos.filter(c => /^OUT\b/i.test(c.item))
+  if (outs.length === 0) return null
+  const outFacturado = outs.reduce((s, c) => s + c.total, 0)
+  const precioUnitario = outs[0].precio_unitario
+  const outCorrecto = precioUnitario * pedidosGocelular
+  const sobrefacturado = outFacturado - outCorrecto
+  return {
+    precioUnitario,
+    pedidosGocelular,
+    outFacturado,
+    outCorrecto,
+    sobrefacturado,
+    totalCorrecto: totalFacturado - sobrefacturado,
+  }
+}
+
 // ── Desglose por tarjeta de la solapa Costos ───────────────────────────────
 
 export type BucketWarehouse = 'in' | 'almacen' | 'out' | 'insumos' | 'seguro' | 'otros'

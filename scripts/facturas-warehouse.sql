@@ -19,8 +19,22 @@ CREATE TABLE IF NOT EXISTS facturas_warehouse (
   seguro_diario jsonb,                        -- [{fecha, valor}] valor declarado por día
   out_conciliadas integer NOT NULL DEFAULT 0, -- órdenes expedidas confirmadas en GOcelular
   out_revisar integer NOT NULL DEFAULT 0,     -- órdenes facturadas sin expedición confirmada
+  -- Control OUT (regla de Emiliano, 15 sep 2026): la preparación se cobra por
+  -- PEDIDO expedido, no por artículo. Andreani factura Q = artículos; el costo
+  -- correcto = precio unitario OUT × pedidos expedidos según la base de
+  -- GOcelular en el mes. La diferencia es sobrefacturación a reclamar.
+  pedidos_gocelular integer,                  -- pedidos expedidos según GOcelular en el período
+  out_correcto numeric,                       -- precio unitario OUT × pedidos_gocelular
+  out_sobrefacturado numeric,                 -- OUT facturado − OUT correcto
+  total_correcto numeric,                     -- total facturado con el OUT corregido
   created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Migración sobre tabla ya creada (ejecutada 15 sep 2026):
+-- ALTER TABLE facturas_warehouse
+--   ADD COLUMN IF NOT EXISTS pedidos_gocelular integer,
+--   ADD COLUMN IF NOT EXISTS out_correcto numeric,
+--   ADD COLUMN IF NOT EXISTS out_sobrefacturado numeric,
+--   ADD COLUMN IF NOT EXISTS total_correcto numeric;
 
 CREATE TABLE IF NOT EXISTS facturas_warehouse_out (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

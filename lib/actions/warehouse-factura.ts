@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool } from '@/lib/db-pool'
 import {
   conciliarOutWarehouse,
+  controlOutPedidos,
   type FacturaWarehouseParseada,
   type ConceptoFactura,
 } from '@/lib/warehouse-factura'
@@ -25,6 +26,11 @@ export interface FacturaWarehouse {
   seguro_diario: { fecha: string; valor: number }[] | null
   out_conciliadas: number
   out_revisar: number
+  /** Pedidos expedidos según la base de GOcelular en el período (control OUT) */
+  pedidos_gocelular: number | null
+  out_correcto: number | null
+  out_sobrefacturado: number | null
+  total_correcto: number | null
 }
 
 export async function getFacturasWarehouse(): Promise<FacturaWarehouse[]> {
@@ -87,6 +93,27 @@ async function fetchEstadoOrdenes(ordenes: string[]): Promise<Map<string, string
   return estados
 }
 
+/** Pedidos expedidos según GOcelular dentro del mes del período ('YYYY-MM'). */
+async function fetchPedidosExpedidos(periodo: string): Promise<number | null> {
+  const pool = getPool()
+  if (!pool) return null
+  const [y, m] = periodo.split('-').map(Number)
+  const desde = `${periodo}-01`
+  const hasta = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ pedidos: string }>(
+      `SELECT COUNT(*)::text AS pedidos
+       FROM andreani_wh_pedidos
+       WHERE estado = 'expedido' AND updated_at >= $1 AND updated_at < $2`,
+      [desde, hasta],
+    )
+    return Number(res.rows[0]?.pedidos ?? 0)
+  } finally {
+    client.release()
+  }
+}
+
 export async function guardarFacturaWarehouse(parseada: FacturaWarehouseParseada, fechaFactura: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaFactura)) return { error: 'Fecha de factura inválida' }
 
@@ -100,8 +127,15 @@ export async function guardarFacturaWarehouse(parseada: FacturaWarehouseParseada
 
   // Conciliar OUT contra los expedidos reales de GOcelular
   const ordenes = [...new Set(parseada.out.map(r => r.orden))]
-  const estadoPorOrden = await fetchEstadoOrdenes(ordenes)
+  const [estadoPorOrden, pedidosGocelular] = await Promise.all([
+    fetchEstadoOrdenes(ordenes),
+    fetchPedidosExpedidos(parseada.periodo),
+  ])
   const { filas, conciliadas, revisar } = conciliarOutWarehouse(parseada.out, estadoPorOrden)
+
+  // Control OUT: la preparación se cobra por pedido expedido (base GOcelular),
+  // no por artículo como la factura Andreani
+  const control = controlOutPedidos(parseada.conceptos, parseada.totalFacturado, pedidosGocelular ?? 0)
 
   const { data: factura, error: facturaError } = await supabase
     .from('facturas_warehouse')
@@ -120,6 +154,10 @@ export async function guardarFacturaWarehouse(parseada: FacturaWarehouseParseada
       seguro_diario: parseada.seguroDiario,
       out_conciliadas: conciliadas,
       out_revisar: revisar,
+      pedidos_gocelular: pedidosGocelular,
+      out_correcto: control?.outCorrecto ?? null,
+      out_sobrefacturado: control?.sobrefacturado ?? null,
+      total_correcto: control?.totalCorrecto ?? null,
     })
     .select('id')
     .single()
@@ -169,7 +207,14 @@ export async function guardarFacturaWarehouse(parseada: FacturaWarehouseParseada
 
   revalidatePath('/compras/envios')
   revalidatePath('/finanzas')
-  return { ok: true, facturaId: factura.id as string, conciliadas, revisar }
+  return {
+    ok: true,
+    facturaId: factura.id as string,
+    conciliadas,
+    revisar,
+    pedidosGocelular,
+    sobrefacturado: control?.sobrefacturado ?? null,
+  }
 }
 
 export async function eliminarFacturaWarehouse(id: string) {

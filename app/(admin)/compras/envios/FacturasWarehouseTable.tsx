@@ -30,8 +30,10 @@ export default function FacturasWarehouseTable({ facturas }: { facturas: Factura
             <th className="text-left px-6 py-3 font-medium text-gray-600">Período</th>
             <th className="text-left px-6 py-3 font-medium text-gray-600">Fecha factura</th>
             <th className="text-right px-6 py-3 font-medium text-gray-600">Unidades</th>
-            <th className="text-right px-6 py-3 font-medium text-gray-600">Pedidos</th>
+            <th className="text-right px-6 py-3 font-medium text-gray-600">Pedidos fact.</th>
+            <th className="text-right px-6 py-3 font-medium text-gray-600">Pedidos GOcelular</th>
             <th className="text-right px-6 py-3 font-medium text-gray-600">Total facturado</th>
+            <th className="text-right px-6 py-3 font-medium text-gray-600">OUT de más</th>
             <th className="text-right px-6 py-3 font-medium text-gray-600">Conciliados</th>
             <th className="text-right px-6 py-3 font-medium text-gray-600">A revisar</th>
             <th className="px-6 py-3"></th>
@@ -44,7 +46,15 @@ export default function FacturasWarehouseTable({ facturas }: { facturas: Factura
               <td className="px-6 py-3 text-gray-600">{new Date(f.fecha_factura + 'T00:00:00').toLocaleDateString('es-AR')}</td>
               <td className="px-6 py-3 text-right text-gray-900">{f.unidades_out.toLocaleString('es-AR')}</td>
               <td className="px-6 py-3 text-right text-gray-900">{f.ordenes_out.toLocaleString('es-AR')}</td>
+              <td className="px-6 py-3 text-right text-gray-900">{f.pedidos_gocelular !== null ? f.pedidos_gocelular.toLocaleString('es-AR') : '—'}</td>
               <td className="px-6 py-3 text-right text-gray-900">{formatearMoneda(f.total_facturado)}</td>
+              <td className="px-6 py-3 text-right">
+                {f.out_sobrefacturado !== null && Math.abs(f.out_sobrefacturado) > 1 ? (
+                  <span className="text-red-600 font-semibold">{formatearMoneda(Math.round(f.out_sobrefacturado))}</span>
+                ) : (
+                  <span className="text-gray-500">—</span>
+                )}
+              </td>
               <td className="px-6 py-3 text-right text-green-700 font-medium">{f.out_conciliadas}</td>
               <td className="px-6 py-3 text-right">
                 <span className={f.out_revisar > 0 ? 'text-amber-600 font-semibold' : 'text-gray-500'}>{f.out_revisar}</span>
