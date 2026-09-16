@@ -92,14 +92,16 @@ export default async function DashboardPage() {
               </div>
               <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
             </div>
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs text-gray-500 mb-1">Ventas con accesorios</p>
+            <div className="border-t border-gray-100 pt-4">
+              <h2 className="text-base font-semibold text-gray-900 mb-2">Ventas con Accesorios</h2>
               <div className="flex items-baseline gap-2">
-                <p className="text-xl font-bold text-gray-700">{accesorios.pct.toLocaleString('es-AR')}%</p>
+                <p className="text-3xl font-bold text-gray-900">{accesorios.pct.toLocaleString('es-AR')}%</p>
                 <p className="text-sm text-gray-500">de las órdenes</p>
               </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d ·{' '}
+              <p className="text-sm text-gray-500 mt-1">
+                {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d
+              </p>
+              <p className="text-sm text-gray-500">
                 {accesorios.monto >= 1e6
                   ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
                   : formatearMoneda(accesorios.monto)}{' '}
