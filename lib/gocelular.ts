@@ -2588,31 +2588,30 @@ export interface ControlStockFila {
   error: string | null
 }
 
-export interface ControlStockCorrida {
-  runAt: string
-  medidos: number
-  conDiferencia: number
-  unidadesDif: number
-  errores: number
-}
-
-export interface ControlStockAndreani {
+export interface LecturaControlStock {
   runAt: string | null
   filas: ControlStockFila[]
-  corridas: ControlStockCorrida[]
   /** Unidades vendidas EN COLA (aún sin enviar a Andreani), por nombre de modelo —
    * sin color-SKU asignado todavía; solo restables a nivel modelo */
   enColaPorModelo: { nombre: string; unidades: number }[]
 }
 
-export async function fetchControlStockAndreani(): Promise<ControlStockAndreani> {
-  const vacio: ControlStockAndreani = { runAt: null, filas: [], corridas: [], enColaPorModelo: [] }
+/**
+ * Lectura EN VIVO del control de stock: última corrida medida de
+ * wh_stock_readings + el comparable GO calculado en este instante. La usa
+ * SOLO el cron de cortes (/api/cron/control-stock) que corre a los :50,
+ * 6 minutos después de cada corrida del job — la UI lee los cortes guardados,
+ * nunca esta lectura (Andreani no es tiempo real, comparar en vivo mezcla
+ * momentos distintos).
+ */
+export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
+  const vacio: LecturaControlStock = { runAt: null, filas: [], enColaPorModelo: [] }
   const pool = getPool()
   if (!pool) return vacio
 
   const client = await pool.connect()
   try {
-    const [filasRes, corridasRes, enColaRes] = await Promise.all([
+    const [filasRes, enColaRes] = await Promise.all([
       client.query<{
         sku: string
         nombre: string | null
@@ -2667,17 +2666,6 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
            AND (r.medido OR r.error IS NOT NULL OR r.and_total > 0 OR r.nuestro_disponible > 0
                 OR COALESCE(inv.wh, 0) > 0)`
       ),
-      client.query<{ run_at: Date; medidos: string; con_dif: string; unidades: string; errores: string }>(
-        `SELECT run_at,
-                COUNT(*) FILTER (WHERE medido)::text AS medidos,
-                COUNT(*) FILTER (WHERE medido AND and_disponible <> nuestro_disponible)::text AS con_dif,
-                COALESCE(SUM(ABS(and_disponible - nuestro_disponible)) FILTER (WHERE medido), 0)::text AS unidades,
-                COUNT(*) FILTER (WHERE error IS NOT NULL)::text AS errores
-         FROM wh_stock_readings
-         GROUP BY run_at
-         ORDER BY run_at DESC
-         LIMIT 12`
-      ),
       // Vendido EN COLA (queued/sending): Andreani no lo conoce y el color-SKU
       // aún no está asignado — solo agrupable por modelo
       client.query<{ nombre: string; unidades: string }>(
@@ -2713,13 +2701,6 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
     return {
       runAt: filasRes.rows[0]?.run_at ? new Date(filasRes.rows[0].run_at).toISOString() : null,
       filas,
-      corridas: corridasRes.rows.map(r => ({
-        runAt: new Date(r.run_at).toISOString(),
-        medidos: Number(r.medidos),
-        conDiferencia: Number(r.con_dif),
-        unidadesDif: Number(r.unidades),
-        errores: Number(r.errores),
-      })),
       enColaPorModelo: enColaRes.rows
         .map(r => ({ nombre: r.nombre, unidades: Number(r.unidades) }))
         .sort((a, b) => b.unidades - a.unidades),

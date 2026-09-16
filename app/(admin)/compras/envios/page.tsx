@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, fetchControlStockAndreani, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ControlStockAndreani } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
+import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/control-stock'
+import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
 import { metaEstado } from '@/lib/rescates'
@@ -28,28 +30,23 @@ export default async function EnviosPage({
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
-  let controlStock: ControlStockAndreani = { runAt: null, filas: [], corridas: [], enColaPorModelo: [] }
   try {
-    ;[asns, alertas, rescates, siniestros, controlStock] = await Promise.all([
+    ;[asns, alertas, rescates, siniestros] = await Promise.all([
       fetchAsns(),
       fetchAlertasEnvios(),
       getRescatesCompletos(),
       getSiniestrosCompletos(),
-      fetchControlStockAndreani(),
     ])
   } catch {
     // GOcelular no disponible
   }
+  // Cortes del control de stock (Supabase — no depende de GOcelular)
+  const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
-  // Diferencias netas por modelo (los colores del mismo modelo se compensan)
-  const modelosConDif = (() => {
-    const porModelo = new Map<string, number>()
-    for (const f of controlStock.filas.filter(x => x.medido)) {
-      porModelo.set(f.nombre, (porModelo.get(f.nombre) ?? 0) + f.dif)
-    }
-    return [...porModelo.values()].filter(d => d !== 0).length
-  })()
+  const modelosConDif = cortesControlStock[0]
+    ? netoPorModelo(cortesControlStock[0].filas, cortesControlStock[0].enCola).filter(m => m.dif !== 0).length
+    : 0
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
@@ -140,7 +137,7 @@ export default async function EnviosPage({
         {
           id: 'control-stock',
           label: modelosConDif > 0 ? `Control Stock (${modelosConDif})` : 'Control Stock',
-          content: <ControlStockTable control={controlStock} />,
+          content: <ControlStockTable cortes={cortesControlStock} />,
         },
         {
           id: 'asn',
