@@ -17,6 +17,8 @@ export interface DevengoMensual {
   estado: FilaHistorialBono['estado']
   mes: string // 'yyyy-mm' de la venta
   unidades: number // devengadas en el mes (ya recortadas al cupo)
+  bonoTotal: number // monto del bono por unidad ($ c/IVA a nivel PVP)
+  bonoAplicado: number // traslado: lo que bajó el precio de venta ($ c/IVA)
   margenUnitario: number // (monto − traslado) ÷ 1,21
   margenTotal: number
 }
@@ -60,6 +62,8 @@ export function armarMargenExtraMensual(
         estado: b.estado,
         mes,
         unidades,
+        bonoTotal: b.monto,
+        bonoAplicado: b.traslado ?? b.monto,
         margenUnitario: b.margenExtraUnitario,
         margenTotal: unidades * b.margenExtraUnitario,
       })

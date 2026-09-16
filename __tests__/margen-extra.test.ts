@@ -36,6 +36,11 @@ describe('armarMargenExtraMensual', () => {
     expect(r[0].margenTotal).toBeCloseTo(30 * (10000 / 1.21), 2)
   })
 
+  it('expone el bono total y el aplicado (traslado) de cada campaña', () => {
+    const r = armarMargenExtraMensual([fila()], [venta('2026-08-25', 5)])
+    expect(r[0]).toMatchObject({ bonoTotal: 30000, bonoAplicado: 20000 })
+  })
+
   it('el cupo corta en orden cronológico: devenga hasta agotarlo y después nada', () => {
     const r = armarMargenExtraMensual(
       [fila({ cupo: 40 })],

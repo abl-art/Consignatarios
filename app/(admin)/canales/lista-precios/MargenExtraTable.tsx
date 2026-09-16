@@ -157,6 +157,8 @@ export default function MargenExtraTable({ devengos }: { devengos: DevengoMensua
               <th className="text-left px-4 py-3 font-medium text-gray-600">Mes</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Vigencia del bono</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Unidades</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Bono total</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Bono aplicado</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Margen/u</th>
               <th className="text-right px-4 py-3 font-medium text-violet-700 bg-violet-50">Margen extra</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
@@ -174,6 +176,8 @@ export default function MargenExtraTable({ devengos }: { devengos: DevengoMensua
                   {d.desde ? fechaCorta(d.desde) : '—'} → {d.hasta ? fechaCorta(d.hasta) : 'sin vto'}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{d.unidades}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{peso(d.bonoTotal)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{peso(d.bonoAplicado)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{peso(d.margenUnitario)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{peso(d.margenTotal)}</td>
                 <td className="px-4 py-2.5">
@@ -185,7 +189,7 @@ export default function MargenExtraTable({ devengos }: { devengos: DevengoMensua
             ))}
             {visibles.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-400">
+                <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-400">
                   Sin margen extra devengado en el período elegido.
                 </td>
               </tr>
@@ -196,7 +200,7 @@ export default function MargenExtraTable({ devengos }: { devengos: DevengoMensua
               <tr>
                 <td className="px-4 py-2.5 font-semibold text-gray-700" colSpan={3}>Total</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-700">{unidadesPeriodo}</td>
-                <td className="px-4 py-2.5" />
+                <td className="px-4 py-2.5" colSpan={3} />
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold text-violet-800 bg-violet-50/40">{peso(totalPeriodo)}</td>
                 <td className="px-4 py-2.5" />
               </tr>
@@ -205,9 +209,10 @@ export default function MargenExtraTable({ devengos }: { devengos: DevengoMensua
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Margen extra = (bono − traslado) ÷ 1,21 por unidad: la parte del bono que no se trasladó al precio y queda
-        para GOcelular, neta de IVA. Se devenga en el MES DE VENTA de cada unidad; con cupo, solo devengan las
-        primeras unidades vendidas hasta agotarlo. Los bonos que trasladan todo el bono al precio no aparecen.
+        Bono total = lo que la marca bonifica por unidad · Bono aplicado = lo que se trasladó al precio de venta
+        (ambos $ c/IVA a nivel PVP) · Margen extra = (bono total − bono aplicado) ÷ 1,21 por unidad: la parte que
+        queda para GOcelular, neta de IVA. Se devenga en el MES DE VENTA de cada unidad; con cupo, solo devengan
+        las primeras unidades vendidas hasta agotarlo. Los bonos que trasladan todo el bono al precio no aparecen.
       </p>
     </div>
   )
