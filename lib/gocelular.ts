@@ -2558,6 +2558,15 @@ export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
 // (verificado 16/9: PBAT0006AR contó 1 WH Andreani + 1 en tránsito). Para el
 // control contra Andreani el lado GOcelular se recalcula EN VIVO solo con
 // physical_location='andreani_wh'; local y tránsito van aparte como contexto.
+//
+// Semántica verificada (16/9, hipótesis de Emiliano, 18/29 SKUs exactos y el
+// resto explicado por corrimiento horario): and_disponible = stock físico de
+// Andreani − pedidos que le ENVIAMOS y aún no pickeó. Nuestro available no
+// descuenta esos pedidos (el IMEI se asigna recién al pickear), así que el
+// lado GOcelular comparable = available en andreani_wh − enviados sin pickear.
+// Los pedidos EN COLA Andreani no los conoce, pero están dentro de ambos
+// lados de la comparación (no la distorsionan) y NO tienen color-SKU asignado
+// todavía — solo se pueden restar a nivel MODELO, como "disponible real".
 
 export interface ControlStockFila {
   sku: string
@@ -2567,11 +2576,13 @@ export interface ControlStockFila {
   andAsignada: number
   /** Disponibles en el WH de Andreani según GOcelular (en vivo, solo andreani_wh) */
   goAndreani: number
+  /** Unidades de pedidos enviados a Andreani sin pickear (Andreani ya las descontó) */
+  goEnviados: number
   /** Disponibles en el depósito propio de GOcuotas (contexto, no entra en la dif) */
   goLocal: number
   /** Disponibles en tránsito a Andreani (contexto, no entra en la dif) */
   goTransito: number
-  /** Andreani disponible (corrida) − GOcelular WH Andreani (vivo) */
+  /** Andreani disponible (corrida) − (GOcelular WH Andreani − enviados sin pickear) */
   dif: number
   medido: boolean
   error: string | null
@@ -2589,16 +2600,19 @@ export interface ControlStockAndreani {
   runAt: string | null
   filas: ControlStockFila[]
   corridas: ControlStockCorrida[]
+  /** Unidades vendidas EN COLA (aún sin enviar a Andreani), por nombre de modelo —
+   * sin color-SKU asignado todavía; solo restables a nivel modelo */
+  enColaPorModelo: { nombre: string; unidades: number }[]
 }
 
 export async function fetchControlStockAndreani(): Promise<ControlStockAndreani> {
-  const vacio: ControlStockAndreani = { runAt: null, filas: [], corridas: [] }
+  const vacio: ControlStockAndreani = { runAt: null, filas: [], corridas: [], enColaPorModelo: [] }
   const pool = getPool()
   if (!pool) return vacio
 
   const client = await pool.connect()
   try {
-    const [filasRes, corridasRes] = await Promise.all([
+    const [filasRes, corridasRes, enColaRes] = await Promise.all([
       client.query<{
         sku: string
         nombre: string | null
@@ -2606,6 +2620,7 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
         and_disponible: number
         and_asignada: number
         go_andreani: number
+        go_enviados: number
         go_local: number
         go_transito: number
         medido: boolean
@@ -2621,6 +2636,7 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
                 ) AS nombre,
                 r.and_total, r.and_disponible, r.and_asignada,
                 COALESCE(inv.wh, 0) AS go_andreani,
+                COALESCE(env.unidades, 0) AS go_enviados,
                 COALESCE(inv.local, 0) AS go_local,
                 COALESCE(inv.transito, 0) AS go_transito,
                 r.medido, r.error, r.run_at
@@ -2634,6 +2650,19 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
            WHERE status = 'available'
            GROUP BY sku
          ) inv ON inv.sku = r.sku
+         LEFT JOIN (
+           -- Unidades de pedidos enviados a Andreani sin pickear, por color-SKU:
+           -- el SKU viaja en las líneas del payload del pedido (la columna
+           -- numero_orden_externa está siempre vacía, el SO-* también va en el payload)
+           SELECT l->'articulo'->>'codigo' AS sku, SUM((l->'articulo'->>'cantidad')::int)::int AS unidades
+           FROM andreani_wh_transactions t
+           CROSS JOIN LATERAL jsonb_array_elements(t.payload->'pedido'->'lineas') l
+           JOIN store_orders so ON so.order_number = t.payload->'pedido'->>'numeroOrdenExterna'
+           JOIN andreani_wh_pedidos p ON p.store_order_id = so.id
+           WHERE t.tipo = 'pedido' AND t.estado = 'accepted' AND t.superseded_at IS NULL
+             AND p.estado IN ('sent', 'picking')
+           GROUP BY 1
+         ) env ON env.sku = r.sku
          WHERE r.run_at = (SELECT MAX(run_at) FROM wh_stock_readings WHERE medido)
            AND (r.medido OR r.error IS NOT NULL OR r.and_total > 0 OR r.nuestro_disponible > 0
                 OR COALESCE(inv.wh, 0) > 0)`
@@ -2649,6 +2678,19 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
          ORDER BY run_at DESC
          LIMIT 12`
       ),
+      // Vendido EN COLA (queued/sending): Andreani no lo conoce y el color-SKU
+      // aún no está asignado — solo agrupable por modelo
+      client.query<{ nombre: string; unidades: string }>(
+        `SELECT COALESCE(dm.name, sp.model_code, sp.display_name) AS nombre,
+                SUM(soi.quantity)::text AS unidades
+         FROM andreani_wh_pedidos p
+         JOIN store_orders so ON so.id = p.store_order_id
+         JOIN store_order_items soi ON soi.order_id = so.id
+         JOIN store_products sp ON sp.id = soi.product_id
+         LEFT JOIN device_models dm ON dm.model_code = sp.model_code
+         WHERE p.estado IN ('queued', 'sending') AND sp.is_addon = false
+         GROUP BY 1`
+      ),
     ])
 
     const filas: ControlStockFila[] = filasRes.rows
@@ -2659,9 +2701,10 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
         andDisponible: Number(r.and_disponible),
         andAsignada: Number(r.and_asignada),
         goAndreani: Number(r.go_andreani),
+        goEnviados: Number(r.go_enviados),
         goLocal: Number(r.go_local),
         goTransito: Number(r.go_transito),
-        dif: Number(r.and_disponible) - Number(r.go_andreani),
+        dif: Number(r.and_disponible) - (Number(r.go_andreani) - Number(r.go_enviados)),
         medido: r.medido,
         error: r.error,
       }))
@@ -2677,6 +2720,9 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
         unidadesDif: Number(r.unidades),
         errores: Number(r.errores),
       })),
+      enColaPorModelo: enColaRes.rows
+        .map(r => ({ nombre: r.nombre, unidades: Number(r.unidades) }))
+        .sort((a, b) => b.unidades - a.unidades),
     }
   } finally {
     client.release()

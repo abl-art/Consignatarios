@@ -28,7 +28,7 @@ export default async function EnviosPage({
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
-  let controlStock: ControlStockAndreani = { runAt: null, filas: [], corridas: [] }
+  let controlStock: ControlStockAndreani = { runAt: null, filas: [], corridas: [], enColaPorModelo: [] }
   try {
     ;[asns, alertas, rescates, siniestros, controlStock] = await Promise.all([
       fetchAsns(),
