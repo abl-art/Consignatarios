@@ -25,6 +25,8 @@ export interface CorteControlStock {
   runAt: string
   corteAt: string
   enCola: { nombre: string; unidades: number }[]
+  /** Unidades recibidas en el WH en las 48h previas al corte, por modelo (contexto putaway) */
+  recepciones: { nombre: string; unidades: number }[]
   filas: CorteDetalleFila[]
 }
 
@@ -35,7 +37,7 @@ export async function getCortesControlStock(maxCortes = 28): Promise<CorteContro
   const supabase = createAdminClient()
   const { data: cortes } = await supabase
     .from('control_stock_cortes')
-    .select('id, run_at, corte_at, en_cola')
+    .select('id, run_at, corte_at, en_cola, recepciones')
     .order('run_at', { ascending: false })
     .limit(maxCortes)
   if (!cortes || cortes.length === 0) return []
@@ -65,6 +67,7 @@ export async function getCortesControlStock(maxCortes = 28): Promise<CorteContro
     runAt: new Date(c.run_at as string).toISOString(),
     corteAt: new Date(c.corte_at as string).toISOString(),
     enCola: (c.en_cola as { nombre: string; unidades: number }[] | null) ?? [],
+    recepciones: (c.recepciones as { nombre: string; unidades: number }[] | null) ?? [],
     filas: (porCorte.get(c.id as string) ?? []).sort(
       (a, b) => Math.abs(b.dif) - Math.abs(a.dif) || (a.nombre ?? '').localeCompare(b.nombre ?? ''),
     ),

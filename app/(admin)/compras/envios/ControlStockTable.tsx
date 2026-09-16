@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { netoPorModelo, type ModeloNeto } from '@/lib/control-stock'
+import { clasificarCortes, netoPorModelo, type DifClasificada, type ModeloNeto } from '@/lib/control-stock'
 import type { CorteControlStock } from '@/lib/actions/control-stock'
 
 // Solapa Control Stock: SOLO cortes guardados (4 por día, a los ~:50 de cada
@@ -10,6 +10,10 @@ import type { CorteControlStock } from '@/lib/actions/control-stock'
 // mezcla momentos). Semántica verificada: And. disponible = stock físico −
 // pedidos enviados sin pickear; GO comparable = available en andreani_wh −
 // enviados sin pickear. En un corte sano la diferencia debería ser 0.
+// Las diferencias se clasifican por PERSISTENCIA entre cortes (sin log de
+// movimientos de Andreani no hay forma de conocer la causa en el momento):
+// solo las que sobreviven ≥2 cortes consecutivos son reales; las que
+// desaparecen solas fueron timing y quedan colapsadas con su retro-etiqueta.
 
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', {
@@ -25,6 +29,28 @@ function DifBadge({ dif }: { dif: number }) {
   return (
     <span className={`font-bold ${Math.abs(dif) >= 5 ? 'text-red-600' : 'text-amber-600'}`}>
       {dif > 0 ? '+' : ''}{dif}
+    </span>
+  )
+}
+
+function EstadoChip({ dif, fechaDesde }: { dif: DifClasificada; fechaDesde: string }) {
+  const chip = {
+    real: { texto: `Real — persiste desde ${fechaDesde} (${dif.cortes} cortes)`, clase: 'bg-red-50 text-red-700' },
+    nueva: { texto: 'Nueva — a confirmar en el próximo corte', clase: 'bg-amber-50 text-amber-700' },
+    resuelta: { texto: 'Se resolvió sola — fue timing', clase: 'bg-green-50 text-green-700' },
+    persistia: { texto: 'Persistía en el corte siguiente', clase: 'bg-amber-50 text-amber-700' },
+  }[dif.estado]
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium ${chip.clase}`}>{chip.texto}</span>
+      {dif.recepcion48h > 0 && dif.dif < 0 && (
+        <span
+          className="inline-flex px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium"
+          title="Hubo recepción reciente de este modelo: Andreani puede no haber terminado el putaway"
+        >
+          📦 {dif.recepcion48h} recibidos 48h — putaway probable
+        </span>
+      )}
     </span>
   )
 }
@@ -53,7 +79,17 @@ function Tarjeta({ titulo, abiertaInicial, resumen, children }: {
   )
 }
 
-function TablaModelos({ modelos }: { modelos: ModeloNeto[] }) {
+const PESO_ESTADO = { real: 0, nueva: 1, persistia: 1, resuelta: 2 } as const
+
+function TablaModelos({ modelos, clasificacion }: {
+  modelos: ModeloNeto[]
+  clasificacion: Map<string, DifClasificada>
+}) {
+  const filas = [...modelos].sort((a, b) => {
+    const pa = a.dif !== 0 ? PESO_ESTADO[clasificacion.get(a.nombre)?.estado ?? 'nueva'] : 3
+    const pb = b.dif !== 0 ? PESO_ESTADO[clasificacion.get(b.nombre)?.estado ?? 'nueva'] : 3
+    return pa - pb || Math.abs(b.dif) - Math.abs(a.dif) || a.nombre.localeCompare(b.nombre)
+  })
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -64,33 +100,53 @@ function TablaModelos({ modelos }: { modelos: ModeloNeto[] }) {
             <th className="py-2 px-3 font-medium text-right">Andreani disp.</th>
             <th className="py-2 px-3 font-medium text-right">GO comparable</th>
             <th className="py-2 px-3 font-medium text-right">Diferencia</th>
+            <th className="py-2 px-3 font-medium">Estado</th>
             <th className="py-2 px-3 font-medium text-right">En cola (solo GO)</th>
             <th className="py-2 px-3 font-medium text-right text-magenta-700">Disponible real</th>
           </tr>
         </thead>
         <tbody>
-          {modelos.map(m => (
-            <tr key={m.nombre} className={`border-b border-gray-100 ${m.dif !== 0 ? 'bg-amber-50/40' : ''}`}>
-              <td className="py-1.5 px-3 text-gray-900">{m.nombre}</td>
-              <td className="py-1.5 px-3 text-right text-gray-500">{m.skus}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.andDisponible}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.goComparable}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums"><DifBadge dif={m.dif} /></td>
-              <td className="py-1.5 px-3 text-right tabular-nums text-gray-500">{m.enCola > 0 ? `−${m.enCola}` : '—'}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-magenta-700">{m.disponibleReal}</td>
-            </tr>
-          ))}
+          {filas.map(m => {
+            const dif = m.dif !== 0 ? clasificacion.get(m.nombre) : undefined
+            const esReal = dif?.estado === 'real'
+            return (
+              <tr key={m.nombre} className={`border-b border-gray-100 ${esReal ? 'bg-red-50/40' : m.dif !== 0 ? 'bg-amber-50/40' : ''}`}>
+                <td className="py-1.5 px-3 text-gray-900">{m.nombre}</td>
+                <td className="py-1.5 px-3 text-right text-gray-500">{m.skus}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.andDisponible}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.goComparable}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums"><DifBadge dif={m.dif} /></td>
+                <td className="py-1.5 px-3">{dif ? <EstadoChip dif={dif} fechaDesde={fechaHora(dif.desde)} /> : <span className="text-gray-300">—</span>}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-gray-500">{m.enCola > 0 ? `−${m.enCola}` : '—'}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-magenta-700">{m.disponibleReal}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
 }
 
-function FilaCorteExpandible({ corte, abiertaInicial }: { corte: CorteControlStock; abiertaInicial: boolean }) {
+function FilaCorteExpandible({ corte, modelos, clasificacion, abiertaInicial }: {
+  corte: CorteControlStock
+  modelos: ModeloNeto[]
+  clasificacion: Map<string, DifClasificada>
+  abiertaInicial: boolean
+}) {
   const [abierta, setAbierta] = useState(abiertaInicial)
-  const modelos = useMemo(() => netoPorModelo(corte.filas, corte.enCola), [corte])
-  const conDif = modelos.filter(m => m.dif !== 0)
-  const unidades = conDif.reduce((s, m) => s + Math.abs(m.dif), 0)
+  const difs = [...clasificacion.values()]
+  const porEstado = (estado: DifClasificada['estado']) => difs.filter(d => d.estado === estado).length
+  const reales = porEstado('real')
+  const nuevas = porEstado('nueva')
+  const persistian = porEstado('persistia')
+  const resueltas = porEstado('resuelta')
+  const resumen = [
+    reales > 0 && `${reales} reales`,
+    nuevas > 0 && `${nuevas} a confirmar`,
+    persistian > 0 && `${persistian} persistían`,
+    resueltas > 0 && `${resueltas} se resolvieron solas`,
+  ].filter(Boolean).join(' · ')
   return (
     <div className="border border-gray-100 rounded-lg">
       <button
@@ -100,15 +156,15 @@ function FilaCorteExpandible({ corte, abiertaInicial }: { corte: CorteControlSto
         <span className="text-sm font-medium text-gray-900">{fechaHora(corte.runAt)}</span>
         <span className="flex items-center gap-4 text-xs">
           <span className="text-gray-500">{corte.filas.filter(f => f.medido).length} SKUs</span>
-          <span className={conDif.length > 0 ? 'text-amber-600 font-semibold' : 'text-green-700 font-medium'}>
-            {conDif.length > 0 ? `${conDif.length} modelos con dif (${unidades} u.)` : '✓ sin diferencias'}
+          <span className={reales > 0 || persistian > 0 ? 'text-red-600 font-semibold' : nuevas > 0 ? 'text-amber-600 font-semibold' : 'text-green-700 font-medium'}>
+            {difs.length > 0 ? resumen : '✓ sin diferencias'}
           </span>
           <span className={`text-gray-400 transition-transform ${abierta ? 'rotate-90' : ''}`}>›</span>
         </span>
       </button>
       {abierta && (
         <div className="px-3 pb-3">
-          <TablaModelos modelos={modelos} />
+          <TablaModelos modelos={modelos} clasificacion={clasificacion} />
           <p className="text-[10px] text-gray-400 mt-1.5">
             Andreani leído a las {fechaHora(corte.runAt)} · lado GOcelular medido a las {fechaHora(corte.corteAt)}
           </p>
@@ -119,17 +175,29 @@ function FilaCorteExpandible({ corte, abiertaInicial }: { corte: CorteControlSto
 }
 
 export default function ControlStockTable({ cortes }: { cortes: CorteControlStock[] }) {
-  // Serie del gráfico y píldoras (hooks antes de cualquier return condicional)
-  const serieBase = useMemo(() => {
+  // Cortes ascendentes con su neto por modelo y la clasificación por
+  // persistencia (hooks antes de cualquier return condicional)
+  const cortesClasificados = useMemo(() => {
     const asc = [...cortes].sort((a, b) => a.runAt.localeCompare(b.runAt))
-    return asc.map(c => {
-      const modelos = netoPorModelo(c.filas, c.enCola)
+    const conModelos = asc.map(c => ({ corte: c, modelos: netoPorModelo(c.filas, c.enCola) }))
+    const clasificados = clasificarCortes(
+      conModelos.map(x => ({ runAt: x.corte.runAt, modelos: x.modelos, recepciones: x.corte.recepciones })),
+    )
+    return conModelos.map((x, i) => ({
+      ...x,
+      clasificacion: new Map(clasificados[i].difs.map(d => [d.nombre, d])),
+    }))
+  }, [cortes])
+
+  // Serie del gráfico y píldoras
+  const serieBase = useMemo(() => {
+    return cortesClasificados.map(({ corte: c, modelos }) => {
       const dif: Record<string, number> = {}
       for (const m of modelos) dif[m.nombre] = m.dif
       const total = modelos.reduce((s, m) => s + Math.abs(m.dif), 0)
       return { label: fechaHora(c.runAt), dif, total }
     })
-  }, [cortes])
+  }, [cortesClasificados])
   const modelosDelGrafico = useMemo(() => {
     const maxAbs = new Map<string, number>()
     for (const p of serieBase) {
@@ -154,10 +222,13 @@ export default function ControlStockTable({ cortes }: { cortes: CorteControlStoc
     )
   }
 
-  const ultimo = cortes[0]
-  const modelosUltimo = netoPorModelo(ultimo.filas, ultimo.enCola)
-  const conDifUltimo = modelosUltimo.filter(m => m.dif !== 0)
-  const unidadesNetas = conDifUltimo.reduce((s, m) => s + Math.abs(m.dif), 0)
+  const ultimoClasificado = cortesClasificados[cortesClasificados.length - 1]
+  const ultimo = ultimoClasificado.corte
+  const difsUltimo = [...ultimoClasificado.clasificacion.values()]
+  const reales = difsUltimo.filter(d => d.estado === 'real')
+  const nuevas = difsUltimo.filter(d => d.estado === 'nueva')
+  const unidadesReales = reales.reduce((s, d) => s + Math.abs(d.dif), 0)
+  const unidadesNuevas = nuevas.reduce((s, d) => s + Math.abs(d.dif), 0)
   const enColaTotal = ultimo.enCola.reduce((s, e) => s + e.unidades, 0)
 
   const sel = modeloSel ?? modelosDelGrafico[0] ?? null
@@ -176,14 +247,18 @@ export default function ControlStockTable({ cortes }: { cortes: CorteControlStoc
           <p className="text-xs text-gray-400 mt-1">3 cortes por día (la corrida de las 21:44 ART falla siempre)</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm text-gray-500">Modelos con diferencia</p>
-          <p className={`text-2xl font-bold mt-1 ${conDifUltimo.length > 0 ? 'text-amber-600' : 'text-green-700'}`}>{conDifUltimo.length}</p>
-          <p className="text-xs text-gray-400 mt-1">de {modelosUltimo.length} modelos medidos</p>
+          <p className="text-sm text-gray-500">Diferencias reales</p>
+          <p className={`text-2xl font-bold mt-1 ${reales.length > 0 ? 'text-red-600' : 'text-green-700'}`}>
+            {reales.length > 0 ? `${reales.length} (${unidadesReales} u.)` : '✓ 0'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">persisten ≥2 cortes — trabajar solo sobre estas</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm text-gray-500">Unidades de diferencia</p>
-          <p className={`text-2xl font-bold mt-1 ${unidadesNetas > 0 ? 'text-red-600' : 'text-green-700'}`}>{unidadesNetas}</p>
-          <p className="text-xs text-gray-400 mt-1">neta por modelo — debería ser 0</p>
+          <p className="text-sm text-gray-500">Nuevas — a confirmar</p>
+          <p className={`text-2xl font-bold mt-1 ${nuevas.length > 0 ? 'text-amber-600' : 'text-green-700'}`}>
+            {nuevas.length > 0 ? `${nuevas.length} (${unidadesNuevas} u.)` : '✓ 0'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">timing o real: se decide solo en el próximo corte</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-sm text-gray-500">Vendido en cola</p>
@@ -196,11 +271,17 @@ export default function ControlStockTable({ cortes }: { cortes: CorteControlStoc
       <Tarjeta
         titulo="Cortes"
         abiertaInicial
-        resumen="Un corte por corrida del job (Andreani y GOcelular medidos en el mismo momento) — expandí cada uno para ver el neto por modelo"
+        resumen="Un corte por corrida del job (Andreani y GOcelular medidos en el mismo momento) — cada dif viene clasificada por persistencia: las que se resolvieron solas fueron timing"
       >
         <div className="space-y-2">
-          {cortes.map((c, i) => (
-            <FilaCorteExpandible key={c.id} corte={c} abiertaInicial={i === 0} />
+          {[...cortesClasificados].reverse().map((x, i) => (
+            <FilaCorteExpandible
+              key={x.corte.id}
+              corte={x.corte}
+              modelos={x.modelos}
+              clasificacion={x.clasificacion}
+              abiertaInicial={i === 0}
+            />
           ))}
         </div>
       </Tarjeta>

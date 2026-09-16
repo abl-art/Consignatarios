@@ -10,8 +10,10 @@ CREATE TABLE IF NOT EXISTS control_stock_cortes (
   run_at timestamptz UNIQUE NOT NULL,   -- corrida de wh_stock_readings
   corte_at timestamptz NOT NULL,        -- cuándo se midió el lado GOcelular
   en_cola jsonb,                        -- [{nombre, unidades}] vendido en cola (solo GO, por modelo)
+  recepciones jsonb,                    -- [{nombre, unidades}] recibido en WH en las 48h previas (contexto putaway)
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE control_stock_cortes ADD COLUMN IF NOT EXISTS recepciones jsonb;
 
 CREATE TABLE IF NOT EXISTS control_stock_cortes_detalle (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

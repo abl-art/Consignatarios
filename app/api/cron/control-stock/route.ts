@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       run_at: lectura.runAt,
       corte_at: new Date().toISOString(),
       en_cola: lectura.enColaPorModelo,
+      recepciones: lectura.recepciones48h,
     })
     .select('id')
     .single()

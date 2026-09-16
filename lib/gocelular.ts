@@ -2594,6 +2594,11 @@ export interface LecturaControlStock {
   /** Unidades vendidas EN COLA (aún sin enviar a Andreani), por nombre de modelo —
    * sin color-SKU asignado todavía; solo restables a nivel modelo */
   enColaPorModelo: { nombre: string; unidades: number }[]
+  /** Unidades recibidas en el WH Andreani en las últimas 48h, por modelo —
+   * contexto de putaway para las difs negativas (andreani_received_at viene
+   * retrodatado: sirve como señal de recepción reciente, no para reconstruir
+   * el estado exacto al corte) */
+  recepciones48h: { nombre: string; unidades: number }[]
 }
 
 /**
@@ -2605,13 +2610,13 @@ export interface LecturaControlStock {
  * momentos distintos).
  */
 export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
-  const vacio: LecturaControlStock = { runAt: null, filas: [], enColaPorModelo: [] }
+  const vacio: LecturaControlStock = { runAt: null, filas: [], enColaPorModelo: [], recepciones48h: [] }
   const pool = getPool()
   if (!pool) return vacio
 
   const client = await pool.connect()
   try {
-    const [filasRes, enColaRes] = await Promise.all([
+    const [filasRes, enColaRes, recepcionesRes] = await Promise.all([
       client.query<{
         sku: string
         nombre: string | null
@@ -2689,6 +2694,23 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
          WHERE p.estado IN ('queued', 'sending') AND sp.is_addon = false
          GROUP BY 1`
       ),
+      // Recepciones de las últimas 48h por modelo: contexto de putaway para
+      // las difs negativas (Andreani puede tardar en reflejar lo recién
+      // ingresado). Señal heurística — received_at viene retrodatado.
+      client.query<{ nombre: string; unidades: string }>(
+        `SELECT COALESCE(
+                  (SELECT dm.name FROM device_model_skus dms
+                   JOIN device_models dm ON dm.model_code = dms.model_code
+                   WHERE dms.sku = ii.sku LIMIT 1),
+                  (SELECT sp.display_name FROM store_products sp WHERE sp.sku = ii.sku LIMIT 1),
+                  ii.sku
+                ) AS nombre,
+                COUNT(*)::text AS unidades
+         FROM inventory_items ii
+         WHERE ii.status = 'available' AND ii.physical_location = 'andreani_wh'
+           AND ii.andreani_received_at >= now() - interval '48 hours'
+         GROUP BY 1`
+      ),
     ])
 
     const filas: ControlStockFila[] = filasRes.rows
@@ -2712,6 +2734,9 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
       runAt: filasRes.rows[0]?.run_at ? new Date(filasRes.rows[0].run_at).toISOString() : null,
       filas,
       enColaPorModelo: enColaRes.rows
+        .map(r => ({ nombre: r.nombre, unidades: Number(r.unidades) }))
+        .sort((a, b) => b.unidades - a.unidades),
+      recepciones48h: recepcionesRes.rows
         .map(r => ({ nombre: r.nombre, unidades: Number(r.unidades) }))
         .sort((a, b) => b.unidades - a.unidades),
     }
