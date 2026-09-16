@@ -2512,3 +2512,113 @@ export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
     client.release()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Control de stock Andreani vs GOcelular (tabla wh_stock_readings)
+// ---------------------------------------------------------------------------
+// GOcelular corre un job cada 6 horas (00:44/06:44/12:44/18:44 UTC) que
+// consulta la API de Andreani por SKU y guarda su stock contra el disponible
+// propio. La corrida de las 00:44 falla siempre (ventana de mantenimiento de
+// Andreani) — por eso la "última corrida" es la última CON mediciones.
+
+export interface ControlStockFila {
+  sku: string
+  nombre: string
+  andTotal: number
+  andDisponible: number
+  andAsignada: number
+  goDisponible: number
+  /** Andreani disponible − GOcelular disponible */
+  dif: number
+  medido: boolean
+  error: string | null
+}
+
+export interface ControlStockCorrida {
+  runAt: string
+  medidos: number
+  conDiferencia: number
+  unidadesDif: number
+  errores: number
+}
+
+export interface ControlStockAndreani {
+  runAt: string | null
+  filas: ControlStockFila[]
+  corridas: ControlStockCorrida[]
+}
+
+export async function fetchControlStockAndreani(): Promise<ControlStockAndreani> {
+  const vacio: ControlStockAndreani = { runAt: null, filas: [], corridas: [] }
+  const pool = getPool()
+  if (!pool) return vacio
+
+  const client = await pool.connect()
+  try {
+    const [filasRes, corridasRes] = await Promise.all([
+      client.query<{
+        sku: string
+        nombre: string | null
+        and_total: number
+        and_disponible: number
+        and_asignada: number
+        nuestro_disponible: number
+        medido: boolean
+        error: string | null
+        run_at: Date
+      }>(
+        `SELECT r.sku,
+                COALESCE(
+                  (SELECT dm.name FROM device_model_skus dms
+                   JOIN device_models dm ON dm.model_code = dms.model_code
+                   WHERE dms.sku = r.sku LIMIT 1),
+                  (SELECT sp.display_name FROM store_products sp WHERE sp.sku = r.sku LIMIT 1)
+                ) AS nombre,
+                r.and_total, r.and_disponible, r.and_asignada,
+                r.nuestro_disponible, r.medido, r.error, r.run_at
+         FROM wh_stock_readings r
+         WHERE r.run_at = (SELECT MAX(run_at) FROM wh_stock_readings WHERE medido)
+           AND (r.medido OR r.error IS NOT NULL OR r.and_total > 0 OR r.nuestro_disponible > 0)`
+      ),
+      client.query<{ run_at: Date; medidos: string; con_dif: string; unidades: string; errores: string }>(
+        `SELECT run_at,
+                COUNT(*) FILTER (WHERE medido)::text AS medidos,
+                COUNT(*) FILTER (WHERE medido AND and_disponible <> nuestro_disponible)::text AS con_dif,
+                COALESCE(SUM(ABS(and_disponible - nuestro_disponible)) FILTER (WHERE medido), 0)::text AS unidades,
+                COUNT(*) FILTER (WHERE error IS NOT NULL)::text AS errores
+         FROM wh_stock_readings
+         GROUP BY run_at
+         ORDER BY run_at DESC
+         LIMIT 12`
+      ),
+    ])
+
+    const filas: ControlStockFila[] = filasRes.rows
+      .map(r => ({
+        sku: r.sku,
+        nombre: r.nombre ?? r.sku,
+        andTotal: Number(r.and_total),
+        andDisponible: Number(r.and_disponible),
+        andAsignada: Number(r.and_asignada),
+        goDisponible: Number(r.nuestro_disponible),
+        dif: Number(r.and_disponible) - Number(r.nuestro_disponible),
+        medido: r.medido,
+        error: r.error,
+      }))
+      .sort((a, b) => Math.abs(b.dif) - Math.abs(a.dif) || a.nombre.localeCompare(b.nombre))
+
+    return {
+      runAt: filasRes.rows[0]?.run_at ? new Date(filasRes.rows[0].run_at).toISOString() : null,
+      filas,
+      corridas: corridasRes.rows.map(r => ({
+        runAt: new Date(r.run_at).toISOString(),
+        medidos: Number(r.medidos),
+        conDiferencia: Number(r.con_dif),
+        unidadesDif: Number(r.unidades),
+        errores: Number(r.errores),
+      })),
+    }
+  } finally {
+    client.release()
+  }
+}

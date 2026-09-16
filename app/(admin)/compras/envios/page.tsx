@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchControlStockAndreani, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ControlStockAndreani } from '@/lib/gocelular'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
 import { metaEstado } from '@/lib/rescates'
@@ -13,6 +13,7 @@ import WarehouseFacturaUpload from './WarehouseFacturaUpload'
 import FacturasWarehouseTable from './FacturasWarehouseTable'
 import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
+import ControlStockTable from './ControlStockTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
 import SiniestrosTable from './SiniestrosTable'
@@ -27,13 +28,28 @@ export default async function EnviosPage({
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
+  let controlStock: ControlStockAndreani = { runAt: null, filas: [], corridas: [] }
   try {
-    ;[asns, alertas, rescates, siniestros] = await Promise.all([fetchAsns(), fetchAlertasEnvios(), getRescatesCompletos(), getSiniestrosCompletos()])
+    ;[asns, alertas, rescates, siniestros, controlStock] = await Promise.all([
+      fetchAsns(),
+      fetchAlertasEnvios(),
+      getRescatesCompletos(),
+      getSiniestrosCompletos(),
+      fetchControlStockAndreani(),
+    ])
   } catch {
     // GOcelular no disponible
   }
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
+  // Diferencias netas por modelo (los colores del mismo modelo se compensan)
+  const modelosConDif = (() => {
+    const porModelo = new Map<string, number>()
+    for (const f of controlStock.filas.filter(x => x.medido)) {
+      porModelo.set(f.nombre, (porModelo.get(f.nombre) ?? 0) + f.dif)
+    }
+    return [...porModelo.values()].filter(d => d !== 0).length
+  })()
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
@@ -120,6 +136,11 @@ export default async function EnviosPage({
           id: 'warehouse',
           label: 'Warehouse Andreani',
           content: <WarehouseAndreani />,
+        },
+        {
+          id: 'control-stock',
+          label: modelosConDif > 0 ? `Control Stock (${modelosConDif})` : 'Control Stock',
+          content: <ControlStockTable control={controlStock} />,
         },
         {
           id: 'asn',
