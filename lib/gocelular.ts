@@ -2370,6 +2370,38 @@ export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
   }
 }
 
+/**
+ * Accesorios en órdenes pagas de la tienda propia, últimos 30 días corridos
+ * (paid_at): cuántas órdenes llevan ≥1 ítem addon y cuánto se facturó de
+ * accesorios (unit_price × quantity, EN CENTAVOS — el llamador divide ÷100).
+ * Los kits de regalo de los bundles no son ítems addon, no inflan la métrica.
+ */
+export async function fetchAccesoriosVentas30d(): Promise<{ ordenes: number; conAccesorios: number; montoCentavos: number }> {
+  const pool = getPool()
+  if (!pool) return { ordenes: 0, conAccesorios: 0, montoCentavos: 0 }
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ ordenes: string; con_acc: string; monto: string }>(
+      `SELECT
+        COUNT(*)::text AS ordenes,
+        COUNT(*) FILTER (WHERE a.n > 0)::text AS con_acc,
+        COALESCE(SUM(a.monto), 0)::text AS monto
+      FROM store_orders o
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n, SUM(i.unit_price * i.quantity) AS monto
+        FROM store_order_items i
+        WHERE i.order_id = o.id AND i.kind = 'addon'
+      ) a ON true
+      WHERE o.paid_at >= now() - interval '30 days'`
+    )
+    const r = res.rows[0]
+    return { ordenes: Number(r.ordenes), conAccesorios: Number(r.con_acc), montoCentavos: Number(r.monto) }
+  } finally {
+    client.release()
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tiempo hasta asignación IMEI por tienda (terceros)
 // ---------------------------------------------------------------------------

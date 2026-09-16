@@ -4,7 +4,8 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
+import { resumenAccesorios } from '@/lib/accesorios'
 import { resumenVentasDia, proyectarVentasMensuales } from '@/lib/ventas-dia'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventario-resumen'
@@ -24,7 +25,7 @@ export default async function DashboardPage() {
   const desde7d = daysAgo7.toISOString().slice(0, 10)
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables, accesoriosRaw] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -40,7 +41,9 @@ export default async function DashboardPage() {
     fetchInventarioResumen().catch(() => ({ productos: [] })),
     fetchCuotasStats().catch(() => ({ monto_contracargos: 0 })),
     fetchOrdenesIncobrables().catch(() => [] as string[]),
+    fetchAccesoriosVentas30d().catch(() => ({ ordenes: 0, conAccesorios: 0, montoCentavos: 0 })),
   ])
+  const accesorios = resumenAccesorios(accesoriosRaw)
 
   // Stock disponible: los mismos datos que /inventario (fuente única)
   const inv = (key: ProductoKey) => inventarioResumen.productos.find(p => p.key === key)
@@ -88,6 +91,20 @@ export default async function DashboardPage() {
                 <p className="text-sm text-gray-500">días</p>
               </div>
               <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
+            </div>
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-500 mb-1">Ventas con accesorios</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-xl font-bold text-gray-700">{accesorios.pct.toLocaleString('es-AR')}%</p>
+                <p className="text-sm text-gray-500">de las órdenes</p>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d ·{' '}
+                {accesorios.monto >= 1e6
+                  ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
+                  : formatearMoneda(accesorios.monto)}{' '}
+                facturados
+              </p>
             </div>
           </div>
         </div>
