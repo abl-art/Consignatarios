@@ -2652,7 +2652,10 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
          LEFT JOIN (
            -- Unidades de pedidos enviados a Andreani sin pickear, por color-SKU:
            -- el SKU viaja en las líneas del payload del pedido (la columna
-           -- numero_orden_externa está siempre vacía, el SO-* también va en el payload)
+           -- numero_orden_externa está siempre vacía, el SO-* también va en el payload).
+           -- Con equipo YA ASIGNADO (pickeado) la unidad salió de available:
+           -- volver a restarla sería doble descuento (caso real SO-NDKKGE, +1
+           -- fantasma en el primer corte) — misma regla que fetchPendientesPicking.
            SELECT l->'articulo'->>'codigo' AS sku, SUM((l->'articulo'->>'cantidad')::int)::int AS unidades
            FROM andreani_wh_transactions t
            CROSS JOIN LATERAL jsonb_array_elements(t.payload->'pedido'->'lineas') l
@@ -2660,6 +2663,13 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
            JOIN andreani_wh_pedidos p ON p.store_order_id = so.id
            WHERE t.tipo = 'pedido' AND t.estado = 'accepted' AND t.superseded_at IS NULL
              AND p.estado IN ('sent', 'picking')
+             AND NOT EXISTS (
+               SELECT 1 FROM shipments s
+               WHERE s.store_order_id = so.id AND s.type = 'outbound' AND s.status <> 'cancelled'
+                 AND (s.imei IS NOT NULL OR s.delivered_at IS NOT NULL))
+             AND NOT EXISTS (
+               SELECT 1 FROM inventory_items ii
+               WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text)
            GROUP BY 1
          ) env ON env.sku = r.sku
          WHERE r.run_at = (SELECT MAX(run_at) FROM wh_stock_readings WHERE medido)
