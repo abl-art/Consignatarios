@@ -2552,6 +2552,12 @@ export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
 // consulta la API de Andreani por SKU y guarda su stock contra el disponible
 // propio. La corrida de las 00:44 falla siempre (ventana de mantenimiento de
 // Andreani) — por eso la "última corrida" es la última CON mediciones.
+//
+// OJO: nuestro_disponible (lo guarda el job) cuenta los available SIN filtrar
+// ubicación — incluye lo en tránsito y el depósito propio de GOcuotas
+// (verificado 16/9: PBAT0006AR contó 1 WH Andreani + 1 en tránsito). Para el
+// control contra Andreani el lado GOcelular se recalcula EN VIVO solo con
+// physical_location='andreani_wh'; local y tránsito van aparte como contexto.
 
 export interface ControlStockFila {
   sku: string
@@ -2559,8 +2565,13 @@ export interface ControlStockFila {
   andTotal: number
   andDisponible: number
   andAsignada: number
-  goDisponible: number
-  /** Andreani disponible − GOcelular disponible */
+  /** Disponibles en el WH de Andreani según GOcelular (en vivo, solo andreani_wh) */
+  goAndreani: number
+  /** Disponibles en el depósito propio de GOcuotas (contexto, no entra en la dif) */
+  goLocal: number
+  /** Disponibles en tránsito a Andreani (contexto, no entra en la dif) */
+  goTransito: number
+  /** Andreani disponible (corrida) − GOcelular WH Andreani (vivo) */
   dif: number
   medido: boolean
   error: string | null
@@ -2594,7 +2605,9 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
         and_total: number
         and_disponible: number
         and_asignada: number
-        nuestro_disponible: number
+        go_andreani: number
+        go_local: number
+        go_transito: number
         medido: boolean
         error: string | null
         run_at: Date
@@ -2607,10 +2620,23 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
                   (SELECT sp.display_name FROM store_products sp WHERE sp.sku = r.sku LIMIT 1)
                 ) AS nombre,
                 r.and_total, r.and_disponible, r.and_asignada,
-                r.nuestro_disponible, r.medido, r.error, r.run_at
+                COALESCE(inv.wh, 0) AS go_andreani,
+                COALESCE(inv.local, 0) AS go_local,
+                COALESCE(inv.transito, 0) AS go_transito,
+                r.medido, r.error, r.run_at
          FROM wh_stock_readings r
+         LEFT JOIN (
+           SELECT sku,
+                  COUNT(*) FILTER (WHERE physical_location = 'andreani_wh')::int AS wh,
+                  COUNT(*) FILTER (WHERE physical_location = 'local')::int AS local,
+                  COUNT(*) FILTER (WHERE physical_location = 'in_transit_andreani')::int AS transito
+           FROM inventory_items
+           WHERE status = 'available'
+           GROUP BY sku
+         ) inv ON inv.sku = r.sku
          WHERE r.run_at = (SELECT MAX(run_at) FROM wh_stock_readings WHERE medido)
-           AND (r.medido OR r.error IS NOT NULL OR r.and_total > 0 OR r.nuestro_disponible > 0)`
+           AND (r.medido OR r.error IS NOT NULL OR r.and_total > 0 OR r.nuestro_disponible > 0
+                OR COALESCE(inv.wh, 0) > 0)`
       ),
       client.query<{ run_at: Date; medidos: string; con_dif: string; unidades: string; errores: string }>(
         `SELECT run_at,
@@ -2632,8 +2658,10 @@ export async function fetchControlStockAndreani(): Promise<ControlStockAndreani>
         andTotal: Number(r.and_total),
         andDisponible: Number(r.and_disponible),
         andAsignada: Number(r.and_asignada),
-        goDisponible: Number(r.nuestro_disponible),
-        dif: Number(r.and_disponible) - Number(r.nuestro_disponible),
+        goAndreani: Number(r.go_andreani),
+        goLocal: Number(r.go_local),
+        goTransito: Number(r.go_transito),
+        dif: Number(r.and_disponible) - Number(r.go_andreani),
         medido: r.medido,
         error: r.error,
       }))

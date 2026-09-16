@@ -1,9 +1,11 @@
 import type { ControlStockAndreani } from '@/lib/gocelular'
 
 // Control de stock: lo que informa la API de Andreani (wh_stock_readings,
-// job de GOcelular cada 6 horas) contra el disponible de GOcelular. La vista
-// por modelo netea los SKUs (colores) del mismo modelo: stock cargado en otro
-// color-SKU no es faltante real.
+// job de GOcelular cada 6 horas) contra el disponible de GOcelular SOLO en el
+// warehouse de Andreani (conteo en vivo de inventory_items en andreani_wh —
+// el depósito propio de GOcuotas y lo en tránsito NO entran en la diferencia,
+// se muestran aparte como contexto). La vista por modelo netea los SKUs
+// (colores) del mismo modelo: stock cargado en otro color-SKU no es faltante.
 
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', {
@@ -38,16 +40,16 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
   const unidadesDif = conDif.reduce((s, f) => s + Math.abs(f.dif), 0)
 
   // Neto por modelo: SKUs (colores) del mismo modelo se compensan entre sí
-  const porModelo = new Map<string, { andDisponible: number; goDisponible: number; skus: number }>()
+  const porModelo = new Map<string, { andDisponible: number; goAndreani: number; skus: number }>()
   for (const f of medidas) {
-    const m = porModelo.get(f.nombre) ?? { andDisponible: 0, goDisponible: 0, skus: 0 }
+    const m = porModelo.get(f.nombre) ?? { andDisponible: 0, goAndreani: 0, skus: 0 }
     m.andDisponible += f.andDisponible
-    m.goDisponible += f.goDisponible
+    m.goAndreani += f.goAndreani
     m.skus++
     porModelo.set(f.nombre, m)
   }
   const modelos = [...porModelo.entries()]
-    .map(([nombre, m]) => ({ nombre, ...m, dif: m.andDisponible - m.goDisponible }))
+    .map(([nombre, m]) => ({ nombre, ...m, dif: m.andDisponible - m.goAndreani }))
     .sort((a, b) => Math.abs(b.dif) - Math.abs(a.dif) || a.nombre.localeCompare(b.nombre))
   const unidadesDifNeta = modelos.reduce((s, m) => s + Math.abs(m.dif), 0)
 
@@ -87,7 +89,7 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
                 <th className="py-2 px-3 font-medium">Modelo</th>
                 <th className="py-2 px-3 font-medium text-right">SKUs</th>
                 <th className="py-2 px-3 font-medium text-right">Andreani disp.</th>
-                <th className="py-2 px-3 font-medium text-right">GOcelular disp.</th>
+                <th className="py-2 px-3 font-medium text-right">GOcelular WH Andreani</th>
                 <th className="py-2 px-3 font-medium text-right">Diferencia</th>
               </tr>
             </thead>
@@ -97,7 +99,7 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
                   <td className="py-1.5 px-3 text-gray-900">{m.nombre}</td>
                   <td className="py-1.5 px-3 text-right text-gray-500">{m.skus}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.andDisponible}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.goDisponible}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{m.goAndreani}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums"><DifBadge dif={m.dif} /></td>
                 </tr>
               ))}
@@ -109,7 +111,7 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
       {/* Por SKU */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-1">Por SKU</h2>
-        <p className="text-xs text-gray-500 mb-3">Detalle por SKU de color; diferencia = disponible Andreani − disponible GOcelular</p>
+        <p className="text-xs text-gray-500 mb-3">Diferencia = disponible Andreani (corrida) − disponibles de GOcelular en el WH de Andreani (en vivo). El depósito propio y lo en tránsito no entran en la comparación</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -119,7 +121,9 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
                 <th className="py-2 px-3 font-medium text-right">And. total</th>
                 <th className="py-2 px-3 font-medium text-right">And. disponible</th>
                 <th className="py-2 px-3 font-medium text-right">And. asignada</th>
-                <th className="py-2 px-3 font-medium text-right">GOcelular disp.</th>
+                <th className="py-2 px-3 font-medium text-right">GO WH Andreani</th>
+                <th className="py-2 px-3 font-medium text-right">GO local</th>
+                <th className="py-2 px-3 font-medium text-right">GO tránsito</th>
                 <th className="py-2 px-3 font-medium text-right">Diferencia</th>
               </tr>
             </thead>
@@ -139,7 +143,9 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
                   <td className="py-1.5 px-3 text-right tabular-nums text-gray-500">{f.medido ? f.andTotal : '—'}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{f.medido ? f.andDisponible : '—'}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-gray-500">{f.medido ? f.andAsignada : '—'}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{f.goDisponible}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">{f.goAndreani}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-400">{f.goLocal > 0 ? f.goLocal : '—'}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-gray-400">{f.goTransito > 0 ? f.goTransito : '—'}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums">{f.medido ? <DifBadge dif={f.dif} /> : <span className="text-gray-300">—</span>}</td>
                 </tr>
               ))}
@@ -177,7 +183,9 @@ export default function ControlStockTable({ control }: { control: ControlStockAn
         </div>
         <p className="text-[10px] text-gray-400 mt-2">
           Fuente: wh_stock_readings de GOcelular — un job consulta la API de Andreani cada 6 horas. La corrida de las
-          ~21:44 ART falla siempre con error: ventana de mantenimiento de Andreani, no es un problema nuestro.
+          ~21:44 ART falla siempre con error: ventana de mantenimiento de Andreani, no es un problema nuestro. OJO: las
+          diferencias del historial usan el conteo guardado por el job, que incluye lo en tránsito — tienden a
+          sobreestimar; la comparación buena es la de arriba (solo WH Andreani).
         </p>
       </div>
     </div>
