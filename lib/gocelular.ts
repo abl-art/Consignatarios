@@ -595,10 +595,14 @@ export interface ContracargosData {
   ordenes_afectadas: number
 }
 
-export async function fetchContracargos(): Promise<ContracargosData> {
+export async function fetchContracargos(clientIds?: string[]): Promise<ContracargosData> {
   const gocuotasPool = getGocuotasPool()
   const gocelularPool = getPool()
   if (!gocuotasPool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 }
+
+  // Filtro opcional por canal (propia/terceros); sin argumento = todos, como siempre
+  const idsSeguros = (clientIds ?? []).filter(id => /^\d+$/.test(id))
+  const clientFilter = idsSeguros.length > 0 ? `AND %ALIAS%.client_id IN (${idsSeguros.join(',')})` : ''
 
   const gocuotasClient = await gocuotasPool.connect()
   try {
@@ -617,7 +621,8 @@ export async function fetchContracargos(): Promise<ContracargosData> {
        FROM chargebacks c
        JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
        JOIN orders o ON i.order_id = o.id
-       WHERE o.store_id IN (${placeholders})`,
+       WHERE o.store_id IN (${placeholders})
+       ${clientFilter.replace('%ALIAS%', 'o')}`,
       storeIds
     )
 
@@ -630,6 +635,7 @@ export async function fetchContracargos(): Promise<ContracargosData> {
          JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
          JOIN orders o2 ON i.order_id = o2.id
          WHERE o2.store_id IN (${placeholders})
+         ${clientFilter.replace('%ALIAS%', 'o2')}
        )`,
       storeIds
     )
@@ -642,12 +648,13 @@ export async function fetchContracargos(): Promise<ContracargosData> {
     if (gocelularPool) {
       const gocelClient = await gocelularPool.connect()
       try {
+        const sqlIdsVentas = idsSeguros.length > 0 ? idsSeguros.map(id => `'${id}'`).join(', ') : SQL_IDS_TODOS
         const ventasRes = await gocelClient.query<{ total: string }>(`
           SELECT COALESCE(SUM(go.total_order_amount), 0) AS total
           FROM gocuotas_orders go
           WHERE go.order_delivered_at IS NOT NULL
             AND go.order_discarded_at IS NULL
-            AND go.client_id::text IN (${SQL_IDS_TODOS})
+            AND go.client_id::text IN (${sqlIdsVentas})
         `)
         montoTotalVentas = Number(ventasRes.rows[0].total)
       } finally {

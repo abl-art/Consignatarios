@@ -2,39 +2,13 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
-import { aDiaHabilSiguiente } from '@/lib/dias-habiles'
-import { SQL_IDS_TODOS, CLIENT_IDS_TODOS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
+import { CLIENT_IDS_TODOS, CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { getPedidos, getMejorPrecio } from './compras'
 import { buscarPrecio, diaHabilSiguiente } from '@/lib/utils'
+import { armarFlujoPorCanal, type FlujoDiario, type FlujoPorCanal, type IncomeRow, type CuotasStats } from '@/lib/flujo-canal'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface FlujoDiario {
-  cash_date: string
-  in_adelantado: number
-  in_en_termino: number
-  in_atrasado: number
-  in_pendiente: number
-  in_vencida: number
-  in_asistencia: number
-  in_mayoristas: number
-  in_proyectado: number
-  out_celulares: number
-  out_licencias: number
-  out_descartables: number
-  out_sueldos: number
-  out_envios: number
-  out_interes: number
-  out_otros: number
-  out_vta3ero: number
-  out_dev_capital: number
-  net_flow: number
-  cash_balance: number
-  estres?: boolean
-}
+export type { FlujoDiario, FlujoPorCanal, CuotasStats }
 
 // ---------------------------------------------------------------------------
 // CRUD: flujo_asistencias (Supabase)
@@ -158,40 +132,6 @@ function addMonths(dateStr: string, months: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function emptyRow(cash_date: string): FlujoDiario {
-  return {
-    cash_date,
-    in_adelantado: 0,
-    in_en_termino: 0,
-    in_atrasado: 0,
-    in_pendiente: 0,
-    in_vencida: 0,
-    in_asistencia: 0,
-    in_mayoristas: 0,
-    in_proyectado: 0,
-    out_celulares: 0,
-    out_licencias: 0,
-    out_descartables: 0,
-    out_sueldos: 0,
-    out_envios: 0,
-    out_interes: 0,
-    out_otros: 0,
-    out_vta3ero: 0,
-    out_dev_capital: 0,
-    net_flow: 0,
-    cash_balance: 0,
-  }
-}
-
-function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
-  let row = map.get(date)
-  if (!row) {
-    row = emptyRow(date)
-    map.set(date, row)
-  }
-  return row
-}
-
 // ---- Data source fetchers -------------------------------------------------
 
 // Los ingresos del flujo salen de la base DIRECTA de GOcuotas (no de la
@@ -208,13 +148,12 @@ function getOrCreate(map: Map<string, FlujoDiario>, date: string): FlujoDiario {
 //     es info firme hasta que la fecha de acreditación quedó atrás
 //   - Vencidas:   al vencimiento, recién cuando la acreditación esperada ya
 //     pasó sin cobro (solo se muestran, no suman al saldo)
-async function fetchIncomeFromGocuotas(): Promise<
-  { cash_date: string; in_adelantado: number; in_en_termino: number; in_atrasado: number; in_pendiente: number; in_vencida: number }[]
-> {
+async function fetchIncomeFromGocuotas(clientIdsStr: string[] = CLIENT_IDS_TODOS): Promise<IncomeRow[]> {
   const pool = getGocuotasPool()
   if (!pool) return []
 
-  const clientIds = CLIENT_IDS_TODOS.map(Number)
+  const clientIds = clientIdsStr.map(Number).filter(n => Number.isFinite(n))
+  if (clientIds.length === 0) return []
   const placeholders = clientIds.map((_, i) => `$${i + 1}`).join(',')
 
   const client = await pool.connect()
@@ -408,47 +347,6 @@ export async function setComprasDias(dias: number) {
   return { ok: true }
 }
 
-/** Advance N business days from a date */
-function addBusinessDays(from: Date, days: number): Date {
-  const d = new Date(from)
-  let added = 0
-  while (added < days) {
-    d.setDate(d.getDate() + 1)
-    const dow = d.getDay()
-    if (dow !== 0 && dow !== 6) added++
-  }
-  return d
-}
-
-function generateProjection(baseDiario: number, endDateStr: string): { cash_date: string; in_proyectado: number }[] {
-  if (baseDiario <= 0) return []
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // Start from today + 2 business days
-  const start = addBusinessDays(today, 2)
-  const end = new Date(endDateStr + 'T00:00:00')
-
-  const rows: { cash_date: string; in_proyectado: number }[] = []
-  const d = new Date(start)
-
-  while (d <= end) {
-    const dow = d.getDay()
-    if (dow !== 0 && dow !== 6) {
-      // Martes (2) = triple because weekend collections
-      const mult = dow === 2 ? 3 : 1
-      rows.push({
-        cash_date: d.toISOString().slice(0, 10),
-        in_proyectado: baseDiario * mult,
-      })
-    }
-    d.setDate(d.getDate() + 1)
-  }
-
-  return rows
-}
-
 // ---------------------------------------------------------------------------
 // IVA: credito y debito fiscal mensual
 // ---------------------------------------------------------------------------
@@ -541,134 +439,45 @@ async function fetchPagosMayoristasParaFlujo(): Promise<{ cash_date: string; in_
 
 // ---- Main aggregation -----------------------------------------------------
 
-export async function fetchFlujoDeFondos(): Promise<FlujoDiario[]> {
-  const [income, vta3ero, asistencias, egresos, baseDiario, pagosMay] = await Promise.all([
-    fetchIncomeFromGocuotas(),
+// Las 3 variantes se arman con las mismas fuentes fetcheadas UNA vez: solo
+// las cuotas (income) se piden por canal; el resto no tiene dimensión de
+// canal y se afecta al flujo propio (regla de Emiliano, 17 sep 2026).
+export async function fetchFlujoDeFondosPorCanal(): Promise<FlujoPorCanal> {
+  // Las 3 primeras pegan a la base directa de GOcuotas (pool max 3)
+  const [incomePropia, incomeTerceros, vta3ero] = await Promise.all([
+    fetchIncomeFromGocuotas(CLIENT_IDS_PROPIOS),
+    fetchIncomeFromGocuotas(CLIENT_IDS_TERCEROS),
     fetchVta3eroFromGocuotas(),
+  ])
+  const [asistencias, egresos, proyeccionDiaria, pagosMayoristas] = await Promise.all([
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
     getProyeccionDiaria(),
     fetchPagosMayoristasParaFlujo(),
   ])
 
-  const map = new Map<string, FlujoDiario>()
-
-  // Merge income
-  for (const r of income) {
-    const row = getOrCreate(map, r.cash_date)
-    row.in_adelantado += r.in_adelantado
-    row.in_en_termino += r.in_en_termino
-    row.in_atrasado += r.in_atrasado
-    row.in_pendiente += r.in_pendiente
-    row.in_vencida += r.in_vencida
-  }
-
-  // Merge asistencias
-  for (const r of asistencias) {
-    const row = getOrCreate(map, r.cash_date)
-    row.in_asistencia += r.in_asistencia
-  }
-
-  // Merge egresos — no pagamos en fin de semana: sábado/domingo → lunes
-  for (const r of egresos) {
-    const row = getOrCreate(map, aDiaHabilSiguiente(r.cash_date))
-    ;(row[r.column] as number) += r.amount
-  }
-
-  // Merge vta3ero (también es un pago nuestro: se corre a día hábil)
-  for (const r of vta3ero) {
-    const row = getOrCreate(map, aDiaHabilSiguiente(r.cash_date))
-    row.out_vta3ero += r.out_vta3ero
-  }
-
-  // Merge pagos mayoristas
-  for (const r of pagosMay) {
-    const row = getOrCreate(map, r.cash_date)
-    row.in_mayoristas += r.in_mayoristas
-  }
-
-  // Generate and merge projections (7 months forward from today)
-  const today = new Date()
-  const projEnd = new Date(today.getFullYear(), today.getMonth() + 7, 0)
-  const projections = generateProjection(baseDiario, projEnd.toISOString().slice(0, 10))
-  for (const p of projections) {
-    const row = getOrCreate(map, p.cash_date)
-    row.in_proyectado += p.in_proyectado
-  }
-
-  // Calendario completo: los días sin movimiento (típicamente sábados y
-  // domingos, que ya no reciben pagos ni acreditaciones) quedan en cero pero
-  // se muestran igual — el flujo se lee corrido, sin saltos de fechas
-  const fechas = [...map.keys()].sort()
-  if (fechas.length > 0) {
-    const d = new Date(fechas[0] + 'T00:00:00Z')
-    const fin = new Date(fechas[fechas.length - 1] + 'T00:00:00Z')
-    while (d <= fin) {
-      getOrCreate(map, d.toISOString().slice(0, 10))
-      d.setUTCDate(d.getUTCDate() + 1)
-    }
-  }
-
-  // Sort by cash_date
-  const sorted = Array.from(map.values()).sort((a, b) =>
-    a.cash_date.localeCompare(b.cash_date)
-  )
-
-  // Calculate net_flow and running cash_balance
-  let balance = 0
-  for (const row of sorted) {
-    // NOTE: in_vencida is intentionally excluded from net_flow
-    row.net_flow =
-      row.in_adelantado +
-      row.in_en_termino +
-      row.in_atrasado +
-      row.in_pendiente +
-      row.in_asistencia +
-      row.in_mayoristas +
-      row.in_proyectado +
-      row.out_celulares +
-      row.out_licencias +
-      row.out_descartables +
-      row.out_sueldos +
-      row.out_envios +
-      row.out_interes +
-      row.out_otros +
-      row.out_vta3ero +
-      row.out_dev_capital
-    balance += row.net_flow
-    row.cash_balance = balance
-  }
-
-  return sorted
+  return armarFlujoPorCanal({
+    incomePropia,
+    incomeTerceros,
+    vta3ero,
+    asistencias,
+    egresos,
+    pagosMayoristas,
+    proyeccionDiaria,
+  })
 }
 
 // ---------------------------------------------------------------------------
 // fetchCuotasStats – installment payment status percentages
 // ---------------------------------------------------------------------------
 
-export async function fetchCuotasStats(): Promise<{
-  total: number
-  adelantado: number
-  en_termino: number
-  atrasado: number
-  mora: number
-  contracargos: number
-  pct_adelantado: number
-  pct_en_termino: number
-  pct_atrasado: number
-  pct_mora: number
-  pct_contracargos: number
-  monto_adelantado: number
-  monto_en_termino: number
-  monto_atrasado: number
-  monto_mora: number
-  monto_contracargos: number
-  ppp_recupero: number
-  ppp_mora: number
-}> {
+export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): Promise<CuotasStats> {
   const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, contracargos: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, pct_contracargos: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, monto_contracargos: 0, ppp_recupero: 0, ppp_mora: 0 }
   const pool = getPool()
   if (!pool) return empty
+  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
+  if (idsSeguros.length === 0) return empty
+  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
 
   // Órdenes incobrables: contracargos ∪ equipos en transición 30+ días (dedup).
   // Sus cuotas salen de los buckets de mora y se castigan como incobrables.
@@ -736,7 +545,7 @@ export async function fetchCuotasStats(): Promise<{
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${SQL_IDS_TODOS})
+        AND o.client_id::text IN (${sqlIds})
         AND i.installment_due_at::date < CURRENT_DATE
     `)
 
@@ -748,9 +557,10 @@ export async function fetchCuotasStats(): Promise<{
     const mora = Number(row.mora)
     const contracargos = Number(row.contracargos)
 
-    // Get real chargeback order amounts from GOcuotas (monto total de la orden, no cuotas)
+    // Get real chargeback order amounts from GOcuotas (monto total de la orden,
+    // no cuotas), restringido a los clients del canal pedido
     const { fetchContracargos } = await import('@/lib/gocelular')
-    const cbData = await fetchContracargos()
+    const cbData = await fetchContracargos(idsSeguros)
     const montoCBOrdenes = cbData.monto_contracargos // already in pesos, monto total de órdenes con CB
     const monto120Plus = Number(row.monto_contracargos) - (
       // monto_contracargos from SQL has both CB cuotas + 120+ cuotas
@@ -768,7 +578,7 @@ export async function fetchCuotasStats(): Promise<{
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${SQL_IDS_TODOS})
+        AND o.client_id::text IN (${sqlIds})
         AND o.order_id::text NOT IN (${cbOrderIdsList})
         AND i.installment_collected_at IS NULL
         AND i.installment_discarded_at IS NULL
@@ -782,7 +592,9 @@ export async function fetchCuotasStats(): Promise<{
     const transicionRes = await client.query<{ monto: string }>(`
       SELECT COALESCE(SUM(i.installment_amount), 0) AS monto
       FROM gocuotas_installments i
+      JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE i.order_id::text IN (${transicionSoloList})
+        AND o.client_id::text IN (${sqlIds})
         AND i.installment_collected_at IS NULL
         AND i.installment_discarded_at IS NULL
     `)
