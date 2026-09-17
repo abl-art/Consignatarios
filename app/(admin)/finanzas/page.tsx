@@ -20,6 +20,8 @@ import { fetchProductos } from '@/lib/actions/productos'
 import { getDatosSimulador } from '@/lib/actions/simulador-datos'
 import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
 
+export const maxDuration = 60
+
 export default async function FinanzasPage({
   searchParams,
 }: {

@@ -150,17 +150,50 @@ function addMonths(dateStr: string, months: number): string {
 //     es info firme hasta que la fecha de acreditación quedó atrás
 //   - Vencidas:   al vencimiento, recién cuando la acreditación esperada ya
 //     pasó sin cobro (solo se muestran, no suman al saldo)
-async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS): Promise<IncomeRow[]> {
-  const pool = getGocuotasPool()
-  if (!pool) return []
+// Universo de client_ids NUESTROS, dinámico: sale de la réplica de GOcelular
+// (gocuotas_stores + gocuotas_orders), que solo contiene nuestros merchants y
+// suma los nuevos sola. OJO: la base DIRECTA de GOcuotas es TODA la
+// plataforma (19,5M de órdenes de comercios ajenos) — cualquier query ahí
+// DEBE filtrar por este universo; un NOT IN propios a secas escanea todo
+// GOcuotas (bug de prod 17 sep 2026: /finanzas tardaba minutos y moría).
+async function fetchClientIdsUniverso(): Promise<string[]> {
+  const pool = getPool()
+  if (!pool) return CLIENT_IDS_PROPIOS
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ client_id: string }>(`
+      SELECT DISTINCT client_id FROM gocuotas_stores WHERE client_id IS NOT NULL
+      UNION
+      SELECT DISTINCT client_id::text FROM gocuotas_orders WHERE client_id IS NOT NULL
+    `)
+    const ids = new Set(CLIENT_IDS_PROPIOS)
+    for (const r of res.rows) if (/^\d+$/.test(r.client_id)) ids.add(r.client_id)
+    return [...ids]
+  } finally {
+    client.release()
+  }
+}
 
-  const cond = condicionClientesNum(clientes, 'o.client_id')
-  if (!cond) return []
+// UNA sola pasada con el canal como columna (es_propio) — el CASE del
+// cash_date lleva un generate_series por cuota y es el query más caro de la
+// página: correrlo dos veces en paralelo (una por canal) saturaba el pool de
+// GOcuotas (max 3) y tiraba connect timeouts (bug de prod, 17 sep 2026)
+async function fetchIncomePorCanalFromGocuotas(universo: string[]): Promise<{ propia: IncomeRow[]; terceros: IncomeRow[] }> {
+  const vacio = { propia: [], terceros: [] }
+  const pool = getGocuotasPool()
+  if (!pool) return vacio
+
+  const propiosNum = CLIENT_IDS_PROPIOS.map(Number).filter(n => Number.isFinite(n))
+  const universoNum = universo.map(Number).filter(n => Number.isFinite(n))
+  if (propiosNum.length === 0 || universoNum.length === 0) return vacio
+  const placeholders = propiosNum.map((_, i) => `$${i + 1}`).join(',')
+  const phUniverso = universoNum.map((_, i) => `$${propiosNum.length + i + 1}`).join(',')
 
   const client = await pool.connect()
   try {
     const res = await client.query<{
       cash_date: Date | string
+      es_propio: boolean
       in_adelantado: string
       in_en_termino: string
       in_atrasado: string
@@ -171,6 +204,7 @@ async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS
         SELECT
           i.collected_at, i.collected_on, i.due_on, i.income_on, i.expected_income_on,
           i.discarded_at, i.amount_in_cents / 100.0 AS monto,
+          o.client_id IN (${placeholders}) AS es_propio,
           COALESCE(
             i.expected_income_on,
             (SELECT d::date FROM generate_series(
@@ -181,7 +215,7 @@ async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS
         JOIN orders o ON o.id = i.order_id
         WHERE o.delivered_at IS NOT NULL
           AND o.discarded_at IS NULL
-          ${cond.clause}
+          AND o.client_id IN (${phUniverso})
       )
       SELECT
         CASE
@@ -196,24 +230,32 @@ async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS
             THEN b.acreditacion_esperada
           ELSE b.due_on
         END AS cash_date,
+        b.es_propio,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on < b.due_on THEN b.monto ELSE 0 END) AS in_adelantado,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on = b.due_on THEN b.monto ELSE 0 END) AS in_en_termino,
         SUM(CASE WHEN b.collected_at IS NOT NULL AND b.collected_on > b.due_on THEN b.monto ELSE 0 END) AS in_atrasado,
         SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND (b.due_on >= CURRENT_DATE OR b.acreditacion_esperada >= CURRENT_DATE) THEN b.monto ELSE 0 END) AS in_pendiente,
         SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on < CURRENT_DATE AND b.acreditacion_esperada < CURRENT_DATE THEN b.monto ELSE 0 END) AS in_vencida
       FROM base b
-      GROUP BY 1
-    `, cond.values)
-    return res.rows
+      GROUP BY 1, 2
+    `, [...propiosNum, ...universoNum])
+    const filas = res.rows
       .filter((r) => r.cash_date != null)
       .map((r) => ({
-        cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date).slice(0, 10),
-        in_adelantado: Number(r.in_adelantado),
-        in_en_termino: Number(r.in_en_termino),
-        in_atrasado: Number(r.in_atrasado),
-        in_pendiente: Number(r.in_pendiente),
-        in_vencida: Number(r.in_vencida),
+        es_propio: r.es_propio,
+        row: {
+          cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date).slice(0, 10),
+          in_adelantado: Number(r.in_adelantado),
+          in_en_termino: Number(r.in_en_termino),
+          in_atrasado: Number(r.in_atrasado),
+          in_pendiente: Number(r.in_pendiente),
+          in_vencida: Number(r.in_vencida),
+        },
       }))
+    return {
+      propia: filas.filter(f => f.es_propio).map(f => f.row),
+      terceros: filas.filter(f => !f.es_propio).map(f => f.row),
+    }
   } finally {
     client.release()
   }
@@ -221,7 +263,7 @@ async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS
 
 // Client IDs de terceros (importado desde lib/client-ids.ts)
 
-async function fetchVta3eroFromGocuotas(): Promise<
+async function fetchVta3eroFromGocuotas(tercerosIds: string[]): Promise<
   { cash_date: string; out_vta3ero: number }[]
 > {
   const host = process.env.PG_GOCUOTAS_HOST
@@ -232,10 +274,14 @@ async function fetchVta3eroFromGocuotas(): Promise<
 
   const gocuotasPool = getGocuotasPool()
   if (!gocuotasPool) return []
+  // Base DIRECTA de GOcuotas (toda la plataforma): SIEMPRE lista explícita
+  // de NUESTROS merchants — un NOT IN acá sumaría liquidaciones de comercios
+  // ajenos (y escanearía 19,5M de órdenes)
+  const cond = condicionClientesNum(tercerosIds, 'client_id')
+  if (!cond) return []
+
   const client = await gocuotasPool.connect()
   try {
-    // Terceros por exclusión: cualquier client que no sea propio es merchant
-    const cond = condicionClientesNum(CLIENTES_TERCEROS, 'client_id')!
     const res = await client.query<{ cash_date: Date; out_vta3ero: string }>(
       `SELECT due_expense_at::date AS cash_date,
               SUM(expense_amount_in_cents) / 100.0 AS out_vta3ero
@@ -445,12 +491,17 @@ async function fetchPagosMayoristasParaFlujo(): Promise<{ cash_date: string; in_
 // las cuotas (income) se piden por canal; el resto no tiene dimensión de
 // canal y se afecta al flujo propio (regla de Emiliano, 17 sep 2026).
 export async function fetchFlujoDeFondosPorCanal(): Promise<FlujoPorCanal> {
-  // Las 3 primeras pegan a la base directa de GOcuotas (pool max 3)
-  const [incomePropia, incomeTerceros, vta3ero] = await Promise.all([
-    fetchIncomeFromGocuotas(CLIENT_IDS_PROPIOS),
-    fetchIncomeFromGocuotas(CLIENTES_TERCEROS),
-    fetchVta3eroFromGocuotas(),
+  // Universo dinámico de client_ids desde la réplica (merchants nuevos entran solos)
+  const universo = await fetchClientIdsUniverso()
+  const tercerosIds = universo.filter(id => !CLIENT_IDS_PROPIOS.includes(id))
+
+  // 2 conexiones pico a GOcuotas (pool max 3): una para el income unificado,
+  // otra para vta3ero — queda 1 libre para contracargos del resto de la página
+  const [incomes, vta3ero] = await Promise.all([
+    fetchIncomePorCanalFromGocuotas(universo),
+    fetchVta3eroFromGocuotas(tercerosIds),
   ])
+  const { propia: incomePropia, terceros: incomeTerceros } = incomes
   const [asistencias, egresos, proyeccionDiaria, pagosMayoristas] = await Promise.all([
     fetchAsistenciasFromSupabase(),
     fetchEgresosFromSupabase(),
