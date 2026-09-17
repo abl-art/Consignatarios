@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getGocuotasPool } from '@/lib/db-pool'
-import { CLIENT_IDS_TODOS, CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, CLIENT_IDS_TERCEROS_NUM } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS, CLIENTES_TODOS, sqlCondicionClientes, condicionClientesNum, type FiltroClientes } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { getPedidos, getMejorPrecio } from './compras'
 import { buscarPrecio, diaHabilSiguiente } from '@/lib/utils'
@@ -150,13 +150,12 @@ function addMonths(dateStr: string, months: number): string {
 //     es info firme hasta que la fecha de acreditación quedó atrás
 //   - Vencidas:   al vencimiento, recién cuando la acreditación esperada ya
 //     pasó sin cobro (solo se muestran, no suman al saldo)
-async function fetchIncomeFromGocuotas(clientIdsStr: string[] = CLIENT_IDS_TODOS): Promise<IncomeRow[]> {
+async function fetchIncomeFromGocuotas(clientes: FiltroClientes = CLIENTES_TODOS): Promise<IncomeRow[]> {
   const pool = getGocuotasPool()
   if (!pool) return []
 
-  const clientIds = clientIdsStr.map(Number).filter(n => Number.isFinite(n))
-  if (clientIds.length === 0) return []
-  const placeholders = clientIds.map((_, i) => `$${i + 1}`).join(',')
+  const cond = condicionClientesNum(clientes, 'o.client_id')
+  if (!cond) return []
 
   const client = await pool.connect()
   try {
@@ -182,7 +181,7 @@ async function fetchIncomeFromGocuotas(clientIdsStr: string[] = CLIENT_IDS_TODOS
         JOIN orders o ON o.id = i.order_id
         WHERE o.delivered_at IS NOT NULL
           AND o.discarded_at IS NULL
-          AND o.client_id IN (${placeholders})
+          ${cond.clause}
       )
       SELECT
         CASE
@@ -204,7 +203,7 @@ async function fetchIncomeFromGocuotas(clientIdsStr: string[] = CLIENT_IDS_TODOS
         SUM(CASE WHEN b.collected_at IS NULL AND b.discarded_at IS NULL AND b.due_on < CURRENT_DATE AND b.acreditacion_esperada < CURRENT_DATE THEN b.monto ELSE 0 END) AS in_vencida
       FROM base b
       GROUP BY 1
-    `, clientIds)
+    `, cond.values)
     return res.rows
       .filter((r) => r.cash_date != null)
       .map((r) => ({
@@ -235,18 +234,19 @@ async function fetchVta3eroFromGocuotas(): Promise<
   if (!gocuotasPool) return []
   const client = await gocuotasPool.connect()
   try {
-    const placeholders = CLIENT_IDS_TERCEROS_NUM.map((_, i) => `$${i + 1}`).join(',')
+    // Terceros por exclusión: cualquier client que no sea propio es merchant
+    const cond = condicionClientesNum(CLIENTES_TERCEROS, 'client_id')!
     const res = await client.query<{ cash_date: Date; out_vta3ero: string }>(
       `SELECT due_expense_at::date AS cash_date,
               SUM(expense_amount_in_cents) / 100.0 AS out_vta3ero
        FROM orders
-       WHERE client_id IN (${placeholders})
-         AND due_expense_at IS NOT NULL
+       WHERE due_expense_at IS NOT NULL
          AND expense_amount_in_cents > 0
          AND discarded_at IS NULL
+         ${cond.clause}
        GROUP BY 1
        ORDER BY 1`,
-      CLIENT_IDS_TERCEROS_NUM
+      cond.values
     )
     return res.rows.map(r => ({
       cash_date: r.cash_date instanceof Date ? r.cash_date.toISOString().slice(0, 10) : String(r.cash_date),
@@ -448,7 +448,7 @@ export async function fetchFlujoDeFondosPorCanal(): Promise<FlujoPorCanal> {
   // Las 3 primeras pegan a la base directa de GOcuotas (pool max 3)
   const [incomePropia, incomeTerceros, vta3ero] = await Promise.all([
     fetchIncomeFromGocuotas(CLIENT_IDS_PROPIOS),
-    fetchIncomeFromGocuotas(CLIENT_IDS_TERCEROS),
+    fetchIncomeFromGocuotas(CLIENTES_TERCEROS),
     fetchVta3eroFromGocuotas(),
   ])
   const [asistencias, egresos, proyeccionDiaria, pagosMayoristas] = await Promise.all([
@@ -473,13 +473,12 @@ export async function fetchFlujoDeFondosPorCanal(): Promise<FlujoPorCanal> {
 // fetchCuotasStats – installment payment status percentages
 // ---------------------------------------------------------------------------
 
-export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): Promise<CuotasStats> {
+export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS): Promise<CuotasStats> {
   const empty = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, contracargos: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, pct_contracargos: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, monto_contracargos: 0, ppp_recupero: 0, ppp_mora: 0 }
   const pool = getPool()
   if (!pool) return empty
-  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
-  if (idsSeguros.length === 0) return empty
-  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
+  const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
+  if (!condClientes) return empty
 
   // Órdenes incobrables: contracargos ∪ equipos en transición 30+ días (dedup).
   // Sus cuotas salen de los buckets de mora y se castigan como incobrables.
@@ -547,7 +546,7 @@ export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): 
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${sqlIds})
+        AND ${condClientes}
         AND i.installment_due_at::date < CURRENT_DATE
     `)
 
@@ -562,7 +561,7 @@ export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): 
     // Get real chargeback order amounts from GOcuotas (monto total de la orden,
     // no cuotas), restringido a los clients del canal pedido
     const { fetchContracargos } = await import('@/lib/gocelular')
-    const cbData = await fetchContracargos(idsSeguros)
+    const cbData = await fetchContracargos(clientes)
     const montoCBOrdenes = cbData.monto_contracargos // already in pesos, monto total de órdenes con CB
     const monto120Plus = Number(row.monto_contracargos) - (
       // monto_contracargos from SQL has both CB cuotas + 120+ cuotas
@@ -580,7 +579,7 @@ export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): 
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE o.order_delivered_at IS NOT NULL
         AND o.order_discarded_at IS NULL
-        AND o.client_id::text IN (${sqlIds})
+        AND ${condClientes}
         AND o.order_id::text NOT IN (${cbOrderIdsList})
         AND i.installment_collected_at IS NULL
         AND i.installment_discarded_at IS NULL
@@ -596,7 +595,7 @@ export async function fetchCuotasStats(clientIds: string[] = CLIENT_IDS_TODOS): 
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
       WHERE i.order_id::text IN (${transicionSoloList})
-        AND o.client_id::text IN (${sqlIds})
+        AND ${condClientes}
         AND i.installment_collected_at IS NULL
         AND i.installment_discarded_at IS NULL
     `)
@@ -768,16 +767,15 @@ interface DPDRow {
   total_vencido: number
 }
 
-export async function fetchDPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS, filtros?: FiltrosIndicadoresSql): Promise<{
+export async function fetchDPDIndicadores(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql): Promise<{
   byOrigination: DPDRow[]
   byDueMonth: DPDRow[]
 }> {
   const empty = { byOrigination: [], byDueMonth: [] }
   const pool = getPool()
   if (!pool) return empty
-  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
-  if (idsSeguros.length === 0) return empty
-  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
+  const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
+  if (!condClientes) return empty
   const extra = sqlFiltrosIndicadores(filtros)
 
   // Órdenes incobrables (contracargos ∪ transición 30d): sus cuotas vencidas
@@ -819,7 +817,7 @@ export async function fetchDPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS
     ${extra.join}
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN (${sqlIds})
+      AND ${condClientes}
       ${extra.where}
     GROUP BY 1
     ORDER BY 1
@@ -896,19 +894,18 @@ interface PDResumen {
   pd_30: number
 }
 
-export async function fetchPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS, filtros?: FiltrosIndicadoresSql): Promise<{
+export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql): Promise<{
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
   resumen: PDResumen[]
   maxCuota: number
 }> {
   const empty = { byOrigination: [], byDueMonth: [], resumen: [], maxCuota: 0 }
-  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
-  if (idsSeguros.length === 0) return empty
+  const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
+  if (!condClientes) return empty
   const pool = getPool()
   if (!pool) return empty
 
-  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
   const extra = sqlFiltrosIndicadores(filtros)
 
   const baseQuery = (mesExpr: string) => `
@@ -932,7 +929,7 @@ export async function fetchPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS,
     ${extra.join}
     WHERE o.order_delivered_at IS NOT NULL
       AND o.order_discarded_at IS NULL
-      AND o.client_id::text IN (${sqlIds})
+      AND ${condClientes}
       ${extra.where}
     GROUP BY 1, 2
     ORDER BY 1, 2
@@ -965,7 +962,7 @@ export async function fetchPDIndicadores(clientIds: string[] = CLIENT_IDS_TODOS,
         ${extra.join}
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${sqlIds})
+          AND ${condClientes}
           ${extra.where}
         GROUP BY 1
         ORDER BY 1
@@ -1048,13 +1045,12 @@ export interface VintageRow {
   pct_recupero_120_plus: number
 }
 
-export async function fetchVintageAnalysis(clientIds: string[] = CLIENT_IDS_TODOS, filtros?: FiltrosIndicadoresSql): Promise<VintageRow[]> {
-  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
-  if (idsSeguros.length === 0) return []
+export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql): Promise<VintageRow[]> {
+  const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
+  if (!condClientes) return []
   const pool = getPool()
   if (!pool) return []
 
-  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
   const extra = sqlFiltrosIndicadores(filtros)
 
   // Órdenes incobrables: contracargos (orden completa) + equipos en transición
@@ -1104,7 +1100,7 @@ export async function fetchVintageAnalysis(clientIds: string[] = CLIENT_IDS_TODO
         ${extra.join}
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${sqlIds})
+          AND ${condClientes}
           ${extra.where}
       ),
       classified AS (
@@ -1221,30 +1217,31 @@ export interface FiltroIndicadores {
   storeId?: string // gocuotas store_id
 }
 
-function resolverFiltro(f: FiltroIndicadores): { clientIds: string[]; filtros: FiltrosIndicadoresSql } {
-  let clientIds =
-    f.canal === 'propia' ? CLIENT_IDS_PROPIOS : f.canal === 'terceros' ? CLIENT_IDS_TERCEROS : CLIENT_IDS_TODOS
-  if (f.canal === 'terceros' && f.merchantId && CLIENT_IDS_TERCEROS.includes(f.merchantId)) {
-    clientIds = [f.merchantId]
+function resolverFiltro(f: FiltroIndicadores): { clientes: FiltroClientes; filtros: FiltrosIndicadoresSql } {
+  // Regla de canales: propios explícitos, terceros = todo lo que no es propio
+  let clientes: FiltroClientes =
+    f.canal === 'propia' ? CLIENT_IDS_PROPIOS : f.canal === 'terceros' ? CLIENTES_TERCEROS : CLIENTES_TODOS
+  if (f.canal === 'terceros' && f.merchantId && /^\d+$/.test(f.merchantId) && !CLIENT_IDS_PROPIOS.includes(f.merchantId)) {
+    clientes = [f.merchantId]
   }
   const bloqueo = f.bloqueo && (BLOQUEOS as readonly string[]).includes(f.bloqueo) ? f.bloqueo : undefined
   const storeIds = f.canal === 'terceros' && f.storeId ? [f.storeId] : undefined
-  return { clientIds, filtros: { bloqueo, storeIds } }
+  return { clientes, filtros: { bloqueo, storeIds } }
 }
 
 export async function fetchPDFiltrado(f: FiltroIndicadores) {
-  const { clientIds, filtros } = resolverFiltro(f)
-  return fetchPDIndicadores(clientIds, filtros)
+  const { clientes, filtros } = resolverFiltro(f)
+  return fetchPDIndicadores(clientes, filtros)
 }
 
 export async function fetchDPDFiltrado(f: FiltroIndicadores) {
-  const { clientIds, filtros } = resolverFiltro(f)
-  return fetchDPDIndicadores(clientIds, filtros)
+  const { clientes, filtros } = resolverFiltro(f)
+  return fetchDPDIndicadores(clientes, filtros)
 }
 
 export async function fetchVintageFiltrado(f: FiltroIndicadores) {
-  const { clientIds, filtros } = resolverFiltro(f)
-  return fetchVintageAnalysis(clientIds, filtros)
+  const { clientes, filtros } = resolverFiltro(f)
+  return fetchVintageAnalysis(clientes, filtros)
 }
 
 // ---------------------------------------------------------------------------
@@ -1261,10 +1258,10 @@ export async function getFiltrosTerceros(): Promise<MerchantTercero[]> {
   const pool = getPool()
   if (!pool) return []
 
-  // '1' es un client tercero legacy sin merchant real: fuera del desplegable
-  const clientIds = CLIENT_IDS_TERCEROS.filter(id => id !== '1')
-  if (clientIds.length === 0) return []
-  const sqlIds = clientIds.map(id => `'${id}'`).join(', ')
+  // Todos los merchants por exclusión: cualquier client_id no propio es un
+  // tercero — los merchants nuevos aparecen solos en el desplegable
+  const condClientes = sqlCondicionClientes(CLIENTES_TERCEROS, 'client_id')
+  if (!condClientes) return []
 
   const client = await pool.connect()
   try {
@@ -1277,7 +1274,7 @@ export async function getFiltrosTerceros(): Promise<MerchantTercero[]> {
     }>(`
       SELECT client_id, gocuotas_store_id, store_name, merchant_name, updated_at
       FROM gocuotas_stores
-      WHERE client_id IN (${sqlIds})
+      WHERE client_id IS NOT NULL AND ${condClientes}
       ORDER BY store_name
     `)
 

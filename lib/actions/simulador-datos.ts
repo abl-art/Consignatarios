@@ -1,7 +1,7 @@
 'use server'
 
 import { getPool } from '@/lib/db-pool'
-import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, SQL_IDS_TERCEROS } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS, SQL_IDS_PROPIOS, sqlCondicionClientes, type FiltroClientes } from '@/lib/client-ids'
 import { fetchVintageAnalysis, fetchPDIndicadores, type VintageRow } from '@/lib/actions/finanzas'
 import { fetchOrderIdsConContracargo, fetchOrderIdsTransicion30d } from '@/lib/gocelular'
 import { getListaPrecios } from '@/lib/actions/lista-precios-canales'
@@ -29,7 +29,7 @@ async function fetchTicketPromedioTerceros(): Promise<number | null> {
         WHERE o.order_created_at >= CURRENT_DATE - 30
           AND o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${SQL_IDS_TERCEROS})
+          AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
         GROUP BY 1
       ) t
     `)
@@ -44,15 +44,14 @@ async function fetchTicketPromedioTerceros(): Promise<number | null> {
 // hace 120+ días, más las órdenes castigadas (contracargo completo; transición
 // solo lo no cobrado — lo ya cobrado fue ingreso real). Regla de Emiliano 10/9.
 async function fetchIncobrabilidadCanal(
-  clientIds: string[],
+  clientes: FiltroClientes,
   cbIds: string[],
   transIds: string[],
 ): Promise<number | null> {
   const pool = getPool()
   if (!pool) return null
-  const idsSeguros = clientIds.filter(id => /^\d+$/.test(id))
-  if (idsSeguros.length === 0) return null
-  const sqlIds = idsSeguros.map(id => `'${id}'`).join(', ')
+  const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
+  if (!condClientes) return null
   const lista = (ids: string[]) => {
     const seguros = ids.filter(id => /^\d+$/.test(id))
     return seguros.length > 0 ? seguros.map(id => `'${id}'`).join(',') : "'0'"
@@ -75,7 +74,7 @@ async function fetchIncobrabilidadCanal(
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
         WHERE o.order_delivered_at IS NOT NULL
           AND o.order_discarded_at IS NULL
-          AND o.client_id::text IN (${sqlIds})
+          AND ${condClientes}
       )
       SELECT
         COALESCE(SUM(amt) FILTER (WHERE clase = 'normal' AND resuelta), 0) AS resueltas,
@@ -115,13 +114,13 @@ export async function getDatosSimulador(prefetch?: PrefetchSimulador): Promise<D
   ])
   const [vinPropia, vinTerceros, pdPropia, pdTerceros, modelos, ticketTerceros, incobPropia, incobTerceros] = await Promise.all([
     prefetch ? Promise.resolve(prefetch.vinPropia) : fetchVintageAnalysis(CLIENT_IDS_PROPIOS),
-    prefetch ? Promise.resolve(prefetch.vinTerceros) : fetchVintageAnalysis(CLIENT_IDS_TERCEROS),
+    prefetch ? Promise.resolve(prefetch.vinTerceros) : fetchVintageAnalysis(CLIENTES_TERCEROS),
     prefetch ? Promise.resolve(prefetch.pdPropia) : fetchPDIndicadores(CLIENT_IDS_PROPIOS),
-    prefetch ? Promise.resolve(prefetch.pdTerceros) : fetchPDIndicadores(CLIENT_IDS_TERCEROS),
+    prefetch ? Promise.resolve(prefetch.pdTerceros) : fetchPDIndicadores(CLIENTES_TERCEROS),
     getListaPrecios(),
     fetchTicketPromedioTerceros(),
     fetchIncobrabilidadCanal(CLIENT_IDS_PROPIOS, cbIds, transIds),
-    fetchIncobrabilidadCanal(CLIENT_IDS_TERCEROS, cbIds, transIds),
+    fetchIncobrabilidadCanal(CLIENTES_TERCEROS, cbIds, transIds),
   ])
   const fpd = (pd: Awaited<ReturnType<typeof fetchPDIndicadores>>) =>
     pd.resumen.find(r => r.cuota === 1)?.pd_hard ?? null

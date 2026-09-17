@@ -1,5 +1,5 @@
 import { getPool, getGocuotasPool } from './db-pool'
-import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS, SQL_IDS_TODOS, SQL_IDS_PROPIOS } from './client-ids'
+import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS, CLIENTES_TODOS, sqlCondicionClientes, type FiltroClientes } from './client-ids'
 
 export { CLIENT_IDS_PROPIOS }
 
@@ -595,14 +595,24 @@ export interface ContracargosData {
   ordenes_afectadas: number
 }
 
-export async function fetchContracargos(clientIds?: string[]): Promise<ContracargosData> {
+export async function fetchContracargos(clientes?: FiltroClientes): Promise<ContracargosData> {
   const gocuotasPool = getGocuotasPool()
   const gocelularPool = getPool()
   if (!gocuotasPool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 }
 
-  // Filtro opcional por canal (propia/terceros); sin argumento = todos, como siempre
-  const idsSeguros = (clientIds ?? []).filter(id => /^\d+$/.test(id))
-  const clientFilter = idsSeguros.length > 0 ? `AND %ALIAS%.client_id IN (${idsSeguros.join(',')})` : ''
+  // Filtro opcional por canal (propia = lista, terceros = NOT IN propios);
+  // sin argumento = todos los clients
+  const numeros = (ids: string[]) => ids.filter(id => /^\d+$/.test(id))
+  let clientFilter = ''
+  if (clientes) {
+    if (Array.isArray(clientes)) {
+      const s = numeros(clientes)
+      if (s.length > 0) clientFilter = `AND %ALIAS%.client_id IN (${s.join(',')})`
+    } else {
+      const s = numeros(clientes.notIn)
+      if (s.length > 0) clientFilter = `AND %ALIAS%.client_id NOT IN (${s.join(',')})`
+    }
+  }
 
   const gocuotasClient = await gocuotasPool.connect()
   try {
@@ -648,13 +658,13 @@ export async function fetchContracargos(clientIds?: string[]): Promise<Contracar
     if (gocelularPool) {
       const gocelClient = await gocelularPool.connect()
       try {
-        const sqlIdsVentas = idsSeguros.length > 0 ? idsSeguros.map(id => `'${id}'`).join(', ') : SQL_IDS_TODOS
+        const condVentas = sqlCondicionClientes(clientes ?? CLIENTES_TODOS, 'go.client_id::text') ?? 'FALSE'
         const ventasRes = await gocelClient.query<{ total: string }>(`
           SELECT COALESCE(SUM(go.total_order_amount), 0) AS total
           FROM gocuotas_orders go
           WHERE go.order_delivered_at IS NOT NULL
             AND go.order_discarded_at IS NULL
-            AND go.client_id::text IN (${sqlIdsVentas})
+            AND ${condVentas}
         `)
         montoTotalVentas = Number(ventasRes.rows[0].total)
       } finally {
@@ -2267,14 +2277,14 @@ export async function fetchAlertaCuotasPagadas(): Promise<AlertaCuotasPagadas> {
       SELECT * FROM pagadas ORDER BY dias_adelanto ASC
     `)
 
-    const terceroIds = new Set(CLIENT_IDS_TERCEROS)
     const detalle: AlertaCuotasPagadasDetalle[] = res.rows.map(r => ({
       orderId: r.order_id,
       userDni: r.user_dni ?? '',
       userName: r.user_name ?? '',
       storeName: r.store_name,
       clientId: r.client_id,
-      esTercero: terceroIds.has(r.client_id),
+      // Regla de canales: todo client que no es propio es tercero
+      esTercero: !CLIENT_IDS_PROPIOS.includes(r.client_id),
       totalCuotas: Number(r.total_cuotas),
       fechaOrden: r.fecha_orden?.slice(0, 10) ?? '',
       fechaUltimoPago: r.fecha_ultimo_pago?.slice(0, 10) ?? '',

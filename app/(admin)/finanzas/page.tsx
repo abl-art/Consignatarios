@@ -18,7 +18,7 @@ import SimuladorTab from './SimuladorTab'
 import ProductosTab from './ProductosTab'
 import { fetchProductos } from '@/lib/actions/productos'
 import { getDatosSimulador } from '@/lib/actions/simulador-datos'
-import { CLIENT_IDS_PROPIOS, CLIENT_IDS_TERCEROS } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
 
 export default async function FinanzasPage({
   searchParams,
@@ -56,11 +56,11 @@ export default async function FinanzasPage({
   const DPD_VACIO = { byOrigination: [], byDueMonth: [] }
   const [pdPropia, pdTerceros, dpdPropia, dpdTerceros, vintagePropia, vintageTerceros] = await Promise.all([
     fetchPDIndicadores(CLIENT_IDS_PROPIOS).catch(() => PD_VACIO),
-    fetchPDIndicadores(CLIENT_IDS_TERCEROS).catch(() => PD_VACIO),
+    fetchPDIndicadores(CLIENTES_TERCEROS).catch(() => PD_VACIO),
     fetchDPDIndicadores(CLIENT_IDS_PROPIOS).catch(() => DPD_VACIO),
-    fetchDPDIndicadores(CLIENT_IDS_TERCEROS).catch(() => DPD_VACIO),
+    fetchDPDIndicadores(CLIENTES_TERCEROS).catch(() => DPD_VACIO),
     fetchVintageAnalysis(CLIENT_IDS_PROPIOS).catch(() => []),
-    fetchVintageAnalysis(CLIENT_IDS_TERCEROS).catch(() => []),
+    fetchVintageAnalysis(CLIENTES_TERCEROS).catch(() => []),
   ])
 
   // Tarjetas de cuotas vencidas por canal (mismo criterio: después del pool
@@ -68,7 +68,7 @@ export default async function FinanzasPage({
   const CUOTAS_VACIO: CuotasStats = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, contracargos: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, pct_contracargos: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, monto_contracargos: 0, ppp_recupero: 0, ppp_mora: 0 }
   const [cuotasPropia, cuotasTerceros, merchantsTerceros] = await Promise.all([
     fetchCuotasStats(CLIENT_IDS_PROPIOS).catch(() => CUOTAS_VACIO),
-    fetchCuotasStats(CLIENT_IDS_TERCEROS).catch(() => CUOTAS_VACIO),
+    fetchCuotasStats(CLIENTES_TERCEROS).catch(() => CUOTAS_VACIO),
     getFiltrosTerceros().catch(() => []),
   ])
 
