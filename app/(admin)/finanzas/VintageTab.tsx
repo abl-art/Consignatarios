@@ -12,7 +12,9 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { formatearMoneda } from '@/lib/utils'
-import CanalPills, { type Canal } from './CanalPills'
+import FiltrosIndicadores from './FiltrosIndicadores'
+import { useIndicadoresFiltro } from './useIndicadoresFiltro'
+import { fetchVintageFiltrado, type MerchantTercero } from '@/lib/actions/finanzas'
 
 interface VintageRow {
   origination_month: string
@@ -45,6 +47,7 @@ interface VintageRow {
 
 interface Props {
   canales: { total: VintageRow[]; propia: VintageRow[]; terceros: VintageRow[] }
+  merchants: MerchantTercero[]
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -74,9 +77,9 @@ const SEGMENTS = [
   { key: 'pct_recupero_120_plus', label: 'Recupero 120+', color: '#065F46' },
 ] as const
 
-export default function VintageTab({ canales }: Props) {
-  const [canal, setCanal] = useState<Canal>('total')
-  const data = canales[canal]
+export default function VintageTab({ canales, merchants }: Props) {
+  const filtro = useIndicadoresFiltro<VintageRow[]>(canales, fetchVintageFiltrado)
+  const data = filtro.data
   const chartData = data.map((r) => ({
     mes: formatMes(r.origination_month),
     pct_cobrada_en_termino: r.pct_cobrada_en_termino,
@@ -95,7 +98,18 @@ export default function VintageTab({ canales }: Props) {
 
   return (
     <div className="space-y-6">
-      <CanalPills canal={canal} onChange={setCanal} />
+      <FiltrosIndicadores
+        canal={filtro.canal}
+        setCanal={filtro.setCanal}
+        bloqueo={filtro.bloqueo}
+        setBloqueo={filtro.setBloqueo}
+        merchantId={filtro.merchantId}
+        setMerchant={filtro.setMerchant}
+        storeId={filtro.storeId}
+        setStore={filtro.setStore}
+        merchants={merchants}
+        cargando={filtro.cargando}
+      />
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <div className="max-h-[400px] overflow-auto border border-gray-200 rounded-xl">

@@ -12,7 +12,9 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { formatearMoneda } from '@/lib/utils'
-import CanalPills, { type Canal } from './CanalPills'
+import FiltrosIndicadores from './FiltrosIndicadores'
+import { useIndicadoresFiltro } from './useIndicadoresFiltro'
+import { fetchDPDFiltrado, type MerchantTercero } from '@/lib/actions/finanzas'
 
 interface DPDRow {
   mes: string
@@ -36,6 +38,7 @@ interface DPDData {
 
 interface Props {
   canales: { total: DPDData; propia: DPDData; terceros: DPDData }
+  merchants: MerchantTercero[]
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -56,9 +59,9 @@ function pctColor(value: number): string {
   return 'text-red-600'
 }
 
-export default function DPDTab({ canales }: Props) {
-  const [canal, setCanal] = useState<Canal>('total')
-  const { byOrigination, byDueMonth } = canales[canal]
+export default function DPDTab({ canales, merchants }: Props) {
+  const filtro = useIndicadoresFiltro<DPDData>(canales, fetchDPDFiltrado)
+  const { byOrigination, byDueMonth } = filtro.data
   const [view, setView] = useState<'due' | 'orig'>('due')
 
   const data = view === 'due' ? byDueMonth : byOrigination
@@ -74,7 +77,18 @@ export default function DPDTab({ canales }: Props) {
 
   return (
     <div className="space-y-6">
-      <CanalPills canal={canal} onChange={setCanal} />
+      <FiltrosIndicadores
+        canal={filtro.canal}
+        setCanal={filtro.setCanal}
+        bloqueo={filtro.bloqueo}
+        setBloqueo={filtro.setBloqueo}
+        merchantId={filtro.merchantId}
+        setMerchant={filtro.setMerchant}
+        storeId={filtro.storeId}
+        setStore={filtro.setStore}
+        merchants={merchants}
+        cargando={filtro.cargando}
+      />
       {/* View selector */}
       <div className="flex gap-2">
         <button

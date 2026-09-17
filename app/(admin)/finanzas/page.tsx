@@ -1,5 +1,5 @@
 import { formatearMoneda } from '@/lib/utils'
-import { fetchFlujoDeFondosPorCanal, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis, type FlujoDiario, type CuotasStats } from '@/lib/actions/finanzas'
+import { fetchFlujoDeFondosPorCanal, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis, getFiltrosTerceros, type FlujoDiario, type CuotasStats } from '@/lib/actions/finanzas'
 import { simularDeuda } from '@/lib/simular-deuda'
 import { fetchPrestamos, fetchMovimientos, getDeudaConfig, fetchInteresesPagadosMes } from '@/lib/actions/deuda'
 import { fetchResultadoTienda } from '@/lib/actions/resultado'
@@ -63,11 +63,13 @@ export default async function FinanzasPage({
     fetchVintageAnalysis(CLIENT_IDS_TERCEROS).catch(() => []),
   ])
 
-  // Tarjetas de cuotas vencidas por canal (mismo criterio: después del pool principal)
+  // Tarjetas de cuotas vencidas por canal (mismo criterio: después del pool
+  // principal) + merchants/stores de terceros para los desplegables
   const CUOTAS_VACIO: CuotasStats = { total: 0, adelantado: 0, en_termino: 0, atrasado: 0, mora: 0, contracargos: 0, pct_adelantado: 0, pct_en_termino: 0, pct_atrasado: 0, pct_mora: 0, pct_contracargos: 0, monto_adelantado: 0, monto_en_termino: 0, monto_atrasado: 0, monto_mora: 0, monto_contracargos: 0, ppp_recupero: 0, ppp_mora: 0 }
-  const [cuotasPropia, cuotasTerceros] = await Promise.all([
+  const [cuotasPropia, cuotasTerceros, merchantsTerceros] = await Promise.all([
     fetchCuotasStats(CLIENT_IDS_PROPIOS).catch(() => CUOTAS_VACIO),
     fetchCuotasStats(CLIENT_IDS_TERCEROS).catch(() => CUOTAS_VACIO),
+    getFiltrosTerceros().catch(() => []),
   ])
 
   // Datos del simulador: reusa el vintage/PD por canal ya fetcheado (prefetch) y
@@ -182,9 +184,9 @@ export default async function FinanzasPage({
           { id: 'flujo', label: diasEstres.length > 0 ? `Flujo de fondos (${diasEstres.length} estrés)` : 'Flujo de fondos', content: flujoTab },
           { id: 'egresos', label: 'Egresos', content: egresosTab },
           { id: 'deuda', label: 'Deuda', content: <DeudaTab prestamos={prestamos} movimientos={todosMovimientos} config={deudaConfig} interesesMes={interesesMes} /> },
-          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} /> },
-          { id: 'dpd', label: 'Days Past Due', content: <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} /> },
-          { id: 'vintage', label: 'Vintage', content: <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} /> },
+          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} merchants={merchantsTerceros} /> },
+          { id: 'dpd', label: 'Days Past Due', content: <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} merchants={merchantsTerceros} /> },
+          { id: 'vintage', label: 'Vintage', content: <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} merchants={merchantsTerceros} /> },
           { id: 'simulador', label: 'Simulación', content: <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> },
           { id: 'precios', label: 'Productos', content: <ProductosTab productos={productosFinancieros} /> },
           { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },

@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import CanalPills, { type Canal } from './CanalPills'
+import FiltrosIndicadores from './FiltrosIndicadores'
+import { useIndicadoresFiltro } from './useIndicadoresFiltro'
+import { fetchPDFiltrado, type MerchantTercero } from '@/lib/actions/finanzas'
 
 interface PDRow {
   mes: string
@@ -26,6 +28,7 @@ interface PDData {
 
 interface Props {
   canales: { total: PDData; propia: PDData; terceros: PDData }
+  merchants: MerchantTercero[]
 }
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -98,9 +101,9 @@ function PDChart({ rows }: { rows: PDRow[] }) {
   )
 }
 
-export default function IndicadoresTab({ canales }: Props) {
-  const [canal, setCanal] = useState<Canal>('total')
-  const { byOrigination, byDueMonth, resumen, maxCuota } = canales[canal]
+export default function IndicadoresTab({ canales, merchants }: Props) {
+  const filtro = useIndicadoresFiltro<PDData>(canales, fetchPDFiltrado)
+  const { byOrigination, byDueMonth, resumen, maxCuota } = filtro.data
   const [selectedCuota, setSelectedCuota] = useState(2)
 
   const cuotas = Array.from({ length: maxCuota }, (_, i) => i + 1)
@@ -117,7 +120,18 @@ export default function IndicadoresTab({ canales }: Props) {
 
   return (
     <div className="space-y-6">
-      <CanalPills canal={canal} onChange={setCanal} />
+      <FiltrosIndicadores
+        canal={filtro.canal}
+        setCanal={filtro.setCanal}
+        bloqueo={filtro.bloqueo}
+        setBloqueo={filtro.setBloqueo}
+        merchantId={filtro.merchantId}
+        setMerchant={filtro.setMerchant}
+        storeId={filtro.storeId}
+        setStore={filtro.setStore}
+        merchants={merchants}
+        cargando={filtro.cargando}
+      />
       {/* Summary card - FPD for all cuotas */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Payment Default por cuota</p>
