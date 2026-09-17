@@ -52,20 +52,13 @@ export function condicionClientesNum(
   return { clause: `AND ${col} NOT IN (${placeholders(values.length)})`, values }
 }
 
-// ─── Legacy (listas hardcodeadas) ─────────────────────────────────────────
-// Quedan solo para consumidores que necesitan una lista explícita (p.ej. el
-// tab Resultado de terceros con su config por merchant). NO usar para filtrar
-// canales — usar CLIENTES_TERCEROS / CLIENTES_TODOS.
-
-export const CLIENT_IDS_TERCEROS = ['1', '5495277', '6033574', '6115009', '6284199', '6277174']
-
-// Todos los client IDs (propios + terceros) — para queries que necesitan el universo completo
-export const CLIENT_IDS_TODOS = [...CLIENT_IDS_PROPIOS, ...CLIENT_IDS_TERCEROS]
-
-// Helper para usar en queries SQL con IN (...)
-export const SQL_IDS_TODOS = CLIENT_IDS_TODOS.map(id => `'${id}'`).join(', ')
 export const SQL_IDS_PROPIOS = CLIENT_IDS_PROPIOS.map(id => `'${id}'`).join(', ')
-export const SQL_IDS_TERCEROS = CLIENT_IDS_TERCEROS.map(id => `'${id}'`).join(', ')
 
-// Client IDs terceros como números (para query a GOcuotas directa)
-export const CLIENT_IDS_TERCEROS_NUM = CLIENT_IDS_TERCEROS.map(Number).filter(n => n > 1)
+// ─── Legacy (lista hardcodeada, CONGELADA) ────────────────────────────────
+// OJO: esta lista NO suma merchants nuevos. La usan solo upselling,
+// getVentasPorModelo (compras) y fetchVentasPropiasDiarias (gocelular) como
+// "universo" viejo — migrarlas a la regla por exclusión cuando se decida.
+// NO usar para nada nuevo: usar CLIENTES_TERCEROS / CLIENTES_TODOS.
+
+const CLIENT_IDS_TERCEROS_LEGACY = ['1', '5495277', '6033574', '6115009', '6284199', '6277174']
+export const SQL_IDS_TODOS = [...CLIENT_IDS_PROPIOS, ...CLIENT_IDS_TERCEROS_LEGACY].map(id => `'${id}'`).join(', ')

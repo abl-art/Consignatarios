@@ -1,8 +1,9 @@
 'use server'
 
 import { getPool } from '@/lib/db-pool'
-import { CLIENT_IDS_TERCEROS } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 import { fetchConfig, type ConfigResultado } from '@/lib/actions/resultado'
+import { getFiltrosTerceros } from '@/lib/actions/finanzas'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,12 +50,6 @@ export interface ResultadoTercerosData {
     ganancia: number
     ganancia_usd: number
   }
-}
-
-const MERCHANT_NAMES: Record<string, string> = {
-  '5495277': 'RIIING',
-  '6033574': 'TECNO-COMPRO',
-  '6115009': 'Plus Phone',
 }
 
 const EMPTY_RESULT: ResultadoTercerosData = {
@@ -149,9 +144,14 @@ export async function fetchResultadoTerceros(desde: string, hasta: string): Prom
   const pool = getPool()
   if (!pool) return EMPTY_RESULT
 
-  const config = await fetchConfigTerceros()
-  const ids = CLIENT_IDS_TERCEROS.filter(id => id !== '1')
-  if (ids.length === 0) return { ...EMPTY_RESULT, config }
+  // Regla de canales: todo client que no es propio es merchant. Los nombres
+  // salen de gocuotas_stores vía nombreMerchant (nada hardcodeado).
+  const [config, merchantsInfo] = await Promise.all([
+    fetchConfigTerceros(),
+    getFiltrosTerceros().catch(() => []),
+  ])
+  const nombres = new Map(merchantsInfo.map(m => [m.clientId, m.nombre]))
+  const propios = CLIENT_IDS_PROPIOS
 
   const client = await pool.connect()
   try {
@@ -162,12 +162,12 @@ export async function fetchResultadoTerceros(desde: string, hasta: string): Prom
       SELECT client_id, COUNT(*)::int AS units,
         SUM(total_order_amount)::numeric AS total_amount
       FROM gocuotas_orders
-      WHERE client_id = ANY($3)
+      WHERE NOT (client_id::text = ANY($3::text[]))
         AND order_discarded_at IS NULL
         AND order_created_at >= $1::date AND order_created_at < ($2::date + 1)
       GROUP BY client_id
       ORDER BY total_amount DESC
-    `, [desde, hasta, ids])
+    `, [desde, hasta, propios])
 
     // 2. Installments for interest calculation
     const installRes = await client.query<{
@@ -180,11 +180,11 @@ export async function fetchResultadoTerceros(desde: string, hasta: string): Prom
         gi.installment_amount AS amount, go2.order_created_at AS order_date
       FROM gocuotas_installments gi
       JOIN gocuotas_orders go2 ON go2.order_id = gi.order_id
-      WHERE go2.client_id = ANY($3)
+      WHERE NOT (go2.client_id::text = ANY($3::text[]))
         AND go2.order_discarded_at IS NULL
         AND go2.order_created_at >= $1::date AND go2.order_created_at < ($2::date + 1)
       ORDER BY go2.order_id, gi.installment_number
-    `, [desde, hasta, ids])
+    `, [desde, hasta, propios])
 
     // Group installments by order
     const orderMap = new Map<string, { client_id: string; orderAmount: number; orderDate: Date; cuotas: { due_date: Date | string; amount: number }[] }>()
@@ -242,7 +242,7 @@ export async function fetchResultadoTerceros(desde: string, hasta: string): Prom
       const gananciaUsd = config.tipo_cambio > 0 ? Math.round(ganancia / config.tipo_cambio) : 0
 
       return {
-        merchant_name: MERCHANT_NAMES[clientId] ?? `Cliente ${clientId}`,
+        merchant_name: nombres.get(clientId) ?? `Cliente ${clientId}`,
         client_id: clientId,
         unidades,
         order_amount_total: Math.round(orderAmountTotal),
