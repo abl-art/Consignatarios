@@ -2,6 +2,13 @@
 // GOcelular: los color-SKUs del mismo modelo se compensan entre sí (stock
 // cargado en otro color no es faltante real). El vendido EN COLA solo existe
 // a nivel modelo (sin color asignado) y define el disponible real de venta.
+//
+// El comparable GO es available en andreani_wh SIN restar la cola de enviados
+// sin pickear. Verificado contra el export del portal de Andreani (17/9): su
+// "Cantidad Disponible" = físico − pickeado/embalado, NO descuenta los pedidos
+// enviados que todavía no pickeó. Restar esa cola del lado GO fabricaba difs
+// positivas del tamaño de la cola. La dif residual real son los despachos sin
+// IMEI (GO infla available) y los cruces de color (netean a nivel modelo).
 
 export interface FilaCorte {
   nombre: string | null
@@ -15,7 +22,8 @@ export interface ModeloNeto {
   nombre: string
   skus: number
   andDisponible: number
-  /** available en WH Andreani − pedidos enviados sin pickear */
+  /** available en WH Andreani (SIN restar la cola de enviados: Andreani
+   * tampoco la descuenta de su disponible — verificado contra el portal) */
   goComparable: number
   /** andDisponible − goComparable */
   dif: number
@@ -108,7 +116,7 @@ export function netoPorModelo(
     const nombre = f.nombre ?? '—'
     const m = porModelo.get(nombre) ?? { andDisponible: 0, goComparable: 0, skus: 0 }
     m.andDisponible += f.and_disponible
-    m.goComparable += f.go_andreani - f.go_enviados
+    m.goComparable += f.go_andreani
     m.skus++
     porModelo.set(nombre, m)
   }

@@ -21,9 +21,18 @@ describe('netoPorModelo', () => {
     ])
   })
 
-  it('descuenta los enviados sin pickear del lado GO (Andreani ya los restó)', () => {
-    const r = netoPorModelo([fila('Moto G17', 32, 44, 12)], [])
-    expect(r[0]).toMatchObject({ goComparable: 32, dif: 0 })
+  it('NO descuenta los enviados sin pickear: Andreani tampoco resta esa cola', () => {
+    // Andreani reporta 44 disponible (no descuenta la cola de 12 no pickeados),
+    // GO tiene 44 available → cierra en 0. Restar la cola daría un +12 falso.
+    const r = netoPorModelo([fila('Moto G17', 44, 44, 12)], [])
+    expect(r[0]).toMatchObject({ goComparable: 44, dif: 0 })
+  })
+
+  it('los despachos sin IMEI (GO infla available) quedan como dif negativa real', () => {
+    // Andreani despachó 2 sin informar serie: su disponible baja a 42, GO sigue
+    // con 44 available → dif −2, el faltante real a reclamar.
+    const r = netoPorModelo([fila('Moto G17', 42, 44, 12)], [])
+    expect(r[0]).toMatchObject({ goComparable: 44, dif: -2 })
   })
 
   it('el vendido en cola define el disponible real sin tocar la diferencia', () => {

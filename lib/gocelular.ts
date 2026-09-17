@@ -2583,13 +2583,15 @@ export interface ControlStockFila {
   andAsignada: number
   /** Disponibles en el WH de Andreani según GOcelular (en vivo, solo andreani_wh) */
   goAndreani: number
-  /** Unidades de pedidos enviados a Andreani sin pickear (Andreani ya las descontó) */
+  /** Unidades de pedidos enviados a Andreani sin pickear — CONTEXTO, ya no entra
+   * en la dif: Andreani no descuenta esta cola de su disponible (verificado
+   * contra el portal 17/9), restarla del lado GO fabricaba positivos falsos */
   goEnviados: number
   /** Disponibles en el depósito propio de GOcuotas (contexto, no entra en la dif) */
   goLocal: number
   /** Disponibles en tránsito a Andreani (contexto, no entra en la dif) */
   goTransito: number
-  /** Andreani disponible (corrida) − (GOcelular WH Andreani − enviados sin pickear) */
+  /** Andreani disponible (corrida) − GOcelular WH Andreani (available) */
   dif: number
   medido: boolean
   error: string | null
@@ -2731,7 +2733,7 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
         goEnviados: Number(r.go_enviados),
         goLocal: Number(r.go_local),
         goTransito: Number(r.go_transito),
-        dif: Number(r.and_disponible) - (Number(r.go_andreani) - Number(r.go_enviados)),
+        dif: Number(r.and_disponible) - Number(r.go_andreani),
         medido: r.medido,
         error: r.error,
       }))
