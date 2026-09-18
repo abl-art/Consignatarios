@@ -78,17 +78,27 @@ function coincide(estado: FilaHistorialBono['estado'], filtro: FiltroEstado): bo
   return filtro === 'vigente' ? estado === 'vigente' || estado === 'agotado' : estado === filtro
 }
 
+const claveVigencia = (b: FilaHistorialBono) => `${b.desde ?? ''}|${b.hasta ?? ''}`
+
+function labelVigencia(clave: string): string {
+  const [desde, hasta] = clave.split('|')
+  return `${desde ? fechaCorta(desde) : '—'} → ${hasta ? fechaCorta(hasta) : 'sin vto'}`
+}
+
 export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBono[] }) {
   const [filtro, setFiltro] = useState<FiltroEstado | null>(null)
   const [marca, setMarca] = useState<string | null>(null)
+  const [vigencia, setVigencia] = useState<string | null>(null)
 
   if (bonos.length === 0) {
     return <p className="text-sm text-gray-500">Todavía no hay bonos cargados. Se cargan desde la columna Bono de la pestaña Lista.</p>
   }
 
   const marcas = [...new Set(bonos.map(b => marcaNC(b.nombreModelo)))].sort()
+  const vigencias = [...new Set(bonos.map(claveVigencia))].sort().reverse()
   const deMarca = marca ? bonos.filter(b => marcaNC(b.nombreModelo) === marca) : bonos
-  const visibles = filtro ? deMarca.filter(b => coincide(b.estado, filtro)) : deMarca
+  const deVigencia = vigencia ? deMarca.filter(b => claveVigencia(b) === vigencia) : deMarca
+  const visibles = filtro ? deVigencia.filter(b => coincide(b.estado, filtro)) : deVigencia
 
   const pill = (activo: boolean) =>
     `px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
@@ -104,16 +114,30 @@ export default function BonosHistorialTable({ bonos }: { bonos: FilaHistorialBon
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {[null, ...FILTROS.map(f => f.valor)].map(v => {
           const label = v === null ? 'Todos' : FILTROS.find(f => f.valor === v)!.label
-          const cantidad = v === null ? deMarca.length : deMarca.filter(b => coincide(b.estado, v)).length
+          const cantidad = v === null ? deVigencia.length : deVigencia.filter(b => coincide(b.estado, v)).length
           return (
             <button key={v ?? 'todos'} onClick={() => setFiltro(v)} className={pill(filtro === v)}>
               {label} ({cantidad})
             </button>
           )
         })}
+        <select
+          value={vigencia ?? ''}
+          onChange={e => setVigencia(e.target.value || null)}
+          className={`ml-auto px-3 py-1.5 rounded-full text-sm font-medium border bg-white transition-colors cursor-pointer ${
+            vigencia ? 'border-gray-900 text-gray-900' : 'border-gray-300 text-gray-600 hover:border-gray-400'
+          }`}
+        >
+          <option value="">Todas las vigencias</option>
+          {vigencias.map(v => (
+            <option key={v} value={v}>
+              {labelVigencia(v)} ({deMarca.filter(b => claveVigencia(b) === v).length})
+            </option>
+          ))}
+        </select>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
