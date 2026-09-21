@@ -1,7 +1,9 @@
 // Segmentación de clientes A1–D4 del ecosistema GO (doc "Estructura de Crédito").
 // Letra = límite general medido en tickets promedio: A >4.8 · B 2–4.8 · C 1–2 · D <1.
-// Número = antigüedad desde la activación (primera orden entregada en GO):
-// 1 = +12 meses · 2 = 4–12 · 3 = <4 · 4 = sin órdenes.
+// Número = antigüedad desde la activación (primera orden BNPL entregada en GO,
+// EXCLUYENDO las órdenes de la plataforma GOcelular — regla de Emiliano 21/9:
+// si el celular fue su primera compra del ecosistema, es un "4", ahí empieza
+// su historial): 1 = +12 meses · 2 = 4–12 · 3 = <4 · 4 = sin historial previo.
 // Ticket promedio = $ ventas GOcuotas BNPL últimos 30 días / Q ventas,
 // excluyendo las operaciones de GOcelular (clientes propios).
 //
@@ -92,6 +94,19 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     const usuarios = resUsuarios.rows.filter(r => /^\d+$/.test(r.user_id))
     const userIds = usuarios.map(r => r.user_id)
 
+    // Órdenes de la plataforma GOcelular por usuario: se excluyen al calcular
+    // la activación, así la antigüedad mide solo el historial BNPL previo/ajeno
+    const resOrdenes = await replica.query<{ user_id: string; order_id: string }>(
+      `SELECT user_id::text AS user_id, order_id::text AS order_id FROM gocuotas_orders WHERE user_id IS NOT NULL`
+    )
+    const ordenesPlataforma = new Map<string, string[]>()
+    for (const r of resOrdenes.rows) {
+      if (!/^\d+$/.test(r.order_id)) continue
+      const arr = ordenesPlataforma.get(r.user_id) ?? []
+      arr.push(r.order_id)
+      ordenesPlataforma.set(r.user_id, arr)
+    }
+
     // Ticket promedio global (30 días, BNPL, sin operaciones GOcelular)
     const tpRows = await databricksQuery(`
       SELECT SUM(go_cuotas_order_amount) / COUNT(*) AS tp
@@ -110,6 +125,10 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     for (let i = 0; i < userIds.length; i += BATCH_DATABRICKS) {
       const batch = userIds.slice(i, i + BATCH_DATABRICKS)
       const inList = batch.join(',')
+      const ordenesExcluidas = batch.flatMap(id => ordenesPlataforma.get(id) ?? [])
+      const notInOrdenes = ordenesExcluidas.length > 0
+        ? `AND go_cuotas_order_id NOT IN (${ordenesExcluidas.map(o => `'${o}'`).join(',')})`
+        : ''
       const rows = await databricksQuery(`
         WITH camp AS (
           SELECT user_customer_id,
@@ -124,6 +143,7 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
           FROM prd.gold_dw.fact_go_cuotas_orders
           WHERE user_customer_id IN (${inList})
             AND delivered_at IS NOT NULL AND discarded_at IS NULL
+            ${notInOrdenes}
           GROUP BY user_customer_id
         )
         SELECT COALESCE(c.user_customer_id, a.user_customer_id) AS user_id,

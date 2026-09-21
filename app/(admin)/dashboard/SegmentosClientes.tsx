@@ -20,7 +20,7 @@ const NUMEROS = [
   { numero: '1', detalle: '+12 meses activo' },
   { numero: '2', detalle: '4–12 meses' },
   { numero: '3', detalle: '< 4 meses' },
-  { numero: '4', detalle: 'Inactivos' },
+  { numero: '4', detalle: 'GOcelular fue su 1ª compra' },
 ]
 
 export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
