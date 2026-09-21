@@ -1,13 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import CanalPills, { type Canal } from './CanalPills'
 import BloqueoPills, { type BloqueoFiltro } from './BloqueoPills'
 import type { MerchantTercero } from '@/lib/actions/finanzas'
-
-// Los 16 segmentos de la Estructura de Crédito GO: letra = límite en tickets
-// promedio (A >4.8 · B 2–4.8 · C 1–2 · D <1), número = antigüedad desde la
-// activación (1 = +12m · 2 = 4–12m · 3 = <4m · 4 = inactivos)
-const SEGMENTOS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4']
 
 interface Props {
   canal: Canal
@@ -18,32 +14,50 @@ interface Props {
   setMerchant: (m: string) => void
   storeId: string
   setStore: (s: string) => void
-  segmento: string
-  setSegmento: (s: string) => void
+  segmentoLetra: string
+  setSegmentoLetra: (s: string) => void
+  segmentoNumero: string
+  setSegmentoNumero: (s: string) => void
   merchants: MerchantTercero[]
   cargando: boolean
 }
 
 // Barra de filtros compartida por PD/DPD/Vintage: canal + solución de bloqueo
-// + segmento de cliente y, con Venta de Terceros elegido, desplegables de
-// Merchant y Store para mirar incobrabilidad por tienda.
-export default function FiltrosIndicadores({ canal, setCanal, bloqueo, setBloqueo, merchantId, setMerchant, storeId, setStore, segmento, setSegmento, merchants, cargando }: Props) {
+// + segmento de cliente (letra = límite, número = antigüedad; combinables o
+// por separado) y, con Venta de Terceros elegido, desplegables de Merchant y
+// Store para mirar incobrabilidad por tienda.
+export default function FiltrosIndicadores({ canal, setCanal, bloqueo, setBloqueo, merchantId, setMerchant, storeId, setStore, segmentoLetra, setSegmentoLetra, segmentoNumero, setSegmentoNumero, merchants, cargando }: Props) {
   const merchant = merchants.find(m => m.clientId === merchantId)
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <CanalPills canal={canal} onChange={setCanal} />
       <BloqueoPills bloqueo={bloqueo} onChange={setBloqueo} />
-      <select
-        value={segmento}
-        onChange={e => setSegmento(e.target.value)}
-        className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700"
-      >
-        <option value="">Todos los segmentos</option>
-        {SEGMENTOS.map(s => (
-          <option key={s} value={s}>Segmento {s}</option>
-        ))}
-      </select>
+      <div className="flex items-center gap-1.5">
+        <select
+          value={segmentoLetra}
+          onChange={e => setSegmentoLetra(e.target.value)}
+          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700"
+        >
+          <option value="">Todas las letras</option>
+          {['A', 'B', 'C', 'D'].map(l => (
+            <option key={l} value={l}>Letra {l}</option>
+          ))}
+        </select>
+        <select
+          value={segmentoNumero}
+          onChange={e => setSegmentoNumero(e.target.value)}
+          className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700"
+        >
+          <option value="">Todos los números</option>
+          {['1', '2', '3', '4'].map(n => (
+            <option key={n} value={n}>Número {n}</option>
+          ))}
+        </select>
+        <Link href="/segmentos" className="text-xs text-gray-400 underline hover:text-gray-600 whitespace-nowrap">
+          ¿Qué es cada segmento?
+        </Link>
+      </div>
       {canal === 'terceros' && (
         <div className="flex flex-wrap items-center gap-2">
           <select

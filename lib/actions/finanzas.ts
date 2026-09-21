@@ -1267,7 +1267,8 @@ export interface FiltroIndicadores {
   bloqueo?: Bloqueo
   merchantId?: string // client_id del merchant tercero
   storeId?: string // gocuotas store_id
-  segmento?: string // 'A1'..'D4' — segmentación de clientes del ecosistema GO
+  segmentoLetra?: string // 'A'..'D' — límite del cliente en tickets promedio
+  segmentoNumero?: string // '1'..'4' — antigüedad desde la activación
 }
 
 async function resolverFiltro(f: FiltroIndicadores): Promise<{ clientes: FiltroClientes; filtros: FiltrosIndicadoresSql }> {
@@ -1279,8 +1280,11 @@ async function resolverFiltro(f: FiltroIndicadores): Promise<{ clientes: FiltroC
   }
   const bloqueo = f.bloqueo && (BLOQUEOS as readonly string[]).includes(f.bloqueo) ? f.bloqueo : undefined
   const storeIds = f.canal === 'terceros' && f.storeId ? [f.storeId] : undefined
-  const segmentoUserIds =
-    f.segmento && /^[A-D][1-4]$/.test(f.segmento) ? await fetchSegmentoUserIds(f.segmento) : undefined
+  const hayFiltroSegmento =
+    (f.segmentoLetra && /^[A-D]$/.test(f.segmentoLetra)) || (f.segmentoNumero && /^[1-4]$/.test(f.segmentoNumero))
+  const segmentoUserIds = hayFiltroSegmento
+    ? await fetchSegmentoUserIds(f.segmentoLetra, f.segmentoNumero)
+    : undefined
   return { clientes, filtros: { bloqueo, storeIds, segmentoUserIds } }
 }
 

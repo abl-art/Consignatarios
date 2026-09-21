@@ -17,13 +17,14 @@ export function useIndicadoresFiltro<T>(
   const [bloqueo, setBloqueo] = useState<BloqueoFiltro>('todas')
   const [merchantId, setMerchantId] = useState('')
   const [storeId, setStoreId] = useState('')
-  const [segmento, setSegmento] = useState('')
+  const [segmentoLetra, setSegmentoLetra] = useState('')
+  const [segmentoNumero, setSegmentoNumero] = useState('')
   const [dataFiltrada, setDataFiltrada] = useState<T | null>(null)
   const [cargando, setCargando] = useState(false)
   const cache = useRef(new Map<string, T>())
 
-  const esDefault = bloqueo === 'todas' && !merchantId && !storeId && !segmento
-  const key = `${canal}|${bloqueo}|${merchantId}|${storeId}|${segmento}`
+  const esDefault = bloqueo === 'todas' && !merchantId && !storeId && !segmentoLetra && !segmentoNumero
+  const key = `${canal}|${bloqueo}|${merchantId}|${storeId}|${segmentoLetra}|${segmentoNumero}`
 
   useEffect(() => {
     if (esDefault) {
@@ -44,7 +45,8 @@ export function useIndicadoresFiltro<T>(
       bloqueo: bloqueo === 'todas' ? undefined : bloqueo,
       merchantId: merchantId || undefined,
       storeId: storeId || undefined,
-      segmento: segmento || undefined,
+      segmentoLetra: segmentoLetra || undefined,
+      segmentoNumero: segmentoNumero || undefined,
     })
       .then(d => {
         if (!vivo) return
@@ -87,8 +89,10 @@ export function useIndicadoresFiltro<T>(
     setMerchant,
     storeId,
     setStore: setStoreId,
-    segmento,
-    setSegmento,
+    segmentoLetra,
+    setSegmentoLetra,
+    segmentoNumero,
+    setSegmentoNumero,
     data,
     cargando,
   }

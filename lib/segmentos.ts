@@ -294,16 +294,31 @@ export async function fetchMixSegmentos(): Promise<MixSegmentos> {
 }
 
 /**
- * User ids (whitelisted /^\d+$/) de un segmento, para inyectar en las queries
- * de la réplica. Segmento inválido o tabla vacía → [].
+ * User ids (whitelisted /^\d+$/) que matchean letra y/o número de segmento,
+ * para inyectar en las queries de la réplica. Se puede filtrar solo por letra
+ * ("todos los A"), solo por número ("todos los 1") o por ambos (A1).
+ * Sin filtros válidos o tabla vacía → [].
  */
-export async function fetchSegmentoUserIds(segmento: string): Promise<string[]> {
-  if (!/^[A-D][1-4]$/.test(segmento)) return []
+export async function fetchSegmentoUserIds(letra?: string, numero?: string): Promise<string[]> {
+  const letraOk = letra && /^[A-D]$/.test(letra) ? letra : undefined
+  const numeroOk = numero && /^[1-4]$/.test(numero) ? Number(numero) : undefined
+  if (!letraOk && numeroOk === undefined) return []
   const pool = getSupabasePool()
   if (!pool) return []
+
+  const condiciones: string[] = []
+  const params: (string | number)[] = []
+  if (letraOk) {
+    params.push(letraOk)
+    condiciones.push(`letra = $${params.length}`)
+  }
+  if (numeroOk !== undefined) {
+    params.push(numeroOk)
+    condiciones.push(`numero = $${params.length}`)
+  }
   const res = await pool.query<{ user_id: string }>(
-    `SELECT user_id FROM segmentos_clientes WHERE segmento = $1`,
-    [segmento]
+    `SELECT user_id FROM segmentos_clientes WHERE ${condiciones.join(' AND ')}`,
+    params
   )
   return res.rows.map(r => r.user_id).filter(id => /^\d+$/.test(id))
 }

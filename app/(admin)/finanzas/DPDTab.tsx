@@ -86,8 +86,10 @@ export default function DPDTab({ canales, merchants }: Props) {
         setMerchant={filtro.setMerchant}
         storeId={filtro.storeId}
         setStore={filtro.setStore}
-        segmento={filtro.segmento}
-        setSegmento={filtro.setSegmento}
+        segmentoLetra={filtro.segmentoLetra}
+        setSegmentoLetra={filtro.setSegmentoLetra}
+        segmentoNumero={filtro.segmentoNumero}
+        setSegmentoNumero={filtro.setSegmentoNumero}
         merchants={merchants}
         cargando={filtro.cargando}
       />

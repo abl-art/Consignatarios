@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import CanalPills, { type Canal } from '../finanzas/CanalPills'
 import type { MixSegmentos } from '@/lib/segmentos'
 
@@ -46,7 +47,10 @@ export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <p className="text-xs text-gray-500">Filas = límite asignado · Columnas = antigüedad desde la activación</p>
+        <p className="text-xs text-gray-500">
+          Filas = límite asignado · Columnas = antigüedad desde la activación ·{' '}
+          <Link href="/segmentos" className="text-gray-400 underline hover:text-gray-600">¿Qué es cada segmento?</Link>
+        </p>
         <CanalPills canal={canal} onChange={setCanal} />
       </div>
 
