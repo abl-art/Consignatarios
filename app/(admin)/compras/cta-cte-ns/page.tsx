@@ -9,8 +9,8 @@ function fmtPesos(n: number): string {
   return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-export default async function CtaCteNSPage() {
-  const { proveedores, error } = await getProveedoresNS()
+export default async function CtaCteNSPage({ searchParams }: { searchParams: { desde?: string; hasta?: string } }) {
+  const { proveedores, error } = await getProveedoresNS(searchParams.desde, searchParams.hasta)
 
   const totalComprado = proveedores.reduce((s, p) => s + p.totalComprado, 0)
   const totalSaldo = proveedores.reduce((s, p) => s + p.saldo, 0)
@@ -44,7 +44,7 @@ export default async function CtaCteNSPage() {
             </div>
           </div>
 
-          <ProveedoresNSTable proveedores={proveedores} />
+          <ProveedoresNSTable proveedores={proveedores} desde={searchParams.desde ?? ''} hasta={searchParams.hasta ?? ''} />
           <p className="text-xs text-gray-400 mt-3">Fuente: NetSuite → Databricks (prd.gold_dw). Los datos se actualizan a diario.</p>
         </>
       )}

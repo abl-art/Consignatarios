@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { ProveedorNS } from '@/lib/actions/netsuite'
 
 function fmtPesos(n: number): string {
@@ -18,8 +19,11 @@ function normalizar(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-export default function ProveedoresNSTable({ proveedores }: { proveedores: ProveedorNS[] }) {
+export default function ProveedoresNSTable({ proveedores, desde, hasta }: { proveedores: ProveedorNS[]; desde: string; hasta: string }) {
+  const router = useRouter()
   const [busqueda, setBusqueda] = useState('')
+  const [fDesde, setFDesde] = useState(desde)
+  const [fHasta, setFHasta] = useState(hasta)
 
   const filtrados = busqueda.trim()
     ? proveedores.filter(p =>
@@ -27,9 +31,18 @@ export default function ProveedoresNSTable({ proveedores }: { proveedores: Prove
       )
     : proveedores
 
+  const aplicarFechas = (d: string, h: string) => {
+    const params = new URLSearchParams()
+    if (d) params.set('desde', d)
+    if (h) params.set('hasta', h)
+    router.push(`/compras/cta-cte-ns${params.toString() ? `?${params.toString()}` : ''}`)
+  }
+
+  const hayFiltroFechas = Boolean(desde || hasta)
+
   return (
     <>
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 mb-3">
         <input
           type="text"
           value={busqueda}
@@ -37,12 +50,41 @@ export default function ProveedoresNSTable({ proveedores }: { proveedores: Prove
           placeholder="Buscar proveedor por nombre o CUIT..."
           className="w-full md:w-80 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
         />
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Desde</label>
+          <input
+            type="date"
+            value={fDesde}
+            onChange={e => { setFDesde(e.target.value); aplicarFechas(e.target.value, fHasta) }}
+            className="px-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          <label className="text-xs text-gray-500">Hasta</label>
+          <input
+            type="date"
+            value={fHasta}
+            onChange={e => { setFHasta(e.target.value); aplicarFechas(fDesde, e.target.value) }}
+            className="px-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          {hayFiltroFechas && (
+            <button
+              onClick={() => { setFDesde(''); setFHasta(''); aplicarFechas('', '') }}
+              className="px-3 py-2 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-700"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
         {busqueda.trim() && (
           <span className="text-xs text-gray-500 whitespace-nowrap">
             {filtrados.length} de {proveedores.length}
           </span>
         )}
       </div>
+      {hayFiltroFechas && (
+        <p className="text-xs text-gray-500 mb-3">
+          Mostrando facturas {desde && `desde el ${desde.split('-').reverse().join('/')}`} {hasta && `hasta el ${hasta.split('-').reverse().join('/')}`} — los totales y saldos corresponden solo a ese período.
+        </p>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">

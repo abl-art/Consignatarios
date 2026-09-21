@@ -38,7 +38,13 @@ export interface CtaCteNS {
   movimientos: MovimientoNS[]
 }
 
-export async function getProveedoresNS(): Promise<{ proveedores: ProveedorNS[]; error?: string }> {
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
+
+export async function getProveedoresNS(desde?: string, hasta?: string): Promise<{ proveedores: ProveedorNS[]; error?: string }> {
+  const filtroFechas = [
+    desde && FECHA_RE.test(desde) ? `AND t.transaction_date >= '${desde}'` : '',
+    hasta && FECHA_RE.test(hasta) ? `AND t.transaction_date <= '${hasta}'` : '',
+  ].join('\n        ')
   try {
     const rows = await databricksQuery(`
       SELECT
@@ -55,6 +61,7 @@ export async function getProveedoresNS(): Promise<{ proveedores: ProveedorNS[]; 
       WHERE t.accounting_transaction_classification_id = ${CLASIFICACION_GO_CELULAR}
         AND t.is_deleted = false
         AND t.is_reversal = false
+        ${filtroFechas}
       GROUP BY v.vendor_id, v.vendor_name, v.vendor_cuit
       ORDER BY saldo DESC, total_comprado DESC
       LIMIT 500
