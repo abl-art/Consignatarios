@@ -92,6 +92,15 @@ export default async function ComprasPage() {
       color: 'orange',
       iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
     },
+    {
+      href: '/compras/cta-cte-ns',
+      title: 'Cta Cte Prov NS',
+      description: 'Cuenta corriente de proveedores según NetSuite: facturas, pagos y saldos',
+      count: '' as const,
+      countLabel: 'NetSuite · GO Celular',
+      color: 'violet',
+      iconPath: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
+    },
   ]
 
   const colorClasses: Record<string, { bg: string; text: string; border: string; badge: string }> = {
@@ -99,6 +108,7 @@ export default async function ComprasPage() {
     emerald: { bg: 'bg-emerald-600', text: 'text-emerald-600', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
     blue: { bg: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
     orange: { bg: 'bg-orange-600', text: 'text-orange-600', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
+    violet: { bg: 'bg-violet-600', text: 'text-violet-600', border: 'border-violet-200', badge: 'bg-violet-100 text-violet-700' },
   }
 
   return (
