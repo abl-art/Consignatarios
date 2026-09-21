@@ -38,7 +38,7 @@ const CELDAS: Record<string, string> = {
   D2: 'Límite mínimo, 4–12 meses.',
   D3: 'Límite mínimo y nuevo: el mayor riesgo relativo entre los que ya operaban.',
   D4: 'Entró por el celular con el límite más chico: apuesta sin historial.',
-]
+}
 
 function fmtPesos(n: number): string {
   return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
