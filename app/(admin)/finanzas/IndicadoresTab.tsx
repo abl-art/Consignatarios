@@ -129,6 +129,8 @@ export default function IndicadoresTab({ canales, merchants }: Props) {
         setMerchant={filtro.setMerchant}
         storeId={filtro.storeId}
         setStore={filtro.setStore}
+        segmento={filtro.segmento}
+        setSegmento={filtro.setSegmento}
         merchants={merchants}
         cargando={filtro.cargando}
       />

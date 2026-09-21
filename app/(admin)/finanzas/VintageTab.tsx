@@ -107,6 +107,8 @@ export default function VintageTab({ canales, merchants }: Props) {
         setMerchant={filtro.setMerchant}
         storeId={filtro.storeId}
         setStore={filtro.setStore}
+        segmento={filtro.segmento}
+        setSegmento={filtro.setSegmento}
         merchants={merchants}
         cargando={filtro.cargando}
       />

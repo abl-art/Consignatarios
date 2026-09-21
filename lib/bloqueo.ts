@@ -13,6 +13,8 @@ export type Bloqueo = (typeof BLOQUEOS)[number]
 export interface FiltrosIndicadoresSql {
   bloqueo?: Bloqueo
   storeIds?: string[]
+  /** user_ids del segmento elegido (whitelisted); [] = segmento sin clientes → no matchear nada */
+  segmentoUserIds?: string[]
 }
 
 // MIN(brand) por orden evita el fan-out de órdenes con más de un device
@@ -45,6 +47,13 @@ export function sqlFiltrosIndicadores(filtros?: FiltrosIndicadoresSql): { join: 
   const storesSeguras = (filtros.storeIds ?? []).filter(id => /^\d+$/.test(id))
   if (storesSeguras.length > 0) {
     condiciones.push(`AND o.store_id::text IN (${storesSeguras.map(id => `'${id}'`).join(', ')})`)
+  }
+
+  if (filtros.segmentoUserIds) {
+    const idsSeguros = filtros.segmentoUserIds.filter(id => /^\d+$/.test(id))
+    condiciones.push(
+      idsSeguros.length > 0 ? `AND o.user_id::text IN (${idsSeguros.map(id => `'${id}'`).join(', ')})` : 'AND FALSE'
+    )
   }
 
   return { join, where: condiciones.join('\n      ') }

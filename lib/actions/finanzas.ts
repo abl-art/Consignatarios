@@ -8,6 +8,7 @@ import { getPedidos, getMejorPrecio } from './compras'
 import { buscarPrecio, diaHabilSiguiente } from '@/lib/utils'
 import { armarFlujoPorCanal, type FlujoDiario, type FlujoPorCanal, type IncomeRow, type CuotasStats } from '@/lib/flujo-canal'
 import { sqlFiltrosIndicadores, BLOQUEOS, type Bloqueo, type FiltrosIndicadoresSql } from '@/lib/bloqueo'
+import { fetchSegmentoUserIds } from '@/lib/segmentos'
 import { nombreMerchant, type StoreNombreRow } from '@/lib/merchant-nombre'
 
 export type { FlujoDiario, FlujoPorCanal, CuotasStats }
@@ -1266,9 +1267,10 @@ export interface FiltroIndicadores {
   bloqueo?: Bloqueo
   merchantId?: string // client_id del merchant tercero
   storeId?: string // gocuotas store_id
+  segmento?: string // 'A1'..'D4' — segmentación de clientes del ecosistema GO
 }
 
-function resolverFiltro(f: FiltroIndicadores): { clientes: FiltroClientes; filtros: FiltrosIndicadoresSql } {
+async function resolverFiltro(f: FiltroIndicadores): Promise<{ clientes: FiltroClientes; filtros: FiltrosIndicadoresSql }> {
   // Regla de canales: propios explícitos, terceros = todo lo que no es propio
   let clientes: FiltroClientes =
     f.canal === 'propia' ? CLIENT_IDS_PROPIOS : f.canal === 'terceros' ? CLIENTES_TERCEROS : CLIENTES_TODOS
@@ -1277,21 +1279,23 @@ function resolverFiltro(f: FiltroIndicadores): { clientes: FiltroClientes; filtr
   }
   const bloqueo = f.bloqueo && (BLOQUEOS as readonly string[]).includes(f.bloqueo) ? f.bloqueo : undefined
   const storeIds = f.canal === 'terceros' && f.storeId ? [f.storeId] : undefined
-  return { clientes, filtros: { bloqueo, storeIds } }
+  const segmentoUserIds =
+    f.segmento && /^[A-D][1-4]$/.test(f.segmento) ? await fetchSegmentoUserIds(f.segmento) : undefined
+  return { clientes, filtros: { bloqueo, storeIds, segmentoUserIds } }
 }
 
 export async function fetchPDFiltrado(f: FiltroIndicadores) {
-  const { clientes, filtros } = resolverFiltro(f)
+  const { clientes, filtros } = await resolverFiltro(f)
   return fetchPDIndicadores(clientes, filtros)
 }
 
 export async function fetchDPDFiltrado(f: FiltroIndicadores) {
-  const { clientes, filtros } = resolverFiltro(f)
+  const { clientes, filtros } = await resolverFiltro(f)
   return fetchDPDIndicadores(clientes, filtros)
 }
 
 export async function fetchVintageFiltrado(f: FiltroIndicadores) {
-  const { clientes, filtros } = resolverFiltro(f)
+  const { clientes, filtros } = await resolverFiltro(f)
   return fetchVintageAnalysis(clientes, filtros)
 }
 

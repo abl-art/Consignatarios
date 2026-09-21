@@ -11,6 +11,8 @@ import { getMejorPrecio } from '@/lib/actions/compras'
 import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventario-resumen'
 import { fetchCuotasStats } from '@/lib/actions/finanzas'
 import { fetchOrdenesIncobrables } from '@/lib/gocelular'
+import { fetchMixSegmentos, type MixSegmentos } from '@/lib/segmentos'
+import SegmentosClientes from './SegmentosClientes'
 import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import SoporteCard from './SoporteCard'
@@ -25,7 +27,7 @@ export default async function DashboardPage() {
   const desde7d = daysAgo7.toISOString().slice(0, 10)
   const hoy = new Date().toISOString().slice(0, 10)
 
-  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables, accesoriosRaw] = await Promise.all([
+  const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables, accesoriosRaw, mixSegmentos] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
     fetchConversionGocuotas().catch(() => []),
@@ -42,6 +44,7 @@ export default async function DashboardPage() {
     fetchCuotasStats().catch(() => ({ monto_contracargos: 0 })),
     fetchOrdenesIncobrables().catch(() => [] as string[]),
     fetchAccesoriosVentas30d().catch(() => ({ ordenes: 0, conAccesorios: 0, montoCentavos: 0 })),
+    fetchMixSegmentos().catch((): MixSegmentos => ({ filas: [], totalPropia: 0, totalTerceros: 0, totalClientes: 0, actualizadoAt: null })),
   ])
   const accesorios = resumenAccesorios(accesoriosRaw)
 
@@ -210,6 +213,9 @@ export default async function DashboardPage() {
         )
         })()}
       </div>
+
+      {/* Segmentos de clientes GO (mix propia vs terceros) */}
+      <SegmentosClientes mix={mixSegmentos} />
 
       {/* Trustonic - ancho completo */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
