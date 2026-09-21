@@ -7,8 +7,9 @@ import type { MixSegmentos } from '@/lib/segmentos'
 
 // Mix de segmentos A1–D4 (Estructura de Crédito GO) de los compradores de
 // GOcelular como cuadro de doble entrada: letra (límite) × número (antigüedad),
-// con píldoras Total / Venta Propia / Venta de Terceros. La tabla
-// segmentos_clientes se recalcula a diario contra Databricks (sync-segmentos).
+// con píldoras Total / Venta Propia / Venta de Terceros y totales por fila y
+// columna. Headers y totales en magenta GOcuotas; las celdas van de verde
+// (1, historial largo) a rojo (4, sin historial) con intensidad por volumen.
 
 const LETRAS = [
   { letra: 'A', detalle: 'Límite > 4.8 tickets' },
@@ -24,6 +25,14 @@ const NUMEROS = [
   { numero: '4', detalle: 'GOcelular fue su 1ª compra' },
 ]
 
+// Verde (1) → rojo (4): rgb base por columna, la intensidad la da el volumen
+const COLOR_NUMERO: Record<string, [number, number, number]> = {
+  '1': [16, 185, 129], // emerald-500
+  '2': [163, 196, 30], // lima
+  '3': [249, 115, 22], // orange-500
+  '4': [239, 68, 68], // red-500
+}
+
 export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
   const [canal, setCanal] = useState<Canal>('total')
   if (mix.filas.length === 0) return null
@@ -33,7 +42,11 @@ export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
   const porSegmento = new Map(mix.filas.map(f => [f.segmento, valor(f)]))
   const totalCanal = canal === 'propia' ? mix.totalPropia : canal === 'terceros' ? mix.totalTerceros : mix.totalClientes
   const sinDatos = porSegmento.get('S/D') ?? 0
-  const maxCelda = Math.max(1, ...LETRAS.flatMap(l => NUMEROS.map(n => porSegmento.get(`${l.letra}${n.numero}`) ?? 0)))
+  const celda = (l: string, n: string) => porSegmento.get(`${l}${n}`) ?? 0
+  const totalLetra = (l: string) => NUMEROS.reduce((s, n) => s + celda(l, n.numero), 0)
+  const totalNumero = (n: string) => LETRAS.reduce((s, l) => s + celda(l.letra, n), 0)
+  const totalMatriz = LETRAS.reduce((s, l) => s + totalLetra(l.letra), 0)
+  const maxCelda = Math.max(1, ...LETRAS.flatMap(l => NUMEROS.map(n => celda(l.letra, n.numero))))
 
   const pct = (n: number) => (totalCanal === 0 ? '—' : `${((n / totalCanal) * 100).toFixed(1)}%`)
   const fecha = mix.actualizadoAt ? new Date(mix.actualizadoAt).toLocaleDateString('es-AR') : null
@@ -58,40 +71,64 @@ export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
         <table className="w-full text-xs border-separate" style={{ borderSpacing: '3px' }}>
           <thead>
             <tr>
-              <th className="text-left font-medium text-gray-400 px-2 py-1"></th>
+              <th className="px-2 py-1"></th>
               {NUMEROS.map(n => (
-                <th key={n.numero} className="px-2 py-1 text-center">
-                  <span className="block text-sm font-bold text-gray-900">{n.numero}</span>
-                  <span className="block text-[10px] font-normal text-gray-400">{n.detalle}</span>
+                <th key={n.numero} className="rounded-lg bg-magenta-600 px-2 py-1.5 text-center">
+                  <span className="block text-sm font-bold text-white">{n.numero}</span>
+                  <span className="block text-[10px] font-normal text-magenta-100">{n.detalle}</span>
                 </th>
               ))}
+              <th className="rounded-lg bg-magenta-600 px-2 py-1.5 text-center">
+                <span className="block text-sm font-bold text-white">Total</span>
+                <span className="block text-[10px] font-normal text-magenta-100">por límite</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {LETRAS.map(l => (
               <tr key={l.letra}>
-                <td className="px-2 py-1 whitespace-nowrap">
-                  <span className="text-sm font-bold text-gray-900">{l.letra}</span>
-                  <span className="block text-[10px] text-gray-400">{l.detalle}</span>
+                <td className="rounded-lg bg-magenta-600 px-2 py-1 whitespace-nowrap">
+                  <span className="text-sm font-bold text-white">{l.letra}</span>
+                  <span className="block text-[10px] text-magenta-100">{l.detalle}</span>
                 </td>
                 {NUMEROS.map(n => {
-                  const seg = `${l.letra}${n.numero}`
-                  const v = porSegmento.get(seg) ?? 0
-                  const alpha = v === 0 ? 0 : 0.04 + (v / maxCelda) * 0.16
+                  const v = celda(l.letra, n.numero)
+                  const [r, g, b] = COLOR_NUMERO[n.numero]
+                  const alpha = v === 0 ? 0.05 : 0.12 + (v / maxCelda) * 0.38
                   return (
                     <td
-                      key={seg}
+                      key={n.numero}
                       className="rounded-lg px-2 py-2.5 text-center align-middle"
-                      style={{ backgroundColor: `rgba(17, 24, 39, ${alpha})` }}
+                      style={{ backgroundColor: `rgba(${r}, ${g}, ${b}, ${alpha})` }}
                     >
-                      <span className="block text-[10px] font-semibold text-gray-400">{seg}</span>
+                      <span className="block text-[10px] font-semibold text-gray-500">{l.letra}{n.numero}</span>
                       <span className="block text-sm font-bold text-gray-900">{v.toLocaleString('es-AR')}</span>
-                      <span className="block text-[10px] text-gray-500">{pct(v)}</span>
+                      <span className="block text-[10px] text-gray-600">{pct(v)}</span>
                     </td>
                   )
                 })}
+                <td className="rounded-lg bg-magenta-50 px-2 py-2.5 text-center align-middle">
+                  <span className="block text-sm font-bold text-magenta-700">{totalLetra(l.letra).toLocaleString('es-AR')}</span>
+                  <span className="block text-[10px] text-magenta-400">{pct(totalLetra(l.letra))}</span>
+                </td>
               </tr>
             ))}
+            <tr>
+              <td className="rounded-lg bg-magenta-600 px-2 py-1.5">
+                <span className="text-sm font-bold text-white">Total</span>
+                <span className="block text-[10px] text-magenta-100">por antigüedad</span>
+              </td>
+              {NUMEROS.map(n => (
+                <td key={n.numero} className="rounded-lg bg-magenta-50 px-2 py-2.5 text-center align-middle">
+                  <span className="block text-sm font-bold text-magenta-700">{totalNumero(n.numero).toLocaleString('es-AR')}</span>
+                  <span className="block text-[10px] text-magenta-400">{pct(totalNumero(n.numero))}</span>
+                </td>
+              ))}
+              <td className="rounded-lg bg-magenta-600 px-2 py-2.5 text-center align-middle">
+                <span className="block text-sm font-bold text-white">{totalMatriz.toLocaleString('es-AR')}</span>
+                <span className="block text-[10px] text-magenta-100">{pct(totalMatriz)}</span>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
