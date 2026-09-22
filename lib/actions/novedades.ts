@@ -27,6 +27,20 @@ export async function getNovedades(limit = 30): Promise<Novedad[]> {
   return data ?? []
 }
 
+// Cantidad de novedades sin leer, para el aviso del sidebar
+export async function contarNovedadesNoLeidas(): Promise<number> {
+  const supabase = createAdminClient()
+  const { count, error } = await supabase
+    .from('novedades_gocelular')
+    .select('id', { count: 'exact', head: true })
+    .is('leida_at', null)
+  if (error) {
+    console.error('contarNovedadesNoLeidas:', error.message)
+    return 0
+  }
+  return count ?? 0
+}
+
 export async function marcarNovedadesLeidas(ids: string[]): Promise<{ ok: boolean }> {
   if (ids.length === 0) return { ok: true }
   const supabase = createAdminClient()
@@ -40,5 +54,6 @@ export async function marcarNovedadesLeidas(ids: string[]): Promise<{ ok: boolea
     return { ok: false }
   }
   revalidatePath('/novedades')
+  revalidatePath('/', 'layout') // refresca el aviso del sidebar
   return { ok: true }
 }

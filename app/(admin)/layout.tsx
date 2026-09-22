@@ -2,10 +2,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import AdminSidebar, { type AdminNavItem } from '@/components/AdminSidebar'
 import MobileMenu from '@/components/MobileMenu'
-import { contarTacsPendientes } from '@/lib/actions/tacs'
+import { contarNovedadesNoLeidas } from '@/lib/actions/novedades'
 
 const navItems: AdminNavItem[] = [
-  { href: '/novedades', label: 'Novedades', icon: 'novedades' },
+  { href: '/novedades', label: 'Novedades', icon: 'novedades', badge: true },
   { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
   { href: '/celia', label: 'Celia', icon: 'celia' },
   { href: 'https://gocelular.vercel.app/dashboard', label: 'Centro de Operaciones', icon: 'sync', external: true },
@@ -19,7 +19,6 @@ const navItems: AdminNavItem[] = [
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
   { href: '/documentacion', label: 'Documentación', icon: 'documento' },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
-  { href: '/gestion-tacs', label: 'Gestión TACs', icon: 'modelos', badge: true },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
   { href: '/grupo-go', label: 'Grupo GO', icon: 'dashboard' },
 ]
@@ -40,15 +39,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const items = rol === 'visor' ? navItemsVisor : navItems
 
-  let tacsPendientes = 0
+  let novedadesNoLeidas = 0
   if (rol === 'admin') {
-    try { tacsPendientes = await contarTacsPendientes() } catch { /* skip */ }
+    try { novedadesNoLeidas = await contarNovedadesNoLeidas() } catch { /* skip */ }
   }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - hidden on mobile, visible on md+ */}
-      <AdminSidebar items={items} tacsPendientes={tacsPendientes} />
+      <AdminSidebar items={items} badgeCount={novedadesNoLeidas} />
 
       {/* Mobile menu */}
       <MobileMenu items={items.map(item => ({

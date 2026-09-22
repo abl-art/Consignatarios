@@ -124,7 +124,6 @@ proformas(id uuid, nombre text, fecha ts, mup num, total_neto num, total_iva num
 proveedores(id uuid, nombre text, cuit text, email text, telefono text, direccion text, saldo_pendiente num, created_at ts, limite_cuenta_corriente num, condicion_pago text)
 stock_cierre_mensual(id uuid, periodo text, categoria text, producto text, stock_final int, precio_unitario num, valuacion num, created_at ts)
 sync_log(id uuid, started_at ts, finished_at ts, status text, ventas_nuevas int, ventas_ya_existentes int, dispositivos_no_encontrados int, errores_monitoreo int, error_msg text, detalle jsonb, created_by uuid)
-tacs_cargados(tac text, marca text, modelo text, origen text, created_at ts, estado text)
 tenencia_modelos_ocultos(id uuid, model_code text, created_at ts)
 ventas(id uuid, dispositivo_id uuid, consignatario_id uuid, fecha_venta date, precio_venta num, comision_monto num, gocelular_sale_id text, synced_at ts, store_name text)
 `

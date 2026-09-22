@@ -14,7 +14,8 @@ export interface AdminNavItem {
 
 const STORAGE_KEY = 'admin-sidebar-collapsed'
 
-export default function AdminSidebar({ items, tacsPendientes }: { items: AdminNavItem[]; tacsPendientes: number }) {
+// badgeCount: contador rojo del ítem marcado con badge (hoy, novedades sin leer)
+export default function AdminSidebar({ items, badgeCount }: { items: AdminNavItem[]; badgeCount: number }) {
   const [collapsed, setCollapsed] = useState(false)
   // Sin transición hasta montar: evita que el sidebar se anime al hidratar con la preferencia guardada
   const [mounted, setMounted] = useState(false)
@@ -81,11 +82,11 @@ export default function AdminSidebar({ items, tacsPendientes }: { items: AdminNa
             >
               <NavIcon name={item.icon} />
               {!collapsed && <span>{item.label}</span>}
-              {item.badge && tacsPendientes > 0 && (
+              {item.badge && badgeCount > 0 && (
                 collapsed ? (
                   <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-600 rounded-full" />
                 ) : (
-                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full">{tacsPendientes}</span>
+                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full">{badgeCount}</span>
                 )
               )}
             </Link>

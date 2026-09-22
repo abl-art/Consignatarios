@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import CanalPills, { type Canal } from '../finanzas/CanalPills'
+import { getMixSegmentosRango } from '@/lib/actions/segmentos'
 import type { MixSegmentos } from '@/lib/segmentos'
 
 // Mix de segmentos A1–D4 (Estructura de Crédito GO) de los compradores de
@@ -33,9 +34,34 @@ const COLOR_NUMERO: Record<string, [number, number, number]> = {
   '4': [239, 68, 68], // red-500
 }
 
-export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
+export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegmentos }) {
   const [canal, setCanal] = useState<Canal>('total')
-  if (mix.filas.length === 0) return null
+  // Filtro de fechas: sin rango aplicado se muestra el histórico precalculado
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
+  const [rango, setRango] = useState<{ desde: string; hasta: string } | null>(null)
+  const [mixRango, setMixRango] = useState<MixSegmentos | null>(null)
+  const [pending, startTransition] = useTransition()
+  if (mixHistorico.filas.length === 0) return null
+
+  const mix = rango && mixRango ? mixRango : mixHistorico
+  const rangoValido = desde !== '' && hasta !== '' && desde <= hasta
+
+  const aplicarRango = () => {
+    if (!rangoValido || pending) return
+    startTransition(async () => {
+      const m = await getMixSegmentosRango(desde, hasta)
+      setMixRango(m)
+      setRango({ desde, hasta })
+    })
+  }
+
+  const limpiarRango = () => {
+    setRango(null)
+    setMixRango(null)
+    setDesde('')
+    setHasta('')
+  }
 
   const valor = (f: { propia: number; terceros: number; total: number }) =>
     canal === 'propia' ? f.propia : canal === 'terceros' ? f.terceros : f.total
@@ -50,24 +76,63 @@ export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
 
   const pct = (n: number) => (totalCanal === 0 ? '—' : `${((n / totalCanal) * 100).toFixed(1)}%`)
   const fecha = mix.actualizadoAt ? new Date(mix.actualizadoAt).toLocaleDateString('es-AR') : null
+  const fmtDia = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('es-AR')
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
         <h2 className="text-base font-semibold text-gray-900">Segmentos de clientes</h2>
         <span className="text-xs text-gray-400">
-          {totalCanal.toLocaleString('es-AR')} compradores{fecha ? ` · actualizado ${fecha}` : ''}
+          {totalCanal.toLocaleString('es-AR')} compradores
+          {rango ? ` · compras del ${fmtDia(rango.desde)} al ${fmtDia(rango.hasta)}` : fecha ? ` · actualizado ${fecha}` : ''}
         </span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <p className="text-xs text-gray-500">
           Filas = límite asignado · Columnas = antigüedad desde la activación ·{' '}
           <Link href="/segmentos" className="text-gray-400 underline hover:text-gray-600">¿Qué es cada segmento?</Link>
         </p>
         <CanalPills canal={canal} onChange={setCanal} />
       </div>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500">Compras entre</span>
+        <input
+          type="date"
+          value={desde}
+          max={hasta || undefined}
+          onChange={e => setDesde(e.target.value)}
+          className="text-xs text-gray-700 border border-gray-200 rounded-lg px-2 py-1"
+        />
+        <span className="text-xs text-gray-500">y</span>
+        <input
+          type="date"
+          value={hasta}
+          min={desde || undefined}
+          onChange={e => setHasta(e.target.value)}
+          className="text-xs text-gray-700 border border-gray-200 rounded-lg px-2 py-1"
+        />
+        <button
+          onClick={aplicarRango}
+          disabled={!rangoValido || pending}
+          className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {pending ? 'Calculando…' : 'Aplicar'}
+        </button>
+        {rango && (
+          <button
+            onClick={limpiarRango}
+            className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            ✕ Volver al histórico
+          </button>
+        )}
+      </div>
 
-      <div className="overflow-x-auto">
+      {rango && mix.totalClientes === 0 && (
+        <p className="text-xs text-amber-600 mb-3">Sin compradores con órdenes entregadas en el rango elegido.</p>
+      )}
+
+      <div className={`overflow-x-auto ${pending ? 'opacity-50' : ''}`}>
         <table className="w-full text-xs border-separate" style={{ borderSpacing: '3px' }}>
           <thead>
             <tr>
@@ -136,6 +201,7 @@ export default function SegmentosClientes({ mix }: { mix: MixSegmentos }) {
       <p className="text-[10px] text-gray-400 mt-3">
         % sobre los compradores del canal elegido. Un cliente que compró en ambos canales cuenta en los dos; en Total, una sola vez.
         {sinDatos > 0 && ` · ${sinDatos} clientes sin segmento (sin límite conocido en GOcuotas).`}
+        {rango && ' · Con filtro de fechas: compradores con al menos una orden entregada en el rango; el segmento mostrado es el actual (se recalcula a diario), no el del momento de la compra.'}
       </p>
     </div>
   )

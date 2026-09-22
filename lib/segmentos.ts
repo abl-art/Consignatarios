@@ -39,6 +39,30 @@ function calcularLetra(limite: number, ticketPromedio: number): string {
   return 'D'
 }
 
+export interface CompradorCanal {
+  user_id: string
+  compro_propia: boolean
+  compro_terceros: boolean
+}
+
+// Agrupa compradores por segmento y canal. Un cliente que compró en ambos
+// canales cuenta en ambos; en total, una sola vez. Sin segmento → 'S/D'.
+export function armarMixSegmentos(
+  compradores: CompradorCanal[],
+  segmentoPorUser: Map<string, string | null>,
+): Map<string, { propia: number; terceros: number; total: number }> {
+  const mix = new Map<string, { propia: number; terceros: number; total: number }>()
+  for (const u of compradores) {
+    const seg = segmentoPorUser.get(u.user_id) ?? 'S/D'
+    const m = mix.get(seg) ?? { propia: 0, terceros: 0, total: 0 }
+    if (u.compro_propia) m.propia++
+    if (u.compro_terceros) m.terceros++
+    m.total++
+    mix.set(seg, m)
+  }
+  return mix
+}
+
 function calcularNumero(primeraOrden: string | null): number {
   if (!primeraOrden) return 4
   const meses = (Date.now() - new Date(primeraOrden).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
@@ -214,16 +238,7 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     }
 
     // Resumen para el Dashboard360: clientes por segmento y canal.
-    // Un cliente que compró en ambos canales cuenta en ambos; total lo cuenta una vez.
-    const mix = new Map<string, { propia: number; terceros: number; total: number }>()
-    for (const u of usuarios) {
-      const seg = segmentoPorUser.get(u.user_id) ?? 'S/D'
-      const m = mix.get(seg) ?? { propia: 0, terceros: 0, total: 0 }
-      if (u.compro_propia) m.propia++
-      if (u.compro_terceros) m.terceros++
-      m.total++
-      mix.set(seg, m)
-    }
+    const mix = armarMixSegmentos(usuarios, segmentoPorUser)
     await db.query('BEGIN')
     try {
       await db.query('DELETE FROM segmentos_mix')
@@ -290,6 +305,58 @@ export async function fetchMixSegmentos(): Promise<MixSegmentos> {
     totalTerceros: filas.reduce((s, f) => s + f.terceros, 0),
     totalClientes: filas.reduce((s, f) => s + f.total, 0),
     actualizadoAt: res.rows[0]?.actualizado_at ?? null,
+  }
+}
+
+// Ordena las filas del mix alfabéticamente con S/D al final
+export function ordenarFilasMix(filas: MixSegmento[]): MixSegmento[] {
+  return [...filas].sort((a, b) => (a.segmento === 'S/D' ? 1 : b.segmento === 'S/D' ? -1 : a.segmento.localeCompare(b.segmento)))
+}
+
+/**
+ * Mix de segmentos filtrado por fecha de compra: compradores con al menos una
+ * orden entregada (no descartada) entre desde y hasta inclusive (YYYY-MM-DD).
+ * El segmento de cada cliente es el ACTUAL de segmentos_clientes (el sync
+ * diario lo recalcula), no el que tenía al momento de comprar; compradores
+ * posteriores al último sync caen en S/D.
+ */
+export async function fetchMixSegmentosRango(desde: string, hasta: string): Promise<MixSegmentos> {
+  const vacio: MixSegmentos = { filas: [], totalPropia: 0, totalTerceros: 0, totalClientes: 0, actualizadoAt: null }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) return vacio
+  const replica = getPool()
+  const propia = getSupabasePool()
+  if (!replica || !propia) return vacio
+
+  const propiosSql = CLIENT_IDS_PROPIOS.map(id => `'${id}'`).join(',')
+  const resUsuarios = await replica.query<{ user_id: string; compro_propia: boolean; compro_terceros: boolean }>(
+    `SELECT user_id::text AS user_id,
+       BOOL_OR(client_id::text IN (${propiosSql})) AS compro_propia,
+       BOOL_OR(client_id::text NOT IN (${propiosSql})) AS compro_terceros
+     FROM gocuotas_orders
+     WHERE user_id IS NOT NULL AND order_discarded_at IS NULL
+       AND order_delivered_at >= $1::date AND order_delivered_at < $2::date + 1
+     GROUP BY 1`,
+    [desde, hasta]
+  )
+  const usuarios = resUsuarios.rows.filter(r => /^\d+$/.test(r.user_id))
+  if (usuarios.length === 0) return vacio
+
+  const resSeg = await propia.query<{ user_id: string; segmento: string | null; calculado_at: string }>(
+    `SELECT user_id, segmento, calculado_at::text AS calculado_at
+     FROM segmentos_clientes WHERE user_id = ANY($1::text[])`,
+    [usuarios.map(u => u.user_id)]
+  )
+  const segmentoPorUser = new Map(resSeg.rows.map(r => [r.user_id, r.segmento]))
+  const actualizadoAt = resSeg.rows.reduce<string | null>((max, r) => (max === null || r.calculado_at > max ? r.calculado_at : max), null)
+
+  const mix = armarMixSegmentos(usuarios, segmentoPorUser)
+  const filas = ordenarFilasMix([...mix.entries()].map(([segmento, m]) => ({ segmento, ...m })))
+  return {
+    filas,
+    totalPropia: filas.reduce((s, f) => s + f.propia, 0),
+    totalTerceros: filas.reduce((s, f) => s + f.terceros, 0),
+    totalClientes: filas.reduce((s, f) => s + f.total, 0),
+    actualizadoAt,
   }
 }
 
