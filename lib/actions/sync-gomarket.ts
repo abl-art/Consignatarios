@@ -62,6 +62,34 @@ async function fetchCatalogoGomarket(): Promise<SkuGomarket[]> {
   }
 }
 
+export interface ProductoGomarketSinSku {
+  nombre: string
+  categoria: string | null
+}
+
+// Productos creados en GOmarket que todavía NO tienen ningún SKU cargado: no
+// se pueden sincronizar ni comprar (todo el circuito identifica por SKU).
+// Se listan en /compras/modelos para que el faltante sea visible.
+export async function getProductosGomarketSinSku(): Promise<ProductoGomarketSinSku[]> {
+  const pool = getPool()
+  if (!pool) return []
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ nombre: string; categoria: string | null }>(
+      `SELECT cp.name AS nombre, cc.name AS categoria
+       FROM commerce_products cp
+       LEFT JOIN commerce_categories cc ON cc.id = cp.category_id
+       WHERE NOT EXISTS (SELECT 1 FROM commerce_skus cs WHERE cs.product_id = cp.id)
+       ORDER BY cp.name`
+    )
+    return res.rows
+  } catch {
+    return []
+  } finally {
+    client.release()
+  }
+}
+
 // Categorías activas de GOmarket (para el selector del form de Modelos cuando
 // el producto es plataforma gomarket). Falla silenciosa → lista vacía.
 export async function getCategoriasGomarket(): Promise<string[]> {

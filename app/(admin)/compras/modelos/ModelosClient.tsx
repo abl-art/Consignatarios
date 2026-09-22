@@ -50,6 +50,7 @@ export default function ModelosClient({
   proveedores,
   precios,
   gomarketCategorias,
+  gomarketSinSku,
 }: {
   productos: Producto[]
   proveedores: Proveedor[]
@@ -57,6 +58,8 @@ export default function ModelosClient({
   // Categorías activas de GOmarket (commerce_categories): se despliegan en el
   // form cuando el producto es plataforma gomarket
   gomarketCategorias: string[]
+  // Productos creados en GOmarket sin ningún SKU: no sincronizan ni se compran
+  gomarketSinSku: { nombre: string; categoria: string | null }[]
 }) {
   const router = useRouter()
   const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
@@ -351,6 +354,22 @@ export default function ModelosClient({
           </button>
         ))}
       </div>
+
+      {/* Aviso: productos de GOmarket a medio cargar (sin SKU no sincronizan ni se compran) */}
+      {gomarketSinSku.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-4 text-xs text-amber-700">
+          <p className="font-semibold mb-1">
+            {gomarketSinSku.length === 1
+              ? 'Hay 1 producto en GOmarket sin SKU cargado — hasta que le cargues el SKU (código + EAN) en el admin de GOmarket no aparece acá ni se puede comprar:'
+              : `Hay ${gomarketSinSku.length} productos en GOmarket sin SKU cargado — hasta que les cargues el SKU (código + EAN) en el admin de GOmarket no aparecen acá ni se pueden comprar:`}
+          </p>
+          <ul className="list-disc ml-4">
+            {gomarketSinSku.map((p) => (
+              <li key={p.nombre}>{p.nombre}{p.categoria ? ` (${p.categoria})` : ''}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Aviso: categorías de GOmarket sincronizadas desde su admin */}
       {filtroCategoria && productos.some((p) => p.plataforma === 'gomarket' && p.categoria === filtroCategoria) && (
