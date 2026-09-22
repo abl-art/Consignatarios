@@ -49,10 +49,14 @@ export default function ModelosClient({
   productos,
   proveedores,
   precios,
+  gomarketCategorias,
 }: {
   productos: Producto[]
   proveedores: Proveedor[]
   precios: Precio[]
+  // Categorías activas de GOmarket (commerce_categories): se despliegan en el
+  // form cuando el producto es plataforma gomarket
+  gomarketCategorias: string[]
 }) {
   const router = useRouter()
   const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
@@ -147,9 +151,25 @@ export default function ModelosClient({
     setProductForm(emptyProduct)
   }
 
+  const formEsGomarket = productForm.plataforma === 'gomarket'
+  // Para productos GOmarket la categoría es la de GOmarket (commerce_categories);
+  // en edición se conserva la actual aunque ya no esté activa allá
+  const opcionesCategoriaGomarket = productForm.categoria && !gomarketCategorias.includes(productForm.categoria)
+    ? [productForm.categoria, ...gomarketCategorias]
+    : gomarketCategorias
+
+  function cambiarPlataforma(plataforma: string) {
+    setProductForm((f) => ({
+      ...f,
+      plataforma,
+      categoria: plataforma === 'gomarket' ? (gomarketCategorias[0] ?? '') : (CATEGORIAS.includes(f.categoria) ? f.categoria : 'Celulares'),
+    }))
+  }
+
   async function handleProductSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!productForm.nombre.trim()) return
+    if (formEsGomarket && !productForm.categoria) return
     setLoading(true)
     if (editingProductId) {
       await editarProducto(editingProductId, productForm)
@@ -258,22 +278,38 @@ export default function ModelosClient({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Categoria</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Categoria{formEsGomarket && <span className="text-violet-600"> (de GOmarket)</span>}
+                </label>
                 <select
                   value={productForm.categoria}
                   onChange={(e) => setProductForm((f) => ({ ...f, categoria: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  disabled={formEsGomarket && opcionesCategoriaGomarket.length === 0}
                 >
-                  {CATEGORIAS.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {formEsGomarket ? (
+                    opcionesCategoriaGomarket.length === 0 ? (
+                      <option value="">Sin categorías en GOmarket</option>
+                    ) : (
+                      opcionesCategoriaGomarket.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))
+                    )
+                  ) : (
+                    CATEGORIAS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))
+                  )}
                 </select>
+                {formEsGomarket && opcionesCategoriaGomarket.length === 0 && (
+                  <p className="text-[10px] text-amber-600 mt-1">Todavía no hay categorías creadas en GOmarket — crealas en el admin de GOmarket y recargá esta página</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Plataforma</label>
                 <select
                   value={productForm.plataforma}
-                  onChange={(e) => setProductForm((f) => ({ ...f, plataforma: e.target.value }))}
+                  onChange={(e) => cambiarPlataforma(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 >
                   <option value="gocelular">GOcelular</option>
@@ -282,11 +318,18 @@ export default function ModelosClient({
                 <p className="text-[10px] text-gray-400 mt-1">Define a qué sistema se informan las compras de este producto</p>
               </div>
             </div>
+            {formEsGomarket && (
+              <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                Los productos de GOmarket se dan de alta UNA vez en el admin de GOmarket y aparecen acá solos con su
+                categoría (sync automático al cargar la página). Cargalo a mano solo como excepción: si el SKU no existe
+                en GOmarket, la compra rebota y el sync lo oculta.
+              </p>
+            )}
             <div className="flex gap-3 justify-end">
               <button type="button" onClick={cancelProductForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">
                 Cancelar
               </button>
-              <button type="submit" disabled={loading} className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={loading || (formEsGomarket && !productForm.categoria)} className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
                 {loading ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
@@ -308,6 +351,14 @@ export default function ModelosClient({
           </button>
         ))}
       </div>
+
+      {/* Aviso: categorías de GOmarket sincronizadas desde su admin */}
+      {filtroCategoria && productos.some((p) => p.plataforma === 'gomarket' && p.categoria === filtroCategoria) && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-2.5 mb-4 text-xs text-violet-700">
+          Los productos de GOmarket se sincronizan automaticamente desde el admin de GOmarket (SKU, nombre y categoria).
+          Para agregar, renombrar o dar de baja uno, hacelo en GOmarket y recarga esta pagina.
+        </div>
+      )}
 
       {/* Aviso: kits sincronizados desde GOcelular */}
       {filtroCategoria === 'Kits de Seguridad' && (
