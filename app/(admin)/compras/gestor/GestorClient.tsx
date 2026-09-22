@@ -28,7 +28,17 @@ interface Producto {
   codigo: string
   nombre: string
   categoria: string
+  plataforma?: string // 'gocelular' (default) | 'gomarket'
   oculto?: boolean
+}
+
+type Destino = 'andreani_wh' | 'andreani_wh2' | 'local'
+type Plataforma = 'gocelular' | 'gomarket'
+
+const DESTINO_LABEL: Record<Destino, string> = {
+  andreani_wh: 'Warehouse Andreani',
+  andreani_wh2: 'Warehouse Andreani 2',
+  local: 'Local',
 }
 
 interface Precio {
@@ -55,7 +65,8 @@ interface NotaPedido {
   estado: 'borrador' | 'confirmado' | 'enviado'
   categoria?: string
   fecha: string
-  destino?: 'andreani_wh' | 'local'
+  destino?: Destino
+  plataforma?: Plataforma
 }
 
 type Tab = 'catalogo' | 'pedido' | 'notas' | 'confirmados'
@@ -75,7 +86,8 @@ interface PedidoGuardado {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
-  destino?: 'andreani_wh' | 'local'
+  destino?: Destino
+  plataforma?: Plataforma
   gocelular?: {
     estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
     purchaseId?: string
@@ -131,9 +143,10 @@ export default function GestorClient({
       estado: p.estado,
       fecha: p.fecha,
       destino: p.destino,
+      plataforma: p.plataforma,
     }))
   )
-  const [destinoSeleccionado, setDestinoSeleccionado] = useState<'andreani_wh' | 'local'>('andreani_wh')
+  const [destinoSeleccionado, setDestinoSeleccionado] = useState<Destino>('andreani_wh')
   // cantidadesPorProv: { "prodId-provId": number }
   const [cantidadesPorProv, setCantidadesPorProv] = useState<Record<string, number>>({})
 
@@ -195,6 +208,21 @@ export default function GestorClient({
     productos.forEach((p) => map.set(p.id, p.categoria))
     return map
   }, [productos])
+
+  // Plataforma por producto (mismo default que el server: sin dato => 'gocelular')
+  const plataformaPorProducto = useMemo(() => {
+    const map = new Map<string, Plataforma>()
+    productos.forEach((p) => map.set(p.id, p.plataforma === 'gomarket' ? 'gomarket' : 'gocelular'))
+    return map
+  }, [productos])
+
+  const plataformaDeProducto = (productoId: string): Plataforma =>
+    plataformaPorProducto.get(productoId) ?? 'gocelular'
+
+  // Plataforma de un pedido guardado: el campo persistido o, para pedidos
+  // anteriores al campo, derivada de sus productos
+  const plataformaDePedidoGuardado = (p: PedidoGuardado): Plataforma =>
+    p.plataforma ?? (p.items.length > 0 && p.items.every(i => plataformaDeProducto(i.productoId) === 'gomarket') ? 'gomarket' : 'gocelular')
 
   const filtrados = useMemo(() => {
     let result = productos
@@ -316,22 +344,29 @@ export default function GestorClient({
   }, [cart])
 
   async function generarNotas() {
-    const porProveedor: Record<string, CartItem[]> = {}
+    // Una nota por proveedor Y por plataforma: una compra GOcelular y una GOmarket
+    // al mismo proveedor van en pedidos separados (se informan a endpoints distintos)
+    const porGrupo: Record<string, CartItem[]> = {}
     cart.forEach((item) => {
-      if (!porProveedor[item.proveedor.id]) porProveedor[item.proveedor.id] = []
-      porProveedor[item.proveedor.id].push(item)
+      const key = `${item.proveedor.id}|${plataformaDeProducto(item.producto.id)}`
+      if (!porGrupo[key]) porGrupo[key] = []
+      porGrupo[key].push(item)
     })
 
     const fecha = new Date().toLocaleDateString('es-AR')
-    const nuevasNotas: NotaPedido[] = Object.entries(porProveedor).map(([provId, items]) => ({
-      id: `NP-${Date.now()}-${provId}`,
-      proveedor: items[0].proveedor,
-      items,
-      estado: 'borrador' as const,
-      categoria: filtroCategoria || 'Celulares',
-      fecha,
-      destino: destinoSeleccionado,
-    }))
+    const nuevasNotas: NotaPedido[] = Object.entries(porGrupo).map(([key, items]) => {
+      const [provId, plataforma] = key.split('|') as [string, Plataforma]
+      return {
+        id: `NP-${Date.now()}-${provId}${plataforma === 'gomarket' ? '-gm' : ''}`,
+        proveedor: items[0].proveedor,
+        items,
+        estado: 'borrador' as const,
+        categoria: filtroCategoria || 'Celulares',
+        fecha,
+        destino: destinoSeleccionado,
+        plataforma,
+      }
+    })
 
     // Save each to DB
     for (const nota of nuevasNotas) {
@@ -350,6 +385,7 @@ export default function GestorClient({
         categoria: nota.categoria,
         fecha,
         destino: nota.destino,
+        plataforma: nota.plataforma,
       })
     }
 
@@ -881,13 +917,19 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                   <label className="text-xs text-gray-500">Destino:</label>
                   <select
                     value={destinoSeleccionado}
-                    onChange={e => setDestinoSeleccionado(e.target.value as 'andreani_wh' | 'local')}
+                    onChange={e => setDestinoSeleccionado(e.target.value as Destino)}
                     className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700"
                   >
                     <option value="andreani_wh">Warehouse Andreani</option>
+                    <option value="andreani_wh2">Warehouse Andreani 2 (voluminosos)</option>
                     <option value="local">Local</option>
                   </select>
                 </div>
+                {cart.some(i => plataformaDeProducto(i.producto.id) === 'gomarket') && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
+                    El carrito tiene productos GOmarket: se generan notas separadas por plataforma
+                  </span>
+                )}
               </div>
 
               <button
@@ -920,9 +962,15 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         <h3 className="font-semibold text-gray-900">
                           Nota de Pedido - {nota.proveedor.nombre}
                         </h3>
-                        <p className="text-xs text-gray-500">Fecha: {nota.fecha} | ID: {nota.id}</p>
+                        <p className="text-xs text-gray-500">
+                          Fecha: {nota.fecha} | ID: {nota.id}
+                          {nota.destino && <> | Destino: {DESTINO_LABEL[nota.destino]}</>}
+                        </p>
                       </div>
                       <div className="flex items-center gap-3">
+                        {nota.plataforma === 'gomarket' && (
+                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-violet-100 text-violet-700">GOmarket</span>
+                        )}
                         <span
                           className={`px-3 py-1 text-xs font-semibold rounded-full ${
                             nota.estado === 'borrador'
@@ -975,7 +1023,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                         id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
                                         proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
                                         items: updated.items.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
-                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino,
+                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino, plataforma: nota.plataforma,
                                       })
                                     }}
                                     className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
@@ -1003,7 +1051,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                         id: nota.id, proveedorId: nota.proveedor.id, proveedorNombre: nota.proveedor.nombre,
                                         proveedorWhatsapp: nota.proveedor.whatsapp, proveedorEmail: nota.proveedor.email,
                                         items: updated.map(i => ({ productoId: i.producto.id, productoNombre: i.producto.nombre, productoCodigo: i.producto.codigo, proveedorId: i.proveedor.id, proveedorNombre: i.proveedor.nombre, proveedorWhatsapp: i.proveedor.whatsapp, proveedorEmail: i.proveedor.email, precio: i.precio, plazo: i.plazo, cantidad: i.cantidad })),
-                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino,
+                                        estado: 'borrador', fecha: nota.fecha, destino: nota.destino, plataforma: nota.plataforma,
                                       })
                                     }}
                                     className="text-xs text-red-400 hover:text-red-600"
@@ -1168,6 +1216,9 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         <td className="px-4 py-3 font-medium text-gray-900">
                           <span className="mr-1 text-gray-400">{expandedPedido === p.id ? '▾' : '▸'}</span>
                           {p.proveedorNombre}
+                          {plataformaDePedidoGuardado(p) === 'gomarket' && (
+                            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-violet-100 text-violet-700 align-middle">GOmarket</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{p.fecha}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{totalUnidades} u.</td>
@@ -1391,15 +1442,18 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                                   Descargar PDF
                                 </button>
 
-                                {/* IMEI upload/download */}
-                                <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
+                                {/* IMEI upload/download — las compras GOmarket van por cantidad, sin IMEIs */}
+                                {plataformaDePedidoGuardado(p) !== 'gomarket' && (
+                                  <ImeiFileSection pedidoId={p.id} proveedorNombre={p.proveedorNombre} fecha={p.fecha} imeiData={p.imeiFile} />
+                                )}
 
-                                {/* Estado de sincronizacion con GOcelular */}
+                                {/* Estado de sincronizacion con GOcelular / GOmarket */}
                                 <GocelularChip
                                   pedidoId={p.id}
                                   gocelular={p.gocelular}
                                   ingresoStockAt={ingresosStock[p.id] || p.ingresoStockAt}
                                   soloAddons={p.items.every(i => (categoriaPorProducto.get(i.productoId) ?? 'Celulares') !== 'Celulares')}
+                                  plataforma={plataformaDePedidoGuardado(p)}
                                 />
 
                                 {/* Modificar / Cancelar pedido */}
@@ -1573,11 +1627,12 @@ function ImeiFileSection({ pedidoId, proveedorNombre, fecha, imeiData }: { pedid
   )
 }
 
-function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
+function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons, plataforma = 'gocelular' }: {
   pedidoId: string
   gocelular?: PedidoGuardado['gocelular']
   ingresoStockAt?: string
   soloAddons: boolean
+  plataforma?: Plataforma
 }) {
   const router = useRouter()
   const [enviando, setEnviando] = useState(false)
@@ -1597,13 +1652,14 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
     }
   }
 
+  const sistema = plataforma === 'gomarket' ? 'GOmarket' : 'GOcelular'
   const estado = gocelular?.estado ?? 'no_enviado'
   const chips: Record<string, { label: string; cls: string }> = {
-    no_enviado: { label: 'GOcelular: sin informar', cls: 'bg-gray-100 text-gray-500 border-gray-300' },
-    validacion_fallida: { label: 'GOcelular: validación fallida', cls: 'bg-red-50 text-red-700 border-red-200' },
-    error_reintentable: { label: 'GOcelular: error de envío', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-    rechazado: { label: 'GOcelular: rechazado', cls: 'bg-red-50 text-red-700 border-red-200' },
-    informado: { label: 'GOcelular: informado ✓', cls: 'bg-green-50 text-green-700 border-green-200' },
+    no_enviado: { label: `${sistema}: sin informar`, cls: 'bg-gray-100 text-gray-500 border-gray-300' },
+    validacion_fallida: { label: `${sistema}: validación fallida`, cls: 'bg-red-50 text-red-700 border-red-200' },
+    error_reintentable: { label: `${sistema}: error de envío`, cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    rechazado: { label: `${sistema}: rechazado`, cls: 'bg-red-50 text-red-700 border-red-200' },
+    informado: { label: `${sistema}: informado ✓`, cls: 'bg-green-50 text-green-700 border-green-200' },
   }
   const c = chips[estado]
   // Progreso de ingreso al deposito de Andreani detectado por sync-ingresos
@@ -1630,10 +1686,12 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons }: {
         >
           {labelChip}{tieneDetalle ? (expandido ? ' ▴' : ' ▾') : ''}
         </button>
-        {estado === 'no_enviado' && soloAddons && (
+        {/* Compras GOmarket y de solo accesorios no tienen Excel de IMEIs que dispare
+            el envío automático: se informan con este botón */}
+        {estado === 'no_enviado' && (soloAddons || plataforma === 'gomarket') && (
           <button onClick={disparar} disabled={enviando}
             className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
-            {enviando ? 'Enviando...' : 'Informar a GOcelular'}
+            {enviando ? 'Enviando...' : `Informar a ${sistema}`}
           </button>
         )}
         {estado === 'validacion_fallida' && (

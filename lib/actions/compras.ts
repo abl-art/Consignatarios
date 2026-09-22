@@ -25,6 +25,8 @@ interface ProductoInput {
   codigo: string
   nombre: string
   categoria: string
+  // A qué sistema se informa la compra: 'gocelular' (default) o 'gomarket'
+  plataforma?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +105,7 @@ export async function agregarProducto(input: ProductoInput) {
     codigo: input.codigo,
     nombre: input.nombre,
     categoria: input.categoria,
+    plataforma: input.plataforma === 'gomarket' ? 'gomarket' : 'gocelular',
   })
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -115,6 +118,7 @@ export async function editarProducto(id: string, input: ProductoInput) {
     codigo: input.codigo,
     nombre: input.nombre,
     categoria: input.categoria,
+    plataforma: input.plataforma === 'gomarket' ? 'gomarket' : 'gocelular',
   }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -227,7 +231,10 @@ export interface Pedido {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
-  destino?: 'andreani_wh' | 'local'   // default andreani_wh si falta (pedidos viejos)
+  // andreani_wh2 = segundo depósito de Andreani para productos voluminosos (otro contrato)
+  destino?: 'andreani_wh' | 'andreani_wh2' | 'local'   // default andreani_wh si falta (pedidos viejos)
+  // A qué sistema se informa: 'gocelular' (default, pedidos viejos) o 'gomarket'
+  plataforma?: 'gocelular' | 'gomarket'
   gocelular?: GocelularEstado
 }
 

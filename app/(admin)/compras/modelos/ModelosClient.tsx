@@ -18,6 +18,7 @@ interface Producto {
   codigo: string
   nombre: string
   categoria: string
+  plataforma?: string // 'gocelular' (default) | 'gomarket'
   oculto?: boolean
 }
 
@@ -34,7 +35,7 @@ const CATEGORIAS = ['Celulares', 'Tablets', 'Smartwatches', 'Parlantes', 'Auricu
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
 const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 
-const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares' }
+const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares', plataforma: 'gocelular' }
 
 function parseProvMarcas(notas: string): string[] {
   try {
@@ -136,7 +137,7 @@ export default function ModelosClient({
 
   function startEditProduct(p: Producto) {
     setEditingProductId(p.id)
-    setProductForm({ codigo: p.codigo, nombre: p.nombre, categoria: p.categoria })
+    setProductForm({ codigo: p.codigo, nombre: p.nombre, categoria: p.categoria, plataforma: p.plataforma === 'gomarket' ? 'gomarket' : 'gocelular' })
     setShowProductForm(true)
   }
 
@@ -234,7 +235,7 @@ export default function ModelosClient({
             {editingProductId ? 'Editar Modelo' : 'Nuevo Modelo'}
           </h3>
           <form onSubmit={handleProductSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Codigo</label>
                 <input
@@ -267,6 +268,18 @@ export default function ModelosClient({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Plataforma</label>
+                <select
+                  value={productForm.plataforma}
+                  onChange={(e) => setProductForm((f) => ({ ...f, plataforma: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="gocelular">GOcelular</option>
+                  <option value="gomarket">GOmarket</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">Define a qué sistema se informan las compras de este producto</p>
               </div>
             </div>
             <div className="flex gap-3 justify-end">
@@ -385,6 +398,9 @@ export default function ModelosClient({
                     <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
+                      {prod.plataforma === 'gomarket' && (
+                        <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-violet-100 text-violet-700">GOmarket</span>
+                      )}
                     </td>
                     {proveedoresFiltrados.map((prov) => {
                       const precio = getPrecio(prod.id, prov.id)
