@@ -1,13 +1,15 @@
 import { signWebhook, buildTimestamp } from '@/lib/gocelular-webhook'
 import type { CommercePurchaseLine } from '@/lib/gomarket-purchase'
 
-// Webhook de compras de GOmarket (Commerce v1 de GOcelular). Contrato según la
-// novedad de Pedro del 22 sep 2026: storefront "go-market", destination,
+// Webhook de compras de GOmarket (Commerce v1 de GOcelular). Contrato según las
+// novedades de Pedro del 22 sep 2026: storefront "go-market", destination,
 // purchase_ref único por compra y una línea por SKU; mode "validate" corre la
 // validación completa sin escribir nada (omitido = apply). Secret PROPIO,
-// distinto del de los webhooks GOcelular (GOMARKET_WEBHOOK_SECRET), misma
-// convención de firma HMAC. OJO al 22/9: GOcelular todavía no configuró el
-// secret (responde 401 a todo) y el apply está apagado (403 endpoint_disabled).
+// distinto del de los webhooks GOcelular (GOMARKET_WEBHOOK_SECRET). La firma es
+// la misma HMAC-SHA256 sobre `${timestamp}.${rawBody}` en hex, pero los headers
+// son PROPIOS: X-Commerce-Signature, X-Commerce-Timestamp e Idempotency-Key —
+// con los X-Gocelular-* responde 401. Al 22/9: validate funciona; el apply
+// sigue apagado (403 endpoint_disabled) hasta que Pedro prenda el flag.
 
 export interface CommercePurchasePayload {
   storefront: 'go-market'
@@ -50,6 +52,10 @@ export async function sendCommercePurchaseWebhook(payload: CommercePurchasePaylo
     return { ok: false, status: 0, body: { code: 'payload_too_large_local' }, retryable: false }
   }
 
+  // Idempotency-Key por compra: los reintentos de la misma compra comparten la
+  // clave; el validate usa una clave propia para no pisar la del apply real
+  const idempotencyKey = payload.mode === 'validate' ? `validate-${payload.purchase_ref}` : payload.purchase_ref
+
   let last: CommerceResult = { ok: false, status: 0, body: null, retryable: true }
   for (let attempt = 0; attempt < 4; attempt++) {
     const ts = buildTimestamp()
@@ -59,8 +65,9 @@ export async function sendCommercePurchaseWebhook(payload: CommercePurchasePaylo
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Gocelular-Signature': sig,
-          'X-Gocelular-Timestamp': ts,
+          'X-Commerce-Signature': sig,
+          'X-Commerce-Timestamp': ts,
+          'Idempotency-Key': idempotencyKey,
         },
         body: rawBody,
         // Un rechazo de negocio de GOcelular puede tardar ~30s (medido en wholesale)

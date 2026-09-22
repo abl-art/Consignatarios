@@ -354,10 +354,11 @@ async function cargarCatalogoCommerce(skus: string[]): Promise<Map<string, SkuCo
   }
 }
 
-// Compra de GOmarket → webhook Commerce v1 (POST /api/webhooks/commerce/v1/purchases).
-// Sin IMEIs: una linea por SKU con quantity (los SKUs viven en commerce_skus).
-// Reusa el mismo estado persistido `gocelular` del pedido (el chip cambia el label).
-async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise<{ ok: boolean; estado: string }> {
+// Armado + prevalidacion local de una compra GOmarket (comun a informar y validate)
+async function prepararCompraGomarket(pedido: Pedido): Promise<
+  | { ok: true; payload: CommercePurchasePayload; warnings: string[] }
+  | { ok: false; errores: string[]; warnings: string[]; reintentable?: boolean }
+> {
   const { lines, errores: erroresLineas } = armarLineasGomarket(pedido.items.map(i => ({
     productoCodigo: i.productoCodigo,
     productoNombre: i.productoNombre,
@@ -365,31 +366,89 @@ async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise
     precio: i.precio,
   })))
   if (erroresLineas.length > 0 || lines.length === 0) {
-    await persistir(pedidoId, {
-      estado: 'validacion_fallida',
-      errores: erroresLineas.length > 0 ? erroresLineas : ['El pedido no tiene líneas informables'],
-    })
-    return { ok: false, estado: 'validacion_fallida' }
+    return { ok: false, errores: erroresLineas.length > 0 ? erroresLineas : ['El pedido no tiene líneas informables'], warnings: [] }
   }
 
   const catalogo = await cargarCatalogoCommerce(lines.map(l => l.sku))
   if (!catalogo) {
-    await persistir(pedidoId, { estado: 'error_reintentable', errores: ['No pude conectar a la base de GOcelular para validar los SKUs de GOmarket'] })
-    return { ok: false, estado: 'error_reintentable' }
+    return { ok: false, errores: ['No pude conectar a la base de GOcelular para validar los SKUs de GOmarket'], warnings: [], reintentable: true }
   }
   const val = validarSkusCommerce(lines, catalogo)
   if (val.errores.length > 0) {
-    await persistir(pedidoId, { estado: 'validacion_fallida', errores: val.errores, warnings: val.warnings })
-    return { ok: false, estado: 'validacion_fallida' }
+    return { ok: false, errores: val.errores, warnings: val.warnings }
   }
 
-  const payload: CommercePurchasePayload = {
-    storefront: 'go-market',
-    destination: pedido.destino ?? 'andreani_wh',
-    purchase_ref: pedido.id,
-    lines,
+  return {
+    ok: true,
+    payload: {
+      storefront: 'go-market',
+      destination: pedido.destino ?? 'andreani_wh',
+      purchase_ref: pedido.id,
+      lines,
+    },
+    warnings: val.warnings,
   }
-  const res = await sendCommercePurchaseWebhook(payload)
+}
+
+const MENSAJES_COMMERCE: Record<string, string> = {
+  unauthorized: 'Firma rechazada — revisar que GOMARKET_WEBHOOK_SECRET sea el token que pasó Pedro (headers X-Commerce-*)',
+  endpoint_disabled: 'El envío real (apply) de compras GOmarket está apagado en GOcelular (commerce_external_purchase_webhook_enabled) — lo prende Pedro con la primera carga real',
+  unknown_sku: 'Algún SKU no existe en el catálogo de GOmarket (commerce_skus) — darlo de alta antes de informar',
+  inbound_shipment_closed: 'Esta compra ya fue anunciada a Andreani: una línea nueva va en una compra NUEVA con otro pedido (no se escribió nada)',
+  invalid_payload: 'GOcelular rechazó el formato del payload Commerce',
+  payload_too_large_local: 'El payload supera 1 MB — dividí la compra en pedidos más chicos',
+}
+
+/**
+ * Dry run de una compra GOmarket contra produccion (mode validate): corre TODA
+ * la validacion del lado de GOcelular sin escribir nada. No persiste estado en
+ * el pedido — devuelve los mensajes para mostrar en el momento.
+ */
+export async function validarCompraGomarket(pedidoId: string): Promise<{ ok: boolean; mensajes: string[] }> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { ok: false, mensajes: ['Pedido no encontrado'] }
+  let pedido: Pedido
+  try {
+    pedido = JSON.parse(data.value) as Pedido
+  } catch {
+    return { ok: false, mensajes: ['Pedido no encontrado'] }
+  }
+
+  const prep = await prepararCompraGomarket(pedido)
+  if (!prep.ok) return { ok: false, mensajes: [...prep.errores, ...prep.warnings] }
+
+  const res = await sendCommercePurchaseWebhook({ ...prep.payload, mode: 'validate' })
+  if (res.ok) {
+    return {
+      ok: true,
+      mensajes: [
+        `GOmarket validó la compra (${res.body?.result ?? 'validated'}) — lista para el envío real cuando Pedro prenda el apply`,
+        ...prep.warnings,
+        ...(res.body?.warnings ?? []),
+      ],
+    }
+  }
+  const detalles = (res.body?.errors ?? []).map(e => [e.path, e.sku].filter(Boolean).join(' · ')).filter(Boolean)
+  const mensaje = res.body?.code === 'secret_no_configurado'
+    ? 'Falta cargar GOMARKET_WEBHOOK_SECRET (el token que pasó Pedro) en Vercel y .env.local'
+    : MENSAJES_COMMERCE[res.body?.code ?? ''] ?? `GOmarket rechazó la validación (${res.body?.code ?? 'HTTP ' + res.status})`
+  return { ok: false, mensajes: [mensaje, ...detalles] }
+}
+
+// Compra de GOmarket → webhook Commerce v1 (POST /api/webhooks/commerce/v1/purchases).
+// Sin IMEIs: una linea por SKU con quantity (los SKUs viven en commerce_skus).
+// Reusa el mismo estado persistido `gocelular` del pedido (el chip cambia el label).
+async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise<{ ok: boolean; estado: string }> {
+  const prep = await prepararCompraGomarket(pedido)
+  if (!prep.ok) {
+    const estado = prep.reintentable ? 'error_reintentable' as const : 'validacion_fallida' as const
+    await persistir(pedidoId, { estado, errores: prep.errores, warnings: prep.warnings })
+    return { ok: false, estado }
+  }
+  const val = { warnings: prep.warnings }
+  const lines = prep.payload.lines
+  const res = await sendCommercePurchaseWebhook(prep.payload)
 
   if (res.ok) {
     await persistir(pedidoId, {
@@ -408,7 +467,7 @@ async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise
       estado: 'error_reintentable',
       codigoError: res.body?.code,
       errores: [res.body?.code === 'secret_no_configurado'
-        ? 'Falta configurar GOMARKET_WEBHOOK_SECRET (coordinar el secret del webhook Commerce con GOcelular)'
+        ? 'Falta cargar GOMARKET_WEBHOOK_SECRET (el token que pasó Pedro) en Vercel y .env.local'
         : `GOmarket no respondió (HTTP ${res.status}) tras los reintentos — reintentá en unos minutos`],
       warnings: val.warnings,
     })
@@ -416,18 +475,10 @@ async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise
   }
 
   const detalles = (res.body?.errors ?? []).map(e => [e.path, e.sku].filter(Boolean).join(' · ')).filter(Boolean)
-  const mensajes: Record<string, string> = {
-    unauthorized: 'Firma rechazada — GOcelular todavía no configuró el secret del webhook Commerce, o GOMARKET_WEBHOOK_SECRET no coincide',
-    endpoint_disabled: 'El endpoint de compras de GOmarket está apagado en GOcelular (commerce_external_purchase_webhook_enabled) — avisale a Pedro',
-    unknown_sku: 'Algún SKU no existe en el catálogo de GOmarket (commerce_skus) — darlo de alta antes de informar',
-    inbound_shipment_closed: 'Esta compra ya fue anunciada a Andreani: una línea nueva va en una compra NUEVA con otro pedido (no se escribió nada)',
-    invalid_payload: 'GOcelular rechazó el formato del payload Commerce',
-    payload_too_large_local: 'El payload supera 1 MB — dividí la compra en pedidos más chicos',
-  }
   await persistir(pedidoId, {
     estado: 'rechazado',
     codigoError: res.body?.code,
-    errores: [mensajes[res.body?.code ?? ''] ?? `GOmarket rechazó la compra (${res.body?.code ?? 'HTTP ' + res.status})`, ...detalles],
+    errores: [MENSAJES_COMMERCE[res.body?.code ?? ''] ?? `GOmarket rechazó la compra (${res.body?.code ?? 'HTTP ' + res.status})`, ...detalles],
     warnings: val.warnings,
   })
   return { ok: false, estado: 'rechazado' }

@@ -1638,6 +1638,23 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons, plataf
   const [enviando, setEnviando] = useState(false)
   const [expandido, setExpandido] = useState(false)
   const [verAvisos, setVerAvisos] = useState(false)
+  const [validando, setValidando] = useState(false)
+  const [validacion, setValidacion] = useState<{ ok: boolean; mensajes: string[] } | null>(null)
+
+  // Dry run contra GOmarket (mode validate): corre toda la validación de
+  // GOcelular sin escribir nada — sirve mientras el apply siga apagado
+  async function validar() {
+    setValidando(true)
+    setValidacion(null)
+    try {
+      const { validarCompraGomarket } = await import('@/lib/actions/purchase-webhook')
+      setValidacion(await validarCompraGomarket(pedidoId))
+    } catch {
+      setValidacion({ ok: false, mensajes: ['No se pudo correr la validación — reintentá'] })
+    } finally {
+      setValidando(false)
+    }
+  }
 
   async function disparar() {
     setEnviando(true)
@@ -1694,6 +1711,12 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons, plataf
             {enviando ? 'Enviando...' : `Informar a ${sistema}`}
           </button>
         )}
+        {plataforma === 'gomarket' && estado !== 'informado' && (
+          <button onClick={validar} disabled={validando || enviando}
+            className="text-[11px] px-2 py-0.5 border border-violet-300 text-violet-700 rounded-full hover:bg-violet-50 disabled:opacity-50">
+            {validando ? 'Validando...' : 'Probar (validate)'}
+          </button>
+        )}
         {estado === 'validacion_fallida' && (
           <button onClick={disparar} disabled={enviando}
             className="text-[11px] px-2 py-0.5 bg-gray-900 text-white rounded-full disabled:opacity-50">
@@ -1713,6 +1736,15 @@ function GocelularChip({ pedidoId, gocelular, ingresoStockAt, soloAddons, plataf
           </button>
         )}
       </div>
+      {validacion && (
+        <div className="mt-1.5 text-[11px] space-y-0.5">
+          {validacion.mensajes.map((m, i) => (
+            <p key={`${i}-${m.slice(0, 40)}`} className={validacion.ok ? (i === 0 ? 'text-green-700' : 'text-gray-500') : 'text-red-600'}>
+              {validacion.ok && i === 0 ? '✓ ' : '• '}{m}
+            </p>
+          ))}
+        </div>
+      )}
       {expandido && gocelular && (
         <div className="mt-1.5 text-[11px] space-y-0.5 max-h-40 overflow-y-auto">
           {estado === 'informado' && (
