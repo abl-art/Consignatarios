@@ -41,7 +41,16 @@ function buildNotas(marcas: string[], plazos: string, observaciones: string): st
   return JSON.stringify({ marcas, plazos, observaciones })
 }
 
-export default function ProveedoresClient({ proveedores }: { proveedores: Proveedor[] }) {
+export default function ProveedoresClient({
+  proveedores,
+  gomarketCategorias,
+}: {
+  proveedores: Proveedor[]
+  // Categorías activas de GOmarket: se suman como tipos de producto elegibles,
+  // así el proveedor queda marcado como proveedor de esa categoría y aparece
+  // en la grilla de precios de Modelos para esos productos
+  gomarketCategorias: string[]
+}) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -56,6 +65,10 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
   const [observaciones, setObservaciones] = useState('')
   const [limiteCta, setLimiteCta] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Tipos elegibles: los fijos de GOcelular + las categorías de GOmarket + lo que
+  // el proveedor ya tenga marcado (para no esconder selecciones viejas al editar)
+  const tiposDisponibles = Array.from(new Set([...TIPOS_PRODUCTO, ...gomarketCategorias, ...tiposProducto]))
 
   function resetForm() {
     setNombre(''); setContacto(''); setCuit(''); setWhatsapp(''); setEmail('')
@@ -185,13 +198,24 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">Tipos de producto</label>
               <div className="flex flex-wrap gap-2">
-                {TIPOS_PRODUCTO.map(t => (
-                  <button key={t} type="button" onClick={() => toggleTipo(t)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${tiposProducto.includes(t) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-300'}`}>
-                    {t}
-                  </button>
-                ))}
+                {tiposDisponibles.map(t => {
+                  const esGomarket = gomarketCategorias.includes(t)
+                  const activo = tiposProducto.includes(t)
+                  return (
+                    <button key={t} type="button" onClick={() => toggleTipo(t)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                        activo
+                          ? esGomarket ? 'bg-violet-600 text-white border-violet-600' : 'bg-indigo-600 text-white border-indigo-600'
+                          : esGomarket ? 'bg-white text-violet-600 border-violet-300 hover:border-violet-500' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-300'
+                      }`}>
+                      {t}
+                    </button>
+                  )
+                })}
               </div>
+              {gomarketCategorias.length > 0 && (
+                <p className="text-[10px] text-gray-400 mt-1.5">Las categorías en violeta son de GOmarket — un mismo proveedor puede proveer categorías de ambas plataformas</p>
+              )}
             </div>
 
             {tiposProducto.includes('Celulares') && (
@@ -251,7 +275,9 @@ export default function ProveedoresClient({ proveedores }: { proveedores: Provee
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{p.nombre}</h3>
-                      {tipos.map(t => <span key={t} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{t}</span>)}
+                      {tipos.map(t => (
+                        <span key={t} className={`text-xs px-2 py-0.5 rounded-full ${gomarketCategorias.includes(t) ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'}`}>{t}</span>
+                      ))}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-500">
                       {p.contacto && <span>Contacto: {p.contacto}</span>}
