@@ -50,7 +50,7 @@ export default async function EnviosPage({
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
-  const totalSiniestros = siniestros.length + siniestrosStock.filter(s => s.estado === 'abierto').length
+  const siniestrosWhAbiertos = siniestrosStock.filter(s => s.estado === 'abierto').length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
   const modelosConDif = cortesControlStock[0]
     ? netoPorModelo(cortesControlStock[0].filas, cortesControlStock[0].enCola).filter(m => m.dif !== 0).length
@@ -164,19 +164,13 @@ export default async function EnviosPage({
         },
         {
           id: 'siniestros',
-          label: totalSiniestros > 0 ? `Siniestros (${totalSiniestros})` : 'Siniestros',
-          content: (
-            <div className="space-y-10">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900 mb-1">Siniestros de distribución</h2>
-                <SiniestrosTable siniestros={siniestros} />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900 mb-1">Diferencias de stock (almacenamiento)</h2>
-                <SiniestrosStockTable siniestros={siniestrosStock} productos={productosStock} />
-              </div>
-            </div>
-          ),
+          label: siniestros.length > 0 ? `Siniestros Distribución (${siniestros.length})` : 'Siniestros Distribución',
+          content: <SiniestrosTable siniestros={siniestros} />,
+        },
+        {
+          id: 'siniestros-warehouse',
+          label: siniestrosWhAbiertos > 0 ? `Siniestros Warehouse (${siniestrosWhAbiertos})` : 'Siniestros Warehouse',
+          content: <SiniestrosStockTable siniestros={siniestrosStock} productos={productosStock} />,
         },
       ]} />
     </div>
