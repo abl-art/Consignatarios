@@ -156,6 +156,7 @@ import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { armarRescates, type Rescate, type RescateRaw, type SeguimientoRescate } from './rescates'
 import { armarSiniestros, type SeguimientoSiniestro, type Siniestro, type SiniestroRaw } from './siniestros'
+import type { DispositivoStock } from './siniestros-stock'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
 import { normalizarMarca } from './marca'
 
@@ -338,6 +339,68 @@ export async function fetchEnviosPorTracking(trackings: string[]): Promise<Sinie
       `${SELECT_SINIESTRO_RAW}
        WHERE s.tracking_number = ANY($1)`,
       [trackings]
+    )
+    return res.rows
+  } finally {
+    client.release()
+  }
+}
+
+export interface ProductoStock {
+  sku: string
+  nombre: string
+  tipo: 'celular' | 'accesorio'
+}
+
+/**
+ * Catálogo completo de productos almacenables (celulares por model_code +
+ * accesorios/kits de la tienda) para el desplegable de carga de siniestros de
+ * stock. Incluye modelos inactivos: un equipo viejo también puede extraviarse.
+ */
+export async function fetchProductosStock(): Promise<ProductoStock[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<ProductoStock>(
+      `SELECT dm.model_code AS sku, dm.name AS nombre, 'celular' AS tipo
+       FROM device_models dm
+       UNION ALL
+       SELECT sp.sku, sp.display_name AS nombre, 'accesorio' AS tipo
+       FROM store_products sp
+       WHERE sp.is_addon = true
+         AND (sp.status = 'active' OR sp.sku ILIKE 'KS-%')
+         AND sp.display_name NOT ILIKE '%E2E%'
+       ORDER BY nombre`
+    )
+    return res.rows
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Datos del equipo en GOcelular por IMEI, para enriquecer los siniestros de
+ * stock cargados con IMEI (ubicación física, status y bloqueo Trustonic).
+ */
+export async function fetchDispositivosPorImei(imeis: string[]): Promise<DispositivoStock[]> {
+  const pool = getPool()
+  if (!pool || imeis.length === 0) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<DispositivoStock>(
+      `SELECT ii.imei,
+              COALESCE(dm.name, ii.model_code) AS modelo,
+              ii.physical_location AS ubicacion,
+              ii.status,
+              d.trustonic_status::text AS "trustonicStatus"
+       FROM inventory_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       LEFT JOIN devices d ON d.imei = ii.imei
+       WHERE ii.imei = ANY($1)`,
+      [imeis]
     )
     return res.rows
   } finally {

@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import { getSiniestrosStock } from '@/lib/actions/siniestros-stock'
+import type { SiniestroStock } from '@/lib/siniestros-stock'
 import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/control-stock'
 import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
@@ -19,6 +21,7 @@ import ControlStockTable from './ControlStockTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
 import SiniestrosTable from './SiniestrosTable'
+import SiniestrosStockTable from './SiniestrosStockTable'
 
 export default async function EnviosPage({
   searchParams,
@@ -30,19 +33,24 @@ export default async function EnviosPage({
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
+  let productosStock: ProductoStock[] = []
   try {
-    ;[asns, alertas, rescates, siniestros] = await Promise.all([
+    ;[asns, alertas, rescates, siniestros, productosStock] = await Promise.all([
       fetchAsns(),
       fetchAlertasEnvios(),
       getRescatesCompletos(),
       getSiniestrosCompletos(),
+      fetchProductosStock(),
     ])
   } catch {
     // GOcelular no disponible
   }
+  // Siniestros de almacenamiento (Supabase — no depende de GOcelular)
+  const siniestrosStock: SiniestroStock[] = await getSiniestrosStock().catch(() => [])
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
+  const totalSiniestros = siniestros.length + siniestrosStock.filter(s => s.estado === 'abierto').length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
   const modelosConDif = cortesControlStock[0]
     ? netoPorModelo(cortesControlStock[0].filas, cortesControlStock[0].enCola).filter(m => m.dif !== 0).length
@@ -156,8 +164,19 @@ export default async function EnviosPage({
         },
         {
           id: 'siniestros',
-          label: siniestros.length > 0 ? `Siniestros (${siniestros.length})` : 'Siniestros',
-          content: <SiniestrosTable siniestros={siniestros} />,
+          label: totalSiniestros > 0 ? `Siniestros (${totalSiniestros})` : 'Siniestros',
+          content: (
+            <div className="space-y-10">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Siniestros de distribución</h2>
+                <SiniestrosTable siniestros={siniestros} />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Diferencias de stock (almacenamiento)</h2>
+                <SiniestrosStockTable siniestros={siniestrosStock} productos={productosStock} />
+              </div>
+            </div>
+          ),
         },
       ]} />
     </div>
