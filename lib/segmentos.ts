@@ -313,16 +313,53 @@ export function ordenarFilasMix(filas: MixSegmento[]): MixSegmento[] {
   return [...filas].sort((a, b) => (a.segmento === 'S/D' ? 1 : b.segmento === 'S/D' ? -1 : a.segmento.localeCompare(b.segmento)))
 }
 
+export interface FiltroMixSegmentos {
+  desde?: string // YYYY-MM-DD, viene junto con hasta
+  hasta?: string
+  clientId?: string // client_id de un merchant tercero
+  storeId?: string // gocuotas store_id (orders.store_id en la réplica)
+}
+
 /**
- * Mix de segmentos filtrado por fecha de compra: compradores con al menos una
- * orden entregada (no descartada) entre desde y hasta inclusive (YYYY-MM-DD).
- * El segmento de cada cliente es el ACTUAL de segmentos_clientes (el sync
- * diario lo recalcula), no el que tenía al momento de comprar; compradores
- * posteriores al último sync caen en S/D.
+ * Cláusulas WHERE extra + params posicionales para el universo de compradores
+ * del mix filtrado (fechas de compra, merchant tercero y/o store). Devuelve
+ * null si no hay ningún filtro o si alguno viene inválido: fechas malformadas
+ * o incoherentes, ids no numéricos, o un clientId propio (el filtro por
+ * merchant es solo para terceros).
  */
-export async function fetchMixSegmentosRango(desde: string, hasta: string): Promise<MixSegmentos> {
+export function condicionesMixSegmentos(f: FiltroMixSegmentos): { where: string; params: string[] } | null {
+  const condiciones: string[] = []
+  const params: string[] = []
+  if (f.desde || f.hasta) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.desde ?? '') || !/^\d{4}-\d{2}-\d{2}$/.test(f.hasta ?? '') || f.desde! > f.hasta!) return null
+    params.push(f.desde!, f.hasta!)
+    condiciones.push(`order_delivered_at >= $1::date AND order_delivered_at < $2::date + 1`)
+  }
+  if (f.clientId) {
+    if (!/^\d+$/.test(f.clientId) || (CLIENT_IDS_PROPIOS as readonly string[]).includes(f.clientId)) return null
+    params.push(f.clientId)
+    condiciones.push(`client_id::text = $${params.length}`)
+  }
+  if (f.storeId) {
+    if (!/^\d+$/.test(f.storeId)) return null
+    params.push(f.storeId)
+    condiciones.push(`store_id::text = $${params.length}`)
+  }
+  if (condiciones.length === 0) return null
+  return { where: condiciones.join(' AND '), params }
+}
+
+/**
+ * Mix de segmentos filtrado: compradores con al menos una orden entregada
+ * (no descartada) que cumpla los filtros — rango de fechas de compra,
+ * merchant tercero (client_id) y/o store. El segmento de cada cliente es el
+ * ACTUAL de segmentos_clientes (el sync diario lo recalcula), no el que tenía
+ * al momento de comprar; compradores posteriores al último sync caen en S/D.
+ */
+export async function fetchMixSegmentosFiltrado(filtro: FiltroMixSegmentos): Promise<MixSegmentos> {
   const vacio: MixSegmentos = { filas: [], totalPropia: 0, totalTerceros: 0, totalClientes: 0, actualizadoAt: null }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) return vacio
+  const extra = condicionesMixSegmentos(filtro)
+  if (!extra) return vacio
   const replica = getPool()
   const propia = getSupabasePool()
   if (!replica || !propia) return vacio
@@ -333,10 +370,10 @@ export async function fetchMixSegmentosRango(desde: string, hasta: string): Prom
        BOOL_OR(client_id::text IN (${propiosSql})) AS compro_propia,
        BOOL_OR(client_id::text NOT IN (${propiosSql})) AS compro_terceros
      FROM gocuotas_orders
-     WHERE user_id IS NOT NULL AND order_discarded_at IS NULL
-       AND order_delivered_at >= $1::date AND order_delivered_at < $2::date + 1
+     WHERE user_id IS NOT NULL AND order_delivered_at IS NOT NULL AND order_discarded_at IS NULL
+       AND ${extra.where}
      GROUP BY 1`,
-    [desde, hasta]
+    extra.params
   )
   const usuarios = resUsuarios.rows.filter(r => /^\d+$/.test(r.user_id))
   if (usuarios.length === 0) return vacio

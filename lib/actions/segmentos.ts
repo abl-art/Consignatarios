@@ -1,13 +1,14 @@
 'use server'
 
-import { fetchMixSegmentosRango, type MixSegmentos } from '@/lib/segmentos'
+import { fetchMixSegmentosFiltrado, type FiltroMixSegmentos, type MixSegmentos } from '@/lib/segmentos'
 
-// Mix de segmentos para un rango de fechas de compra (tarjeta del Dashboard 360)
-export async function getMixSegmentosRango(desde: string, hasta: string): Promise<MixSegmentos> {
+// Mix de segmentos filtrado por fechas de compra, merchant tercero y/o store
+// (tarjeta del Dashboard 360)
+export async function getMixSegmentosFiltrado(filtro: FiltroMixSegmentos): Promise<MixSegmentos> {
   try {
-    return await fetchMixSegmentosRango(desde, hasta)
+    return await fetchMixSegmentosFiltrado(filtro)
   } catch (e) {
-    console.error('getMixSegmentosRango:', e instanceof Error ? e.message : e)
+    console.error('getMixSegmentosFiltrado:', e instanceof Error ? e.message : e)
     return { filas: [], totalPropia: 0, totalTerceros: 0, totalClientes: 0, actualizadoAt: null }
   }
 }

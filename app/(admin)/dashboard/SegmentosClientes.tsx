@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import CanalPills, { type Canal } from '../finanzas/CanalPills'
-import { getMixSegmentosRango } from '@/lib/actions/segmentos'
+import { getMixSegmentosFiltrado } from '@/lib/actions/segmentos'
+import { getFiltrosTerceros, type MerchantTercero } from '@/lib/actions/finanzas'
 import type { MixSegmentos } from '@/lib/segmentos'
 
 // Mix de segmentos A1–D4 (Estructura de Crédito GO) de los compradores de
 // GOcelular como cuadro de doble entrada: letra (límite) × número (antigüedad),
-// con píldoras Total / Venta Propia / Venta de Terceros y totales por fila y
-// columna. Headers y totales en magenta GOcuotas; las celdas van de verde
-// (1, historial largo) a rojo (4, sin historial) con intensidad por volumen.
+// con píldoras Total / Venta Propia / Venta de Terceros, filtro de fechas de
+// compra y, con Terceros elegido, desplegables Merchant → Store para ver qué
+// tipo de usuarios trae cada cliente y cada tienda. Headers y totales en
+// magenta GOcuotas; las celdas van de verde (1, historial largo) a rojo
+// (4, sin historial) con intensidad por volumen.
 
 const LETRAS = [
   { letra: 'A', detalle: 'Límite > 4.8 tickets' },
@@ -35,30 +38,93 @@ const COLOR_NUMERO: Record<string, [number, number, number]> = {
 }
 
 export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegmentos }) {
-  const [canal, setCanal] = useState<Canal>('total')
-  // Filtro de fechas: sin rango aplicado se muestra el histórico precalculado
+  const [canal, setCanalRaw] = useState<Canal>('total')
+  // Filtro de fechas: sin filtros aplicados se muestra el histórico precalculado
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [rango, setRango] = useState<{ desde: string; hasta: string } | null>(null)
-  const [mixRango, setMixRango] = useState<MixSegmentos | null>(null)
-  const [pending, startTransition] = useTransition()
+  // Merchant/store de terceros: la lista se carga recién al elegir el canal
+  const [merchantId, setMerchantId] = useState('')
+  const [storeId, setStoreId] = useState('')
+  const [merchants, setMerchants] = useState<MerchantTercero[] | null>(null)
+  const [mixFiltrado, setMixFiltrado] = useState<MixSegmentos | null>(null)
+  const [cargando, setCargando] = useState(false)
+  const cache = useRef(new Map<string, MixSegmentos>())
+
+  const filtroActivo = rango !== null || merchantId !== ''
+  const key = `${rango?.desde ?? ''}|${rango?.hasta ?? ''}|${merchantId}|${storeId}`
+
+  useEffect(() => {
+    if (canal !== 'terceros' || merchants !== null) return
+    getFiltrosTerceros()
+      .then(setMerchants)
+      .catch(() => setMerchants([]))
+  }, [canal, merchants])
+
+  useEffect(() => {
+    if (!filtroActivo) {
+      setMixFiltrado(null)
+      setCargando(false)
+      return
+    }
+    const cached = cache.current.get(key)
+    if (cached !== undefined) {
+      setMixFiltrado(cached)
+      setCargando(false)
+      return
+    }
+    let vivo = true
+    setCargando(true)
+    getMixSegmentosFiltrado({
+      desde: rango?.desde,
+      hasta: rango?.hasta,
+      clientId: merchantId || undefined,
+      storeId: storeId || undefined,
+    })
+      .then(m => {
+        if (!vivo) return
+        cache.current.set(key, m)
+        setMixFiltrado(m)
+      })
+      .catch(() => {
+        if (vivo) setMixFiltrado(null)
+      })
+      .finally(() => {
+        if (vivo) setCargando(false)
+      })
+    return () => {
+      vivo = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, filtroActivo])
+
   if (mixHistorico.filas.length === 0) return null
 
-  const mix = rango && mixRango ? mixRango : mixHistorico
+  const mix = filtroActivo && mixFiltrado ? mixFiltrado : mixHistorico
   const rangoValido = desde !== '' && hasta !== '' && desde <= hasta
+  const merchant = merchants?.find(m => m.clientId === merchantId)
+  const store = merchant?.stores.find(s => s.id === storeId)
+
+  const setCanal = (c: Canal) => {
+    setCanalRaw(c)
+    if (c !== 'terceros') {
+      setMerchantId('')
+      setStoreId('')
+    }
+  }
+
+  const setMerchant = (m: string) => {
+    setMerchantId(m)
+    setStoreId('')
+  }
 
   const aplicarRango = () => {
-    if (!rangoValido || pending) return
-    startTransition(async () => {
-      const m = await getMixSegmentosRango(desde, hasta)
-      setMixRango(m)
-      setRango({ desde, hasta })
-    })
+    if (!rangoValido || cargando) return
+    setRango({ desde, hasta })
   }
 
   const limpiarRango = () => {
     setRango(null)
-    setMixRango(null)
     setDesde('')
     setHasta('')
   }
@@ -84,7 +150,8 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
         <h2 className="text-base font-semibold text-gray-900">Segmentos de clientes</h2>
         <span className="text-xs text-gray-400">
           {totalCanal.toLocaleString('es-AR')} compradores
-          {rango ? ` · compras del ${fmtDia(rango.desde)} al ${fmtDia(rango.hasta)}` : fecha ? ` · actualizado ${fecha}` : ''}
+          {merchant ? ` · ${store ? `${merchant.nombre} — ${store.nombre}` : merchant.nombre}` : ''}
+          {rango ? ` · compras del ${fmtDia(rango.desde)} al ${fmtDia(rango.hasta)}` : !filtroActivo && fecha ? ` · actualizado ${fecha}` : ''}
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -92,7 +159,34 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
           Filas = límite asignado · Columnas = antigüedad desde la activación ·{' '}
           <Link href="/segmentos" className="text-gray-400 underline hover:text-gray-600">¿Qué es cada segmento?</Link>
         </p>
-        <CanalPills canal={canal} onChange={setCanal} />
+        <div className="flex flex-wrap items-center gap-2">
+          {canal === 'terceros' && (
+            <>
+              <select
+                value={merchantId}
+                onChange={e => setMerchant(e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700"
+              >
+                <option value="">{merchants === null ? 'Cargando merchants…' : 'Todos los merchants'}</option>
+                {merchants?.map(m => (
+                  <option key={m.clientId} value={m.clientId}>{m.nombre}</option>
+                ))}
+              </select>
+              <select
+                value={storeId}
+                onChange={e => setStoreId(e.target.value)}
+                disabled={!merchant}
+                className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-700 disabled:bg-gray-50 disabled:text-gray-400 max-w-[280px]"
+              >
+                <option value="">{merchant ? 'Todas las stores' : 'Elegí un merchant'}</option>
+                {merchant?.stores.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
+            </>
+          )}
+          <CanalPills canal={canal} onChange={setCanal} />
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <span className="text-xs text-gray-500">Compras entre</span>
@@ -113,26 +207,26 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
         />
         <button
           onClick={aplicarRango}
-          disabled={!rangoValido || pending}
+          disabled={!rangoValido || cargando}
           className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {pending ? 'Calculando…' : 'Aplicar'}
+          {cargando ? 'Calculando…' : 'Aplicar'}
         </button>
         {rango && (
           <button
             onClick={limpiarRango}
             className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            ✕ Volver al histórico
+            ✕ Quitar fechas
           </button>
         )}
       </div>
 
-      {rango && mix.totalClientes === 0 && (
-        <p className="text-xs text-amber-600 mb-3">Sin compradores con órdenes entregadas en el rango elegido.</p>
+      {filtroActivo && !cargando && mix.totalClientes === 0 && (
+        <p className="text-xs text-amber-600 mb-3">Sin compradores con órdenes entregadas para los filtros elegidos.</p>
       )}
 
-      <div className={`overflow-x-auto ${pending ? 'opacity-50' : ''}`}>
+      <div className={`overflow-x-auto ${cargando ? 'opacity-50' : ''}`}>
         <table className="w-full text-xs border-separate" style={{ borderSpacing: '3px' }}>
           <thead>
             <tr>
@@ -201,7 +295,7 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
       <p className="text-[10px] text-gray-400 mt-3">
         % sobre los compradores del canal elegido. Un cliente que compró en ambos canales cuenta en los dos; en Total, una sola vez.
         {sinDatos > 0 && ` · ${sinDatos} clientes sin segmento (sin límite conocido en GOcuotas).`}
-        {rango && ' · Con filtro de fechas: compradores con al menos una orden entregada en el rango; el segmento mostrado es el actual (se recalcula a diario), no el del momento de la compra.'}
+        {filtroActivo && ' · Con filtros: compradores con al menos una orden entregada que los cumpla; el segmento mostrado es el actual (se recalcula a diario), no el del momento de la compra.'}
       </p>
     </div>
   )
