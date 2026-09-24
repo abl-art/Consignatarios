@@ -1,9 +1,26 @@
 import * as XLSX from 'xlsx'
 
 export interface ImeiParseResult {
-  lines: { sku: string; ean: string | null; imeis: string[] }[]
+  lines: { sku: string; ean: string | null; imeis: string[]; serials: string[] }[]
   errores: string[]
 }
+
+export interface ImeiParseOpts {
+  // Tablets (contrato GOcelular 23/9/2026): se identifican por numero de serie en vez de
+  // IMEI (columna IMEI/SN del proveedor). Opt-in para no cambiar los Excels de celulares:
+  // apagado, un valor no-IMEI en la columna identificadora se ignora como siempre.
+  permitirSeriales?: boolean
+}
+
+// Formato de serial del contrato de GOcelular: 4-32 caracteres alfanumericos y guion.
+// Para deteccion exigimos ademas al menos una letra: un serial 100% numerico es
+// indistinguible de un EAN o de una cantidad.
+const SERIAL_RE = /^[A-Za-z0-9][A-Za-z0-9-]{3,31}$/
+const esSerial = (v: string): boolean => SERIAL_RE.test(v) && /[A-Za-z]/.test(v) && !/^\d{15}$/.test(v)
+
+// Formato aceptado por el webhook para un elemento de serials (sin exigir letra:
+// GOcelular acepta seriales 100% numericos aunque el parser no los auto-detecte)
+export const serialValido = (v: string): boolean => SERIAL_RE.test(v)
 
 export function luhnValido(imei: string): boolean {
   if (!/^\d{15}$/.test(imei)) return false
@@ -67,7 +84,8 @@ function buscarColSkuPorEncabezado(matriz: string[][]): number | null {
   return null
 }
 
-export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<string>): ImeiParseResult {
+export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<string>, opts: ImeiParseOpts = {}): ImeiParseResult {
+  const permitirSeriales = opts.permitirSeriales === true
   let matrices: string[][][]
   try {
     matrices = aMatrices(imeiFileB64OrText).filter(m => m.length > 0)
@@ -94,6 +112,9 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
   // Clasificar cada columna por contenido de sus celdas no vacias
   const stats = Array.from({ length: nCols }, (_, col) => {
     let imeis = 0, eans = 0, skuMatch = 0, textos = 0, noVacias = 0
+    // Seriales DISTINTOS: un identificador es unico por unidad, mientras que la columna de
+    // SKU repite el mismo valor alfanumerico fila tras fila — la cardinalidad las separa
+    const serialesDistintos = new Set<string>()
     for (const row of matriz) {
       const v = (row[col] ?? '').replace(/\s/g, '')
       if (!v) continue
@@ -102,13 +123,22 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
       else if (/^\d{8,14}$/.test(v)) eans++
       else textos++
       if (skusConocidos.has(v)) skuMatch++
+      else if (esSerial(v)) serialesDistintos.add(v)
     }
-    return { col, imeis, eans, skuMatch, textos, noVacias }
+    return { col, imeis, eans, skuMatch, textos, noVacias, seriales: serialesDistintos.size }
   })
 
-  const colImei = stats.filter(s => s.imeis > 0).sort((a, b) => b.imeis - a.imeis)[0]
+  // Columna identificadora: la de mas IMEIs validos; en modo seriales suman tambien los
+  // seriales distintos (un Excel de tablets no tiene ningun IMEI de 15 digitos)
+  const puntajeId = (s: (typeof stats)[number]) => s.imeis + (permitirSeriales ? s.seriales : 0)
+  const colImei = stats.filter(s => puntajeId(s) > 0).sort((a, b) => puntajeId(b) - puntajeId(a))[0]
   if (!colImei) {
-    return { lines: [], errores: ['No encontré una columna de IMEIs (15 dígitos) en el archivo'] }
+    return {
+      lines: [],
+      errores: [permitirSeriales
+        ? 'No encontré una columna de IMEIs ni de números de serie en el archivo'
+        : 'No encontré una columna de IMEIs (15 dígitos) en el archivo'],
+    }
   }
 
   // SKU: primero la columna con mas matches contra el catalogo; despues la que su encabezado
@@ -131,17 +161,23 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
     .sort((a, b) => b.eans - a.eans)[0]
 
   const errores: string[] = []
-  const porSku = new Map<string, { ean: string | null; imeis: string[] }>()
+  const porSku = new Map<string, { ean: string | null; imeis: string[]; serials: string[] }>()
   const vistos = new Set<string>()
   let ultimoSku = ''
 
   for (const row of matriz) {
-    const rawImei = (row[colImei.col] ?? '').replace(/\s/g, '')
-    if (!/^\d{15}$/.test(rawImei)) continue // fila de encabezado o vacia
-
-    if (!luhnValido(rawImei)) {
-      errores.push(`IMEI con dígito verificador inválido: ${rawImei}`)
-      continue
+    const rawId = (row[colImei.col] ?? '').replace(/\s/g, '')
+    let tipo: 'imei' | 'serial'
+    if (/^\d{15}$/.test(rawId)) {
+      if (!luhnValido(rawId)) {
+        errores.push(`IMEI con dígito verificador inválido: ${rawId}`)
+        continue
+      }
+      tipo = 'imei'
+    } else if (permitirSeriales && esSerial(rawId)) {
+      tipo = 'serial'
+    } else {
+      continue // fila de encabezado o vacia
     }
 
     // Manejo de SKU con forward-fill para celdas merged
@@ -157,18 +193,27 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
 
     const ean = colEan ? (row[colEan.col] ?? '').replace(/\s/g, '') || null : null
 
-    if (vistos.has(rawImei)) {
-      errores.push(`IMEI duplicado en el archivo: ${rawImei}`)
+    if (vistos.has(rawId)) {
+      errores.push(tipo === 'imei'
+        ? `IMEI duplicado en el archivo: ${rawId}`
+        : `Número de serie duplicado en el archivo: ${rawId}`)
       continue
     }
-    vistos.add(rawImei)
+    vistos.add(rawId)
 
     if (!sku) {
-      errores.push(`IMEI ${rawImei} sin SKU en su fila`)
+      errores.push(`${tipo === 'imei' ? 'IMEI' : 'Serial'} ${rawId} sin SKU en su fila`)
       continue
     }
-    if (!porSku.has(sku)) porSku.set(sku, { ean, imeis: [] })
-    porSku.get(sku)!.imeis.push(rawImei)
+    if (!porSku.has(sku)) porSku.set(sku, { ean, imeis: [], serials: [] })
+    porSku.get(sku)![tipo === 'imei' ? 'imeis' : 'serials'].push(rawId)
+  }
+
+  // Una linea del webhook lleva imeis O serials, nunca los dos (contrato GOcelular)
+  for (const [sku, d] of porSku) {
+    if (d.imeis.length > 0 && d.serials.length > 0) {
+      errores.push(`El SKU ${sku} mezcla IMEIs (${d.imeis.length}) y números de serie (${d.serials.length}) — un equipo se identifica por uno solo de los dos`)
+    }
   }
 
   if (porSku.size === 0 && errores.length === 0) {
@@ -176,7 +221,7 @@ export function parseImeiExcel(imeiFileB64OrText: string, skusConocidos: Set<str
   }
 
   return {
-    lines: [...porSku.entries()].map(([sku, d]) => ({ sku, ean: d.ean, imeis: d.imeis })),
+    lines: [...porSku.entries()].map(([sku, d]) => ({ sku, ean: d.ean, imeis: d.imeis, serials: d.serials })),
     errores,
   }
 }

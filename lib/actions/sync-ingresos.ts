@@ -64,7 +64,11 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
                   max(COALESCE(inv.andreani_received_at, inv.created_at))
                     FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ultimo
            FROM (
-             SELECT jsonb_array_elements_text(COALESCE(l->'imeis', '[]'::jsonb)) AS imei
+             -- Las tablets se identifican por numero de serie (l->'serials'), que GOcelular
+             -- guarda en la MISMA columna imei de inventory_items — el join sirve para ambos
+             SELECT jsonb_array_elements_text(
+               COALESCE(l->'imeis', '[]'::jsonb) || COALESCE(l->'serials', '[]'::jsonb)
+             ) AS imei
              FROM jsonb_array_elements(pi.source_payload->'lines') l
            ) x
            LEFT JOIN inventory_items inv ON inv.imei = x.imei
@@ -78,7 +82,9 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
          ) a ON true
          WHERE pi.purchase_reference = ANY($1)
          ORDER BY pi.created_at DESC`,
-        [pendientes.map(p => p.id)]
+        // purchaseReference pisa al id cuando la compra vive en GOcelular con otra
+        // referencia (ej. ingresada por ellos como NP-...-SERIALES)
+        [pendientes.map(p => p.gocelular?.purchaseReference ?? p.id)]
       )
       rows = res.rows
     } finally {
@@ -92,7 +98,7 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
     }
 
     for (const pedido of pendientes) {
-      const r = porRef.get(pedido.id)
+      const r = porRef.get(pedido.gocelular?.purchaseReference ?? pedido.id)
       if (!r) continue
 
       const ev = evaluarIngreso({

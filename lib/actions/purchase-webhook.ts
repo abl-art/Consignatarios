@@ -195,10 +195,14 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       return { ok: false, estado: 'validacion_fallida' }
     }
 
-    const esCelular = (productoId: string) => (categorias.get(productoId) ?? 'Celulares') === 'Celulares'
-    const itemsDevice = pedido.items.filter(i => esCelular(i.productoId))
-    const itemsAddon = pedido.items.filter(i => !esCelular(i.productoId))
-    const tieneCelulares = itemsDevice.length > 0
+    // device = todo lo que se enrola en Trustonic: celulares (imeis) y tablets (serials).
+    // addon = lo que se vende sin control (contrato GOcelular, novedades 23/9/2026).
+    const CATEGORIAS_DEVICE = new Set(['Celulares', 'Tablets'])
+    const esDevice = (productoId: string) => CATEGORIAS_DEVICE.has(categorias.get(productoId) ?? 'Celulares')
+    const itemsDevice = pedido.items.filter(i => esDevice(i.productoId))
+    const itemsAddon = pedido.items.filter(i => !esDevice(i.productoId))
+    const tieneEquipos = itemsDevice.length > 0
+    const tieneTablets = itemsDevice.some(i => categorias.get(i.productoId) === 'Tablets')
 
     // 1. Lineas device desde el Excel de IMEIs
     const lines: PurchaseLine[] = []
@@ -206,13 +210,13 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
     const nextRef = () => `L${++refN}`
     const warningsAlias: string[] = []
 
-    if (tieneCelulares) {
+    if (tieneEquipos) {
       if (!pedido.imeiFile) {
-        await persistir(pedidoId, { estado: 'validacion_fallida', errores: ['El pedido tiene celulares pero no se cargó el Excel de IMEIs'] })
+        await persistir(pedidoId, { estado: 'validacion_fallida', errores: ['El pedido tiene equipos pero no se cargó el Excel de IMEIs/seriales'] })
         return { ok: false, estado: 'validacion_fallida' }
       }
       const { skusConocidos, skuToNombre } = await cargarSkusYNombres()
-      const parsed = parseImeiExcel(pedido.imeiFile, skusConocidos)
+      const parsed = parseImeiExcel(pedido.imeiFile, skusConocidos, { permitirSeriales: tieneTablets })
       if (parsed.errores.length > 0) {
         await persistir(pedidoId, { estado: 'validacion_fallida', errores: parsed.errores })
         return { ok: false, estado: 'validacion_fallida' }
@@ -222,7 +226,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       // las cantidades por modelo según el alias tienen que calzar con el
       // pedido ANTES de enviar — ataja alias creados con el modelo equivocado
       const dryRun = verificarAliasVsPedido(
-        parsed.lines.map(l => ({ sku: l.sku, unidades: l.imeis.length })),
+        parsed.lines.map(l => ({ sku: l.sku, unidades: l.imeis.length + l.serials.length })),
         skuToNombre,
         itemsDevice.map(i => ({ productoNombre: i.productoNombre, cantidad: i.cantidad })),
       )
@@ -238,7 +242,8 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
           line_reference: nextRef(),
           item_type: 'device',
           sku: l.sku,
-          imeis: l.imeis,
+          // Exactamente uno de imeis/serials por linea (el parser ya erroreo si mezclan)
+          ...(l.serials.length > 0 ? { serials: l.serials } : { imeis: l.imeis }),
           ...(l.ean ? { ean: l.ean } : {}),
           ...(costos.has(l.sku) ? { unit_cost: costos.get(l.sku) } : {}),
         })
@@ -259,14 +264,16 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       })
     }
 
-    // 3. Pre-validacion contra catalogo GOcelular
-    const todosImeis = lines.flatMap(l => l.imeis ?? [])
-    const catalogo = await cargarCatalogo(todosImeis)
+    // 3. Pre-validacion contra catalogo GOcelular. Los seriales de tablets viven en la
+    // misma columna imei de inventory_items, asi que van juntos al chequeo de existentes.
+    const todosIdentificadores = lines.flatMap(l => [...(l.imeis ?? []), ...(l.serials ?? [])])
+    const catalogo = await cargarCatalogo(todosIdentificadores)
     if (!catalogo) {
       await persistir(pedidoId, { estado: 'error_reintentable', errores: ['No pude conectar a la base de GOcelular para validar'] })
       return { ok: false, estado: 'error_reintentable' }
     }
-    const val = validarCompra(pedido.proveedorNombre, lines, catalogo)
+    const destino = pedido.destino === 'local' ? 'local' as const : 'andreani_wh' as const // wh2 ya bloqueado arriba
+    const val = validarCompra(pedido.proveedorNombre, lines, catalogo, destino)
     if (val.errores.length > 0) {
       await persistir(pedidoId, { estado: 'validacion_fallida', errores: val.errores, warnings: [...warningsAlias, ...val.warnings] })
       return { ok: false, estado: 'validacion_fallida' }
@@ -276,7 +283,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
     const payload: PurchasePayload = {
       purchase_reference: pedido.id,
       supplier: pedido.proveedorNombre.trim(),
-      destination: pedido.destino === 'local' ? 'local' : 'andreani_wh', // wh2 ya bloqueado arriba
+      destination: destino,
       lines,
       timestamp: buildTimestamp(),
     }
@@ -311,18 +318,20 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       return { ok: false, estado: 'error_reintentable' }
     }
 
-    // 4xx / 409: rechazado
+    // 4xx / 409: rechazado. Desde el 23/9/2026 los errores traen el path exacto
+    // (lines[i].imeis[j] / lines[i].serials[j]) y un reason descriptivo.
     const detalles = (res.body?.errors ?? []).map(e =>
-      [e.path, e.line_reference, e.sku].filter(Boolean).join(' · ')
+      [e.path, e.line_reference, e.sku, typeof e.reason === 'string' ? e.reason : null].filter(Boolean).join(' · ')
     ).filter(Boolean)
     const mensajes: Record<string, string> = {
       unauthorized: 'Firma rechazada — revisar GOCELULAR_WEBHOOK_SECRET',
-      invalid_payload: 'GOcelular rechazó el formato del payload',
+      invalid_payload: 'GOcelular rechazó el formato del payload (incluye IMEI/serial malformado o duplicado dentro del envío)',
       supplier_desconocido: 'GOcelular no reconoce el proveedor',
       supplier_ambiguo: 'El nombre del proveedor matchea más de uno en GOcelular',
       sku_inactivo: 'Algún SKU existe pero está inactivo en GOcelular',
-      imeis_invalid: 'GOcelular rechazó IMEIs (no se guardó nada — corregir y reintentar con el mismo pedido)',
-      purchase_conflict: 'Este pedido ya fue informado con otros datos — coordinar corrección manual con GOcelular',
+      imeis_invalid: 'GOcelular rechazó IMEIs o números de serie ya existentes en su inventario (no se guardó nada — corregir y reintentar con el mismo pedido)',
+      identificador_no_corresponde: 'El tipo de identificador no coincide con el modelo en GOcelular (un celular lleva IMEIs, una tablet números de serie, y los serials solo van a Andreani) — corregir el pedido, no reintentar igual',
+      purchase_conflict: 'Este pedido ya fue informado con otros datos — un reenvío corregido va SIEMPRE en un pedido nuevo con otra referencia (GOcelular devuelve la respuesta vieja ante la misma referencia)',
       payload_too_large_local: 'El payload supera 1 MB — dividí la compra en pedidos más chicos',
     }
     await persistir(pedidoId, {

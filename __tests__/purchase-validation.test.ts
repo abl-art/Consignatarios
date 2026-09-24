@@ -67,6 +67,62 @@ describe('validarCompra', () => {
     expect(r.errores.some(e => e.includes('duplicado'))).toBe(true)
   })
 
+  // Tablets (contrato GOcelular 23/9/2026): device con serials en vez de imeis,
+  // exactamente uno de los dos, solo con destino andreani_wh
+  describe('serials (tablets)', () => {
+    const cat = { ...catalogo, deviceSkusActivos: new Set(['PB970105AR', 'SAM-A11-64']) }
+    const lineaTablet: PurchaseLine = {
+      line_reference: 'L1', item_type: 'device', sku: 'SAM-A11-64', serials: ['R8YL303PA8J', 'R8YL303PACE'], unit_cost: '280000.00',
+    }
+
+    it('pasa con serials validos y destino andreani_wh', () => {
+      const r = validarCompra('MIRGOR SA', [lineaTablet], cat, 'andreani_wh')
+      expect(r.errores).toEqual([])
+    })
+
+    it('error si una linea device trae imeis Y serials', () => {
+      const r = validarCompra('MIRGOR SA', [{ ...lineaTablet, imeis: [IMEI_A] }], cat)
+      expect(r.errores.some(e => e.includes('L1') && e.includes('uno solo'))).toBe(true)
+    })
+
+    it('error si una linea device no trae ni imeis ni serials', () => {
+      const r = validarCompra('MIRGOR SA', [{ line_reference: 'L1', item_type: 'device', sku: 'SAM-A11-64' }], cat)
+      expect(r.errores.length).toBeGreaterThan(0)
+    })
+
+    it('error de formato de serial (contrato: 4-32 caracteres alfanumericos y guion)', () => {
+      const r = validarCompra('MIRGOR SA', [{ ...lineaTablet, serials: ['R8!'] }], cat)
+      expect(r.errores.some(e => e.includes('R8!'))).toBe(true)
+    })
+
+    it('serial duplicado en la compra es error', () => {
+      const l2: PurchaseLine = { ...lineaTablet, line_reference: 'L2', serials: ['R8YL303PA8J'] }
+      const r = validarCompra('MIRGOR SA', [lineaTablet, l2], cat)
+      expect(r.errores.some(e => e.includes('duplicado') && e.includes('R8YL303PA8J'))).toBe(true)
+    })
+
+    it('serial ya existente en el inventario de GOcelular es error (viven en la columna imei)', () => {
+      const conSerial = { ...cat, imeisExistentes: new Set(['R8YL303PA8J']) }
+      const r = validarCompra('MIRGOR SA', [lineaTablet], conSerial)
+      expect(r.errores.some(e => e.includes('R8YL303PA8J'))).toBe(true)
+    })
+
+    it('serials con destino local es error (el contrato solo los acepta con andreani_wh)', () => {
+      const r = validarCompra('MIRGOR SA', [lineaTablet], cat, 'local')
+      expect(r.errores.some(e => e.toLowerCase().includes('andreani'))).toBe(true)
+    })
+
+    it('quantity en una linea device debe coincidir con la cantidad de serials', () => {
+      const r = validarCompra('MIRGOR SA', [{ ...lineaTablet, quantity: 5 }], cat)
+      expect(r.errores.some(e => e.includes('L1'))).toBe(true)
+    })
+  })
+
+  it('addon cuyo SKU es un equipo en el catalogo es error (400 identificador_no_corresponde de GOcelular)', () => {
+    const r = validarCompra('MIRGOR SA', [{ line_reference: 'L2', item_type: 'addon', sku: 'PB970105AR', quantity: 5, unit_cost: '100.00' }], catalogo)
+    expect(r.errores.some(e => e.includes('PB970105AR') && e.toLowerCase().includes('equipo'))).toBe(true)
+  })
+
   it('addon sin unit_cost es error', () => {
     const sinCosto = { ...lineaAddon, unit_cost: undefined }
     const r = validarCompra('MIRGOR SA', [sinCosto], catalogo)

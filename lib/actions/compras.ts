@@ -202,6 +202,9 @@ interface PedidoItem {
 
 export interface GocelularEstado {
   estado: 'no_enviado' | 'validacion_fallida' | 'error_reintentable' | 'rechazado' | 'informado'
+  // Referencia real en GOcelular cuando difiere del id del pedido (ej. una compra que
+  // GOcelular ingresó por su cuenta, como NP-1790193408441-SERIALES) — la usa sync-ingresos
+  purchaseReference?: string
   purchaseId?: string
   requestId?: string
   enviadoAt?: string

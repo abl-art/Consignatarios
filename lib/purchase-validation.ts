@@ -1,4 +1,5 @@
 import type { PurchaseLine } from '@/lib/gocelular-webhook'
+import { serialValido } from '@/lib/imei-excel-parser'
 
 export interface CatalogoGocelular {
   proveedoresActivos: string[]
@@ -19,7 +20,10 @@ const MONTO_RE = /^\d+(\.\d{1,2})?$/
 export function validarCompra(
   supplier: string,
   lines: PurchaseLine[],
-  catalogo: CatalogoGocelular
+  catalogo: CatalogoGocelular,
+  // Los serials solo se aceptan con destino andreani_wh (contrato 23/9/2026);
+  // sin destino conocido se omite ese chequeo
+  destination?: 'andreani_wh' | 'local'
 ): ValidacionResult {
   const errores: string[] = []
   const warnings: string[] = []
@@ -44,16 +48,39 @@ export function validarCompra(
     const ref = l.line_reference
 
     if (l.item_type === 'device') {
-      if (!l.imeis || l.imeis.length === 0) {
-        errores.push(`Línea ${ref}: los celulares requieren IMEIs`)
+      const nImeis = l.imeis?.length ?? 0
+      const nSerials = l.serials?.length ?? 0
+      if (nImeis > 0 && nSerials > 0) {
+        errores.push(`Línea ${ref}: un equipo se identifica por uno solo de IMEIs o números de serie, no ambos`)
+      } else if (nImeis === 0 && nSerials === 0) {
+        errores.push(`Línea ${ref}: los equipos requieren IMEIs (celulares) o números de serie (tablets)`)
       } else {
-        unidades += l.imeis.length
-        for (const imei of l.imeis) {
+        unidades += nImeis + nSerials
+        for (const imei of l.imeis ?? []) {
           if (imeisVistos.has(imei)) errores.push(`IMEI duplicado en la compra: ${imei}`)
           imeisVistos.add(imei)
           if (catalogo.imeisExistentes.has(imei)) {
             errores.push(`El IMEI ${imei} ya existe en el inventario de GOcelular — rechazaría la compra completa`)
           }
+        }
+        for (const serial of l.serials ?? []) {
+          if (!serialValido(serial)) {
+            errores.push(`Línea ${ref}: el número de serie "${serial}" no cumple el formato del contrato (4-32 caracteres, letras/números/guion, sin espacios)`)
+            continue
+          }
+          if (imeisVistos.has(serial)) errores.push(`Número de serie duplicado en la compra: ${serial}`)
+          imeisVistos.add(serial)
+          // GOcelular guarda el serial de las tablets en la misma columna imei de inventory_items
+          if (catalogo.imeisExistentes.has(serial)) {
+            errores.push(`El número de serie ${serial} ya existe en el inventario de GOcelular — rechazaría la compra completa`)
+          }
+        }
+        if (nSerials > 0 && destination === 'local') {
+          errores.push(`Línea ${ref}: los números de serie solo se aceptan con destino Andreani (andreani_wh) — GOcelular rechaza serials con destino local`)
+        }
+        // quantity en una linea device es opcional; si viene tiene que calzar con los identificadores
+        if (l.quantity !== undefined && l.quantity !== nImeis + nSerials) {
+          errores.push(`Línea ${ref}: quantity (${l.quantity}) no coincide con la cantidad de identificadores (${nImeis + nSerials})`)
         }
       }
       if (catalogo.deviceSkusInactivos.has(l.sku)) {
@@ -66,11 +93,20 @@ export function validarCompra(
       if (!l.quantity || l.quantity <= 0) errores.push(`Línea ${ref}: los accesorios requieren cantidad mayor a 0`)
       else unidades += l.quantity
       if (!l.unit_cost) errores.push(`Línea ${ref}: los accesorios requieren costo unitario`)
-      if (l.imeis && l.imeis.length > 0) errores.push(`Línea ${ref}: los accesorios no llevan IMEIs`)
+      if ((l.imeis && l.imeis.length > 0) || (l.serials && l.serials.length > 0)) {
+        errores.push(`Línea ${ref}: los accesorios no llevan IMEIs ni números de serie`)
+      }
       if (catalogo.addonSkusInactivos.has(l.sku)) {
         errores.push(`El SKU ${l.sku} existe en GOcelular pero está inactivo — rechazaría la compra completa`)
       } else if (!catalogo.addonSkus.has(l.sku)) {
-        warnings.push(`El SKU ${l.sku} no está en el catálogo de accesorios de GOcelular — quedará como alias pendiente (lo resuelven ellos, no bloquea)`)
+        // Regla nueva de GOcelular (23/9/2026): un addon cuyo SKU es un EQUIPO en su
+        // catalogo rebota con 400 identificador_no_corresponde (antes entraba como alias
+        // pendiente y la compra quedaba sin lote — caso tablets MULTIPOINT)
+        if (catalogo.deviceSkusActivos.has(l.sku) || catalogo.deviceSkusInactivos.has(l.sku)) {
+          errores.push(`El SKU ${l.sku} es un equipo en el catálogo de GOcelular — mandalo como device con IMEIs (celular) o números de serie (tablet), no como accesorio`)
+        } else {
+          warnings.push(`El SKU ${l.sku} no está en el catálogo de accesorios de GOcelular — quedará como alias pendiente (lo resuelven ellos, no bloquea)`)
+        }
       }
     }
 
@@ -79,7 +115,7 @@ export function validarCompra(
         errores.push(`Línea ${ref}: el costo "${l.unit_cost}" no tiene el formato requerido (decimal con punto, ej. 185000.00)`)
       } else {
         const costo = parseFloat(l.unit_cost)
-        const cant = Math.max(0, l.item_type === 'device' ? (l.imeis?.length ?? 0) : (l.quantity ?? 0))
+        const cant = Math.max(0, l.item_type === 'device' ? (l.imeis?.length ?? 0) + (l.serials?.length ?? 0) : (l.quantity ?? 0))
         // Tope $100M por linea: aplica al unit_cost (interpretacion literal de la doc GOcelular; pendiente confirmar si aplica al total de linea)
         if (costo > 100_000_000) errores.push(`Línea ${ref}: el costo unitario supera el tope de $100.000.000 por línea`)
         montoTotal += costo * cant

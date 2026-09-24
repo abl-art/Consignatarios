@@ -5,6 +5,9 @@ export interface PurchaseLine {
   item_type: 'device' | 'addon'
   sku: string
   imeis?: string[]
+  // Tablets (contrato 23/9/2026): device identificado por numero de serie — exactamente
+  // uno de imeis/serials por linea, y serials solo con destination andreani_wh
+  serials?: string[]
   quantity?: number
   unit_cost?: string
   description?: string

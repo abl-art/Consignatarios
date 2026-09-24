@@ -166,6 +166,102 @@ describe('parseImeiExcel', () => {
     expect(r.lines[0].imeis).toEqual([IMEI_A, IMEI_B])
   })
 
+  // Tablets (novedades de Pedro 23/9/2026): se identifican por numero de serie en la
+  // columna IMEI/SN, item_type device con serials. El modo es opt-in (permitirSeriales)
+  // para no cambiar el comportamiento de los Excels de celulares.
+  describe('modo seriales (tablets)', () => {
+    const skusTablets = new Set(['SAM-A11-64', 'SAM-A11PLUS-128', 'PB970105AR'])
+
+    it('parsea el formato real de MULTIPOINT (SKU | IMEI/SN | EAN) agrupando serials por SKU', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN', 'EAN'],
+        ['SM-X133NZAAL09', 'R8YL303PA8J', 8806097820796],
+        ['SM-X133NZAAL09', 'R8YL303PACE', 8806097820796],
+        ['SM-X230NZAAL09', 'R5GL704TB8D', 8806097886785],
+      ])
+      const r = parseImeiExcel(b64, skusTablets, { permitirSeriales: true })
+      expect(r.errores).toEqual([])
+      expect(r.lines).toHaveLength(2)
+      const a11 = r.lines.find(l => l.sku === 'SM-X133NZAAL09')!
+      expect(a11.serials).toEqual(['R8YL303PA8J', 'R8YL303PACE'])
+      expect(a11.imeis).toEqual([])
+      expect(a11.ean).toBe('8806097820796')
+    })
+
+    it('distingue la columna de seriales de la de SKU aunque ambas sean alfanumericas (por valores distintos)', () => {
+      // SKUs desconocidos para el catalogo y repetidos por fila; los seriales son unicos
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN'],
+        ['TAB-NUEVA-64', 'R8AAA0001AA'],
+        ['TAB-NUEVA-64', 'R8AAA0002BB'],
+        ['TAB-NUEVA-64', 'R8AAA0003CC'],
+      ])
+      const r = parseImeiExcel(b64, new Set<string>(), { permitirSeriales: true })
+      expect(r.errores).toEqual([])
+      expect(r.lines).toHaveLength(1)
+      expect(r.lines[0].sku).toBe('TAB-NUEVA-64')
+      expect(r.lines[0].serials).toEqual(['R8AAA0001AA', 'R8AAA0002BB', 'R8AAA0003CC'])
+    })
+
+    it('maneja un Excel mixto de celulares (IMEI) y tablets (serial) en la misma columna', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN', 'EAN'],
+        ['PB970105AR', IMEI_A, '7790894902032'],
+        ['SAM-A11-64', 'R8YL303PA8J', '8806097820796'],
+      ])
+      const r = parseImeiExcel(b64, skusTablets, { permitirSeriales: true })
+      expect(r.errores).toEqual([])
+      const moto = r.lines.find(l => l.sku === 'PB970105AR')!
+      expect(moto.imeis).toEqual([IMEI_A])
+      expect(moto.serials).toEqual([])
+      const tab = r.lines.find(l => l.sku === 'SAM-A11-64')!
+      expect(tab.serials).toEqual(['R8YL303PA8J'])
+      expect(tab.imeis).toEqual([])
+    })
+
+    it('reporta error si un mismo SKU mezcla IMEIs y seriales', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN'],
+        ['SAM-A11-64', IMEI_A],
+        ['SAM-A11-64', 'R8YL303PA8J'],
+      ])
+      const r = parseImeiExcel(b64, skusTablets, { permitirSeriales: true })
+      expect(r.errores.some(e => e.includes('SAM-A11-64') && e.toLowerCase().includes('mezcla'))).toBe(true)
+    })
+
+    it('reporta serial duplicado', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN'],
+        ['SAM-A11-64', 'R8YL303PA8J'],
+        ['SAM-A11-64', 'R8YL303PA8J'],
+      ])
+      const r = parseImeiExcel(b64, skusTablets, { permitirSeriales: true })
+      expect(r.errores.some(e => e.includes('duplicado') && e.includes('R8YL303PA8J'))).toBe(true)
+      expect(r.lines[0].serials).toEqual(['R8YL303PA8J'])
+    })
+
+    it('sigue validando Luhn para valores de 15 digitos aun en modo seriales', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN'],
+        ['SAM-A11-64', 'R8YL303PA8J'],
+        ['PB970105AR', '354581531507665'],
+      ])
+      const r = parseImeiExcel(b64, skusTablets, { permitirSeriales: true })
+      expect(r.errores.some(e => e.includes('354581531507665'))).toBe(true)
+      expect(r.lines.find(l => l.sku === 'SAM-A11-64')!.serials).toEqual(['R8YL303PA8J'])
+    })
+
+    it('con el modo apagado un Excel de solo seriales sigue reportando que no hay IMEIs', () => {
+      const b64 = xlsxB64([
+        ['SKU', 'IMEI/SN'],
+        ['SAM-A11-64', 'R8YL303PA8J'],
+      ])
+      const r = parseImeiExcel(b64, skusTablets)
+      expect(r.errores.length).toBeGreaterThan(0)
+      expect(r.lines).toEqual([])
+    })
+  })
+
   it('parsea un CSV plano codificado en base64 (lo que sube el navegador via FileReader)', () => {
     const csv = `sku;ean;imei\nPB970105AR;7790894902032;${IMEI_A}\n`
     const b64 = Buffer.from(csv).toString('base64')
