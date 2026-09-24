@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getListaPrecios, getHistorialBonos, getMargenExtra, getModelosCelulares, getNotasCredito } from '@/lib/actions/lista-precios-canales'
+import { getListaPrecios, getHistorialBonos, getMargenExtra, getModelosAgregables, getNotasCredito } from '@/lib/actions/lista-precios-canales'
 import ListaPreciosTable from './ListaPreciosTable'
 import BonosHistorialTable from './BonosHistorialTable'
 import NotasCreditoTable from './NotasCreditoTable'
@@ -12,7 +12,7 @@ export default async function ListaPreciosPage() {
   const [filas, bonos, modelos, notasCredito, margenExtra] = await Promise.all([
     getListaPrecios(),
     getHistorialBonos(),
-    getModelosCelulares(),
+    getModelosAgregables(),
     getNotasCredito(),
     getMargenExtra(),
   ])
@@ -27,7 +27,7 @@ export default async function ListaPreciosPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Lista de Precios</h1>
       <p className="text-sm text-gray-500 mb-6">
         Costo sin IVA del proveedor de cada marca × múltiplo = PVP con cuota redonda (÷9 en centenas, siempre para
-        arriba). Solo modelos con ventas en los últimos 30 días.
+        arriba). Celulares con ventas en los últimos 30 días; tablets y accesorios se suman con &quot;+ Agregar modelo&quot;.
       </p>
       <TabsListaBonos
         cantidadBonos={bonos.length}

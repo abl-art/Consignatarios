@@ -425,6 +425,30 @@ describe('armarListaPrecios', () => {
       const filas = armarListaPrecios([producto()], COSTOS_FIJADO, {}, {}, {})
       expect(filas).toHaveLength(0)
     })
+
+    it('accesorio fijado sin match por nombre toma el precio tienda por SKU (codigo)', () => {
+      const acc = producto({ id: 'a1', nombre: 'Redmi Buds 6 Play', codigo: 'BHR8776GL', categoria: 'Auriculares' })
+      const filas = armarListaPrecios(
+        [acc], { a1: [{ proveedor: 'SOLNIK SA', precio: 18000 }] }, {},
+        { 'Auriculares Redmi Buds 6 Play Azul': 36900 }, // nombre de tienda distinto: no matchea
+        {}, {}, new Date('2026-08-25'), [], ['a1'],
+        { BHR8776GL: 36900 },
+      )
+      expect(filas).toHaveLength(1)
+      expect(filas[0].categoria).toBe('Auriculares')
+      expect(filas[0].precioTienda).toBe(36900)
+      expect(filas[0].pvp).toBe(36000) // 18.000×2 = 36.000 → cuota 4.000 exacta
+    })
+
+    it('el match por nombre le gana al SKU (celulares siguen igual)', () => {
+      const filas = armarListaPrecios(
+        [producto()], COSTOS_FIJADO, {},
+        { 'Celular Motorola Moto G17 4/128 GB': 500000 },
+        VENTAS, {}, new Date('2026-08-25'), [], [],
+        { 'MOTO-G17-128': 999999 },
+      )
+      expect(filas[0].precioTienda).toBe(500000)
+    })
   })
 
   describe('armarHistorialBonos (pestaña Bonos)', () => {

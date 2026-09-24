@@ -12,6 +12,7 @@ function fila(over: Partial<FilaListaPrecios> = {}): FilaListaPrecios {
     productoId: 'p1',
     nombre: 'Samsung Galaxy A27 5G 256GB',
     codigo: 'SM-A27 (256gb)',
+    categoria: 'Celulares',
     marca: 'Samsung',
     proveedor: 'IATEC SAU (Mirgor sa)',
     proveedorPreferido: true,

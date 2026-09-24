@@ -1123,6 +1123,32 @@ export async function fetchPreciosTiendaCelulares(): Promise<Record<string, numb
   }
 }
 
+/**
+ * Precio activo de la tienda (en pesos) por SKU, addons incluidos — para
+ * matchear accesorios/tablets de la Lista de Precios por compras_productos.codigo
+ * (sus display_name no coinciden con los nombres del gestor de Compras).
+ */
+export async function fetchPreciosTiendaPorSku(): Promise<Record<string, number>> {
+  const pool = getPool()
+  if (!pool) return {}
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ sku: string; price: string }>(
+      `SELECT sku, price
+       FROM store_products
+       WHERE status = 'active' AND sku IS NOT NULL AND display_name NOT ILIKE '%E2E%'`
+    )
+    const result: Record<string, number> = {}
+    for (const r of res.rows) {
+      if (r.price !== null && Number(r.price) > 0) result[r.sku] = Number(r.price) / 100
+    }
+    return result
+  } finally {
+    client.release()
+  }
+}
+
 /** Precio de venta (default_price, en pesos) por modelo activo de la tienda GOcelular. */
 export async function fetchPreciosVentaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()

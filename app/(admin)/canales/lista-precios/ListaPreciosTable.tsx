@@ -216,11 +216,15 @@ function BonoEditor({ fila }: { fila: FilaListaPrecios }) {
   )
 }
 
-function AgregarModelo({ agregables }: { agregables: { id: string; nombre: string }[] }) {
+function AgregarModelo({ agregables }: { agregables: { id: string; nombre: string; categoria?: string }[] }) {
   const router = useRouter()
   const [agregando, startTransition] = useTransition()
 
   if (agregables.length === 0) return null
+  // Agrupado por categoría, Celulares primero
+  const categorias = [...new Set(agregables.map(p => p.categoria ?? 'Otros'))].sort((a, b) =>
+    a === 'Celulares' ? -1 : b === 'Celulares' ? 1 : a.localeCompare(b)
+  )
   return (
     <select
       value=""
@@ -234,11 +238,15 @@ function AgregarModelo({ agregables }: { agregables: { id: string; nombre: strin
         })
       }}
       className="px-3 py-1.5 rounded-full text-sm border border-dashed border-gray-400 text-gray-600 bg-white hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
-      title="Fijar un modelo sin ventas recientes para que aparezca en la lista"
+      title="Fijar un producto sin ventas recientes para que aparezca en la lista"
     >
       <option value="">{agregando ? 'Agregando…' : '+ Agregar modelo'}</option>
-      {agregables.map(p => (
-        <option key={p.id} value={p.id}>{p.nombre}</option>
+      {categorias.map(cat => (
+        <optgroup key={cat} label={cat}>
+          {agregables.filter(p => (p.categoria ?? 'Otros') === cat).map(p => (
+            <option key={p.id} value={p.id}>{p.nombre}</option>
+          ))}
+        </optgroup>
       ))}
     </select>
   )
@@ -261,7 +269,7 @@ function QuitarFijado({ fila }: { fila: FilaListaPrecios }) {
   )
 }
 
-export default function ListaPreciosTable({ filas, agregables = [] }: { filas: FilaListaPrecios[]; agregables?: { id: string; nombre: string }[] }) {
+export default function ListaPreciosTable({ filas, agregables = [] }: { filas: FilaListaPrecios[]; agregables?: { id: string; nombre: string; categoria?: string }[] }) {
   const [marca, setMarca] = useState<string | null>(null)
   const marcas = [...new Set(filas.map(f => f.marca))].sort()
   const conBono = filas.filter(f => f.bonoMonto !== null || f.bonoEstado === 'agotado')

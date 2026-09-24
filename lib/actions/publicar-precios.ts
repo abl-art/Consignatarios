@@ -32,11 +32,15 @@ export interface PreviewPublicacion {
 }
 
 export async function previewPublicacionPrecios(): Promise<PreviewPublicacion> {
-  const [filas, cat] = await Promise.all([getListaPrecios(), fetchCatalogoPrecios()])
+  const [todas, cat] = await Promise.all([getListaPrecios(), fetchCatalogoPrecios()])
   if (!cat.ok || !cat.body?.products) {
     return { error: `No se pudo leer el catálogo de la tienda (HTTP ${cat.status}${cat.body?.code ? `, ${cat.body.code}` : ''})` }
   }
 
+  // La API de precios de la tienda solo expone celulares (los addons no están
+  // en su catálogo): tablets/accesorios de la lista quedan fuera del batch en
+  // vez de aparecer como "sin mapear" en cada preview
+  const filas = todas.filter(f => f.categoria === 'Celulares')
   const { mapeadas, sinMapear } = mapearProductosTienda(filas, cat.body.products)
   const { lineas, excluidas } = armarLineasPrecios(mapeadas)
   if (lineas.length === 0) {

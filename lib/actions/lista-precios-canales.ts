@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   fetchPreciosTiendaCelulares,
+  fetchPreciosTiendaPorSku,
   fetchVentasPorModelo,
   fetchVentasPropiasPorModelo,
   fetchVentasPropiasConFactura,
@@ -209,21 +210,29 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
   const ahora = opts?.fechaSimulada ? new Date(`${opts.fechaSimulada}T12:00:00Z`) : ahoraArgentina()
   const supabase = createAdminClient()
 
-  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, ventasDiarias, ventasPropias] =
+  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, preciosTiendaSku, ventasDiarias, ventasPropias] =
     await Promise.all([
-      supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto').eq('categoria', 'Celulares'),
+      // Todas las categorías: celulares entran por ventas 30d, el resto
+      // (tablets, accesorios, kits) aparece al fijarse con "+ Agregar modelo"
+      supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto'),
       supabase.from('compras_precios').select('producto_id, proveedor_id, precio, created_at').order('created_at', { ascending: false }),
       supabase.from('compras_proveedores').select('id, nombre'),
       supabase.from('flujo_config').select('key, value').like('key', 'listaprecios_%'),
       fetchBonosRegistros(createAdminClient()),
       fetchPreciosTiendaCelulares().catch(() => ({} as Record<string, number>)),
+      fetchPreciosTiendaPorSku().catch(() => ({} as Record<string, number>)),
       fetchVentasPorModelo().catch(() => []),
       fetchVentasPropiasPorModelo().catch(() => []),
     ])
 
   const productos: ProductoLista[] = (prods ?? [])
     .filter(p => !p.oculto)
-    .map(p => ({ id: p.id as string, nombre: p.nombre as string, codigo: (p.codigo as string) || null }))
+    .map(p => ({
+      id: p.id as string,
+      nombre: p.nombre as string,
+      codigo: (p.codigo as string) || null,
+      categoria: (p.categoria as string) || null,
+    }))
 
   const nombreProveedor = new Map<string, string>((provs ?? []).map(p => [p.id as string, p.nombre as string]))
 
@@ -283,20 +292,20 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
   } catch { /* best-effort */ }
 
   const incluidos = parseIncluidos((cfg ?? []) as { key: string; value: string }[])
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos, preciosTiendaSku)
 }
 
-/** Catálogo de celulares (no ocultos) para el desplegable "Agregar modelo". */
-export async function getModelosCelulares(): Promise<{ id: string; nombre: string }[]> {
+/** Catálogo completo de productos (no ocultos) para el desplegable "Agregar modelo". */
+export async function getModelosAgregables(): Promise<{ id: string; nombre: string; categoria: string }[]> {
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('compras_productos')
-    .select('id, nombre, oculto')
-    .eq('categoria', 'Celulares')
+    .select('id, nombre, categoria, oculto')
+    .order('categoria')
     .order('nombre')
   return (data ?? [])
     .filter(p => !p.oculto)
-    .map(p => ({ id: p.id as string, nombre: p.nombre as string }))
+    .map(p => ({ id: p.id as string, nombre: p.nombre as string, categoria: (p.categoria as string) || 'Otros' }))
 }
 
 /** Fija o quita un modelo agregado a mano en la Lista de Precios. */

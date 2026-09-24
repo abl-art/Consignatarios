@@ -137,6 +137,8 @@ export async function getDatosSimulador(prefetch?: PrefetchSimulador): Promise<D
       mora_dias: derivarMoraDias(vinTerceros),
       ticket_promedio: ticketTerceros,
     },
-    modelos,
+    // Solo celulares: la lista ahora incluye tablets/accesorios fijados, que
+    // no aplican al simulador de financiación
+    modelos: modelos.filter(m => m.categoria === 'Celulares'),
   }
 }

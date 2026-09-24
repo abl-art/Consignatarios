@@ -26,6 +26,7 @@ export interface ProductoLista {
   id: string
   nombre: string
   codigo: string | null
+  categoria?: string | null
 }
 
 export interface CostoProveedor {
@@ -173,6 +174,7 @@ export interface FilaListaPrecios {
   productoId: string
   nombre: string
   codigo: string | null
+  categoria: string | null
   marca: string
   proveedor: string | null
   proveedorPreferido: boolean
@@ -369,6 +371,7 @@ export function armarListaPrecios(
   hoy: Date = new Date(),
   ventasPropiasDiarias: VentaPropiaDiaria[] = [],
   incluidos: string[] = [],
+  preciosTiendaPorSku: Record<string, number> = {},
 ): FilaListaPrecios[] {
   const tienda = porClaveNormalizada(preciosTienda)
   const ventas = porClaveNormalizada(ventas30dPorNombre)
@@ -383,7 +386,9 @@ export function armarListaPrecios(
     const marca = normalizarMarca(p.nombre.split(/\s+/)[0] ?? null) ?? '—'
     const eleccion = elegirCosto(marca, costosPorProducto[p.id] ?? [])
     const multiplo = multiplos[p.id] ?? MULTIPLO_DEFAULT
-    const precioTienda = tienda.get(clave) ?? null
+    // Celulares matchean por nombre normalizado; accesorios/tablets (addons de
+    // la tienda, nombres que no coinciden) caen al match por SKU vía codigo
+    const precioTienda = tienda.get(clave) ?? (p.codigo ? preciosTiendaPorSku[p.codigo] : undefined) ?? null
 
     let pvp: number | null = null
     let cuota: number | null = null
@@ -445,6 +450,7 @@ export function armarListaPrecios(
       productoId: p.id,
       nombre: p.nombre,
       codigo: p.codigo,
+      categoria: p.categoria ?? null,
       marca,
       proveedor: eleccion?.costo.proveedor ?? null,
       proveedorPreferido: eleccion?.preferido ?? false,
