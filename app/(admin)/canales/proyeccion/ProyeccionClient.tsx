@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, ComposedChart, CartesianGrid, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, ComposedChart, CartesianGrid, LabelList, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import CanalPills, { type Canal } from '../../finanzas/CanalPills'
 import { getProyeccionDimension } from '@/lib/actions/proyecciones'
 import type { FilaProyReal } from '@/lib/proyeccion-ventas'
@@ -75,6 +75,14 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
 
   const merchantSel = merchants.find((m) => m.clientId === merchantId)
 
+  // Etiquetas sobre cada punto del gráfico: monto compacto en $M, unidades enteras
+  const fmtEtiqueta = (v: unknown) =>
+    typeof v === 'number'
+      ? metrica === 'monto'
+        ? `$${(v / 1_000_000).toLocaleString('es-AR', { maximumFractionDigits: 0 })}M`
+        : v.toLocaleString('es-AR')
+      : ''
+
   const datosChart = useMemo(
     () =>
       filas.map((f) => ({
@@ -145,7 +153,7 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
             </h2>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={datosChart} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                <ComposedChart data={datosChart} margin={{ top: 20, right: 15, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                   <YAxis
@@ -162,9 +170,15 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Real" fill={COLOR_REAL} radius={[4, 4, 0, 0]} maxBarSize={36} />
-                  <Line type="monotone" dataKey="Proy. Híbrido" stroke={COLOR_HIBRIDO} strokeWidth={2} dot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="Proy. GOcuotas" stroke={COLOR_GOCUOTAS} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4 }} />
+                  <Bar dataKey="Real" fill={COLOR_REAL} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                    <LabelList dataKey="Real" position="top" formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#1e40af', fontWeight: 600 }} />
+                  </Bar>
+                  <Line type="monotone" dataKey="Proy. Híbrido" stroke={COLOR_HIBRIDO} strokeWidth={2} dot={{ r: 4 }}>
+                    <LabelList dataKey="Proy. Híbrido" position="top" offset={10} formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#be123c', fontWeight: 600 }} />
+                  </Line>
+                  <Line type="monotone" dataKey="Proy. GOcuotas" stroke={COLOR_GOCUOTAS} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4 }}>
+                    <LabelList dataKey="Proy. GOcuotas" position="bottom" offset={10} formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#b45309', fontWeight: 600 }} />
+                  </Line>
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
