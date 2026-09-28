@@ -171,6 +171,54 @@ describe('validarCompra', () => {
 })
 
 describe('verificarAliasVsPedido (dry run contra la tabla de alias, lineamiento de Pedro)', () => {
+  it('caso A16/A17 (28/9): faltante cubierto por SKUs sin alias baja a warning y no bloquea', () => {
+    const aliasSamsung = new Map([
+      ['SM-A165MLGMARO', 'Celular Samsung Galaxy A16 4/128 GB'],
+      ['SM-A165MZAMARO', 'Celular Samsung Galaxy A16 4/128 GB'],
+    ])
+    const r = verificarAliasVsPedido(
+      [
+        { sku: 'SM-A165MLGMARO', unidades: 20 },
+        { sku: 'SM-A165MZAMARO', unidades: 12 },
+        { sku: 'SM-A165MZAAARO', unidades: 4 }, // color nuevo del A16, sin alias
+        { sku: 'SM-A175FZARARO', unidades: 2 }, // A17, sin alias
+      ],
+      aliasSamsung,
+      [
+        { productoNombre: 'Samsung Galaxy A16 4/128GB', cantidad: 36 },
+        { productoNombre: 'Samsung Galaxy A17 4/128GB', cantidad: 2 },
+      ],
+    )
+    expect(r.errores).toEqual([])
+    expect(r.warnings.length).toBeGreaterThanOrEqual(3) // dif A16 + modelo A17 + skus sin alias
+  })
+
+  it('si las unidades sin alias no alcanzan a cubrir el faltante, sigue bloqueando', () => {
+    const aliasSamsung = new Map([['SM-A165MLGMARO', 'Celular Samsung Galaxy A16 4/128 GB']])
+    const r = verificarAliasVsPedido(
+      [
+        { sku: 'SM-A165MLGMARO', unidades: 30 },
+        { sku: 'SM-XXXX', unidades: 2 }, // sin alias, no alcanza para el deficit de 6
+      ],
+      aliasSamsung,
+      [{ productoNombre: 'Samsung Galaxy A16 4/128GB', cantidad: 36 }],
+    )
+    expect(r.errores).toHaveLength(1)
+  })
+
+  it('el Excel con MAS unidades aliasadas que lo declarado sigue bloqueando aunque haya SKUs sin alias', () => {
+    const aliasSamsung = new Map([['SM-A165MLGMARO', 'Celular Samsung Galaxy A16 4/128 GB']])
+    const r = verificarAliasVsPedido(
+      [
+        { sku: 'SM-A165MLGMARO', unidades: 40 },
+        { sku: 'SM-XXXX', unidades: 2 },
+      ],
+      aliasSamsung,
+      [{ productoNombre: 'Samsung Galaxy A16 4/128GB', cantidad: 36 }],
+    )
+    expect(r.errores).toHaveLength(1)
+  })
+
   const alias = new Map([
     ['SM-A075MZKVARO', 'Celular Samsung Galaxy A07 4/64 GB'],
     ['SM-A0756ZKUARO', 'Celular Samsung Galaxy A07 4/128 GB'],

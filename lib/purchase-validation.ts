@@ -178,6 +178,14 @@ export function verificarAliasVsPedido(
     porPedido.set(clave, e)
   }
 
+  // Un faltante (el pedido declara MÁS que lo aliasado) puede explicarse por
+  // SKUs sin alias del mismo modelo (color nuevo, caso A16 28/9): si las
+  // unidades sin alias alcanzan a cubrir TODOS los faltantes, se avisa en vez
+  // de bloquear. Un exceso (más unidades aliasadas que declaradas) no tiene
+  // esa explicación y bloquea siempre.
+  const totalSinAlias = sinAlias.reduce((s, l) => s + l.unidades, 0)
+  const faltantes: { msj: string; deficit: number }[] = []
+
   for (const [clave, alias] of porAlias) {
     const pedido = porPedido.get(clave)
     if (!pedido) {
@@ -188,10 +196,30 @@ export function verificarAliasVsPedido(
       continue
     }
     if (alias.unidades !== pedido.cantidad) {
-      errores.push(
+      const msj =
         `"${pedido.nombre}": el Excel trae ${alias.unidades} unidades según el alias de GOcelular ` +
-        `(${alias.skus.join(', ')}) pero el pedido declara ${pedido.cantidad}`,
+        `(${alias.skus.join(', ')}) pero el pedido declara ${pedido.cantidad}`
+      if (alias.unidades < pedido.cantidad && totalSinAlias > 0) {
+        faltantes.push({ msj, deficit: pedido.cantidad - alias.unidades })
+      } else {
+        errores.push(msj)
+      }
+    }
+  }
+
+  // Modelos del pedido sin ningún SKU aliasado también son faltante a cubrir
+  const deficitModelosSinSku = [...porPedido.entries()]
+    .filter(([clave]) => !porAlias.has(clave))
+    .reduce((s, [, p]) => s + p.cantidad, 0)
+  const deficitTotal = faltantes.reduce((s, f) => s + f.deficit, 0) + deficitModelosSinSku
+
+  for (const f of faltantes) {
+    if (deficitTotal <= totalSinAlias) {
+      warnings.push(
+        `${f.msj} — la diferencia puede estar en los SKUs sin alias (${sinAlias.map(s => s.sku).join(', ')}), verificá a mano`,
       )
+    } else {
+      errores.push(f.msj)
     }
   }
 
