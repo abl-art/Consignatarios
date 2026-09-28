@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { forecastCompras, type FilaForecast, type ItemVentaForecast } from '@/lib/forecast-compras'
+import { marcaDeModelo } from '@/lib/marca'
 import type { ReposicionModelo } from '@/lib/inventario-indicadores'
 import type { MesProyeccionPropia } from '@/lib/actions/proyecciones'
 
@@ -96,12 +97,20 @@ function TablaForecast({ titulo, filas, meses }: { titulo: string; filas: FilaFo
 
 export default function ForecastClient({ celulares, addons, reposiciones, proyeccion }: Props) {
   const [metodo, setMetodo] = useState<Metodo>('hibrido')
+  const [marca, setMarca] = useState('')
 
   const meses = proyeccion.porMetodo[metodo]
   const forecast = useMemo(
     () => forecastCompras(celulares, addons, reposiciones, meses.map((m) => ({ mes: m.mes, unidades: m.unidades }))),
     [celulares, addons, reposiciones, meses]
   )
+
+  // El share % se calcula sobre el mix completo; el filtro solo recorta filas
+  const marcas = useMemo(() => {
+    const set = new Set([...forecast.celulares, ...forecast.addons].map((f) => marcaDeModelo(f.modelo)))
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [forecast])
+  const porMarca = (filas: FilaForecast[]) => (marca ? filas.filter((f) => marcaDeModelo(f.modelo) === marca) : filas)
 
   return (
     <div className="space-y-4">
@@ -124,14 +133,35 @@ export default function ForecastClient({ celulares, addons, reposiciones, proyec
             </button>
           ))}
         </div>
+        <div className="flex gap-1 flex-wrap">
+          <button
+            onClick={() => setMarca('')}
+            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              marca === '' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Todas
+          </button>
+          {marcas.map((m) => (
+            <button
+              key={m}
+              onClick={() => setMarca(marca === m ? '' : m)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                marca === m ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
         <p className="text-xs text-gray-500">
           Run {proyeccion.runMes} · proyección propia:{' '}
           {meses.map((m) => `${etiquetaMes(m)} ${Math.round(m.unidades).toLocaleString('es-AR')}`).join(' · ')}
         </p>
       </div>
 
-      <TablaForecast titulo="Celulares" filas={forecast.celulares} meses={meses} />
-      <TablaForecast titulo="Addons" filas={forecast.addons} meses={meses} />
+      <TablaForecast titulo="Celulares" filas={porMarca(forecast.celulares)} meses={meses} />
+      <TablaForecast titulo="Addons" filas={porMarca(forecast.addons)} meses={meses} />
 
       <p className="text-xs text-gray-400">
         Demanda = venta 30d del modelo × (proyección del mes ÷ {Math.round(forecast.baselineMensual).toLocaleString('es-AR')}{' '}
