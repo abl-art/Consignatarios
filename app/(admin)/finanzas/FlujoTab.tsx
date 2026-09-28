@@ -100,7 +100,7 @@ export default function FlujoTab({ canales, prestamos, limiteDeuda, proyeccionDi
             <p className="text-xs text-gray-400">{cuotasStats.contracargos.toLocaleString('es-AR')} cuotas</p>
           </div>
           <p className="text-sm font-semibold text-red-700 mt-1">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
-          <p className="text-xs text-red-500 mt-1">Contracargos + mora 120+ días + transición 30+ días</p>
+          <p className="text-xs text-red-500 mt-1">Contracargos + mora 90+ días + transición 30+ días</p>
         </div>
       </div>
 

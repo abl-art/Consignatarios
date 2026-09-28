@@ -24,8 +24,7 @@ interface VintageRow {
   amt_mora_1_29: number
   amt_mora_30_59: number
   amt_mora_60_89: number
-  amt_mora_90_119: number
-  amt_incobrable_120_plus: number
+  amt_incobrable_90_plus: number
   amt_recupero_1_29: number
   amt_recupero_30_59: number
   amt_recupero_60_89: number
@@ -36,8 +35,7 @@ interface VintageRow {
   pct_mora_1_29: number
   pct_mora_30_59: number
   pct_mora_60_89: number
-  pct_mora_90_119: number
-  pct_incobrable_120_plus: number
+  pct_incobrable_90_plus: number
   pct_recupero_1_29: number
   pct_recupero_30_59: number
   pct_recupero_60_89: number
@@ -68,8 +66,7 @@ const SEGMENTS = [
   { key: 'pct_mora_1_29', label: 'Mora 1-29', color: '#FCD34D' },
   { key: 'pct_mora_30_59', label: 'Mora 30-59', color: '#F59E0B' },
   { key: 'pct_mora_60_89', label: 'Mora 60-89', color: '#F97316' },
-  { key: 'pct_mora_90_119', label: 'Mora 90-119', color: '#EF4444' },
-  { key: 'pct_incobrable_120_plus', label: 'Incobrable 120+', color: '#991B1B' },
+  { key: 'pct_incobrable_90_plus', label: 'Incobrable 90+', color: '#991B1B' },
   { key: 'pct_recupero_1_29', label: 'Recupero 1-29', color: '#6EE7B7' },
   { key: 'pct_recupero_30_59', label: 'Recupero 30-59', color: '#34D399' },
   { key: 'pct_recupero_60_89', label: 'Recupero 60-89', color: '#059669' },
@@ -87,8 +84,7 @@ export default function VintageTab({ canales, merchants }: Props) {
     pct_mora_1_29: r.pct_mora_1_29,
     pct_mora_30_59: r.pct_mora_30_59,
     pct_mora_60_89: r.pct_mora_60_89,
-    pct_mora_90_119: r.pct_mora_90_119,
-    pct_incobrable_120_plus: r.pct_incobrable_120_plus,
+    pct_incobrable_90_plus: r.pct_incobrable_90_plus,
     pct_recupero_1_29: r.pct_recupero_1_29,
     pct_recupero_30_59: r.pct_recupero_30_59,
     pct_recupero_60_89: r.pct_recupero_60_89,
@@ -124,7 +120,7 @@ export default function VintageTab({ canales, merchants }: Props) {
                 <th className="text-right px-2 py-2 font-semibold text-gray-600 border-b border-gray-200 border-l border-gray-300">Total</th>
                 <th className="text-right px-2 py-2 font-semibold text-green-700 border-b border-gray-200 border-l border-gray-300">En term.</th>
                 <th className="text-right px-2 py-2 font-semibold text-blue-700 border-b border-gray-200 border-l border-gray-300">Por vencer</th>
-                <th colSpan={4} className="text-center px-2 py-2 font-semibold text-orange-700 border-b border-gray-200 border-l border-gray-300">Mora</th>
+                <th colSpan={3} className="text-center px-2 py-2 font-semibold text-orange-700 border-b border-gray-200 border-l border-gray-300">Mora</th>
                 <th className="text-right px-2 py-2 font-semibold text-red-900 border-b border-gray-200 border-l border-gray-300">Incobr.</th>
                 <th colSpan={5} className="text-center px-2 py-2 font-semibold text-emerald-700 border-b border-gray-200 border-l border-gray-300">Recupero</th>
               </tr>
@@ -136,8 +132,7 @@ export default function VintageTab({ canales, merchants }: Props) {
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200 border-l border-gray-300">1-29</th>
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200">30-59</th>
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200">60-89</th>
-                <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200">90-119</th>
-                <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200 border-l border-gray-300">120+</th>
+                <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200 border-l border-gray-300">90+</th>
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200 border-l border-gray-300">1-29</th>
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200">30-59</th>
                 <th className="text-right px-2 py-1 text-[10px] text-gray-500 border-b border-gray-200">60-89</th>
@@ -155,8 +150,7 @@ export default function VintageTab({ canales, merchants }: Props) {
                   <td className="px-2 py-1.5 text-right font-medium text-yellow-600 border-l border-gray-300">{row.pct_mora_1_29.toFixed(2)}%</td>
                   <td className="px-2 py-1.5 text-right font-medium text-amber-600">{row.pct_mora_30_59.toFixed(2)}%</td>
                   <td className="px-2 py-1.5 text-right font-medium text-orange-600">{row.pct_mora_60_89.toFixed(2)}%</td>
-                  <td className="px-2 py-1.5 text-right font-medium text-red-600">{row.pct_mora_90_119.toFixed(2)}%</td>
-                  <td className="px-2 py-1.5 text-right font-bold text-red-900 border-l border-gray-300">{row.pct_incobrable_120_plus.toFixed(2)}%</td>
+                  <td className="px-2 py-1.5 text-right font-bold text-red-900 border-l border-gray-300">{row.pct_incobrable_90_plus.toFixed(2)}%</td>
                   <td className="px-2 py-1.5 text-right font-medium text-emerald-300 border-l border-gray-300">{row.pct_recupero_1_29.toFixed(2)}%</td>
                   <td className="px-2 py-1.5 text-right font-medium text-emerald-400">{row.pct_recupero_30_59.toFixed(2)}%</td>
                   <td className="px-2 py-1.5 text-right font-medium text-emerald-600">{row.pct_recupero_60_89.toFixed(2)}%</td>

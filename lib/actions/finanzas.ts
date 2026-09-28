@@ -10,6 +10,7 @@ import { armarFlujoPorCanal, type FlujoDiario, type FlujoPorCanal, type IncomeRo
 import { sqlFiltrosIndicadores, BLOQUEOS, type Bloqueo, type FiltrosIndicadoresSql } from '@/lib/bloqueo'
 import { fetchSegmentoUserIds } from '@/lib/segmentos'
 import { nombreMerchant, type StoreNombreRow } from '@/lib/merchant-nombre'
+import { DIAS_INCOBRABLE } from '@/lib/incobrabilidad'
 
 export type { FlujoDiario, FlujoPorCanal, CuotasStats }
 
@@ -567,16 +568,16 @@ export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date)::int AS adelantado,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date)::int AS en_termino,
         COUNT(*) FILTER (WHERE i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date)::int AS atrasado,
-        COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120)::int AS mora,
+        COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < ${DIAS_INCOBRABLE})::int AS mora,
         (COUNT(*) FILTER (WHERE o.order_id::text IN (${cbOrderIdsList}))
-         + COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= 120)
+         + COUNT(*) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= ${DIAS_INCOBRABLE})
         )::int AS contracargos,
         COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date < i.installment_due_at::date), 0) AS monto_adelantado,
         COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date = i.installment_due_at::date), 0) AS monto_en_termino,
         COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NOT NULL AND i.installment_collected_at::date > i.installment_due_at::date), 0) AS monto_atrasado,
-        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120), 0) AS monto_mora,
+        COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < ${DIAS_INCOBRABLE}), 0) AS monto_mora,
         (COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text IN (${cbOrderIdsList})), 0)
-         + COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= 120), 0)
+         + COALESCE(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) >= ${DIAS_INCOBRABLE}), 0)
         ) AS monto_contracargos,
         COALESCE(
           SUM(
@@ -589,9 +590,9 @@ export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS
         COALESCE(
           SUM(
             (CURRENT_DATE - i.installment_due_at::date) * i.installment_amount
-          ) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120)
+          ) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < ${DIAS_INCOBRABLE})
           /
-          NULLIF(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < 120), 0),
+          NULLIF(SUM(i.installment_amount) FILTER (WHERE o.order_id::text NOT IN (${cbOrderIdsList}) AND i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL AND (CURRENT_DATE - i.installment_due_at::date) < ${DIAS_INCOBRABLE}), 0),
           0
         ) AS ppp_mora
       FROM gocuotas_installments i
@@ -615,17 +616,8 @@ export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS
     const { fetchContracargos } = await import('@/lib/gocelular')
     const cbData = await fetchContracargos(clientes)
     const montoCBOrdenes = cbData.monto_contracargos // already in pesos, monto total de órdenes con CB
-    const monto120Plus = Number(row.monto_contracargos) - (
-      // monto_contracargos from SQL has both CB cuotas + 120+ cuotas
-      // We need to subtract CB cuotas and keep only 120+ cuotas, then add real CB order amount
-      0 // we'll recalculate below
-    )
-
-    // monto_contracargos from SQL = CB cuotas amount + 120+ non-CB cuotas amount
-    // We need: real CB order amount (from GOcuotas) + 120+ non-CB cuotas amount
-    // The 120+ part is already correct in the SQL, we just need to extract it
-    // Query the 120+ part separately
-    const mora120Res = await client.query<{ monto: string }>(`
+    // Mora incobrable (cuotas no-CB vencidas hace DIAS_INCOBRABLE+ días)
+    const moraIncobrableRes = await client.query<{ monto: string }>(`
       SELECT COALESCE(SUM(i.installment_amount), 0) AS monto
       FROM gocuotas_installments i
       JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
@@ -636,9 +628,9 @@ export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS
         AND i.installment_collected_at IS NULL
         AND i.installment_discarded_at IS NULL
         AND i.installment_due_at::date < CURRENT_DATE
-        AND (CURRENT_DATE - i.installment_due_at::date) >= 120
+        AND (CURRENT_DATE - i.installment_due_at::date) >= ${DIAS_INCOBRABLE}
     `)
-    const montoMora120 = Number(mora120Res.rows[0].monto)
+    const montoMoraIncobrable = Number(moraIncobrableRes.rows[0].monto)
 
     // Equipos en transición 30+ días (sin contracargo, para no duplicar): se
     // castigan TODAS las cuotas pendientes de la orden, vencidas o no
@@ -652,7 +644,7 @@ export async function fetchCuotasStats(clientes: FiltroClientes = CLIENTES_TODOS
         AND i.installment_discarded_at IS NULL
     `)
     const montoTransicion = Number(transicionRes.rows[0].monto)
-    const montoIncobrableTotal = montoCBOrdenes + montoMora120 + montoTransicion
+    const montoIncobrableTotal = montoCBOrdenes + montoMoraIncobrable + montoTransicion
 
     const pct = (n: number) => (total > 0 ? Math.round((n / total) * 10000) / 100 : 0)
 
@@ -1076,8 +1068,7 @@ export interface VintageRow {
   amt_mora_1_29: number
   amt_mora_30_59: number
   amt_mora_60_89: number
-  amt_mora_90_119: number
-  amt_incobrable_120_plus: number
+  amt_incobrable_90_plus: number
   amt_recupero_1_29: number
   amt_recupero_30_59: number
   amt_recupero_60_89: number
@@ -1088,8 +1079,7 @@ export interface VintageRow {
   pct_mora_1_29: number
   pct_mora_30_59: number
   pct_mora_60_89: number
-  pct_mora_90_119: number
-  pct_incobrable_120_plus: number
+  pct_incobrable_90_plus: number
   pct_recupero_1_29: number
   pct_recupero_30_59: number
   pct_recupero_60_89: number
@@ -1125,8 +1115,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
       amt_mora_1_29: string
       amt_mora_30_59: string
       amt_mora_60_89: string
-      amt_mora_90_119: string
-      amt_incobrable_120_plus: string
+      amt_incobrable_90_plus: string
       amt_recupero_1_29: string
       amt_recupero_30_59: string
       amt_recupero_60_89: string
@@ -1160,20 +1149,19 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
           origination_month,
           amount,
           CASE
-            WHEN tiene_contracargo THEN 'INCOBRABLE_120_PLUS'
+            WHEN tiene_contracargo THEN 'INCOBRABLE_90_PLUS'
             WHEN collected_date IS NOT NULL AND collected_date <= due_date THEN 'COBRADA_EN_TERMINO'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 1 AND 29 THEN 'RECUPERO_1_29'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 30 AND 59 THEN 'RECUPERO_30_59'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 60 AND 89 THEN 'RECUPERO_60_89'
             WHEN collected_date IS NOT NULL AND days_late_paid BETWEEN 90 AND 119 THEN 'RECUPERO_90_119'
             WHEN collected_date IS NOT NULL AND days_late_paid >= 120 THEN 'RECUPERO_120_PLUS'
-            WHEN tiene_transicion AND collected_date IS NULL THEN 'INCOBRABLE_120_PLUS'
+            WHEN tiene_transicion AND collected_date IS NULL THEN 'INCOBRABLE_90_PLUS'
             WHEN collected_date IS NULL AND due_date >= CURRENT_DATE THEN 'POR_VENCER'
             WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 1 AND 29 THEN 'MORA_1_29'
             WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 30 AND 59 THEN 'MORA_30_59'
             WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 60 AND 89 THEN 'MORA_60_89'
-            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due BETWEEN 90 AND 119 THEN 'MORA_90_119'
-            WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due >= 120 THEN 'INCOBRABLE_120_PLUS'
+                        WHEN collected_date IS NULL AND due_date < CURRENT_DATE AND days_past_due >= ${DIAS_INCOBRABLE} THEN 'INCOBRABLE_90_PLUS'
             ELSE 'OTRO'
           END AS bucket
         FROM base
@@ -1187,8 +1175,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_1_29'), 0) AS amt_mora_1_29,
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_30_59'), 0) AS amt_mora_30_59,
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_60_89'), 0) AS amt_mora_60_89,
-          COALESCE(SUM(amount) FILTER (WHERE bucket = 'MORA_90_119'), 0) AS amt_mora_90_119,
-          COALESCE(SUM(amount) FILTER (WHERE bucket = 'INCOBRABLE_120_PLUS'), 0) AS amt_incobrable_120_plus,
+                    COALESCE(SUM(amount) FILTER (WHERE bucket = 'INCOBRABLE_90_PLUS'), 0) AS amt_incobrable_90_plus,
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_1_29'), 0) AS amt_recupero_1_29,
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_30_59'), 0) AS amt_recupero_30_59,
           COALESCE(SUM(amount) FILTER (WHERE bucket = 'RECUPERO_60_89'), 0) AS amt_recupero_60_89,
@@ -1211,8 +1198,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
         const amt_mora_1_29 = Number(r.amt_mora_1_29)
         const amt_mora_30_59 = Number(r.amt_mora_30_59)
         const amt_mora_60_89 = Number(r.amt_mora_60_89)
-        const amt_mora_90_119 = Number(r.amt_mora_90_119)
-        const amt_incobrable_120_plus = Number(r.amt_incobrable_120_plus)
+        const amt_incobrable_90_plus = Number(r.amt_incobrable_90_plus)
         const amt_recupero_1_29 = Number(r.amt_recupero_1_29)
         const amt_recupero_30_59 = Number(r.amt_recupero_30_59)
         const amt_recupero_60_89 = Number(r.amt_recupero_60_89)
@@ -1229,8 +1215,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
           amt_mora_1_29,
           amt_mora_30_59,
           amt_mora_60_89,
-          amt_mora_90_119,
-          amt_incobrable_120_plus,
+          amt_incobrable_90_plus,
           amt_recupero_1_29,
           amt_recupero_30_59,
           amt_recupero_60_89,
@@ -1241,8 +1226,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
           pct_mora_1_29: pct(amt_mora_1_29),
           pct_mora_30_59: pct(amt_mora_30_59),
           pct_mora_60_89: pct(amt_mora_60_89),
-          pct_mora_90_119: pct(amt_mora_90_119),
-          pct_incobrable_120_plus: pct(amt_incobrable_120_plus),
+          pct_incobrable_90_plus: pct(amt_incobrable_90_plus),
           pct_recupero_1_29: pct(amt_recupero_1_29),
           pct_recupero_30_59: pct(amt_recupero_30_59),
           pct_recupero_60_89: pct(amt_recupero_60_89),

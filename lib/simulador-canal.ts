@@ -1,7 +1,7 @@
 export interface CohorteVintage {
   origination_month: string // 'YYYY-MM'
   amt_total: number
-  amt_incobrable_120_plus: number
+  amt_incobrable_90_plus: number
   amt_cobrada_en_termino: number
   amt_recupero_1_29: number
   amt_recupero_30_59: number
@@ -18,8 +18,8 @@ export interface DatosCanal {
 }
 
 export interface IncobrabilidadCanalInput {
-  resueltas: number // cuotas de órdenes sanas vencidas hace 120+ días (tuvieron chance de resolverse)
-  mora120: number // de esas, impagas con 120+ días de mora
+  resueltas: number // cuotas de órdenes sanas vencidas hace 90+ días (DIAS_INCOBRABLE) (tuvieron chance de resolverse)
+  moraIncobrable: number // de esas, impagas con 90+ días de mora
   cbTotal: number // total de cuotas de órdenes con contracargo (el CB revierte hasta lo cobrado)
   transTotal: number // total de cuotas de órdenes con equipo en transición 30+
   transNoCobrado: number // de esas, las no cobradas (lo cobrado fue ingreso real de caja)
@@ -33,7 +33,7 @@ export interface IncobrabilidadCanalInput {
 export function incobrabilidadResuelta(d: IncobrabilidadCanalInput): number | null {
   const den = d.resueltas + d.cbTotal + d.transTotal
   if (den <= 0) return null
-  const num = d.mora120 + d.cbTotal + d.transNoCobrado
+  const num = d.moraIncobrable + d.cbTotal + d.transNoCobrado
   return (num / den) * 100
 }
 

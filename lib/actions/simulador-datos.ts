@@ -1,6 +1,7 @@
 'use server'
 
 import { getPool } from '@/lib/db-pool'
+import { DIAS_INCOBRABLE } from '@/lib/incobrabilidad'
 import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS, SQL_IDS_PROPIOS, sqlCondicionClientes, type FiltroClientes } from '@/lib/client-ids'
 import { fetchVintageAnalysis, fetchPDIndicadores, type VintageRow } from '@/lib/actions/finanzas'
 import { fetchOrderIdsConContracargo, fetchOrderIdsTransicion30d } from '@/lib/gocelular'
@@ -41,7 +42,7 @@ async function fetchTicketPromedioTerceros(): Promise<number | null> {
 }
 
 // Incobrabilidad del canal sobre lo RESUELTO: cuotas de órdenes sanas vencidas
-// hace 120+ días, más las órdenes castigadas (contracargo completo; transición
+// hace DIAS_INCOBRABLE+ días, más las órdenes castigadas (contracargo completo; transición
 // solo lo no cobrado — lo ya cobrado fue ingreso real). Regla de Emiliano 10/9.
 async function fetchIncobrabilidadCanal(
   clientes: FiltroClientes,
@@ -59,16 +60,16 @@ async function fetchIncobrabilidadCanal(
   const client = await pool.connect()
   try {
     const res = await client.query<{
-      resueltas: string; mora120: string; cb_total: string; trans_total: string; trans_no_cobrado: string
+      resueltas: string; mora_incobrable: string; cb_total: string; trans_total: string; trans_no_cobrado: string
     }>(`
       WITH base AS (
         SELECT i.installment_amount::float AS amt,
           CASE WHEN o.order_id::text IN (${lista(cbIds)}) THEN 'cb'
                WHEN o.order_id::text IN (${lista(transIds)}) THEN 'trans'
                ELSE 'normal' END AS clase,
-          i.installment_due_at::date < CURRENT_DATE - 120 AS resuelta,
+          i.installment_due_at::date < CURRENT_DATE - ${DIAS_INCOBRABLE} AS resuelta,
           (i.installment_collected_at IS NULL AND i.installment_discarded_at IS NULL
-            AND CURRENT_DATE - i.installment_due_at::date >= 120) AS mora120,
+            AND CURRENT_DATE - i.installment_due_at::date >= ${DIAS_INCOBRABLE}) AS mora_incobrable,
           i.installment_collected_at IS NULL AS no_cobrada
         FROM gocuotas_installments i
         JOIN gocuotas_orders o ON o.order_id::text = i.order_id::text
@@ -78,7 +79,7 @@ async function fetchIncobrabilidadCanal(
       )
       SELECT
         COALESCE(SUM(amt) FILTER (WHERE clase = 'normal' AND resuelta), 0) AS resueltas,
-        COALESCE(SUM(amt) FILTER (WHERE clase = 'normal' AND resuelta AND mora120), 0) AS mora120,
+        COALESCE(SUM(amt) FILTER (WHERE clase = 'normal' AND resuelta AND mora_incobrable), 0) AS mora_incobrable,
         COALESCE(SUM(amt) FILTER (WHERE clase = 'cb'), 0) AS cb_total,
         COALESCE(SUM(amt) FILTER (WHERE clase = 'trans'), 0) AS trans_total,
         COALESCE(SUM(amt) FILTER (WHERE clase = 'trans' AND no_cobrada), 0) AS trans_no_cobrado
@@ -88,7 +89,7 @@ async function fetchIncobrabilidadCanal(
     if (!r) return null
     return incobrabilidadResuelta({
       resueltas: Number(r.resueltas),
-      mora120: Number(r.mora120),
+      moraIncobrable: Number(r.mora_incobrable),
       cbTotal: Number(r.cb_total),
       transTotal: Number(r.trans_total),
       transNoCobrado: Number(r.trans_no_cobrado),

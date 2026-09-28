@@ -166,7 +166,7 @@ export default async function DashboardPage() {
               <p className="text-xl font-bold text-red-700">{contracargos.cantidad}</p>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2">Contracargos + mora 120+ días + equipos en transición 30+ días (misma fuente que Finanzas)</p>
+          <p className="text-xs text-gray-400 mt-2">Contracargos + mora 90+ días + equipos en transición 30+ días (misma fuente que Finanzas)</p>
         </div>
 
         {/* Bloqueados vs Mora */}
