@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchVentasMensuales13m, fetchSerieMensualGocuotas } from '@/lib/gocelular'
 import { clasificarCanal, type ConsignatarioPrefix } from '@/lib/ventas-dia'
+import { prorratearMesActual } from '@/lib/forecast-compras'
 import {
   armarProyVsReal,
   indiceEstacional,
@@ -14,6 +15,7 @@ import {
   ventanaSerie,
   type DimensionProyeccion,
   type FilaProyReal,
+  type MetodoProyeccion,
   type SnapshotProyeccion,
   type VentaMensualDim,
 } from '@/lib/proyeccion-ventas'
@@ -141,6 +143,51 @@ export async function getProyeccionDashboard(): Promise<{ runMes: string; meses:
     porMes.set(f.mes, acc)
   }
   return { runMes: run.run_mes, meses: [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes)).slice(0, 4) }
+}
+
+export interface MesProyeccionPropia {
+  mes: string
+  unidades: number
+  /** true si es el mes en curso prorrateado a los días que faltan */
+  restoDelMes: boolean
+}
+
+/**
+ * Proyección congelada de VENTA PROPIA del último run para el forecast de
+ * compras: el mes en curso prorrateado a los días restantes + los meses
+ * siguientes, por método. Null si no hay runs.
+ */
+export async function getProyeccionPropiaRun(): Promise<{
+  runMes: string
+  porMetodo: Record<MetodoProyeccion, MesProyeccionPropia[]>
+} | null> {
+  const admin = createAdminClient()
+  const { data: run } = await admin
+    .from('proyecciones_runs')
+    .select('run_mes')
+    .order('run_mes', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!run) return null
+
+  const mesActual = mesHoy()
+  const { data: filas } = await admin
+    .from('proyecciones_ventas')
+    .select('metodo, mes, ventas')
+    .eq('run_mes', run.run_mes)
+    .eq('nivel', 'propia')
+    .gte('mes', mesActual)
+    .order('mes')
+  if (!filas || filas.length === 0) return null
+
+  const hoy = new Date().toISOString().slice(0, 10)
+  const porMetodo: Record<MetodoProyeccion, MesProyeccionPropia[]> = { hibrido: [], gocuotas: [] }
+  for (const f of filas) {
+    const restoDelMes = f.mes === mesActual
+    const unidades = restoDelMes ? prorratearMesActual(Number(f.ventas), hoy) : Number(f.ventas)
+    porMetodo[f.metodo as MetodoProyeccion].push({ mes: f.mes, unidades, restoDelMes })
+  }
+  return { runMes: run.run_mes, porMetodo }
 }
 
 /**

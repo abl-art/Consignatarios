@@ -101,6 +101,15 @@ export default async function ComprasPage() {
       color: 'violet',
       iconPath: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
     },
+    {
+      href: '/compras/forecast',
+      title: 'Forecast de Compras',
+      description: 'Compra sugerida por modelo y addon desde la proyección de venta propia',
+      count: '' as const,
+      countLabel: 'proyección propia · 4 meses',
+      color: 'rose',
+      iconPath: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+    },
   ]
 
   const colorClasses: Record<string, { bg: string; text: string; border: string; badge: string }> = {
@@ -109,6 +118,7 @@ export default async function ComprasPage() {
     blue: { bg: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
     orange: { bg: 'bg-orange-600', text: 'text-orange-600', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
     violet: { bg: 'bg-violet-600', text: 'text-violet-600', border: 'border-violet-200', badge: 'bg-violet-100 text-violet-700' },
+    rose: { bg: 'bg-rose-600', text: 'text-rose-600', border: 'border-rose-200', badge: 'bg-rose-100 text-rose-700' },
   }
 
   return (
@@ -116,7 +126,7 @@ export default async function ComprasPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Compras</h1>
       <p className="text-sm text-gray-500 mb-8">Gestión de proveedores, productos y pedidos de compra</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {cards.map((card) => {
           const c = colorClasses[card.color]
           return (
