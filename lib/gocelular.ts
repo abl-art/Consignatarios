@@ -1,4 +1,5 @@
 import { getPool, getGocuotasPool } from './db-pool'
+import type { VentaMensualDim, PuntoMensual } from './proyeccion-ventas'
 import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS, CLIENTES_TODOS, sqlCondicionClientes, type FiltroClientes } from './client-ids'
 
 export { CLIENT_IDS_PROPIOS }
@@ -507,39 +508,60 @@ export async function fetchPendientesPicking(): Promise<{ gocuotas: Record<strin
   }
 }
 
-export interface VentaMensualRaw {
-  mes: string // 'YYYY-MM'
-  store_name: string
-  client_id: string
-  ventas: number
-  monto: number
-}
-
 /**
- * Ventas del año en curso agrupadas por mes y store_name. Misma base que
- * fetchVentasHoy (órdenes creadas, no anuladas) — alimenta la proyección
- * mensual del dashboard.
+ * Ventas mensuales de los últimos 13 meses agrupadas por mes, store y
+ * client (réplica; órdenes creadas, no anuladas) — alimentan la proyección
+ * del dashboard y de /canales/proyeccion en todas sus dimensiones.
  */
-export async function fetchVentasMensualesAnio(): Promise<VentaMensualRaw[]> {
+export async function fetchVentasMensuales13m(): Promise<VentaMensualDim[]> {
   const pool = getPool()
   if (!pool) return []
 
   const client = await pool.connect()
   try {
-    const res = await client.query<{ mes: string; store_name: string; client_id: string; ventas: string; monto: string }>(
-      `SELECT to_char(go.created_at, 'YYYY-MM') AS mes, go.store_name, go.client_id::text, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
+    const res = await client.query<{ mes: string; store_name: string; client_id: string; store_id: string | null; ventas: string; monto: string }>(
+      `SELECT to_char(go.created_at, 'YYYY-MM') AS mes, go.store_name, go.client_id::text, go.store_id::text, COUNT(*)::text AS ventas, COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS monto
        FROM gocuotas_orders go
        WHERE go.order_discarded_at IS NULL
-         AND go.created_at >= date_trunc('year', CURRENT_DATE)
-       GROUP BY 1, go.store_name, go.client_id`
+         AND go.created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '13 months'
+       GROUP BY 1, go.store_name, go.client_id, go.store_id`
     )
     return res.rows.map((r) => ({
       mes: r.mes,
       store_name: r.store_name,
       client_id: r.client_id,
+      store_id: r.store_id,
       ventas: Number(r.ventas),
       monto: Number(r.monto),
     }))
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Serie mensual de órdenes de TODA la plataforma GOcuotas (base directa),
+ * últimos 26 meses — insumo del índice estacional y de los ratios del
+ * método "gocuotas". SOLO la usa el cron mensual de congelado: una única
+ * pasada agregada con timeout, sin exclusiones (regla de la base directa).
+ */
+export async function fetchSerieMensualGocuotas(): Promise<PuntoMensual[]> {
+  const pool = getGocuotasPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    await client.query(`SET statement_timeout = '50s'`)
+    const res = await client.query<{ mes: string; n: string }>(
+      `SELECT to_char(created_at, 'YYYY-MM') AS mes, COUNT(*)::text AS n
+       FROM orders
+       WHERE created_at >= date_trunc('month', now()) - INTERVAL '26 months'
+       GROUP BY 1
+       ORDER BY 1`
+    )
+    // El mes en curso está incompleto: no sirve ni para el índice ni como ratio
+    const mesActual = new Date().toISOString().slice(0, 7)
+    return res.rows.filter((r) => r.mes < mesActual).map((r) => ({ mes: r.mes, n: Number(r.n) }))
   } finally {
     client.release()
   }

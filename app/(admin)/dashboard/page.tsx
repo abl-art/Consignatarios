@@ -4,9 +4,10 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasMensualesAnio, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
 import { resumenAccesorios } from '@/lib/accesorios'
-import { resumenVentasDia, proyectarVentasMensuales } from '@/lib/ventas-dia'
+import { resumenVentasDia } from '@/lib/ventas-dia'
+import { getProyeccionDashboard } from '@/lib/actions/proyecciones'
 import { getMejorPrecio } from '@/lib/actions/compras'
 import { fetchInventarioResumen, type ProductoKey } from '@/lib/actions/inventario-resumen'
 import { fetchCuotasStats } from '@/lib/actions/finanzas'
@@ -339,46 +340,42 @@ const NOMBRES_MES: Record<string, string> = {
 }
 
 async function ProyeccionVentasCard() {
-  const supabase = createClient()
-  const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
-  const prefixes = (consigs ?? [])
-    .filter((c: { store_prefix: string | null }) => c.store_prefix)
-    .map((c: { nombre: string; store_prefix: string | null }) => ({
-      nombre: c.nombre,
-      prefix: c.store_prefix!.toLowerCase(),
-    }))
-
-  let mensuales: Awaited<ReturnType<typeof fetchVentasMensualesAnio>> = []
+  let proyeccion: Awaited<ReturnType<typeof getProyeccionDashboard>> = null
   try {
-    mensuales = await fetchVentasMensualesAnio()
+    proyeccion = await getProyeccionDashboard()
   } catch {
-    // GOcelular no disponible
+    // Supabase no disponible
   }
-  if (mensuales.length === 0) return null
+  if (!proyeccion || proyeccion.meses.length === 0) return null
 
-  const mesActual = new Date().toISOString().slice(0, 7)
-  const p = proyectarVentasMensuales(mensuales, prefixes, mesActual)
-  if (p.proyeccion.length === 0 || p.mesesCerrados === 0) return null
+  const anioActual = new Date().toISOString().slice(0, 4)
+  const etiqueta = (mes: string) => `${NOMBRES_MES[mes.slice(5)]}${mes.slice(0, 4) !== anioActual ? ` ${mes.slice(0, 4)}` : ''}`
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Ventas mensuales proyectadas</h2>
-        <p className="text-sm text-gray-500">
-          Real ene–{NOMBRES_MES[String(p.mesesCerrados).padStart(2, '0')].toLowerCase().slice(0, 3)}: prom. <span className="font-semibold text-gray-700">{Math.round(p.promedioMensualCerrado.ventas)} ventas · {formatearMoneda(Math.round(p.promedioMensualCerrado.monto))}</span> /mes
-        </p>
+        <Link href="/canales/proyeccion" className="text-sm text-magenta-700 hover:underline">
+          Proyectado vs Real →
+        </Link>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {p.proyeccion.map((punto) => (
+        {proyeccion.meses.map((punto) => (
           <div key={punto.mes} className="bg-gray-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-500 mb-1">{NOMBRES_MES[punto.mes.slice(5)]}</p>
-            <p className="text-2xl font-bold text-gray-900">{Math.round(punto.ventas).toLocaleString('es-AR')}</p>
-            <p className="text-xs text-gray-400">ventas</p>
-            <p className="text-sm font-semibold text-magenta-700 mt-1">{formatearMoneda(Math.round(punto.monto))}</p>
+            <p className="text-sm text-gray-500 mb-1">{etiqueta(punto.mes)}</p>
+            <p className="text-2xl font-bold text-gray-900">{Math.round(punto.hibrido.ventas).toLocaleString('es-AR')}</p>
+            <p className="text-sm font-semibold text-magenta-700">{formatearMoneda(Math.round(punto.hibrido.monto))}</p>
+            {punto.gocuotas && (
+              <p className="text-xs text-gray-400 mt-1">
+                s/GOcuotas: {Math.round(punto.gocuotas.ventas).toLocaleString('es-AR')} · {formatearMoneda(Math.round(punto.gocuotas.monto))}
+              </p>
+            )}
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mt-3">Tendencia lineal sobre los meses cerrados del año · sin consignatarios</p>
+      <p className="text-xs text-gray-400 mt-3">
+        Grande: tendencia propia × estacionalidad GOcuotas · gris: creciendo al ritmo de GOcuotas del año pasado · congelado el 1° de cada mes · sin consignatarios
+      </p>
     </div>
   )
 }

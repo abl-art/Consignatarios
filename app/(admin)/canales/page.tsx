@@ -32,11 +32,11 @@ const canales = [
     iconPath: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
   },
   {
-    href: '/consignatarios',
-    title: 'Consignatarios',
-    description: 'Stock en consignación en locales de terceros',
+    href: '/canales/proyeccion',
+    title: 'Proyección de Ventas',
+    description: 'Proyectado vs Real por canal — tendencia propia y estacionalidad GOcuotas',
     color: 'amber',
-    iconPath: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z',
+    iconPath: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   },
   {
     href: '/canales/lista-precios',
