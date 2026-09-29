@@ -105,6 +105,23 @@ export async function GET(request: NextRequest) {
       .update({ analisis, estado: 'listo', updated_at: new Date().toISOString() })
       .eq('id', id)
 
+    // Los puntajes del cuadro combinan CV + entrevista: aplicar los ajustes
+    // que la entrevista justifica (el admin puede retocarlos a mano después)
+    if (analisis.scores_sugeridos && Object.keys(analisis.scores_sugeridos).length > 0) {
+      const claves = new Set(criterios.map((c) => c.clave))
+      const ajustes = Object.fromEntries(
+        Object.entries(analisis.scores_sugeridos).filter(
+          ([k, v]) => claves.has(k) && v >= 1 && v <= 5
+        )
+      )
+      if (Object.keys(ajustes).length > 0) {
+        await supabase
+          .from('rec_candidatos')
+          .update({ scores: { ...candidato.scores, ...ajustes } })
+          .eq('id', fila.candidato_id)
+      }
+    }
+
     return NextResponse.json({ estado: 'listo', analisis })
   } catch (err: unknown) {
     console.error('Error en /api/reclutamiento/entrevista/estado:', err)

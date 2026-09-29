@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { setAssessment, type BusquedaCompleta, type CandidatoRow } from '@/lib/actions/reclutamiento'
-import type { Assessment } from '@/lib/reclutamiento'
 
 const COLOR_SCORE: Record<number, string> = {
   5: 'bg-green-800',
@@ -31,34 +30,43 @@ function badgeEntrevista(c: CandidatoRow): { texto: string; clase: string } {
   return { texto: veredicto ? `✓ ${veredicto}` : '✓ analizada', clase: 'bg-green-100 text-green-800' }
 }
 
-const ASSESS_CICLO: Assessment[] = ['pendiente', 'pasa', 'no_pasa']
-const ASSESS_UI: Record<Assessment, { texto: string; clase: string }> = {
-  pendiente: { texto: 'Pendiente', clase: 'bg-gray-100 text-gray-600 border-transparent' },
-  pasa: { texto: '✓ Pasa', clase: 'bg-green-100 text-green-800 border-green-600' },
-  no_pasa: { texto: '✗ No pasa', clase: 'bg-red-100 text-red-700 border-red-600' },
-}
-
-export default function CuadroComparativo({ busqueda }: { busqueda: BusquedaCompleta }) {
+// Cuadro de una etapa del pipeline. El checkbox de la última columna promueve
+// al candidato a la etapa Assessment (o lo devuelve a Entrevista si se destilda).
+export default function CuadroComparativo({
+  busqueda,
+  candidatos,
+}: {
+  busqueda: BusquedaCompleta
+  candidatos: CandidatoRow[]
+}) {
   const router = useRouter()
   const [cambiando, setCambiando] = useState<string | null>(null)
 
-  async function ciclarAssessment(c: CandidatoRow) {
-    const siguiente = ASSESS_CICLO[(ASSESS_CICLO.indexOf(c.assessment) + 1) % ASSESS_CICLO.length]
+  async function toggleAssessment(c: CandidatoRow) {
     setCambiando(c.id)
     try {
-      await setAssessment(c.id, siguiente)
+      await setAssessment(c.id, c.assessment === 'pasa' ? 'pendiente' : 'pasa')
       router.refresh()
     } finally {
       setCambiando(null)
     }
   }
 
-  const total = (c: CandidatoRow) => Object.values(c.scores).reduce((a, b) => a + b, 0)
+  const total = (c: CandidatoRow) =>
+    busqueda.criterios.reduce((a, cr) => a + (c.scores[cr.clave] || 0), 0)
   const maxTotal = busqueda.criterios.length * 5
+
+  if (candidatos.length === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-sm text-gray-500 mb-6">
+        No hay candidatos en esta etapa.
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-6">
-      <table className="w-full text-sm min-w-[1000px]">
+      <table className="w-full text-sm min-w-[900px]">
         <thead>
           <tr className="bg-indigo-50 text-xs uppercase tracking-wide text-gray-600">
             <th className="text-left px-4 py-3">Candidato/a</th>
@@ -70,14 +78,13 @@ export default function CuadroComparativo({ busqueda }: { busqueda: BusquedaComp
             ))}
             <th className="px-2 py-3">Total /{maxTotal}</th>
             <th className="px-2 py-3">Entrevista</th>
-            <th className="px-2 py-3">Assessment</th>
             <th className="px-2 py-3">Arquetipo</th>
+            <th className="px-2 py-3">Pasa a Assessment</th>
           </tr>
         </thead>
         <tbody>
-          {busqueda.candidatos.map((c) => {
+          {candidatos.map((c) => {
             const ent = badgeEntrevista(c)
-            const ass = ASSESS_UI[c.assessment]
             return (
               <tr key={c.id} className="border-t border-gray-100 text-center">
                 <td className="text-left px-4 py-2.5 font-semibold">
@@ -96,25 +103,30 @@ export default function CuadroComparativo({ busqueda }: { busqueda: BusquedaComp
                     {ent.texto}
                   </span>
                 </td>
-                <td className="px-2 py-2.5">
-                  <button
-                    onClick={() => ciclarAssessment(c)}
-                    disabled={cambiando === c.id}
-                    className={`text-xs font-bold rounded-full px-3 py-1 border ${ass.clase} disabled:opacity-50`}
-                    title="Clic para cambiar: Pendiente → Pasa → No pasa"
-                  >
-                    {cambiando === c.id ? '…' : ass.texto}
-                  </button>
-                </td>
                 <td className="px-2 py-2.5 text-gray-600">{c.arquetipo || '—'}</td>
+                <td className="px-2 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={c.assessment === 'pasa'}
+                    disabled={cambiando === c.id}
+                    onChange={() => toggleAssessment(c)}
+                    className="w-5 h-5 accent-indigo-700 cursor-pointer"
+                    title={
+                      c.assessment === 'pasa'
+                        ? 'Destildar para devolverlo a la etapa Entrevista'
+                        : 'Tildar para pasarlo a la etapa Assessment'
+                    }
+                  />
+                </td>
               </tr>
             )
           })}
         </tbody>
       </table>
       <p className="text-xs text-gray-400 px-4 py-2 border-t border-gray-100">
-        * criterios prioritarios · puntajes 1-5 generados por IA desde CV + entrevista, editables en la
-        página de cada candidato · la columna Assessment marca quién pasa a la etapa siguiente
+        * criterios prioritarios · puntajes 1-5 combinando CV + entrevista (la entrevista ajusta los
+        puntajes sola al analizarse; también podés retocarlos en la página del candidato) · tildá la
+        última columna para pasar al candidato a la etapa Assessment
       </p>
     </div>
   )

@@ -22,9 +22,7 @@ const CRITERIOS = [
   { clave: 'vision_negocios', nombre: 'Visión de negocios', prioritario: true },
   { clave: 'procesos', nombre: 'Procesos', prioritario: true },
   { clave: 'resolucion_problemas', nombre: 'Resolución de problemas', prioritario: true },
-  { clave: 'nativo_digital', nombre: 'Nativo digital', prioritario: true },
   { clave: 'data_driven', nombre: 'Data driven', prioritario: false },
-  { clave: 'negociacion', nombre: 'Negociación / comercial', prioritario: false },
   { clave: 'liderazgo', nombre: 'Liderazgo', prioritario: false },
 ]
 
