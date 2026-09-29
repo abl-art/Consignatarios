@@ -19,6 +19,7 @@ const navItems: AdminNavItem[] = [
   { href: '/sync', label: 'Sincronización', icon: 'sync' },
   { href: '/documentacion', label: 'Documentación', icon: 'documento' },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
+  { href: '/reclutamiento', label: 'Reclutamiento', icon: 'consignatarios' },
   { href: '/knox-guard', label: 'Knox Guard', icon: 'diferencias' },
   { href: '/grupo-go', label: 'Grupo GO', icon: 'dashboard' },
 ]
