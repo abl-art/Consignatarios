@@ -54,6 +54,16 @@ export function extraerDriveFileId(link: string): string | null {
   return null
 }
 
+// claude-opus-5 devuelve bloques thinking antes del texto: juntar SOLO los text.
+export function textoDeClaude(content: { type: string; text?: string }[]): string {
+  const texto = content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text || '')
+    .join('')
+  if (!texto.trim()) throw new Error('Claude devolvió una respuesta vacía')
+  return texto
+}
+
 // Claude a veces envuelve el JSON en fences aunque se le pida que no.
 export function parseJsonDeClaude<T>(texto: string): T {
   const limpio = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()

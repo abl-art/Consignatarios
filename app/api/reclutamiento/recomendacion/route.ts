@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { promptRecomendacion, type AnalisisEntrevista, type Criterio } from '@/lib/reclutamiento'
+import { textoDeClaude, promptRecomendacion, type AnalisisEntrevista, type Criterio } from '@/lib/reclutamiento'
 
 export const maxDuration = 120
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         },
       ],
     })
-    const recomendacion = response.content[0].type === 'text' ? response.content[0].text : ''
+    const recomendacion = textoDeClaude(response.content)
 
     await supabase
       .from('rec_busquedas')

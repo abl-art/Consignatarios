@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { parseJsonDeClaude, promptFichaCV, type Criterio, type FichaCandidato } from '@/lib/reclutamiento'
+import { parseJsonDeClaude, textoDeClaude, promptFichaCV, type Criterio, type FichaCandidato } from '@/lib/reclutamiento'
 
 export const maxDuration = 120
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         },
       ],
     })
-    const texto = response.content[0].type === 'text' ? response.content[0].text : ''
+    const texto = textoDeClaude(response.content)
     const ficha = parseJsonDeClaude<FichaCandidato>(texto)
 
     const cvPath = `${busquedaId}/${crypto.randomUUID()}.pdf`

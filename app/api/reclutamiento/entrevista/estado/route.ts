@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   parseJsonDeClaude,
+  textoDeClaude,
   promptAnalisisEntrevista,
   type AnalisisEntrevista,
   type Criterio,
@@ -96,7 +97,7 @@ export async function GET(request: NextRequest) {
         },
       ],
     })
-    const texto = response.content[0].type === 'text' ? response.content[0].text : ''
+    const texto = textoDeClaude(response.content)
     const analisis = parseJsonDeClaude<AnalisisEntrevista & { scores_sugeridos?: Record<string, number> }>(texto)
 
     await supabase
