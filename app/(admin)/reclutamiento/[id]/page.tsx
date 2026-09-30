@@ -15,8 +15,9 @@ export default async function BusquedaPage({ params }: { params: { id: string } 
   const busqueda = await getBusqueda(params.id)
   if (!busqueda) notFound()
 
-  const enEntrevista = busqueda.candidatos.filter((c) => c.assessment !== 'pasa')
+  const enEntrevista = busqueda.candidatos.filter((c) => c.assessment === 'pendiente')
   const enAssessment = busqueda.candidatos.filter((c) => c.assessment === 'pasa')
+  const rechazados = busqueda.candidatos.filter((c) => c.assessment === 'no_pasa')
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -67,6 +68,20 @@ export default async function BusquedaPage({ params }: { params: { id: string } 
                     resolver. Por ahora esta pestaña agrupa a los candidatos promovidos; destildá el
                     checkbox para devolver a alguien a Entrevista.
                   </div>
+                </>
+              ),
+            },
+            {
+              id: 'rechazados',
+              label: `Rechazados (${rechazados.length})`,
+              content: (
+                <>
+                  <CuadroComparativo busqueda={busqueda} candidatos={rechazados} />
+                  <p className="text-xs text-gray-400">
+                    Candidatos marcados como &quot;No sigue&quot;. Destildá el checkbox para
+                    devolverlos a la etapa Entrevista — no se borra nada, la ficha y las entrevistas
+                    quedan guardadas.
+                  </p>
                 </>
               ),
             },

@@ -42,10 +42,11 @@ export default function CuadroComparativo({
   const router = useRouter()
   const [cambiando, setCambiando] = useState<string | null>(null)
 
-  async function toggleAssessment(c: CandidatoRow) {
+  // 'pasa' y 'no_pasa' son excluyentes: tildar uno destilda el otro
+  async function toggle(c: CandidatoRow, objetivo: 'pasa' | 'no_pasa') {
     setCambiando(c.id)
     try {
-      await setAssessment(c.id, c.assessment === 'pasa' ? 'pendiente' : 'pasa')
+      await setAssessment(c.id, c.assessment === objetivo ? 'pendiente' : objetivo)
       router.refresh()
     } finally {
       setCambiando(null)
@@ -80,6 +81,7 @@ export default function CuadroComparativo({
             <th className="px-2 py-3">Entrevista</th>
             <th className="px-2 py-3">Arquetipo</th>
             <th className="px-2 py-3">Pasa a Assessment</th>
+            <th className="px-2 py-3">No sigue</th>
           </tr>
         </thead>
         <tbody>
@@ -109,12 +111,26 @@ export default function CuadroComparativo({
                     type="checkbox"
                     checked={c.assessment === 'pasa'}
                     disabled={cambiando === c.id}
-                    onChange={() => toggleAssessment(c)}
+                    onChange={() => toggle(c, 'pasa')}
                     className="w-5 h-5 accent-indigo-700 cursor-pointer"
                     title={
                       c.assessment === 'pasa'
                         ? 'Destildar para devolverlo a la etapa Entrevista'
                         : 'Tildar para pasarlo a la etapa Assessment'
+                    }
+                  />
+                </td>
+                <td className="px-2 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={c.assessment === 'no_pasa'}
+                    disabled={cambiando === c.id}
+                    onChange={() => toggle(c, 'no_pasa')}
+                    className="w-5 h-5 accent-red-600 cursor-pointer"
+                    title={
+                      c.assessment === 'no_pasa'
+                        ? 'Destildar para devolverlo a la etapa Entrevista'
+                        : 'Tildar para marcarlo como rechazado'
                     }
                   />
                 </td>
@@ -125,8 +141,8 @@ export default function CuadroComparativo({
       </table>
       <p className="text-xs text-gray-400 px-4 py-2 border-t border-gray-100">
         * criterios prioritarios · puntajes 1-5 combinando CV + entrevista (la entrevista ajusta los
-        puntajes sola al analizarse; también podés retocarlos en la página del candidato) · tildá la
-        última columna para pasar al candidato a la etapa Assessment
+        puntajes sola al analizarse; también podés retocarlos en la página del candidato) · tildá
+        &quot;Pasa a Assessment&quot; o &quot;No sigue&quot; para mover al candidato de etapa (son excluyentes)
       </p>
     </div>
   )
