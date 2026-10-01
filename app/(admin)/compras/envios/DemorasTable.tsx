@@ -24,20 +24,18 @@ function TrustonicChip({ status, updatedAt }: { status: string | null; updatedAt
     : s === 'ready_for_use' ? 'bg-amber-50 text-amber-700 border-amber-200'
     : 'bg-gray-50 text-gray-600 border-gray-200'
   const emoji = s === 'active' ? '⚠️' : s === 'locked' ? '🔒' : ''
+  // La fecha del dato va solo en el tooltip (pedido de Emiliano: chip chico);
+  // el * marca dato con más de 3 días — pasar el mouse para ver de cuándo es
   const diasDato = updatedAt ? Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000) : null
+  const viejo = diasDato !== null && diasDato > 3
   return (
-    <span className="inline-flex flex-col items-start">
-      <span className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${cls}`}>
-        {emoji && `${emoji} `}{status}
-      </span>
-      {updatedAt && (
-        <span
-          className={`text-[10px] mt-0.5 ${diasDato !== null && diasDato > 3 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}
-          title="Fecha del dato en la réplica de GOcelular — si es viejo, verificá en la consola de Trustonic"
-        >
-          dato del {fecha(updatedAt)}
-        </span>
-      )}
+    <span
+      className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${cls}`}
+      title={updatedAt
+        ? `Dato de la réplica del ${new Date(updatedAt).toLocaleDateString('es-AR')}${viejo ? ' — VIEJO, verificar en la consola de Trustonic' : ''}`
+        : 'Réplica de GOcelular'}
+    >
+      {emoji && `${emoji} `}{status}{viejo && <span className="font-bold">*</span>}
     </span>
   )
 }
