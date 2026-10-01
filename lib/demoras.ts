@@ -38,6 +38,28 @@ export interface DemoraEntrega {
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
+// Andreani no siempre emite EnvioEntregado: hay entregas registradas solo en la
+// descripción de una Visita ("Entregado", "Entregado por Mostrador"). Ojo con
+// "No entregado", que es lo contrario.
+function descripcionDiceEntregado(descripcion: string | undefined): boolean {
+  if (!descripcion) return false
+  return /entregado/i.test(descripcion) && !/no entregado/i.test(descripcion)
+}
+
+// Envíos en ciclo de rendición: el paquete está volviendo (o volvió) al
+// depósito — ya no es una entrega demorada a gestionar.
+const EVENTOS_RENDICION = new Set(['EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'])
+
+export function envioResuelto(eventos: TraceEvento[]): boolean {
+  return eventos.some(
+    e =>
+      e.evento === 'EnvioEntregado' ||
+      e.evento === 'SolicitudDeRescate' ||
+      EVENTOS_RENDICION.has(e.evento) ||
+      descripcionDiceEntregado(e.descripcion)
+  )
+}
+
 export function umbralDias(metodo: MetodoEntrega): number {
   return metodo === 'sucursal' ? UMBRAL_SUCURSAL_DIAS : UMBRAL_DOMICILIO_DIAS
 }
@@ -61,7 +83,7 @@ export function armarDemoras(
     if (r.metodo !== 'domicilio' && r.metodo !== 'sucursal') continue
     if (r.tracking && excluirTrackings.has(r.tracking)) continue
     const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
-    if (eventos.some(e => e.evento === 'EnvioEntregado' || e.evento === 'SolicitudDeRescate')) continue
+    if (envioResuelto(eventos)) continue
     const metodo = r.metodo
     const diasDemora = diasEntre(r.confirmadaAt, ahora)
     if (diasDemora <= umbralDias(metodo)) continue

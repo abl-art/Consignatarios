@@ -46,6 +46,19 @@ describe('armarDemoras', () => {
     expect(demoras.map(d => d.orderNumber)).toEqual(['QUEDA'])
   })
 
+  it('excluye entregas registradas solo en la descripción y envíos en rendición', () => {
+    const filas = [
+      raw({ orderNumber: 'VISITA-ENTREGADO', traces: [{ evento: 'Visita', fecha: '2026-09-22T10:00:00Z', descripcion: 'Entregado / Entregado por Mostrador' }] }),
+      raw({ orderNumber: 'RECTIF-ENTREGADO', traces: [{ evento: 'RectificacionDeMotivo', fecha: '2026-09-22T10:00:00Z', descripcion: 'Entregado' }] }),
+      raw({ orderNumber: 'RENDIDO', traces: [{ evento: 'EnvioRendido', fecha: '2026-09-22T10:00:00Z' }] }),
+      raw({ orderNumber: 'EN-RENDICION', traces: [{ evento: 'InicioCicloDeRendicion', fecha: '2026-09-22T10:00:00Z' }] }),
+      // "No entregado" NO es una entrega: tiene que quedar en la lista
+      raw({ orderNumber: 'NO-ENTREGADO', traces: [{ evento: 'Visita', fecha: '2026-09-22T10:00:00Z', descripcion: 'No entregado / Ausente' }] }),
+    ]
+    const demoras = armarDemoras(filas, AHORA)
+    expect(demoras.map(d => d.orderNumber)).toEqual(['NO-ENTREGADO'])
+  })
+
   it('calcula días, último evento, movimiento y normaliza cliente', () => {
     const [d] = armarDemoras([raw({})], AHORA)
     expect(d.diasDemora).toBe(11)

@@ -319,7 +319,11 @@ export async function fetchDemorasEntrega(
            SELECT 1 FROM jsonb_array_elements(s.traces) t
            WHERE t->>'evento' ILIKE '%siniestr%'
               OR t->>'descripcion' ILIKE '%siniestr%'
-              OR t->>'descripcion' ILIKE '%extrav%')
+              OR t->>'descripcion' ILIKE '%extrav%'
+              -- entregas registradas solo en la descripción (Visita → "Entregado")
+              OR (t->>'descripcion' ~* 'entregado' AND t->>'descripcion' !~* 'no entregado')
+              -- ciclo de rendición: el paquete vuelve al depósito, ya no es demora
+              OR t->>'evento' IN ('EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'))
          AND so.paid_at IS NOT NULL
          AND ((so.shipping_method = 'domicilio' AND so.paid_at < now() - interval '7 days')
            OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))`
