@@ -4,7 +4,7 @@
 
 import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { SQL_IDS_PROPIOS } from '@/lib/client-ids'
+import { CLIENT_IDS_PROPIOS, sqlCondicionClientes } from '@/lib/client-ids'
 import {
   armarEscenarios,
   armarRankingConPlan,
@@ -21,7 +21,18 @@ const SHARE_FIJO_DESDE = '2026-07-01'
 const SHARE_FIJO_HASTA = '2026-10-01'
 const ACUERDO_DESDE = '2026-10-01'
 
+export type CanalPartner = 'total' | 'propia' | 'terceros'
+
+// Condición de canal sobre la RÉPLICA (universo GOcelular — notIn permitido acá)
+function condCanal(canal: CanalPartner): string {
+  if (canal === 'total') return ''
+  const filtro = canal === 'propia' ? CLIENT_IDS_PROPIOS : { notIn: CLIENT_IDS_PROPIOS }
+  const cond = sqlCondicionClientes(filtro, 'o.client_id')
+  return cond ? `AND ${cond}` : ''
+}
+
 export interface DatosPartnerSamsung {
+  canal: CanalPartner
   mesActual: string
   runMes: string
   shareFijo: number
@@ -32,9 +43,10 @@ export interface DatosPartnerSamsung {
   ranking: ModeloRanking[]
 }
 
-export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | null> {
+export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Promise<DatosPartnerSamsung | null> {
   const pool = getPool()
   if (!pool) return null
+  const filtroCanal = condCanal(canal)
   const client = await pool.connect()
   try {
     const [histRes, actualRes, rankRes] = await Promise.all([
@@ -47,8 +59,7 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
          LEFT JOIN LATERAL (
            SELECT MIN(brand) AS marca FROM devices WHERE devices.order_id = o.order_id
          ) d ON true
-         WHERE o.client_id::text IN (${SQL_IDS_PROPIOS})
-           AND o.order_discarded_at IS NULL
+         WHERE o.order_discarded_at IS NULL ${filtroCanal}
            AND o.created_at >= '2026-06-01' AND o.created_at < '${SHARE_FIJO_HASTA}'
          GROUP BY 1 ORDER BY 1`
       ),
@@ -60,8 +71,7 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
          LEFT JOIN LATERAL (
            SELECT MIN(brand) AS marca FROM devices WHERE devices.order_id = o.order_id
          ) d ON true
-         WHERE o.client_id::text IN (${SQL_IDS_PROPIOS})
-           AND o.order_discarded_at IS NULL
+         WHERE o.order_discarded_at IS NULL ${filtroCanal}
            AND o.created_at >= '${ACUERDO_DESDE}'`
       ),
       // Ranking de modelos Samsung en venta propia, últimos 90 días
@@ -69,8 +79,7 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
         `SELECT d.model, count(*)::text AS u
          FROM devices d
          JOIN gocuotas_orders o ON o.order_id = d.order_id
-         WHERE d.brand ILIKE '%samsung%'
-           AND o.client_id::text IN (${SQL_IDS_PROPIOS})
+         WHERE d.brand ILIKE '%samsung%' ${filtroCanal}
            AND o.order_discarded_at IS NULL
            AND o.created_at >= now() - interval '90 days'
          GROUP BY 1`
@@ -103,7 +112,7 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
       .from('proyecciones_ventas')
       .select('mes, metodo, ventas')
       .eq('run_mes', runMes)
-      .eq('nivel', 'propia')
+      .eq('nivel', canal)
       .order('mes')
     const porMes = new Map<string, MesProyeccion>()
     for (const p of proy ?? []) {
@@ -128,6 +137,7 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
     )
 
     return {
+      canal,
       mesActual,
       runMes,
       shareFijo,
@@ -140,4 +150,16 @@ export async function getDatosPartnerSamsung(): Promise<DatosPartnerSamsung | nu
   } finally {
     client.release()
   }
+}
+
+// Los tres canales en paralelo para las píldoras del link (misma UX que
+// /canales/proyeccion). El acuerdo aplica a venta propia; total y terceros
+// son contexto.
+export async function getDatosPartnerSamsungTodos(): Promise<Record<CanalPartner, DatosPartnerSamsung | null>> {
+  const [total, propia, terceros] = await Promise.all([
+    getDatosPartnerSamsung('total'),
+    getDatosPartnerSamsung('propia'),
+    getDatosPartnerSamsung('terceros'),
+  ])
+  return { total, propia, terceros }
 }

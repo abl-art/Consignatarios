@@ -11,7 +11,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { DatosPartnerSamsung } from '@/lib/actions/partner-samsung'
+import { useState } from 'react'
+import CanalPills, { type Canal } from '@/app/(admin)/finanzas/CanalPills'
+import type { CanalPartner, DatosPartnerSamsung } from '@/lib/actions/partner-samsung'
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -30,7 +32,23 @@ function rango(a: number, b: number): string {
   return `${lo.toLocaleString('es-AR')} – ${hi.toLocaleString('es-AR')}`
 }
 
-export default function SamsungClient({ datos }: { datos: DatosPartnerSamsung }) {
+const NOMBRE_CANAL: Record<CanalPartner, string> = {
+  total: 'venta total',
+  propia: 'tienda propia',
+  terceros: 'venta de terceros',
+}
+
+export default function SamsungClient({ datos: todos }: { datos: Record<CanalPartner, DatosPartnerSamsung | null> }) {
+  // El acuerdo aplica a la venta propia: es el canal por defecto
+  const [canal, setCanal] = useState<Canal>('propia')
+  const datos = todos[canal]
+  if (!datos) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+        Sin datos para este canal.
+      </div>
+    )
+  }
   const { escenarios, ranking, historico, shareFijo, shareActual, muestraActual } = datos
 
   // Gráfico: real Samsung (contexto jun-sep) + proyección en dos escenarios
@@ -56,13 +74,16 @@ export default function SamsungClient({ datos }: { datos: DatosPartnerSamsung })
         <div className="max-w-5xl mx-auto">
           <h1 className="text-xl font-bold">GOcelular · Plan Samsung</h1>
           <p className="text-sm text-blue-200">
-            Proyección de unidades Samsung en la tienda propia — acuerdo vigente desde el 1/10/2026.
+            Proyección de unidades Samsung en {NOMBRE_CANAL[canal]} — acuerdo vigente desde el 1/10/2026.
             Actualizado en cada visita con las ventas reales.
           </p>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <div className="mb-4">
+          <CanalPills canal={canal} onChange={setCanal} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Share hasta el 30/9 (jul-sep)</p>

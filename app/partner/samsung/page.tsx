@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
-import { getDatosPartnerSamsung } from '@/lib/actions/partner-samsung'
+import { getDatosPartnerSamsungTodos } from '@/lib/actions/partner-samsung'
 import SamsungClient from './SamsungClient'
 
 const TOKEN = 'samsung2026go'
@@ -17,8 +17,8 @@ export default async function PartnerSamsungPage({
 }) {
   if (searchParams.token !== TOKEN) notFound()
 
-  const datos = await getDatosPartnerSamsung()
-  if (!datos) {
+  const datos = await getDatosPartnerSamsungTodos()
+  if (!datos.propia && !datos.total) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
         Datos no disponibles en este momento — reintentá en unos minutos.
