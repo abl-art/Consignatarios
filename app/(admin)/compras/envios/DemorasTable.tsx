@@ -90,10 +90,12 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
   return (
     <div>
       <p className="text-xs text-gray-500 max-w-3xl mb-4">
-        Órdenes confirmadas y despachadas que Andreani todavía no marcó como entregadas: domicilio con
-        más de {UMBRAL_DOMICILIO_DIAS} días desde la confirmación, sucursal con más de {UMBRAL_SUCURSAL_DIAS}.
-        No incluye lo que ya está en Rescates ni en Siniestros. &quot;Pedir rescate&quot; lo carga con
-        motivo No Entregado y lo mueve a la pestaña Rescates.
+        Órdenes activas y despachadas que Andreani todavía no marcó como entregadas: domicilio con más
+        de {UMBRAL_DOMICILIO_DIAS} días, sucursal con más de {UMBRAL_SUCURSAL_DIAS}, contados <b>desde la
+        creación del tracking en Andreani</b> (la demora de entrega es de Andreani). La columna Picking
+        mide aparte los días entre la confirmación de la orden y la creación del tracking (esa demora es
+        nuestra). No incluye órdenes anuladas ni lo que ya está en Rescates o Siniestros.
+        &quot;Pedir rescate&quot; lo carga con motivo No Entregado y lo mueve a la pestaña Rescates.
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -124,7 +126,9 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
               <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Entrega</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Confirmada</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días desde la confirmación de la orden">Días</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Creación del tracking en Andreani (primer evento del trace)">Tracking creado</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días entre la confirmación de la orden y la creación del tracking — demora de picking, nuestra">Picking</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días desde la creación del tracking sin entrega — demora de Andreani">Días</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento Andreani</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
@@ -157,6 +161,10 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fecha(d.confirmadaAt)}</td>
+                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fecha(d.trackingCreadoAt)}</td>
+                <td className={`px-4 py-3 tabular-nums ${d.diasPicking > 3 ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
+                  {d.diasPicking}
+                </td>
                 <td className={`px-4 py-3 font-bold tabular-nums ${d.diasDemora > 21 ? 'text-red-700' : 'text-gray-900'}`}>
                   {d.diasDemora}
                 </td>

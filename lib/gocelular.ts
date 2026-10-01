@@ -305,6 +305,7 @@ export async function fetchDemorasEntrega(
               so.customer_phone AS "clienteTelefono", so.product_name AS producto,
               so.shipping_city AS ciudad, so.shipping_province AS provincia,
               so.shipping_method AS metodo, so.paid_at::text AS "confirmadaAt",
+              s.created_at::text AS "envioCreadoAt",
               s.tracking_number AS tracking, s.traces,
               d.trustonic_status::text AS "trustonicStatus",
               go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
@@ -327,8 +328,13 @@ export async function fetchDemorasEntrega(
               -- ciclo de rendición: el paquete vuelve al depósito, ya no es demora
               OR t->>'evento' IN ('EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'))
          AND so.paid_at IS NOT NULL
+         -- Prefiltro (superset): el umbral fino corre desde la creación del tracking
+         -- y lo aplica armarDemoras; paid_at siempre es anterior, así que esto no recorta de más
          AND ((so.shipping_method = 'domicilio' AND so.paid_at < now() - interval '7 days')
            OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))
+         -- Orden anulada en GOcuotas: el envío nunca va a ingresar, no es demora
+         AND (go.order_id IS NULL
+           OR (go.order_discarded_at IS NULL AND COALESCE(go.order_status, '') NOT IN ('discarded', 'cancel')))
          -- Tracking "API…" = identificador provisorio de la API de Andreani; si la
          -- orden tiene otro envío con tracking real, el API es un duplicado huérfano
          AND NOT (s.tracking_number LIKE 'API%' AND EXISTS (

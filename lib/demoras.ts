@@ -14,6 +14,7 @@ export type MetodoEntrega = 'domicilio' | 'sucursal'
 export interface DemoraRaw extends Omit<RescateRaw, 'traces'> {
   metodo: string | null
   confirmadaAt: string | null // store_orders.paid_at
+  envioCreadoAt: string | null // shipments.created_at (fallback si no hay traces)
   trustonicStatus: string | null // devices.trustonic_status vía IMEI del envío
   traces: TraceEvento[]
 }
@@ -32,7 +33,12 @@ export interface DemoraEntrega {
   trustonicStatus: string | null
   metodo: MetodoEntrega
   confirmadaAt: string
+  /** Creación del tracking en Andreani (primer evento del trace) */
+  trackingCreadoAt: string
+  /** Días desde la creación del tracking sin entrega — la demora DE ENTREGA */
   diasDemora: number
+  /** Días entre la confirmación de la orden y la creación del tracking — demora de picking */
+  diasPicking: number
   ultimoEvento: string
   ultimoEventoAt: string | null
   diasSinMovimiento: number | null
@@ -84,11 +90,19 @@ export function armarDemoras(
     if (!r.confirmadaAt) continue
     if (r.metodo !== 'domicilio' && r.metodo !== 'sucursal') continue
     if (r.tracking && excluirTrackings.has(r.tracking)) continue
+    // Orden anulada: si se descartó después del picking, el envío nunca va a
+    // ingresar a distribución — no es una demora, es una orden muerta
+    if (esOrdenActiva(r) === false) continue
     const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
     if (envioResuelto(eventos)) continue
     const metodo = r.metodo
-    const diasDemora = diasEntre(r.confirmadaAt, ahora)
+    // La demora de entrega corre desde que EXISTE el tracking en Andreani
+    // (primer evento del trace); lo anterior es demora de picking, no de envío
+    const trackingCreadoAt = eventos[0]?.fecha ?? r.envioCreadoAt
+    if (!trackingCreadoAt) continue
+    const diasDemora = diasEntre(trackingCreadoAt, ahora)
     if (diasDemora <= umbralDias(metodo)) continue
+    const diasPicking = Math.max(0, diasEntre(r.confirmadaAt, new Date(trackingCreadoAt)))
     const ultimo = eventos[eventos.length - 1]
     demoras.push({
       orderNumber: r.orderNumber,
@@ -104,7 +118,9 @@ export function armarDemoras(
       trustonicStatus: r.trustonicStatus,
       metodo,
       confirmadaAt: r.confirmadaAt,
+      trackingCreadoAt,
       diasDemora,
+      diasPicking,
       ultimoEvento: ultimo ? [ultimo.evento, ultimo.descripcion].filter(Boolean).join(' — ') : 'Sin eventos de Andreani',
       ultimoEventoAt: ultimo?.fecha ?? null,
       diasSinMovimiento: ultimo ? diasEntre(ultimo.fecha, ahora) : null,
