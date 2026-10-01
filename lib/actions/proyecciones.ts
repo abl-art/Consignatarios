@@ -1,7 +1,8 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchVentasMensuales13m, fetchSerieMensualGocuotas } from '@/lib/gocelular'
+import { fetchVentasMensuales13m, fetchSerieMensualGocuotas, fetchVentasMensualesMarca13m } from '@/lib/gocelular'
+import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 import { clasificarCanal, type ConsignatarioPrefix } from '@/lib/ventas-dia'
 import { prorratearMesActual } from '@/lib/forecast-compras'
 import {
@@ -224,6 +225,51 @@ function armarFilas(
     monto: Number(s.monto),
   }))
   return armarProyVsReal(snapshots, serieDimension(raw, dim, prefixes), mesHoy())
+}
+
+export type MarcaFiltro = 'samsung' | 'motorola' | 'xiaomi' | 'otras'
+export type CanalMarca = 'total' | 'propia' | 'terceros'
+
+/**
+ * Proyectado vs Real de una MARCA dentro de un canal (filtro por marca de
+ * /canales/proyeccion, pedido de Emiliano 1/10 por el acuerdo con Samsung).
+ * Real = unidades/monto medidos de la marca (réplica, vía devices.brand).
+ * Proyectado = snapshots del canal × share de la marca en los últimos 3 meses
+ * CERRADOS del canal (aproximación: el share por unidades se aplica también
+ * al monto).
+ */
+export async function getProyeccionMarca(
+  marca: MarcaFiltro,
+  canal: CanalMarca
+): Promise<{ filas: FilaProyReal[]; share: number }> {
+  const admin = createAdminClient()
+  const clientIds =
+    canal === 'propia' ? CLIENT_IDS_PROPIOS : canal === 'terceros' ? { notIn: CLIENT_IDS_PROPIOS } : null
+
+  const [serieMarca, { data: snaps }] = await Promise.all([
+    fetchVentasMensualesMarca13m(marca, clientIds),
+    admin
+      .from('proyecciones_ventas')
+      .select('run_mes, metodo, mes, ventas, monto')
+      .eq('nivel', canal)
+      .limit(5000),
+  ])
+
+  const mesActual = mesHoy()
+  const cerrados = serieMarca.filter((m) => m.mes < mesActual).slice(-3)
+  const totalCerrados = cerrados.reduce((a, m) => a + m.totalVentas, 0)
+  const marcaCerrados = cerrados.reduce((a, m) => a + m.marcaVentas, 0)
+  const share = totalCerrados > 0 ? marcaCerrados / totalCerrados : 0
+
+  const snapshots: SnapshotProyeccion[] = (snaps ?? []).map((s) => ({
+    run_mes: s.run_mes,
+    metodo: s.metodo as SnapshotProyeccion['metodo'],
+    mes: s.mes,
+    ventas: Number(s.ventas) * share,
+    monto: Number(s.monto) * share,
+  }))
+  const reales = serieMarca.map((m) => ({ mes: m.mes, ventas: m.marcaVentas, monto: m.marcaMonto }))
+  return { filas: armarProyVsReal(snapshots, reales, mesActual), share }
 }
 
 /**

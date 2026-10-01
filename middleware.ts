@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas públicas
-  if (pathname.startsWith('/proveedor/') || pathname.startsWith('/share/') || pathname.startsWith('/afiliados/') || pathname === '/catalogo') {
+  if (pathname.startsWith('/proveedor/') || pathname.startsWith('/share/') || pathname.startsWith('/afiliados/') || pathname.startsWith('/partner/') || pathname === '/catalogo') {
     return supabaseResponse
   }
 

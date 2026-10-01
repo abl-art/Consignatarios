@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, ComposedChart, CartesianGrid, LabelList, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import CanalPills, { type Canal } from '../../finanzas/CanalPills'
-import { getProyeccionDimension } from '@/lib/actions/proyecciones'
+import { getProyeccionDimension, getProyeccionMarca, type MarcaFiltro } from '@/lib/actions/proyecciones'
 import type { FilaProyReal } from '@/lib/proyeccion-ventas'
 import type { MerchantTercero } from '@/lib/actions/finanzas'
 import { formatearMoneda } from '@/lib/utils'
@@ -24,6 +24,15 @@ interface Props {
 }
 
 const etiquetaMes = (mes: string) => `${MESES_CORTOS[Number(mes.slice(5)) - 1]} ${mes.slice(2, 4)}`
+
+// Filtro por marca (acuerdo Samsung 1/10/2026): Real = medido por marca;
+// proyectado = proyección del canal × share de la marca (últimos 3 meses cerrados)
+const MARCAS: { id: MarcaFiltro; label: string }[] = [
+  { id: 'samsung', label: 'Samsung' },
+  { id: 'motorola', label: 'Motorola' },
+  { id: 'xiaomi', label: 'Xiaomi' },
+  { id: 'otras', label: 'Otras' },
+]
 
 function fmt(valor: number, metrica: Metrica): string {
   return metrica === 'monto' ? formatearMoneda(Math.round(valor)) : Math.round(valor).toLocaleString('es-AR')
@@ -46,10 +55,29 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
   const [merchantId, setMerchantId] = useState('')
   const [storeId, setStoreId] = useState('')
   const [metrica, setMetrica] = useState<Metrica>('ventas')
+  const [marca, setMarca] = useState<'todas' | MarcaFiltro>('todas')
   const [cache, setCache] = useState<Record<string, FilaProyReal[]>>({})
+  const [marcaCache, setMarcaCache] = useState<Record<string, { filas: FilaProyReal[]; share: number }>>({})
   const [cargando, setCargando] = useState(false)
 
   const claveDim = storeId ? `store:${storeId}` : merchantId ? `merchant:${merchantId}` : ''
+  const claveMarca = marca !== 'todas' ? `${canal}:${marca}` : ''
+
+  useEffect(() => {
+    if (!claveMarca || marcaCache[claveMarca]) return
+    let vigente = true
+    setCargando(true)
+    getProyeccionMarca(marca as MarcaFiltro, canal)
+      .then((r) => {
+        if (vigente) setMarcaCache((c) => ({ ...c, [claveMarca]: r }))
+      })
+      .finally(() => {
+        if (vigente) setCargando(false)
+      })
+    return () => {
+      vigente = false
+    }
+  }, [claveMarca, marca, canal, marcaCache])
 
   useEffect(() => {
     if (canal !== 'terceros' || !claveDim || cache[claveDim]) return
@@ -70,8 +98,12 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
     }
   }, [canal, claveDim, merchantId, storeId, cache])
 
-  const filas: FilaProyReal[] =
-    canal === 'terceros' && claveDim ? cache[claveDim] ?? [] : inicial[canal === 'propia' ? 'propia' : canal === 'terceros' ? 'terceros' : 'total']
+  const filas: FilaProyReal[] = claveMarca
+    ? marcaCache[claveMarca]?.filas ?? []
+    : canal === 'terceros' && claveDim
+      ? cache[claveDim] ?? []
+      : inicial[canal === 'propia' ? 'propia' : canal === 'terceros' ? 'terceros' : 'total']
+  const shareMarca = claveMarca ? marcaCache[claveMarca]?.share : undefined
 
   const merchantSel = merchants.find((m) => m.clientId === merchantId)
 
@@ -98,7 +130,25 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <CanalPills canal={canal} onChange={(c) => { setCanal(c); setMerchantId(''); setStoreId('') }} />
-        {canal === 'terceros' && (
+        <div className="flex gap-1">
+          {([{ id: 'todas' as const, label: 'Todas las marcas' }, ...MARCAS]).map((m) => (
+            <button
+              key={m.id}
+              onClick={() => { setMarca(m.id); setMerchantId(''); setStoreId('') }}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                marca === m.id ? 'bg-indigo-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {shareMarca !== undefined && (
+          <span className="text-xs text-gray-500" title="Participación de la marca en el canal, últimos 3 meses cerrados — con ese share se escala la proyección del canal">
+            share 3m: <b>{(shareMarca * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%</b>
+          </span>
+        )}
+        {marca === 'todas' && canal === 'terceros' && (
           <>
             <select
               value={merchantId}

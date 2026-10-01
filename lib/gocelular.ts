@@ -597,6 +597,68 @@ export async function fetchPendientesPicking(): Promise<{ gocuotas: Record<strin
  * client (réplica; órdenes creadas, no anuladas) — alimentan la proyección
  * del dashboard y de /canales/proyeccion en todas sus dimensiones.
  */
+// Serie mensual 13m de una MARCA dentro de un canal (para el filtro por marca
+// de /canales/proyeccion): por mes, el total del canal y lo de la marca.
+// La marca sale de devices.brand (MIN por orden, mismo criterio que bloqueo).
+export interface VentaMensualMarca {
+  mes: string
+  totalVentas: number
+  totalMonto: number
+  marcaVentas: number
+  marcaMonto: number
+}
+
+const PATRONES_MARCA: Record<string, string> = {
+  samsung: '%samsung%',
+  motorola: '%motorola%',
+  xiaomi: '%xiaomi%',
+}
+
+export async function fetchVentasMensualesMarca13m(
+  marca: 'samsung' | 'motorola' | 'xiaomi' | 'otras',
+  clientIds: FiltroClientes | null
+): Promise<VentaMensualMarca[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  // 'otras' = cualquier marca que no sea una de las tres grandes (incluye
+  // órdenes sin device vinculado, que igual suman al total del canal)
+  const condMarca =
+    marca === 'otras'
+      ? `(COALESCE(d.marca, '') NOT ILIKE '${PATRONES_MARCA.samsung}' AND COALESCE(d.marca, '') NOT ILIKE '${PATRONES_MARCA.motorola}' AND COALESCE(d.marca, '') NOT ILIKE '${PATRONES_MARCA.xiaomi}')`
+      : `d.marca ILIKE '${PATRONES_MARCA[marca]}'`
+  const condClientes = clientIds ? sqlCondicionClientes(clientIds, 'go.client_id') : null
+  const condCanal = condClientes ? `AND ${condClientes}` : ''
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ mes: string; total_v: string; total_m: string; marca_v: string; marca_m: string }>(
+      `SELECT to_char(go.created_at, 'YYYY-MM') AS mes,
+              COUNT(*)::text AS total_v,
+              COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END), 0)::text AS total_m,
+              COUNT(*) FILTER (WHERE ${condMarca})::text AS marca_v,
+              COALESCE(SUM(CASE WHEN go.total_order_amount > 5000000 THEN go.total_order_amount / 100.0 ELSE go.total_order_amount END) FILTER (WHERE ${condMarca}), 0)::text AS marca_m
+       FROM gocuotas_orders go
+       LEFT JOIN LATERAL (
+         SELECT MIN(brand) AS marca FROM devices d2 WHERE d2.order_id = go.order_id
+       ) d ON true
+       WHERE go.order_discarded_at IS NULL
+         AND go.created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '13 months'
+         ${condCanal}
+       GROUP BY 1 ORDER BY 1`
+    )
+    return res.rows.map((r) => ({
+      mes: r.mes,
+      totalVentas: Number(r.total_v),
+      totalMonto: Number(r.total_m),
+      marcaVentas: Number(r.marca_v),
+      marcaMonto: Number(r.marca_m),
+    }))
+  } finally {
+    client.release()
+  }
+}
+
 export async function fetchVentasMensuales13m(): Promise<VentaMensualDim[]> {
   const pool = getPool()
   if (!pool) return []
