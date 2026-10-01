@@ -31,7 +31,7 @@ export interface RescateRaw {
 
 export type EstadoRescate = 'pendiente' | 'solicitado' | 'rescatado' | 'en_viaje' | 'rendido' | 'entregado'
 
-export const MOTIVOS_RESCATE = ['Fraude', 'Arrepentimiento', 'Devolución', 'Falla'] as const
+export const MOTIVOS_RESCATE = ['Fraude', 'Arrepentimiento', 'Devolución', 'Falla', 'No Entregado'] as const
 export type MotivoRescate = (typeof MOTIVOS_RESCATE)[number]
 
 // Fila de rescates_seguimiento (Supabase): carga manual de un rescate
