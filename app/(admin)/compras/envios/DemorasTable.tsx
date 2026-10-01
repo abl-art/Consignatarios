@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { DemoraEntrega, MetodoEntrega } from '@/lib/demoras'
 import { resumenDemoras, UMBRAL_DOMICILIO_DIAS, UMBRAL_SUCURSAL_DIAS } from '@/lib/demoras'
 import { cargarRescate } from '@/lib/actions/rescates'
+import { descartarDemora } from '@/lib/actions/demoras'
 
 function fecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR')
@@ -55,6 +56,42 @@ function TrustonicChip({ status }: { status: string | null }) {
     <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
       {emoji && `${emoji} `}{status}
     </span>
+  )
+}
+
+// Para los casos de traces congelados: el admin verificó en Andreani que se
+// entregó y lo saca de la lista (queda registrado en demoras_descartes).
+function BotonDescartar({ tracking }: { tracking: string | null }) {
+  const router = useRouter()
+  const [enviando, startTransition] = useTransition()
+  const [confirmando, setConfirmando] = useState(false)
+
+  if (!tracking) return null
+  if (!confirmando) {
+    return (
+      <button
+        onClick={() => setConfirmando(true)}
+        className="px-2 py-1 rounded-lg border border-gray-300 text-gray-500 text-xs hover:bg-gray-100 whitespace-nowrap"
+        title="Verifiqué en Andreani que se entregó (los traces sincronizados quedaron viejos) — sacarlo de la lista"
+      >
+        Descartar
+      </button>
+    )
+  }
+  return (
+    <button
+      disabled={enviando}
+      onClick={() =>
+        startTransition(async () => {
+          await descartarDemora(tracking, 'Verificado entregado en Andreani')
+          router.refresh()
+        })
+      }
+      className="px-2 py-1 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 whitespace-nowrap"
+      title="Confirmar: verificado entregado en Andreani"
+    >
+      {enviando ? '…' : '¿Confirmar?'}
+    </button>
   )
 }
 
@@ -176,7 +213,21 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.tracking ?? '—'}</td>
+                <td className="px-4 py-3 font-mono text-xs">
+                  {d.tracking ? (
+                    <a
+                      href={`https://www.andreani.com/envio/${d.tracking}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-700 hover:underline"
+                      title="Ver el tracking en vivo en Andreani (los traces de acá pueden estar desactualizados)"
+                    >
+                      {d.tracking}
+                    </a>
+                  ) : (
+                    <span className="text-gray-600">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.gocuotasOrderId ?? '—'}</td>
                 <td className="px-4 py-3">
                   {d.ordenActiva === null ? (
@@ -195,7 +246,10 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                 </td>
                 <td className="px-4 py-3"><TrustonicChip status={d.trustonicStatus} /></td>
                 <td className="px-4 py-3">
-                  <BotonRescate tracking={d.tracking} />
+                  <div className="flex items-center gap-1.5">
+                    <BotonRescate tracking={d.tracking} />
+                    <BotonDescartar tracking={d.tracking} />
+                  </div>
                 </td>
               </tr>
             ))}

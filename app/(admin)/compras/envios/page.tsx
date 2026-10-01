@@ -9,6 +9,7 @@ import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/con
 import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
+import { getDemorasDescartadas } from '@/lib/actions/demoras'
 import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import EnviosClient from './EnviosClient'
@@ -46,11 +47,12 @@ export default async function EnviosPage({
       fetchProductosStock(),
     ])
     // Después de rescates: sus trackings (incluidos los cargados a mano) se
-    // excluyen de Demoras para que cada envío viva en una sola pestaña
-    demoras = await fetchDemorasEntrega(
-      new Date(),
-      new Set(rescates.map(r => r.tracking).filter((t): t is string => Boolean(t)))
-    )
+    // excluyen de Demoras, igual que los descartes manuales (verificados
+    // entregados en Andreani pese a traces congelados)
+    const descartadas = await getDemorasDescartadas().catch(() => new Set<string>())
+    const excluir = new Set(rescates.map(r => r.tracking).filter((t): t is string => Boolean(t)))
+    for (const t of descartadas) excluir.add(t)
+    demoras = await fetchDemorasEntrega(new Date(), excluir)
   } catch {
     // GOcelular no disponible
   }
