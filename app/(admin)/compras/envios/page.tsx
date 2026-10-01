@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, fetchDemorasEntrega, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import type { DemoraEntrega } from '@/lib/demoras'
 import { getSiniestrosStock } from '@/lib/actions/siniestros-stock'
 import type { SiniestroStock } from '@/lib/siniestros-stock'
 import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/control-stock'
@@ -20,6 +21,7 @@ import AsnTable from './AsnTable'
 import ControlStockTable from './ControlStockTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
+import DemorasTable from './DemorasTable'
 import SiniestrosTable from './SiniestrosTable'
 import SiniestrosStockTable from './SiniestrosStockTable'
 
@@ -34,6 +36,7 @@ export default async function EnviosPage({
   let rescates: Rescate[] = []
   let siniestros: Siniestro[] = []
   let productosStock: ProductoStock[] = []
+  let demoras: DemoraEntrega[] = []
   try {
     ;[asns, alertas, rescates, siniestros, productosStock] = await Promise.all([
       fetchAsns(),
@@ -42,6 +45,12 @@ export default async function EnviosPage({
       getSiniestrosCompletos(),
       fetchProductosStock(),
     ])
+    // Después de rescates: sus trackings (incluidos los cargados a mano) se
+    // excluyen de Demoras para que cada envío viva en una sola pestaña
+    demoras = await fetchDemorasEntrega(
+      new Date(),
+      new Set(rescates.map(r => r.tracking).filter((t): t is string => Boolean(t)))
+    )
   } catch {
     // GOcelular no disponible
   }
@@ -156,6 +165,11 @@ export default async function EnviosPage({
           id: 'alertas',
           label: totalAlertas > 0 ? `Alertas (${totalAlertas})` : 'Alertas',
           content: <AlertasTable requierenAtencion={alertas.requierenAtencion} expedidosSinImei={alertas.expedidosSinImei} />,
+        },
+        {
+          id: 'demoras',
+          label: demoras.length > 0 ? `Demoras de entrega (${demoras.length})` : 'Demoras de entrega',
+          content: <DemorasTable demoras={demoras} />,
         },
         {
           id: 'rescates',

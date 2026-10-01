@@ -156,6 +156,7 @@ import { armarAsns, type AsnResumen } from './asn'
 import type { ModeloCatalogo } from './catalogo-buscador'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { armarRescates, type Rescate, type RescateRaw, type SeguimientoRescate } from './rescates'
+import { armarDemoras, type DemoraEntrega, type DemoraRaw } from './demoras'
 import { armarSiniestros, type SeguimientoSiniestro, type Siniestro, type SiniestroRaw } from './siniestros'
 import type { DispositivoStock } from './siniestros-stock'
 import { calcularStockAccesorio, calcularStockKit } from './stock-accesorios'
@@ -277,6 +278,53 @@ export async function fetchRescates(ahora: Date = new Date(), seguimientos: Segu
          AND s.traces @> '[{"evento":"SolicitudDeRescate"}]'`
     )
     return armarRescates(res.rows, ahora, seguimientos)
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Pestaña Demoras de entrega: envíos despachados sin EnvioEntregado cuya orden
+ * confirmada (paid_at) superó el umbral de su método (domicilio 7 días,
+ * sucursal 14). Solo envíos CON traces: los anteriores a ago 2026 no tienen
+ * tracking sincronizado y serían falsos positivos. Siniestros y rescates se
+ * filtran acá; los rescates cargados a mano se excluyen en armarDemoras.
+ */
+export async function fetchDemorasEntrega(
+  ahora: Date = new Date(),
+  excluirTrackings: Set<string> = new Set()
+): Promise<DemoraEntrega[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<DemoraRaw>(
+      `SELECT so.order_number AS "orderNumber",
+              so.customer_name AS "clienteNombre", so.customer_dni AS "clienteDni",
+              so.customer_phone AS "clienteTelefono", so.product_name AS producto,
+              so.shipping_city AS ciudad, so.shipping_province AS provincia,
+              so.shipping_method AS metodo, so.paid_at::text AS "confirmadaAt",
+              s.tracking_number AS tracking, s.traces,
+              go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
+              go.order_discarded_at::text AS "gocuotasDiscardedAt"
+       FROM shipments s
+       JOIN store_orders so ON so.id = s.store_order_id
+       LEFT JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+       WHERE s.type = 'outbound'
+         AND jsonb_array_length(COALESCE(s.traces, '[]'::jsonb)) > 0
+         AND NOT s.traces @> '[{"evento":"EnvioEntregado"}]'
+         AND NOT s.traces @> '[{"evento":"SolicitudDeRescate"}]'
+         AND NOT EXISTS (
+           SELECT 1 FROM jsonb_array_elements(s.traces) t
+           WHERE t->>'evento' ILIKE '%siniestr%'
+              OR t->>'descripcion' ILIKE '%siniestr%'
+              OR t->>'descripcion' ILIKE '%extrav%')
+         AND so.paid_at IS NOT NULL
+         AND ((so.shipping_method = 'domicilio' AND so.paid_at < now() - interval '7 days')
+           OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))`
+    )
+    return armarDemoras(res.rows, ahora, excluirTrackings)
   } finally {
     client.release()
   }
