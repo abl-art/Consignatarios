@@ -241,7 +241,7 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                   <span className="text-gray-400">{d.gocuotasOrderId ?? '—'}</span>
                 </td>
                 <td className="px-2 py-1.5">
-                  <div className="flex flex-col items-start gap-0.5">
+                  <div className="flex items-center gap-1 whitespace-nowrap">
                     {d.ordenActiva !== null && (
                       <span
                         className={`inline-block text-[11px] font-semibold rounded-full px-1.5 py-0.5 border ${
