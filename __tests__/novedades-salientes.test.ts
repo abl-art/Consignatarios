@@ -32,7 +32,7 @@ describe('armarNovedadSaliente', () => {
       tipo: 'aviso',
       referencia: '  ',
     })
-    expect(n.titulo).toHaveLength(300)
+    expect(n.titulo).toHaveLength(200)
     expect(n.detalle).toHaveLength(2000)
     expect(n.tipo).toBe('aviso')
     expect(n).not.toHaveProperty('referencia')

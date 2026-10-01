@@ -24,13 +24,15 @@ export function validarNovedadSaliente(input: NovedadSalienteInput): string[] {
   return errores
 }
 
-/** Payload con los topes del contrato (espejo de parseNovedades); campos vacíos afuera. */
+/** Payload con los topes del RECEPTOR de Pedro (contrato 1/10: titulo 200,
+ * detalle 4000, tipo 40, referencia 200 — más estricto que nuestro entrante);
+ * campos vacíos afuera. */
 export function armarNovedadSaliente(input: NovedadSalienteInput): Record<string, string> {
-  const out: Record<string, string> = { titulo: input.titulo.trim().slice(0, 300) }
+  const out: Record<string, string> = { titulo: input.titulo.trim().slice(0, 200) }
   const detalle = input.detalle?.trim()
   if (detalle) out.detalle = detalle.slice(0, 2000)
   const tipo = input.tipo?.trim()
-  if (tipo) out.tipo = tipo.slice(0, 50)
+  if (tipo) out.tipo = tipo.slice(0, 40)
   const referencia = input.referencia?.trim()
   if (referencia) out.referencia = referencia.slice(0, 200)
   if (input.id) out.id = input.id

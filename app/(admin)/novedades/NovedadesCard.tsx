@@ -75,13 +75,18 @@ export default function NovedadesCard({ novedades }: { novedades: Novedad[] }) {
                   <p className="text-xs md:text-sm text-gray-400 mt-1.5">
                     {fechaCorta(n.created_at)}
                     {n.referencia && <> · {n.referencia}</>}
-                    {' · '}
-                    <Link
-                      href={`/novedades?tab=enviadas&re=${encodeURIComponent(n.id_externo ?? n.id)}&ret=${encodeURIComponent(n.titulo.slice(0, 80))}`}
-                      className="text-indigo-600 hover:underline"
-                    >
-                      Responder
-                    </Link>
+                    {/* Responder solo si Pedro mandó su id (contrato 1/10: en_respuesta_a debe ser un uuid generado por él) */}
+                    {n.id_externo && (
+                      <>
+                        {' · '}
+                        <Link
+                          href={`/novedades?tab=enviadas&re=${encodeURIComponent(n.id_externo)}&ret=${encodeURIComponent(n.titulo.slice(0, 80))}`}
+                          className="text-indigo-600 hover:underline"
+                        >
+                          Responder
+                        </Link>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
