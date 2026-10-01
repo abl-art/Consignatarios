@@ -3,47 +3,15 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { DemoraEntrega, MetodoEntrega } from '@/lib/demoras'
-import { resumenDemoras, UMBRAL_DOMICILIO_DIAS, UMBRAL_SUCURSAL_DIAS } from '@/lib/demoras'
+import { resumenDemoras, UMBRAL_DIAS } from '@/lib/demoras'
 import { cargarRescate } from '@/lib/actions/rescates'
+import { cargarSiniestro } from '@/lib/actions/siniestros'
 import { descartarDemora } from '@/lib/actions/demoras'
 
 function fecha(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-AR')
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
 
-// Un clic pide el rescate con motivo "No Entregado": la fila pasa a la pestaña
-// Rescates (pendiente de aceptación) y sale de Demoras en el refresh.
-function BotonRescate({ tracking }: { tracking: string | null }) {
-  const router = useRouter()
-  const [enviando, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  if (!tracking) return <span className="text-gray-400">—</span>
-  return (
-    <span className="inline-flex items-center gap-1">
-      <button
-        disabled={enviando}
-        onClick={() =>
-          startTransition(async () => {
-            const res = await cargarRescate(tracking, 'No Entregado')
-            if (res.error) setError(res.error)
-            else router.refresh()
-          })
-        }
-        className="px-2.5 py-1 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
-        title="Solicitar el rescate con motivo No Entregado — pasa a la pestaña Rescates"
-      >
-        {enviando ? 'Cargando…' : 'Pedir rescate'}
-      </button>
-      {error && <span className="text-xs text-red-600">{error}</span>}
-    </span>
-  )
-}
-
-// Semáforo pensado para una demora: "ready_for_use" (enrolado, sin bloquear) es
-// lo normal de un equipo en tránsito → ámbar neutro; "active" significa que el
-// equipo ESTÁ EN USO sin entrega registrada → rojo, revisar (entrega sin
-// registrar o uso indebido); "locked" ya fue bloqueado por mora/gestión.
 // OJO: el estado sale de la réplica de GOcelular (devices.trustonic_status) y
 // el sync no cubre todos los equipos todos los días — puede quedar viejo (caso
 // real: 17 días congelado en ready_for_use cuando Trustonic decía active).
@@ -59,7 +27,7 @@ function TrustonicChip({ status, updatedAt }: { status: string | null; updatedAt
   const diasDato = updatedAt ? Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000) : null
   return (
     <span className="inline-flex flex-col items-start">
-      <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${cls}`}>
         {emoji && `${emoji} `}{status}
       </span>
       {updatedAt && (
@@ -67,46 +35,80 @@ function TrustonicChip({ status, updatedAt }: { status: string | null; updatedAt
           className={`text-[10px] mt-0.5 ${diasDato !== null && diasDato > 3 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}
           title="Fecha del dato en la réplica de GOcelular — si es viejo, verificá en la consola de Trustonic"
         >
-          dato del {new Date(updatedAt).toLocaleDateString('es-AR')}
+          dato del {fecha(updatedAt)}
         </span>
       )}
     </span>
   )
 }
 
-// Para los casos de traces congelados: el admin verificó en Andreani que se
-// entregó y lo saca de la lista (queda registrado en demoras_descartes).
-function BotonDescartar({ tracking }: { tracking: string | null }) {
-  const router = useRouter()
-  const [enviando, startTransition] = useTransition()
-  const [confirmando, setConfirmando] = useState(false)
+type Accion = 'siniestro' | 'rescate' | 'descartar'
 
-  if (!tracking) return null
-  if (!confirmando) {
-    return (
-      <button
-        onClick={() => setConfirmando(true)}
-        className="px-2 py-1 rounded-lg border border-gray-300 text-gray-500 text-xs hover:bg-gray-100 whitespace-nowrap"
-        title="Verifiqué en Andreani que se entregó (los traces sincronizados quedaron viejos) — sacarlo de la lista"
-      >
-        Descartar
-      </button>
-    )
-  }
-  return (
-    <button
-      disabled={enviando}
-      onClick={() =>
-        startTransition(async () => {
-          await descartarDemora(tracking, 'Verificado entregado en Andreani')
-          router.refresh()
-        })
+const ACCIONES: { id: Accion; abrev: string; titulo: string; confirmCls: string }[] = [
+  { id: 'siniestro', abrev: 'Sin.', titulo: 'Cargar como SINIESTRO (pasa a la pestaña Siniestros Distribución)', confirmCls: 'bg-red-600 hover:bg-red-700' },
+  { id: 'rescate', abrev: 'Res.', titulo: 'Pedir RESCATE con motivo No Entregado (pasa a la pestaña Rescates)', confirmCls: 'bg-gray-900 hover:bg-gray-700' },
+  { id: 'descartar', abrev: 'Desc.', titulo: 'DESCARTAR: verifiqué en Andreani que se entregó (los traces quedaron viejos)', confirmCls: 'bg-amber-600 hover:bg-amber-700' },
+]
+
+// Tres acciones abreviadas con confirmación en dos pasos. Cada una mueve la
+// fila a su pestaña (o la saca de la lista) en el refresh.
+function Acciones({ tracking }: { tracking: string | null }) {
+  const router = useRouter()
+  const [pendiente, setPendiente] = useState<Accion | null>(null)
+  const [enviando, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  if (!tracking) return <span className="text-gray-400">—</span>
+
+  function ejecutar(a: Accion) {
+    startTransition(async () => {
+      const res =
+        a === 'siniestro' ? await cargarSiniestro(tracking!)
+        : a === 'rescate' ? await cargarRescate(tracking!, 'No Entregado')
+        : await descartarDemora(tracking!, 'Verificado entregado en Andreani')
+      if (res.error) {
+        setError(res.error)
+        setPendiente(null)
+      } else {
+        router.refresh()
       }
-      className="px-2 py-1 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 whitespace-nowrap"
-      title="Confirmar: verificado entregado en Andreani"
-    >
-      {enviando ? '…' : '¿Confirmar?'}
-    </button>
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <div className="flex items-center gap-1">
+        {ACCIONES.map(a =>
+          pendiente === a.id ? (
+            <button
+              key={a.id}
+              disabled={enviando}
+              onClick={() => ejecutar(a.id)}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-bold text-white whitespace-nowrap disabled:opacity-50 ${a.confirmCls}`}
+              title={`Confirmar: ${a.titulo}`}
+            >
+              {enviando ? '…' : `¿${a.abrev}?`}
+            </button>
+          ) : (
+            <button
+              key={a.id}
+              disabled={enviando || pendiente !== null}
+              onClick={() => { setPendiente(a.id); setError(null) }}
+              className="px-1.5 py-0.5 rounded border border-gray-300 text-[11px] text-gray-600 hover:bg-gray-100 whitespace-nowrap disabled:opacity-40"
+              title={a.titulo}
+            >
+              {a.abrev}
+            </button>
+          )
+        )}
+        {pendiente && !enviando && (
+          <button onClick={() => setPendiente(null)} className="text-[11px] text-gray-400 hover:text-gray-600 px-0.5" title="Cancelar">
+            ✕
+          </button>
+        )}
+      </div>
+      {error && <span className="text-[10px] text-red-600 max-w-[160px]">{error}</span>}
+    </div>
   )
 }
 
@@ -125,8 +127,8 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
         <p className="text-sm text-gray-600">
-          No hay entregas demoradas: todo lo despachado está dentro de los {UMBRAL_DOMICILIO_DIAS} días
-          (domicilio) / {UMBRAL_SUCURSAL_DIAS} días (sucursal) desde la confirmación.
+          No hay entregas demoradas: todo lo despachado está dentro de los {UMBRAL_DIAS} días desde la
+          creación del tracking.
         </p>
       </div>
     )
@@ -134,20 +136,19 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
 
   const tarjetas: { id: Filtro; label: string; cantidad: number; tono?: string }[] = [
     { id: 'todos', label: '📦 Demorados', cantidad: resumen.total },
-    { id: 'domicilio', label: `🏠 Domicilio (>${UMBRAL_DOMICILIO_DIAS}d)`, cantidad: resumen.domicilio },
-    { id: 'sucursal', label: `🏤 Sucursal (>${UMBRAL_SUCURSAL_DIAS}d)`, cantidad: resumen.sucursal },
+    { id: 'domicilio', label: '🏠 Domicilio', cantidad: resumen.domicilio },
+    { id: 'sucursal', label: '🏤 Sucursal', cantidad: resumen.sucursal },
     { id: 'criticos', label: '🔴 Más de 21 días', cantidad: resumen.criticos, tono: 'text-red-700' },
   ]
 
   return (
     <div>
       <p className="text-xs text-gray-500 max-w-3xl mb-4">
-        Órdenes activas y despachadas que Andreani todavía no marcó como entregadas: domicilio con más
-        de {UMBRAL_DOMICILIO_DIAS} días, sucursal con más de {UMBRAL_SUCURSAL_DIAS}, contados <b>desde la
-        creación del tracking en Andreani</b> (la demora de entrega es de Andreani). La columna Picking
-        mide aparte los días entre la confirmación de la orden y la creación del tracking (esa demora es
-        nuestra). No incluye órdenes anuladas ni lo que ya está en Rescates o Siniestros.
-        &quot;Pedir rescate&quot; lo carga con motivo No Entregado y lo mueve a la pestaña Rescates.
+        Órdenes activas y despachadas que Andreani todavía no marcó como entregadas, con más de{' '}
+        {UMBRAL_DIAS} días <b>desde la creación del tracking</b> (la demora de entrega es de Andreani;
+        la columna Picking mide aparte los días confirmación → tracking, que son nuestros). Acciones:{' '}
+        <b>Sin.</b> carga el siniestro, <b>Res.</b> pide el rescate (No Entregado), <b>Desc.</b> lo
+        descarta si verificaste en Andreani que se entregó.
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -157,114 +158,108 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
             <button
               key={t.id}
               onClick={() => setFiltro(activa ? 'todos' : t.id)}
-              className={`bg-white border rounded-xl p-4 text-left transition-colors ${
+              className={`bg-white border rounded-xl p-3 text-left transition-colors ${
                 activa ? 'border-magenta-600 ring-1 ring-magenta-600' : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <div className="text-xs text-gray-500 mb-1">{t.label}</div>
-              <div className={`text-3xl font-bold tabular-nums ${t.tono ?? 'text-gray-900'}`}>{t.cantidad}</div>
+              <div className="text-xs text-gray-500 mb-0.5">{t.label}</div>
+              <div className={`text-2xl font-bold tabular-nums ${t.tono ?? 'text-gray-900'}`}>{t.cantidad}</div>
             </button>
           )
         })}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Entrega</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Confirmada</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Creación del tracking en Andreani (primer evento del trace)">Tracking creado</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días entre la confirmación de la orden y la creación del tracking — demora de picking, nuestra">Picking</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días desde la creación del tracking sin entrega — demora de Andreani">Días</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento Andreani</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del equipo en Trustonic: locked es lo esperable sin entrega; active sin entrega registrada es bandera de fraude">Trustonic</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Acción</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Orden</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Cliente</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Producto / Destino</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Entrega</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600" title="Confirmación de la orden → creación del tracking en Andreani">Conf. → Tracking</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600" title="Días entre la confirmación y la creación del tracking — demora de picking, nuestra">Pick.</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600" title="Días desde la creación del tracking sin entrega — demora de Andreani">Días</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Último evento</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Tracking / Order ID</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600" title="Orden GOcuotas activa + estado Trustonic (réplica)">GOcuotas · Trustonic</th>
+              <th className="text-left px-2 py-2 font-medium text-gray-600">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visibles.map(d => (
-              <tr key={`${d.orderNumber}-${d.tracking}`} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono text-xs">{d.orderNumber}</td>
-                <td className="px-4 py-3">
+              <tr key={`${d.orderNumber}-${d.tracking}`} className="hover:bg-gray-50 align-top">
+                <td className="px-2 py-1.5 font-mono text-[11px]">{d.orderNumber}</td>
+                <td className="px-2 py-1.5">
                   <div className="text-gray-900">{d.cliente || '—'}</div>
-                  <div className="text-xs text-gray-400">
-                    {[d.dni, d.telefono].filter(Boolean).join(' · ') || ''}
-                  </div>
+                  <div className="text-[10px] text-gray-400">{[d.dni, d.telefono].filter(Boolean).join(' · ')}</div>
                 </td>
-                <td className="px-4 py-3 text-gray-700">{d.producto ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-700">{d.destino || '—'}</td>
-                <td className="px-4 py-3">
+                <td className="px-2 py-1.5">
+                  <div className="text-gray-900 max-w-[180px] truncate" title={d.producto ?? ''}>{d.producto ?? '—'}</div>
+                  <div className="text-[10px] text-gray-400 max-w-[180px] truncate" title={d.destino}>{d.destino || '—'}</div>
+                </td>
+                <td className="px-2 py-1.5">
                   <span
-                    className={`inline-block text-xs font-semibold rounded-full px-2 py-0.5 border ${
+                    className={`inline-block text-[11px] font-semibold rounded-full px-1.5 py-0.5 border ${
                       d.metodo === 'domicilio'
                         ? 'bg-blue-50 text-blue-700 border-blue-200'
                         : 'bg-purple-50 text-purple-700 border-purple-200'
                     }`}
                   >
-                    {d.metodo === 'domicilio' ? 'Domicilio' : 'Sucursal'}
+                    {d.metodo === 'domicilio' ? 'Dom.' : 'Suc.'}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fecha(d.confirmadaAt)}</td>
-                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fecha(d.trackingCreadoAt)}</td>
-                <td className={`px-4 py-3 tabular-nums ${d.diasPicking > 3 ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
+                <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">
+                  {fecha(d.confirmadaAt)} → {fecha(d.trackingCreadoAt)}
+                </td>
+                <td className={`px-2 py-1.5 tabular-nums ${d.diasPicking > 3 ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
                   {d.diasPicking}
                 </td>
-                <td className={`px-4 py-3 font-bold tabular-nums ${d.diasDemora > 21 ? 'text-red-700' : 'text-gray-900'}`}>
+                <td className={`px-2 py-1.5 font-bold tabular-nums text-sm ${d.diasDemora > 21 ? 'text-red-700' : 'text-gray-900'}`}>
                   {d.diasDemora}
                 </td>
-                <td className="px-4 py-3 text-gray-700">
-                  <div className="max-w-xs truncate" title={d.ultimoEvento}>{d.ultimoEvento}</div>
+                <td className="px-2 py-1.5 text-gray-700">
+                  <div className="max-w-[160px] truncate" title={d.ultimoEvento}>{d.ultimoEvento}</div>
                   {d.diasSinMovimiento !== null && (
-                    <div className={`text-xs ${d.diasSinMovimiento > 5 ? 'text-red-600' : 'text-gray-400'}`}>
+                    <div className={`text-[10px] ${d.diasSinMovimiento > 5 ? 'text-red-600' : 'text-gray-400'}`}>
                       hace {d.diasSinMovimiento} {d.diasSinMovimiento === 1 ? 'día' : 'días'}
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs">
+                <td className="px-2 py-1.5 font-mono text-[11px]">
                   {d.tracking ? (
                     <a
                       href={`https://www.andreani.com/envio/${d.tracking}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-700 hover:underline"
+                      className="text-indigo-700 hover:underline block"
                       title="Ver el tracking en vivo en Andreani (los traces de acá pueden estar desactualizados)"
                     >
                       {d.tracking}
                     </a>
                   ) : (
-                    <span className="text-gray-600">—</span>
+                    <span className="text-gray-600 block">—</span>
                   )}
+                  <span className="text-gray-400">{d.gocuotasOrderId ?? '—'}</span>
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.gocuotasOrderId ?? '—'}</td>
-                <td className="px-4 py-3">
-                  {d.ordenActiva === null ? (
-                    <span className="text-gray-400">—</span>
-                  ) : (
-                    <span
-                      className={`inline-block text-xs font-semibold rounded-full px-2 py-0.5 border ${
-                        d.ordenActiva
-                          ? 'bg-green-50 text-green-700 border-green-200'
-                          : 'bg-red-50 text-red-700 border-red-200'
-                      }`}
-                    >
-                      {d.ordenActiva ? 'Activa' : 'Anulada'}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3"><TrustonicChip status={d.trustonicStatus} updatedAt={d.trustonicUpdatedAt} /></td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <BotonRescate tracking={d.tracking} />
-                    <BotonDescartar tracking={d.tracking} />
+                <td className="px-2 py-1.5">
+                  <div className="flex flex-col items-start gap-0.5">
+                    {d.ordenActiva !== null && (
+                      <span
+                        className={`inline-block text-[11px] font-semibold rounded-full px-1.5 py-0.5 border ${
+                          d.ordenActiva
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : 'bg-red-50 text-red-700 border-red-200'
+                        }`}
+                      >
+                        {d.ordenActiva ? 'Activa' : 'Anulada'}
+                      </span>
+                    )}
+                    <TrustonicChip status={d.trustonicStatus} updatedAt={d.trustonicUpdatedAt} />
                   </div>
+                </td>
+                <td className="px-2 py-1.5">
+                  <Acciones tracking={d.tracking} />
                 </td>
               </tr>
             ))}

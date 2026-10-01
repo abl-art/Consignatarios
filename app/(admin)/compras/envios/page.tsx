@@ -51,6 +51,7 @@ export default async function EnviosPage({
     // entregados en Andreani pese a traces congelados)
     const descartadas = await getDemorasDescartadas().catch(() => new Set<string>())
     const excluir = new Set(rescates.map(r => r.tracking).filter((t): t is string => Boolean(t)))
+    for (const s of siniestros) if (s.tracking) excluir.add(s.tracking) // incluye los cargados a mano
     for (const t of descartadas) excluir.add(t)
     demoras = await fetchDemorasEntrega(new Date(), excluir)
   } catch {

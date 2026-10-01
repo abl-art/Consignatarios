@@ -329,10 +329,9 @@ export async function fetchDemorasEntrega(
               -- ciclo de rendición: el paquete vuelve al depósito, ya no es demora
               OR t->>'evento' IN ('EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'))
          AND so.paid_at IS NOT NULL
-         -- Prefiltro (superset): el umbral fino corre desde la creación del tracking
-         -- y lo aplica armarDemoras; paid_at siempre es anterior, así que esto no recorta de más
-         AND ((so.shipping_method = 'domicilio' AND so.paid_at < now() - interval '7 days')
-           OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))
+         -- Prefiltro (superset): el umbral fino (14 días desde la creación del tracking)
+         -- lo aplica armarDemoras; paid_at siempre es anterior, así que esto no recorta de más
+         AND so.paid_at < now() - interval '14 days'
          -- Orden anulada en GOcuotas: el envío nunca va a ingresar, no es demora
          AND (go.order_id IS NULL
            OR (go.order_discarded_at IS NULL AND COALESCE(go.order_status, '') NOT IN ('discarded', 'cancel')))

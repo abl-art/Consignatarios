@@ -6,8 +6,9 @@
 
 import { esOrdenActiva, type RescateRaw, type TraceEvento } from '@/lib/rescates'
 
-export const UMBRAL_DOMICILIO_DIAS = 7
-export const UMBRAL_SUCURSAL_DIAS = 14
+// Estandarizado en 14 días para ambos métodos (decisión de Emiliano 1/10/2026
+// tras analizar la distribución real de entregas)
+export const UMBRAL_DIAS = 14
 
 export type MetodoEntrega = 'domicilio' | 'sucursal'
 
@@ -70,9 +71,7 @@ export function envioResuelto(eventos: TraceEvento[]): boolean {
   )
 }
 
-export function umbralDias(metodo: MetodoEntrega): number {
-  return metodo === 'sucursal' ? UMBRAL_SUCURSAL_DIAS : UMBRAL_DOMICILIO_DIAS
-}
+
 
 function diasEntre(desde: string, hasta: Date): number {
   return Math.max(0, Math.floor((hasta.getTime() - new Date(desde).getTime()) / DIA_MS))
@@ -103,7 +102,7 @@ export function armarDemoras(
     const trackingCreadoAt = eventos[0]?.fecha ?? r.envioCreadoAt
     if (!trackingCreadoAt) continue
     const diasDemora = diasEntre(trackingCreadoAt, ahora)
-    if (diasDemora <= umbralDias(metodo)) continue
+    if (diasDemora <= UMBRAL_DIAS) continue
     const diasPicking = Math.max(0, diasEntre(r.confirmadaAt, new Date(trackingCreadoAt)))
     const ultimo = eventos[eventos.length - 1]
     demoras.push({
