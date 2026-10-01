@@ -11,20 +11,35 @@ export interface Novedad {
   referencia: string | null
   created_at: string
   leida_at: string | null
+  /** Id externo de Pedro (contrato v2) — es lo que va en en_respuesta_a al responderle */
+  id_externo: string | null
+  /** Si Pedro respondió a una novedad nuestra: id en novedades_enviadas */
+  en_respuesta_a: string | null
+  /** Título de la novedad nuestra a la que responde (resuelto acá) */
+  respuestaATitulo: string | null
 }
 
 export async function getNovedades(limit = 30): Promise<Novedad[]> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('novedades_gocelular')
-    .select('id, titulo, detalle, tipo, referencia, created_at, leida_at')
+    .select('id, titulo, detalle, tipo, referencia, created_at, leida_at, id_externo, en_respuesta_a')
     .order('created_at', { ascending: false })
     .limit(limit)
   if (error) {
     console.error('getNovedades:', error.message)
     return []
   }
-  return data ?? []
+  const filas = data ?? []
+
+  // Resolver a qué novedad nuestra responde cada una (contrato v2)
+  const refs = [...new Set(filas.map(f => f.en_respuesta_a).filter((v): v is string => v !== null))]
+  const titulos = new Map<string, string>()
+  if (refs.length > 0) {
+    const { data: enviadas } = await supabase.from('novedades_enviadas').select('id, titulo').in('id', refs)
+    for (const e of enviadas ?? []) titulos.set(e.id, e.titulo)
+  }
+  return filas.map(f => ({ ...f, respuestaATitulo: f.en_respuesta_a ? titulos.get(f.en_respuesta_a) ?? null : null }))
 }
 
 // Cantidad de novedades sin leer, para el aviso del sidebar
@@ -77,6 +92,7 @@ export interface NovedadEnviada {
   respuesta: string | null
   enviada_at: string | null
   created_at: string
+  en_respuesta_a: string | null
 }
 
 export async function getNovedadesEnviadas(limit = 50): Promise<NovedadEnviada[]> {
@@ -90,8 +106,10 @@ export async function getNovedadesEnviadas(limit = 50): Promise<NovedadEnviada[]
 }
 
 async function postNovedadAGocelular(payload: Record<string, string>): Promise<{ ok: boolean; respuesta: string }> {
-  const secret = process.env.GOCELULAR_WEBHOOK_SECRET
-  if (!secret) return { ok: false, respuesta: 'GOCELULAR_WEBHOOK_SECRET sin configurar' }
+  // Secret PROPIO de esta dirección (ajuste de Pedro 30/9: un secret por
+  // dirección evita que una novedad nuestra se replaye contra nuestro endpoint)
+  const secret = process.env.GOCELULAR_NOVEDADES_SECRET
+  if (!secret) return { ok: false, respuesta: 'GOCELULAR_NOVEDADES_SECRET sin configurar (secret de la dirección 360→GOcelular)' }
 
   const admin = createAdminClient()
   const { data: config } = await admin.from('flujo_config').select('value').eq('key', 'gocelular_novedades_url').maybeSingle()
@@ -124,21 +142,24 @@ export async function enviarNovedadGocelular(input: NovedadSalienteInput): Promi
   const errores = validarNovedadSaliente(input)
   if (errores.length > 0) return { ok: false, error: errores.join(' · ') }
 
-  const payload = armarNovedadSaliente(input)
+  const base = armarNovedadSaliente(input)
   const admin = createAdminClient()
   const { data: fila, error: errIns } = await admin
     .from('novedades_enviadas')
     .insert({
-      titulo: payload.titulo,
-      detalle: payload.detalle ?? null,
-      tipo: payload.tipo ?? null,
-      referencia: payload.referencia ?? null,
+      titulo: base.titulo,
+      detalle: base.detalle ?? null,
+      tipo: base.tipo ?? null,
+      referencia: base.referencia ?? null,
+      en_respuesta_a: base.en_respuesta_a ?? null,
       estado: 'fallida',
     })
     .select('id')
     .single()
   if (errIns || !fila) return { ok: false, error: `No se pudo guardar la novedad: ${errIns?.message}` }
 
+  // id estable = uuid de la fila (contrato v2: dedup de reintentos del lado de Pedro)
+  const payload = { ...base, id: fila.id as string }
   const envio = await postNovedadAGocelular(payload)
   await admin
     .from('novedades_enviadas')
@@ -160,6 +181,8 @@ export async function reintentarNovedadGocelular(id: string): Promise<{ ok: bool
     detalle: fila.detalle ?? undefined,
     tipo: fila.tipo ?? undefined,
     referencia: fila.referencia ?? undefined,
+    id: fila.id,
+    enRespuestaA: fila.en_respuesta_a ?? undefined,
   })
   const envio = await postNovedadAGocelular(payload)
   await admin

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { marcarNovedadesLeidas, type Novedad } from '@/lib/actions/novedades'
 
 const TIPO_COLOR: Record<string, string> = {
@@ -68,9 +69,19 @@ export default function NovedadesCard({ novedades }: { novedades: Novedad[] }) {
                     {n.titulo}
                   </p>
                   {n.detalle && <p className="text-sm md:text-base text-gray-600 mt-1 whitespace-pre-wrap">{n.detalle}</p>}
+                  {n.respuestaATitulo && (
+                    <p className="text-xs text-indigo-600 mt-1">↩ en respuesta a: {n.respuestaATitulo}</p>
+                  )}
                   <p className="text-xs md:text-sm text-gray-400 mt-1.5">
                     {fechaCorta(n.created_at)}
                     {n.referencia && <> · {n.referencia}</>}
+                    {' · '}
+                    <Link
+                      href={`/novedades?tab=enviadas&re=${encodeURIComponent(n.id_externo ?? n.id)}&ret=${encodeURIComponent(n.titulo.slice(0, 80))}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      Responder
+                    </Link>
                   </p>
                 </div>
               </div>

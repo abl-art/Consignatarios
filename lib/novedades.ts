@@ -8,6 +8,10 @@ export interface NovedadEntrante {
   detalle: string | null
   tipo: string | null
   referencia: string | null
+  /** Id estable del emisor (contrato v2, 30/9): dedup de reintentos */
+  id_externo: string | null
+  /** Id de la novedad nuestra a la que responde (contrato v2) */
+  en_respuesta_a: string | null
 }
 
 const MAX_SKEW_MS = 5 * 60 * 1000
@@ -52,6 +56,8 @@ export function parseNovedades(body: unknown): { ok: true; novedades: NovedadEnt
       detalle: str(n.detalle),
       tipo: str(n.tipo)?.slice(0, 50) ?? null,
       referencia: str(n.referencia)?.slice(0, 200) ?? null,
+      id_externo: str(n.id)?.slice(0, 100) ?? null,
+      en_respuesta_a: str(n.en_respuesta_a)?.slice(0, 100) ?? null,
     })
   }
   return { ok: true, novedades }

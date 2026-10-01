@@ -19,6 +19,12 @@ describe('validarNovedadSaliente', () => {
 })
 
 describe('armarNovedadSaliente', () => {
+  it('incluye id y en_respuesta_a cuando vienen', () => {
+    const n = armarNovedadSaliente({ titulo: 'Re: alias A16', id: 'uuid-1', enRespuestaA: 'nov-ped-9' })
+    expect(n.id).toBe('uuid-1')
+    expect(n.en_respuesta_a).toBe('nov-ped-9')
+  })
+
   it('recorta a los topes del contrato y omite los campos vacíos', () => {
     const n = armarNovedadSaliente({
       titulo: '  ' + 'T'.repeat(400) + '  ',

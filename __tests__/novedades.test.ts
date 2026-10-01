@@ -32,16 +32,34 @@ describe('verificarFirmaNovedades', () => {
 })
 
 describe('parseNovedades', () => {
+  it('contrato v2: acepta id estable y en_respuesta_a opcionales', () => {
+    const r = parseNovedades({ titulo: 'Fix aplicado', id: 'nov-123', en_respuesta_a: 'a0b1c2' })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.novedades[0].id_externo).toBe('nov-123')
+      expect(r.novedades[0].en_respuesta_a).toBe('a0b1c2')
+    }
+  })
+
+  it('contrato v2: sin id ni en_respuesta_a quedan null', () => {
+    const r = parseNovedades({ titulo: 'Suelto' })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.novedades[0].id_externo).toBeNull()
+      expect(r.novedades[0].en_respuesta_a).toBeNull()
+    }
+  })
+
   it('acepta una novedad suelta', () => {
     const r = parseNovedades({ titulo: 'Nueva columna en orders', tipo: 'schema' })
-    expect(r).toEqual({ ok: true, novedades: [{ titulo: 'Nueva columna en orders', detalle: null, tipo: 'schema', referencia: null }] })
+    expect(r).toEqual({ ok: true, novedades: [{ titulo: 'Nueva columna en orders', detalle: null, tipo: 'schema', referencia: null, id_externo: null, en_respuesta_a: null }] })
   })
 
   it('acepta batch { novedades: [...] }', () => {
     const r = parseNovedades({ novedades: [{ titulo: 'a' }, { titulo: 'b', detalle: 'det', referencia: 'orders' }] })
     if (!r.ok) throw new Error('debió aceptar')
     expect(r.novedades).toHaveLength(2)
-    expect(r.novedades[1]).toEqual({ titulo: 'b', detalle: 'det', tipo: null, referencia: 'orders' })
+    expect(r.novedades[1]).toEqual({ titulo: 'b', detalle: 'det', tipo: null, referencia: 'orders', id_externo: null, en_respuesta_a: null })
   })
 
   it('rechaza sin título', () => {

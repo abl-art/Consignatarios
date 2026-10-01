@@ -7,6 +7,10 @@ export interface NovedadSalienteInput {
   detalle?: string
   tipo?: string
   referencia?: string
+  /** Id estable nuestro (uuid de novedades_enviadas) — dedup de reintentos del lado de Pedro */
+  id?: string
+  /** Id de la novedad de Pedro a la que responde */
+  enRespuestaA?: string
 }
 
 export const TIPOS_NOVEDAD = ['schema', 'feature', 'aviso'] as const
@@ -29,5 +33,8 @@ export function armarNovedadSaliente(input: NovedadSalienteInput): Record<string
   if (tipo) out.tipo = tipo.slice(0, 50)
   const referencia = input.referencia?.trim()
   if (referencia) out.referencia = referencia.slice(0, 200)
+  if (input.id) out.id = input.id
+  const enRespuestaA = input.enRespuestaA?.trim()
+  if (enRespuestaA) out.en_respuesta_a = enRespuestaA.slice(0, 100)
   return out
 }

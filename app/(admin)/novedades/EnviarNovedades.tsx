@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { enviarNovedadGocelular, reintentarNovedadGocelular, type NovedadEnviada } from '@/lib/actions/novedades'
 import { TIPOS_NOVEDAD } from '@/lib/novedades-salientes'
 
@@ -17,14 +18,27 @@ export default function EnviarNovedades({ enviadas }: { enviadas: NovedadEnviada
   const [referencia, setReferencia] = useState('')
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
   const [pendiente, startTransition] = useTransition()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // "Responder" desde una novedad recibida: ?re=<id de Pedro>&ret=<título>
+  const enRespuestaA = searchParams.get('re') ?? undefined
+  const respondeATitulo = searchParams.get('ret')
+
+  const limpiarRespuesta = () => {
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.delete('re'); sp.delete('ret')
+    router.replace(`/novedades?${sp.toString()}`, { scroll: false })
+  }
 
   const enviar = () => {
     setMensaje(null)
     startTransition(async () => {
-      const r = await enviarNovedadGocelular({ titulo, detalle, tipo, referencia })
+      const r = await enviarNovedadGocelular({ titulo, detalle, tipo, referencia, enRespuestaA })
       if (r.ok) {
         setMensaje({ ok: true, texto: 'Novedad enviada a GOcelular' })
         setTitulo(''); setDetalle(''); setReferencia('')
+        if (enRespuestaA) limpiarRespuesta()
       } else {
         setMensaje({ ok: false, texto: `Quedó guardada como fallida — ${r.error}` })
         setTitulo(''); setDetalle(''); setReferencia('')
@@ -44,6 +58,12 @@ export default function EnviarNovedades({ enviadas }: { enviadas: NovedadEnviada
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">Informar novedad a GOcelular</h2>
+        {enRespuestaA && (
+          <div className="flex items-center gap-2 mb-3 text-xs text-indigo-700 bg-indigo-50 rounded-lg px-3 py-2 max-w-2xl">
+            <span>↩ Respondiendo a: <span className="font-medium">{respondeATitulo ?? enRespuestaA}</span></span>
+            <button onClick={limpiarRespuesta} className="ml-auto text-indigo-400 hover:text-indigo-700">✕</button>
+          </div>
+        )}
         <div className="space-y-3 max-w-2xl">
           <div className="flex gap-3">
             <input
