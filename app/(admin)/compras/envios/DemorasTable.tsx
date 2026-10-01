@@ -39,15 +39,18 @@ function BotonRescate({ tracking }: { tracking: string | null }) {
   )
 }
 
-// En una demora, "locked" es lo esperable (equipo sin entregar, bloqueado);
-// "active"/"ready_for_use" sin entrega registrada es bandera de fraude.
+// Semáforo pensado para una demora: "ready_for_use" (enrolado, sin bloquear) es
+// lo normal de un equipo en tránsito → ámbar neutro; "active" significa que el
+// equipo ESTÁ EN USO sin entrega registrada → rojo, revisar (entrega sin
+// registrar o uso indebido); "locked" ya fue bloqueado por mora/gestión.
 function TrustonicChip({ status }: { status: string | null }) {
   if (!status) return <span className="text-gray-400">—</span>
   const s = status.toLowerCase()
-  const cls = s === 'locked' ? 'bg-green-50 text-green-700 border-green-200'
-    : s === 'active' || s === 'ready_for_use' ? 'bg-red-50 text-red-700 border-red-200'
+  const cls = s === 'active' ? 'bg-red-50 text-red-700 border-red-200'
+    : s === 'locked' ? 'bg-green-50 text-green-700 border-green-200'
+    : s === 'ready_for_use' ? 'bg-amber-50 text-amber-700 border-amber-200'
     : 'bg-gray-50 text-gray-600 border-gray-200'
-  const emoji = s === 'locked' ? '🔒' : s === 'active' || s === 'ready_for_use' ? '⚠️' : ''
+  const emoji = s === 'active' ? '⚠️' : s === 'locked' ? '🔒' : ''
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
       {emoji && `${emoji} `}{status}
