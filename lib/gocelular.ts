@@ -306,11 +306,13 @@ export async function fetchDemorasEntrega(
               so.shipping_city AS ciudad, so.shipping_province AS provincia,
               so.shipping_method AS metodo, so.paid_at::text AS "confirmadaAt",
               s.tracking_number AS tracking, s.traces,
+              d.trustonic_status::text AS "trustonicStatus",
               go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
               go.order_discarded_at::text AS "gocuotasDiscardedAt"
        FROM shipments s
        JOIN store_orders so ON so.id = s.store_order_id
        LEFT JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+       LEFT JOIN devices d ON d.imei = s.imei
        WHERE s.type = 'outbound'
          AND jsonb_array_length(COALESCE(s.traces, '[]'::jsonb)) > 0
          AND NOT s.traces @> '[{"evento":"EnvioEntregado"}]'

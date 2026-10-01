@@ -39,6 +39,22 @@ function BotonRescate({ tracking }: { tracking: string | null }) {
   )
 }
 
+// En una demora, "locked" es lo esperable (equipo sin entregar, bloqueado);
+// "active"/"ready_for_use" sin entrega registrada es bandera de fraude.
+function TrustonicChip({ status }: { status: string | null }) {
+  if (!status) return <span className="text-gray-400">—</span>
+  const s = status.toLowerCase()
+  const cls = s === 'locked' ? 'bg-green-50 text-green-700 border-green-200'
+    : s === 'active' || s === 'ready_for_use' ? 'bg-red-50 text-red-700 border-red-200'
+    : 'bg-gray-50 text-gray-600 border-gray-200'
+  const emoji = s === 'locked' ? '🔒' : s === 'active' || s === 'ready_for_use' ? '⚠️' : ''
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
+      {emoji && `${emoji} `}{status}
+    </span>
+  )
+}
+
 type Filtro = 'todos' | MetodoEntrega | 'criticos'
 
 export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) {
@@ -108,7 +124,9 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
               <th className="text-left px-4 py-3 font-medium text-gray-600" title="Días desde la confirmación de la orden">Días</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento Andreani</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del equipo en Trustonic: locked es lo esperable sin entrega; active sin entrega registrada es bandera de fraude">Trustonic</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Acción</th>
             </tr>
           </thead>
@@ -148,6 +166,7 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                   )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.tracking ?? '—'}</td>
+                <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.gocuotasOrderId ?? '—'}</td>
                 <td className="px-4 py-3">
                   {d.ordenActiva === null ? (
                     <span className="text-gray-400">—</span>
@@ -163,6 +182,7 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                     </span>
                   )}
                 </td>
+                <td className="px-4 py-3"><TrustonicChip status={d.trustonicStatus} /></td>
                 <td className="px-4 py-3">
                   <BotonRescate tracking={d.tracking} />
                 </td>

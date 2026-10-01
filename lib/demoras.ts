@@ -14,6 +14,7 @@ export type MetodoEntrega = 'domicilio' | 'sucursal'
 export interface DemoraRaw extends Omit<RescateRaw, 'traces'> {
   metodo: string | null
   confirmadaAt: string | null // store_orders.paid_at
+  trustonicStatus: string | null // devices.trustonic_status vía IMEI del envío
   traces: TraceEvento[]
 }
 
@@ -28,6 +29,7 @@ export interface DemoraEntrega {
   gocuotasOrderId: string | null
   gocuotasStatus: string | null
   ordenActiva: boolean | null
+  trustonicStatus: string | null
   metodo: MetodoEntrega
   confirmadaAt: string
   diasDemora: number
@@ -99,6 +101,7 @@ export function armarDemoras(
       gocuotasOrderId: r.gocuotasOrderId,
       gocuotasStatus: r.gocuotasStatus,
       ordenActiva: esOrdenActiva(r),
+      trustonicStatus: r.trustonicStatus,
       metodo,
       confirmadaAt: r.confirmadaAt,
       diasDemora,

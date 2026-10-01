@@ -17,6 +17,7 @@ function raw(sobre: Partial<DemoraRaw>): DemoraRaw {
     gocuotasStatus: 'delivered',
     gocuotasDiscardedAt: null,
     metodo: 'domicilio',
+    trustonicStatus: 'locked',
     confirmadaAt: '2026-09-20T10:00:00Z', // 11 días antes de AHORA
     traces: [{ evento: 'Distribucion', fecha: '2026-09-25T10:00:00Z' }],
     ...sobre,
@@ -66,6 +67,8 @@ describe('armarDemoras', () => {
     expect(d.ultimoEvento).toBe('Distribucion')
     expect(d.diasSinMovimiento).toBe(6)
     expect(d.ordenActiva).toBe(true)
+    expect(d.trustonicStatus).toBe('locked')
+    expect(d.gocuotasOrderId).toBe('123')
     expect(d.destino).toBe('Córdoba, Córdoba')
   })
 
