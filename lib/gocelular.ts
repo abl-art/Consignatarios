@@ -334,7 +334,25 @@ export async function fetchDemorasEntrega(
          AND NOT (s.tracking_number LIKE 'API%' AND EXISTS (
            SELECT 1 FROM shipments s2
            WHERE s2.store_order_id = s.store_order_id AND s2.id <> s.id
-             AND s2.type = 'outbound' AND s2.tracking_number NOT LIKE 'API%'))`
+             AND s2.type = 'outbound' AND s2.tracking_number NOT LIKE 'API%'))
+         -- Si OTRO envío de la misma orden ya se resolvió (entregado, rendido o en
+         -- rescate), este es una etiqueta re-generada muerta: la orden no está demorada
+         AND NOT EXISTS (
+           SELECT 1 FROM shipments s2
+           WHERE s2.store_order_id = s.store_order_id AND s2.id <> s.id
+             AND s2.type = 'outbound'
+             AND (s2.traces @> '[{"evento":"EnvioEntregado"}]'
+               OR s2.traces @> '[{"evento":"SolicitudDeRescate"}]'
+               OR EXISTS (
+                 SELECT 1 FROM jsonb_array_elements(COALESCE(s2.traces, '[]'::jsonb)) t2
+                 WHERE (t2->>'descripcion' ~* 'entregado' AND t2->>'descripcion' !~* 'no entregado')
+                    OR t2->>'evento' IN ('EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'))))
+         -- Entre varios envíos vigentes de la misma orden, mostrar solo el más nuevo
+         AND NOT EXISTS (
+           SELECT 1 FROM shipments s3
+           WHERE s3.store_order_id = s.store_order_id AND s3.id <> s.id
+             AND s3.type = 'outbound' AND s3.tracking_number NOT LIKE 'API%'
+             AND s3.created_at > s.created_at)`
     )
     return armarDemoras(res.rows, ahora, excluirTrackings)
   } finally {
