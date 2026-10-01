@@ -11,6 +11,12 @@ describe('validarNovedadSaliente', () => {
     expect(validarNovedadSaliente({ titulo: '   ' })).toContain('El título es obligatorio')
   })
 
+
+  it('en_respuesta_a debe ser un uuid (contrato de Pedro)', () => {
+    expect(validarNovedadSaliente({ titulo: 'x', enRespuestaA: 'no-es-uuid' })).toContain('en_respuesta_a debe ser un uuid (el id que generó GOcelular para su novedad)')
+    expect(validarNovedadSaliente({ titulo: 'x', enRespuestaA: 'ad42d1cb-1513-41b5-8116-f22ca1904b9e' })).toEqual([])
+    expect(validarNovedadSaliente({ titulo: 'x' })).toEqual([])
+  })
   it('el tipo tiene que ser schema, feature o aviso', () => {
     expect(validarNovedadSaliente({ titulo: 'x', tipo: 'bug' })).toContain('Tipo inválido: schema, feature o aviso')
     expect(validarNovedadSaliente({ titulo: 'x', tipo: 'aviso' })).toEqual([])

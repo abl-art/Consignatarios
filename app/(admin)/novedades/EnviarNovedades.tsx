@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { enviarNovedadGocelular, reintentarNovedadGocelular, type NovedadEnviada } from '@/lib/actions/novedades'
+import { enviarNovedadGocelular, reintentarNovedadGocelular, descartarBorradorNovedad, type NovedadEnviada } from '@/lib/actions/novedades'
 import { TIPOS_NOVEDAD } from '@/lib/novedades-salientes'
 
 const COLOR_TIPO: Record<string, string> = {
@@ -46,11 +46,23 @@ export default function EnviarNovedades({ enviadas }: { enviadas: NovedadEnviada
     })
   }
 
-  const reintentar = (id: string) => {
+  const reintentar = (id: string, esBorrador = false) => {
     setMensaje(null)
     startTransition(async () => {
       const r = await reintentarNovedadGocelular(id)
-      setMensaje(r.ok ? { ok: true, texto: 'Novedad reenviada' } : { ok: false, texto: `Sigue fallando — ${r.error}` })
+      setMensaje(
+        r.ok
+          ? { ok: true, texto: esBorrador ? 'Borrador aprobado y enviado a GOcelular' : 'Novedad reenviada' }
+          : { ok: false, texto: `Falló el envío — ${r.error}` }
+      )
+    })
+  }
+
+  const descartar = (id: string) => {
+    setMensaje(null)
+    startTransition(async () => {
+      const r = await descartarBorradorNovedad(id)
+      setMensaje(r.ok ? { ok: true, texto: 'Borrador descartado' } : { ok: false, texto: r.error ?? 'No se pudo descartar' })
     })
   }
 
@@ -140,12 +152,38 @@ export default function EnviarNovedades({ enviadas }: { enviadas: NovedadEnviada
                   </td>
                   <td className="px-3 py-2 text-gray-500 text-xs">{n.referencia ?? '—'}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded-full ${n.estado === 'enviada' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {n.estado}
+                    <span
+                      className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                        n.estado === 'enviada'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : n.estado === 'borrador'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      {n.estado === 'borrador' ? 'borrador de Celia' : n.estado}
                     </span>
                     {n.respuesta && <p className="text-[10px] text-gray-400 mt-0.5 max-w-[200px]">{n.respuesta}</p>}
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                    {n.estado === 'borrador' && (
+                      <>
+                        <button
+                          onClick={() => reintentar(n.id, true)}
+                          disabled={pendiente}
+                          className="px-3 py-1 text-xs font-medium rounded-full bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40"
+                        >
+                          Enviar
+                        </button>
+                        <button
+                          onClick={() => descartar(n.id)}
+                          disabled={pendiente}
+                          className="ml-2 px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-40"
+                        >
+                          Descartar
+                        </button>
+                      </>
+                    )}
                     {n.estado === 'fallida' && (
                       <button
                         onClick={() => reintentar(n.id)}

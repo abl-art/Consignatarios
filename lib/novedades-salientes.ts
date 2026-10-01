@@ -15,11 +15,17 @@ export interface NovedadSalienteInput {
 
 export const TIPOS_NOVEDAD = ['schema', 'feature', 'aviso'] as const
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function validarNovedadSaliente(input: NovedadSalienteInput): string[] {
   const errores: string[] = []
   if (!input.titulo || input.titulo.trim() === '') errores.push('El título es obligatorio')
   if (input.tipo && input.tipo.trim() !== '' && !TIPOS_NOVEDAD.includes(input.tipo as (typeof TIPOS_NOVEDAD)[number])) {
     errores.push('Tipo inválido: schema, feature o aviso')
+  }
+  // Contrato de Pedro (1/10): en_respuesta_a, si viene, es el uuid que él generó
+  if (input.enRespuestaA && !UUID_RE.test(input.enRespuestaA.trim())) {
+    errores.push('en_respuesta_a debe ser un uuid (el id que generó GOcelular para su novedad)')
   }
   return errores
 }

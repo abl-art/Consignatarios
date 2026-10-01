@@ -88,7 +88,7 @@ export interface NovedadEnviada {
   detalle: string | null
   tipo: string | null
   referencia: string | null
-  estado: 'enviada' | 'fallida'
+  estado: 'borrador' | 'enviada' | 'fallida'
   respuesta: string | null
   enviada_at: string | null
   created_at: string
@@ -192,4 +192,59 @@ export async function reintentarNovedadGocelular(id: string): Promise<{ ok: bool
 
   revalidatePath('/novedades')
   return envio.ok ? { ok: true } : { ok: false, error: envio.respuesta }
+}
+
+/**
+ * Borrador de novedad (lo usa la tool redactar_novedad de Celia): queda en
+ * novedades_enviadas con estado 'borrador' y Emiliano lo envía con un click
+ * desde /novedades → Enviadas. Nada sale sin aprobación humana.
+ */
+export async function crearBorradorNovedad(input: NovedadSalienteInput): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const errores = validarNovedadSaliente(input)
+  if (errores.length > 0) return { ok: false, error: errores.join(' · ') }
+
+  const admin = createAdminClient()
+
+  // Si responde a una novedad de Pedro, el id tiene que ser uno que él mandó
+  if (input.enRespuestaA) {
+    const { data: original } = await admin
+      .from('novedades_gocelular')
+      .select('id')
+      .eq('id_externo', input.enRespuestaA.trim())
+      .maybeSingle()
+    if (!original) {
+      return { ok: false, error: `No existe ninguna novedad recibida con id_externo ${input.enRespuestaA} — en_respuesta_a debe ser el id_externo de una novedad de GOcelular (las anteriores al contrato v2 no tienen)` }
+    }
+  }
+
+  const base = armarNovedadSaliente(input)
+  const { data: fila, error } = await admin
+    .from('novedades_enviadas')
+    .insert({
+      titulo: base.titulo,
+      detalle: base.detalle ?? null,
+      tipo: base.tipo ?? null,
+      referencia: base.referencia ?? null,
+      en_respuesta_a: base.en_respuesta_a ?? null,
+      estado: 'borrador',
+    })
+    .select('id')
+    .single()
+  if (error || !fila) return { ok: false, error: `No se pudo guardar el borrador: ${error?.message}` }
+
+  revalidatePath('/novedades')
+  return { ok: true, id: fila.id }
+}
+
+export async function descartarBorradorNovedad(id: string): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient()
+  const { error, count } = await admin
+    .from('novedades_enviadas')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+    .eq('estado', 'borrador')
+  if (error) return { ok: false, error: error.message }
+  if (!count) return { ok: false, error: 'Solo se pueden descartar borradores' }
+  revalidatePath('/novedades')
+  return { ok: true }
 }

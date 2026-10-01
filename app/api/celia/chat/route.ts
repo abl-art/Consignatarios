@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool, getSupabasePool } from '@/lib/db-pool'
 import { ejecutarConsulta, serializarFilas } from '@/lib/celia/sql'
 import { SYSTEM_CELIA } from '@/lib/celia/contexto'
+import { crearBorradorNovedad } from '@/lib/actions/novedades'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -28,7 +29,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: 'consultar_supabase',
     description:
-      'Ejecuta una consulta SELECT en el Postgres de la plataforma GOcelular360 (cheques_proveedor, flujo_*, facturas, proveedores, liquidaciones, garantías, etc.). Solo lectura, máx 500 filas.',
+      'Ejecuta una consulta SELECT en el Postgres de la plataforma GOcelular360 (cheques_proveedor, flujo_*, facturas, proveedores, liquidaciones, garantías, novedades_gocelular/novedades_enviadas, etc.). Solo lectura, máx 500 filas.',
     input_schema: {
       type: 'object',
       properties: {
@@ -37,13 +38,47 @@ const tools: Anthropic.Tool[] = [
       required: ['sql'],
     },
   },
+  {
+    name: 'redactar_novedad',
+    description:
+      'Crea un BORRADOR de novedad para el equipo de GOcelular (Pedro). NO la envía: queda en estado borrador y Emiliano la revisa y despacha con un click desde /novedades → Enviadas. Usala cuando Emiliano pida informar o responder algo a GOcelular. Antes de redactar, consultá los datos reales con las otras tools — nunca inventes cifras ni referencias.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        titulo: { type: 'string', description: 'Título de la novedad (máx 200 caracteres)' },
+        detalle: { type: 'string', description: 'Cuerpo con el contexto completo (máx 2000 caracteres)' },
+        tipo: { type: 'string', enum: ['schema', 'feature', 'aviso'], description: 'Tipo de novedad (default aviso)' },
+        referencia: { type: 'string', description: 'Referencia corta: pedido, IMEI, endpoint, request_id (máx 200)' },
+        en_respuesta_a: {
+          type: 'string',
+          description: 'Solo si responde a una novedad recibida de GOcelular: el id_externo (uuid) de esa novedad en novedades_gocelular. Las novedades viejas sin id_externo no se pueden hilar — omitilo.',
+        },
+      },
+      required: ['titulo'],
+    },
+  },
 ]
 
-async function ejecutarTool(nombre: string, sql: string): Promise<{ contenido: string; esError: boolean }> {
+async function ejecutarTool(nombre: string, input: Record<string, unknown>): Promise<{ contenido: string; esError: boolean }> {
+  if (nombre === 'redactar_novedad') {
+    const r = await crearBorradorNovedad({
+      titulo: String(input.titulo ?? ''),
+      detalle: input.detalle ? String(input.detalle) : undefined,
+      tipo: input.tipo ? String(input.tipo) : 'aviso',
+      referencia: input.referencia ? String(input.referencia) : undefined,
+      enRespuestaA: input.en_respuesta_a ? String(input.en_respuesta_a) : undefined,
+    })
+    if (!r.ok) return { contenido: `No se pudo crear el borrador: ${r.error}`, esError: true }
+    return {
+      contenido: `Borrador creado (id ${r.id}). NO fue enviado: Emiliano lo revisa y despacha desde /novedades → pestaña "Enviadas a GOcelular". Avisale que tiene un borrador esperando aprobación.`,
+      esError: false,
+    }
+  }
+
   const pool = nombre === 'consultar_gocelular' ? getPool() : getSupabasePool()
   if (!pool) return { contenido: 'Error: base de datos no configurada', esError: true }
   try {
-    const { filas, truncado } = await ejecutarConsulta(pool, sql)
+    const { filas, truncado } = await ejecutarConsulta(pool, String(input.sql ?? ''))
     const cuerpo = serializarFilas(filas)
     return {
       contenido: truncado ? `${cuerpo}\n[RESULTADO TRUNCADO a 500 filas]` : cuerpo,
@@ -171,10 +206,12 @@ export async function POST(request: Request) {
             const resultados: Anthropic.ToolResultBlockParam[] = []
             for (const block of respuesta.content) {
               if (block.type !== 'tool_use') continue
-              const base = block.name === 'consultar_gocelular' ? 'GOcelular' : 'la plataforma'
-              emitir({ tipo: 'estado', texto: `Consultando ${base}...` })
-              const input = block.input as { sql: string }
-              const { contenido, esError } = await ejecutarTool(block.name, input.sql)
+              const estado =
+                block.name === 'redactar_novedad'
+                  ? 'Redactando borrador de novedad...'
+                  : `Consultando ${block.name === 'consultar_gocelular' ? 'GOcelular' : 'la plataforma'}...`
+              emitir({ tipo: 'estado', texto: estado })
+              const { contenido, esError } = await ejecutarTool(block.name, block.input as Record<string, unknown>)
               resultados.push({
                 type: 'tool_result',
                 tool_use_id: block.id,

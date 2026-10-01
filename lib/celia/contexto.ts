@@ -115,6 +115,8 @@ modelos(id uuid, marca text, modelo text, created_at ts, precio_costo num)
 modelos_config(id uuid, modelo_id uuid, stock_minimo int, proyeccion_ventas_mensual int, created_at ts)
 notas_pedidos(id uuid, fecha date, estado text, observaciones text, total num, created_at ts, numero int)
 notas_pedidos_items(id uuid, nota_pedido_id uuid, proveedor_id uuid, proveedor_nombre text, modelo_id uuid, marca text, modelo text, cantidad int, precio_unitario num, subtotal num, created_at ts)
+novedades_gocelular(id uuid, titulo text, detalle text, tipo text, referencia text, created_at ts, leida_at ts, id_externo text, en_respuesta_a text)
+novedades_enviadas(id uuid, titulo text, detalle text, tipo text, referencia text, estado text, respuesta text, enviada_at ts, created_at ts, en_respuesta_a text)
 pagos(id uuid, factura_id uuid, fecha date, monto num, metodo_pago text, created_at ts)
 pagos_mayoristas(id uuid, cliente_mayorista_id uuid, monto num, fecha_cobro date, cuit_emisor text, tipo text, comprobante_url text, confianza_extraccion num, created_at ts, nro_cheque text, emisor text)
 pase_contabilidad_transito(id uuid, periodo text, pedido_id text, categoria text, proveedor text, items jsonb, unidades int, valuacion num, created_at ts)
@@ -126,4 +128,16 @@ stock_cierre_mensual(id uuid, periodo text, categoria text, producto text, stock
 sync_log(id uuid, started_at ts, finished_at ts, status text, ventas_nuevas int, ventas_ya_existentes int, dispositivos_no_encontrados int, errores_monitoreo int, error_msg text, detalle jsonb, created_by uuid)
 tenencia_modelos_ocultos(id uuid, model_code text, created_at ts)
 ventas(id uuid, dispositivo_id uuid, consignatario_id uuid, fecha_venta date, precio_venta num, comision_monto num, gocelular_sale_id text, synced_at ts, store_name text)
+
+
+## Novedades con GOcelular (canal bidireccional con Pedro)
+
+novedades_gocelular son los avisos que manda el equipo de GOcelular (Pedro): cambios de esquema, features y avisos operativos. id_externo es el id estable que genera Pedro (las anteriores al 1/10/2026 no lo tienen); en_respuesta_a, si viene, es el uuid de una novedad NUESTRA (novedades_enviadas.id) a la que responde. novedades_enviadas es lo que el 360 le mandó a Pedro (estado: borrador/enviada/fallida).
+
+Cuando Emiliano te pida informar o responder algo a GOcelular/Pedro, usá la tool redactar_novedad. Reglas:
+- SIEMPRE consultá primero los datos reales con las tools SQL; nunca inventes cifras, referencias ni ids.
+- Si es respuesta a una novedad de Pedro, pasá en_respuesta_a = id_externo de esa novedad (consultalo en novedades_gocelular). Si no tiene id_externo, omitilo y mencioná la novedad original en el detalle.
+- El borrador NO se envía solo: queda esperando que Emiliano lo apruebe desde /novedades → Enviadas. Terminá siempre avisándole que el borrador está listo para su revisión.
+- Pedro lee las novedades por Slack y responde solo con su aprobación — escribí como para un equipo técnico externo: concreto, con datos y referencias.
+
 `

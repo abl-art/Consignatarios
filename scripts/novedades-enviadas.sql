@@ -23,3 +23,8 @@ CREATE POLICY admin_all ON novedades_enviadas
 -- ALTER TABLE novedades_gocelular ADD COLUMN IF NOT EXISTS id_externo text, ADD COLUMN IF NOT EXISTS en_respuesta_a text;
 -- CREATE UNIQUE INDEX IF NOT EXISTS novedades_gocelular_id_externo_uq ON novedades_gocelular(id_externo) WHERE id_externo IS NOT NULL;
 -- ALTER TABLE novedades_enviadas ADD COLUMN IF NOT EXISTS en_respuesta_a text;
+
+-- Borradores de Celia (1/10/2026): la tool redactar_novedad crea filas con
+-- estado 'borrador' que Emiliano aprueba/descarta desde /novedades. ALTER ya corrido:
+-- ALTER TABLE novedades_enviadas DROP CONSTRAINT novedades_enviadas_estado_check;
+-- ALTER TABLE novedades_enviadas ADD CONSTRAINT novedades_enviadas_estado_check CHECK (estado IN ('borrador','enviada','fallida'));
