@@ -24,6 +24,7 @@ export type IconName =
   | 'documento'
   | 'celia'
   | 'novedades'
+  | 'carga-simple'
 
 /**
  * Iconos de sidebar. Usa strokes de 1.8px para buena legibilidad a 16px.
@@ -42,6 +43,25 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
   }
 
   switch (name) {
+    case 'carga-simple':
+      // Logo "CS" (iniciales de Carga Simple, sistema externo de comprobantes)
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="18" height="18" rx="4" />
+          <text
+            x="12"
+            y="15.5"
+            textAnchor="middle"
+            fontSize="8.5"
+            fontWeight="700"
+            fill="currentColor"
+            stroke="none"
+            fontFamily="inherit"
+          >
+            CS
+          </text>
+        </svg>
+      )
     case 'dashboard':
       return (
         <svg {...common}>
