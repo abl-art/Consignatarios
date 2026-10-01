@@ -16,6 +16,7 @@ export interface DemoraRaw extends Omit<RescateRaw, 'traces'> {
   confirmadaAt: string | null // store_orders.paid_at
   envioCreadoAt: string | null // shipments.created_at (fallback si no hay traces)
   trustonicStatus: string | null // devices.trustonic_status vía IMEI del envío
+  trustonicUpdatedAt: string | null // frescura del dato: réplica, puede estar vieja
   traces: TraceEvento[]
 }
 
@@ -31,6 +32,7 @@ export interface DemoraEntrega {
   gocuotasStatus: string | null
   ordenActiva: boolean | null
   trustonicStatus: string | null
+  trustonicUpdatedAt: string | null
   metodo: MetodoEntrega
   confirmadaAt: string
   /** Creación del tracking en Andreani (primer evento del trace) */
@@ -116,6 +118,7 @@ export function armarDemoras(
       gocuotasStatus: r.gocuotasStatus,
       ordenActiva: esOrdenActiva(r),
       trustonicStatus: r.trustonicStatus,
+      trustonicUpdatedAt: r.trustonicUpdatedAt,
       metodo,
       confirmadaAt: r.confirmadaAt,
       trackingCreadoAt,

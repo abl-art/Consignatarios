@@ -18,6 +18,7 @@ function raw(sobre: Partial<DemoraRaw>): DemoraRaw {
     gocuotasDiscardedAt: null,
     metodo: 'domicilio',
     trustonicStatus: 'locked',
+    trustonicUpdatedAt: '2026-09-30T10:00:00Z',
     confirmadaAt: '2026-09-18T10:00:00Z',
     envioCreadoAt: '2026-09-20T09:00:00Z',
     // tracking creado el 20/9 → 11 días hasta AHORA; picking 18/9→20/9 = 2 días

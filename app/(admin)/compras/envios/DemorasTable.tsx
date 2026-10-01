@@ -44,7 +44,11 @@ function BotonRescate({ tracking }: { tracking: string | null }) {
 // lo normal de un equipo en tránsito → ámbar neutro; "active" significa que el
 // equipo ESTÁ EN USO sin entrega registrada → rojo, revisar (entrega sin
 // registrar o uso indebido); "locked" ya fue bloqueado por mora/gestión.
-function TrustonicChip({ status }: { status: string | null }) {
+// OJO: el estado sale de la réplica de GOcelular (devices.trustonic_status) y
+// el sync no cubre todos los equipos todos los días — puede quedar viejo (caso
+// real: 17 días congelado en ready_for_use cuando Trustonic decía active).
+// Por eso el chip muestra SIEMPRE de cuándo es el dato, en rojo si tiene +3 días.
+function TrustonicChip({ status, updatedAt }: { status: string | null; updatedAt: string | null }) {
   if (!status) return <span className="text-gray-400">—</span>
   const s = status.toLowerCase()
   const cls = s === 'active' ? 'bg-red-50 text-red-700 border-red-200'
@@ -52,9 +56,20 @@ function TrustonicChip({ status }: { status: string | null }) {
     : s === 'ready_for_use' ? 'bg-amber-50 text-amber-700 border-amber-200'
     : 'bg-gray-50 text-gray-600 border-gray-200'
   const emoji = s === 'active' ? '⚠️' : s === 'locked' ? '🔒' : ''
+  const diasDato = updatedAt ? Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000) : null
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
-      {emoji && `${emoji} `}{status}
+    <span className="inline-flex flex-col items-start">
+      <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}>
+        {emoji && `${emoji} `}{status}
+      </span>
+      {updatedAt && (
+        <span
+          className={`text-[10px] mt-0.5 ${diasDato !== null && diasDato > 3 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}
+          title="Fecha del dato en la réplica de GOcelular — si es viejo, verificá en la consola de Trustonic"
+        >
+          dato del {new Date(updatedAt).toLocaleDateString('es-AR')}
+        </span>
+      )}
     </span>
   )
 }
@@ -244,7 +259,7 @@ export default function DemorasTable({ demoras }: { demoras: DemoraEntrega[] }) 
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3"><TrustonicChip status={d.trustonicStatus} /></td>
+                <td className="px-4 py-3"><TrustonicChip status={d.trustonicStatus} updatedAt={d.trustonicUpdatedAt} /></td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5">
                     <BotonRescate tracking={d.tracking} />

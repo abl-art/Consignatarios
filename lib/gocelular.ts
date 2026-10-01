@@ -308,6 +308,7 @@ export async function fetchDemorasEntrega(
               s.created_at::text AS "envioCreadoAt",
               s.tracking_number AS tracking, s.traces,
               d.trustonic_status::text AS "trustonicStatus",
+              d.updated_at::text AS "trustonicUpdatedAt",
               go.order_id::text AS "gocuotasOrderId", go.order_status AS "gocuotasStatus",
               go.order_discarded_at::text AS "gocuotasDiscardedAt"
        FROM shipments s
