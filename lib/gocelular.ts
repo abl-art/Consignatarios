@@ -326,7 +326,13 @@ export async function fetchDemorasEntrega(
               OR t->>'evento' IN ('EnvioRendido', 'InicioCicloDeRendicion', 'EnvioEnInformeDeRendicion'))
          AND so.paid_at IS NOT NULL
          AND ((so.shipping_method = 'domicilio' AND so.paid_at < now() - interval '7 days')
-           OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))`
+           OR (so.shipping_method = 'sucursal' AND so.paid_at < now() - interval '14 days'))
+         -- Tracking "API…" = identificador provisorio de la API de Andreani; si la
+         -- orden tiene otro envío con tracking real, el API es un duplicado huérfano
+         AND NOT (s.tracking_number LIKE 'API%' AND EXISTS (
+           SELECT 1 FROM shipments s2
+           WHERE s2.store_order_id = s.store_order_id AND s2.id <> s.id
+             AND s2.type = 'outbound' AND s2.tracking_number NOT LIKE 'API%'))`
     )
     return armarDemoras(res.rows, ahora, excluirTrackings)
   } finally {
