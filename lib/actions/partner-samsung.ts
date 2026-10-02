@@ -2,7 +2,9 @@
 // de GOcelular y los runs congelados de proyección (Supabase, ambos métodos).
 //
 // REGLA DE MARCA POR VENTA (Emiliano, 2/10): el share se mide sobre VENTAS
-// (fecha de creación de la orden), no sobre equipos asignados. Marca:
+// CONFIRMADAS — no descartadas Y order_delivered_at NOT NULL (en GOcuotas se
+// estampa al aprobar el crédito, no con la entrega física: las 216 órdenes del
+// 1-2/10 ya lo tenían; los carros abandonados quedan 'discarded'). Marca:
 // - propia: primera palabra de store_orders.product_name (misma fuente que el
 //   cuadro "Qué vendemos" del Dashboard 360) — cobertura 100% al instante.
 // - terceros: devices.brand (el comercio enrola el equipo al vender).
@@ -93,7 +95,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
                 ${MARCA_VENTA} AS marca,
                 count(*)::text AS ventas
          ${FROM_VENTAS}
-         WHERE o.order_discarded_at IS NULL ${filtroCanal}
+         WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
            AND o.order_created_at >= '${CONTEXTO_DESDE}' AND o.order_created_at < '${SHARE_FIJO_HASTA}'
          GROUP BY 1, 2 ORDER BY 1`
       ),
@@ -101,7 +103,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
       client.query<{ marca: string | null; ventas: string }>(
         `SELECT ${MARCA_VENTA} AS marca, count(*)::text AS ventas
          ${FROM_VENTAS}
-         WHERE o.order_discarded_at IS NULL ${filtroCanal}
+         WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
            AND o.order_created_at >= '${ACUERDO_DESDE}'
          GROUP BY 1`
       ),
@@ -109,7 +111,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
       client.query<{ model: string | null; u: string }>(
         `SELECT ${MODELO_VENTA} AS model, count(*)::text AS u
          ${FROM_VENTAS}
-         WHERE o.order_discarded_at IS NULL ${filtroCanal}
+         WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
            AND (${MARCA_VENTA}) ILIKE '%samsung%'
            AND o.order_created_at >= now() - interval '90 days'
          GROUP BY 1`
@@ -124,7 +126,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
                       (now() AT TIME ZONE '${TZ_AR}')::date AS hoy
                FROM gocuotas_orders o
                JOIN store_orders so ON so.gocuotas_order_id = o.order_id
-               WHERE o.order_discarded_at IS NULL
+               WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL
                  AND ${COND_PROPIO}
                  AND so.product_name ILIKE 'samsung%'
                  AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date >= (now() AT TIME ZONE '${TZ_AR}')::date - 30
