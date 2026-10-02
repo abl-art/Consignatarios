@@ -131,7 +131,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
                     count(*) FILTER (WHERE fecha >= date_trunc('month', hoy)::date)::text AS mes
              FROM ventas
              GROUP BY sku
-             ORDER BY d30 DESC`
+             ORDER BY count(*) DESC`
           )
         : Promise.resolve({ rows: [] as { sku: string; hoy: string; ayer: string; d7: string; d30: string; mes: string }[] }),
     ])
@@ -235,7 +235,7 @@ export async function getSkusSamsungRango(desde: string, hasta: string): Promise
          AND so.product_name ILIKE 'samsung%'
          AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date >= $1::date
          AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date <= $2::date
-       GROUP BY 1 ORDER BY 2 DESC`,
+       GROUP BY 1 ORDER BY count(*) DESC`,
       [desde, hasta]
     )
     return res.rows.map(r => ({ sku: r.sku, unidades: Number(r.unidades) }))
