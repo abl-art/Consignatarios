@@ -6,6 +6,9 @@
 //   (ventana jul-sep 2026) — la foto pre-acuerdo, no cambia más.
 // - Escenario "desde 1/10": share REAL medido desde el 1/10 hasta hoy,
 //   recalculado en cada visita — el último share mantiene viva la proyección.
+// - Ambos shares se miden SOLO sobre órdenes con equipo asignado (con marca):
+//   el device llega al picking con ~1 día de lag y las órdenes sin marca en el
+//   denominador aplastan el share de la ventana fresca (2/10: 9,3% vs 34,9%).
 
 export interface MesProyeccion {
   mes: string // YYYY-MM

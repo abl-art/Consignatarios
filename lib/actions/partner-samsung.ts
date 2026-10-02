@@ -16,10 +16,12 @@ import {
 } from '@/lib/partner-samsung'
 
 // Ventana FIJA del share pre-acuerdo (definición de Emiliano: el histórico
-// hasta el 30/9 es un dato fijo)
-const SHARE_FIJO_DESDE = '2026-07-01'
-const SHARE_FIJO_HASTA = '2026-10-01'
-const ACUERDO_DESDE = '2026-10-01'
+// hasta el 30/9 es un dato fijo). Límites en hora argentina — con fecha UTC
+// la noche del 30/9 ART caía dentro de "octubre" y contaminaba el share nuevo.
+const CONTEXTO_DESDE = '2026-06-01T00:00:00-03:00'
+const SHARE_FIJO_HASTA = '2026-10-01T00:00:00-03:00'
+const ACUERDO_DESDE = SHARE_FIJO_HASTA
+const TZ_AR = 'America/Argentina/Buenos_Aires'
 
 export type CanalPartner = 'total' | 'propia' | 'terceros'
 
@@ -37,7 +39,11 @@ export interface DatosPartnerSamsung {
   runMes: string
   shareFijo: number
   shareActual: number
-  muestraActual: { samsung: number; total: number } // órdenes desde el 1/10
+  // Muestra desde el 1/10: el share se mide SOLO sobre órdenes con equipo ya
+  // asignado (conMarca) — las recién creadas no tienen device todavía y
+  // contarlas en el denominador aplasta el share (bug real del 2/10: 9,3% vs
+  // 34,9% medido sobre órdenes con marca). total queda como contexto.
+  muestraActual: { samsung: number; conMarca: number; total: number }
   historico: { mes: string; samsung: number; total: number }[] // jun-sep, contexto
   escenarios: EscenarioMes[]
   ranking: ModeloRanking[]
@@ -51,21 +57,23 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
   try {
     const [histRes, actualRes, rankRes] = await Promise.all([
       // Unidades propias por mes con flag Samsung (jun → sep, incluye la ventana del share fijo)
-      client.query<{ mes: string; total: string; samsung: string }>(
-        `SELECT to_char(date_trunc('month', o.created_at), 'YYYY-MM') AS mes,
+      client.query<{ mes: string; total: string; con_marca: string; samsung: string }>(
+        `SELECT to_char(date_trunc('month', o.created_at AT TIME ZONE '${TZ_AR}'), 'YYYY-MM') AS mes,
                 count(*)::text AS total,
+                count(*) FILTER (WHERE d.marca IS NOT NULL)::text AS con_marca,
                 count(*) FILTER (WHERE d.marca ILIKE '%samsung%')::text AS samsung
          FROM gocuotas_orders o
          LEFT JOIN LATERAL (
            SELECT MIN(brand) AS marca FROM devices WHERE devices.order_id = o.order_id
          ) d ON true
          WHERE o.order_discarded_at IS NULL ${filtroCanal}
-           AND o.created_at >= '2026-06-01' AND o.created_at < '${SHARE_FIJO_HASTA}'
+           AND o.created_at >= '${CONTEXTO_DESDE}' AND o.created_at < '${SHARE_FIJO_HASTA}'
          GROUP BY 1 ORDER BY 1`
       ),
       // Share real desde el 1/10 (el "último share" que pide Emiliano)
-      client.query<{ total: string; samsung: string }>(
+      client.query<{ total: string; con_marca: string; samsung: string }>(
         `SELECT count(*)::text AS total,
+                count(*) FILTER (WHERE d.marca IS NOT NULL)::text AS con_marca,
                 count(*) FILTER (WHERE d.marca ILIKE '%samsung%')::text AS samsung
          FROM gocuotas_orders o
          LEFT JOIN LATERAL (
@@ -86,18 +94,21 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
       ),
     ])
 
-    // Share fijo: jul-sep (junio queda solo como contexto del gráfico)
+    // Share fijo: jul-sep (junio queda solo como contexto del gráfico).
+    // Denominador = órdenes con marca conocida, misma regla que el share actual.
     const ventanaFija = histRes.rows.filter(r => r.mes >= '2026-07')
     const fijoSamsung = ventanaFija.reduce((a, r) => a + Number(r.samsung), 0)
-    const fijoTotal = ventanaFija.reduce((a, r) => a + Number(r.total), 0)
-    const shareFijo = calcularShare(fijoSamsung, fijoTotal)
+    const fijoConMarca = ventanaFija.reduce((a, r) => a + Number(r.con_marca), 0)
+    const shareFijo = calcularShare(fijoSamsung, fijoConMarca)
 
     const muestraActual = {
       samsung: Number(actualRes.rows[0]?.samsung ?? 0),
+      conMarca: Number(actualRes.rows[0]?.con_marca ?? 0),
       total: Number(actualRes.rows[0]?.total ?? 0),
     }
-    // Sin ventas todavía desde el 1/10, el escenario "con acuerdo" arranca igual al fijo
-    const shareActual = muestraActual.total > 0 ? calcularShare(muestraActual.samsung, muestraActual.total) : shareFijo
+    // Sin ventas con equipo asignado todavía desde el 1/10, el escenario
+    // "con acuerdo" arranca igual al fijo
+    const shareActual = muestraActual.conMarca > 0 ? calcularShare(muestraActual.samsung, muestraActual.conMarca) : shareFijo
 
     // Proyección propia del último run congelado, ambos métodos
     const supabase = createAdminClient()

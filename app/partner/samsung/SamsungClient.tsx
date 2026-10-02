@@ -94,9 +94,9 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
             <p className="text-xs text-gray-500 mb-1">Share desde el 1/10</p>
             <p className="text-2xl font-bold text-[#1428a0]">{pct(shareActual)}</p>
             <p className="text-xs text-gray-400">
-              {muestraActual.total > 0
-                ? `${muestraActual.samsung.toLocaleString('es-AR')} de ${muestraActual.total.toLocaleString('es-AR')} ventas`
-                : 'sin ventas aún — se usa la base fija'}
+              {muestraActual.conMarca > 0
+                ? `${muestraActual.samsung.toLocaleString('es-AR')} de ${muestraActual.conMarca.toLocaleString('es-AR')} ventas con equipo asignado`
+                : 'sin ventas con equipo asignado aún — se usa la base fija'}
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -132,7 +132,8 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
           <p className="text-xs text-gray-400 mt-2">
             Las líneas muestran el promedio de los dos métodos de proyección de GOcelular; el rango por
             método está en la tabla. El escenario &quot;desde 1/10&quot; usa el share real acumulado del
-            acuerdo y se recalcula con cada venta.
+            acuerdo y se recalcula con cada venta. El share se mide sobre ventas con equipo ya
+            asignado (las órdenes recién creadas aún no informan marca).
           </p>
         </div>
 
