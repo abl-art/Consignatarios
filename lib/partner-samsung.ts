@@ -6,9 +6,10 @@
 //   (ventana jul-sep 2026) — la foto pre-acuerdo, no cambia más.
 // - Escenario "desde 1/10": share REAL medido desde el 1/10 hasta hoy,
 //   recalculado en cada visita — el último share mantiene viva la proyección.
-// - Ambos shares se miden SOLO sobre órdenes con equipo asignado (con marca):
-//   el device llega al picking con ~1 día de lag y las órdenes sin marca en el
-//   denominador aplastan el share de la ventana fresca (2/10: 9,3% vs 34,9%).
+// - Ambos shares se miden POR VENTA (fecha de la orden): en propia la marca
+//   sale del producto vendido (store_orders.product_name, cobertura
+//   inmediata); NUNCA de la asignación de equipo en Andreani, que llega con
+//   ~1 día de lag y aplasta el share de la ventana fresca.
 
 export interface MesProyeccion {
   mes: string // YYYY-MM
@@ -38,6 +39,40 @@ export function armarEscenarios(meses: MesProyeccion[], shareFijo: number, share
 export function calcularShare(unidadesMarca: number, unidadesTotal: number): number {
   if (unidadesTotal <= 0) return 0
   return unidadesMarca / unidadesTotal
+}
+
+// Marca por VENTA (regla de Emiliano, 2/10): propia = primera palabra de
+// store_orders.product_name (misma fuente que "Qué vendemos" del Dashboard
+// 360 — la venta existe aunque el equipo no esté asignado); terceros =
+// devices.brand (el comercio enrola el equipo al vender). Acá se unifican.
+export interface VentaMarca {
+  marca: string
+  ventas: number
+}
+
+export function normalizarMarca(marca: string | null): string | null {
+  const limpio = (marca ?? '').trim()
+  if (!limpio) return null
+  if (/samsung/i.test(limpio)) return 'Samsung'
+  return limpio
+}
+
+export function agruparMarcas(rows: { marca: string | null; ventas: number }[]): VentaMarca[] {
+  const porMarca = new Map<string, number>()
+  for (const r of rows) {
+    const marca = normalizarMarca(r.marca)
+    if (!marca) continue
+    porMarca.set(marca, (porMarca.get(marca) ?? 0) + r.ventas)
+  }
+  return [...porMarca.entries()]
+    .map(([marca, ventas]) => ({ marca, ventas }))
+    .sort((a, b) => b.ventas - a.ventas)
+}
+
+export function shareSamsung(marcas: VentaMarca[]): number {
+  const total = marcas.reduce((a, m) => a + m.ventas, 0)
+  const samsung = marcas.find(m => m.marca === 'Samsung')?.ventas ?? 0
+  return calcularShare(samsung, total)
 }
 
 // Los nombres de modelo en devices.model vienen en variantes libres

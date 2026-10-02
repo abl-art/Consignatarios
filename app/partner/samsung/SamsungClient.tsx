@@ -13,7 +13,17 @@ import {
 } from 'recharts'
 import { useState } from 'react'
 import CanalPills, { type Canal } from '@/app/(admin)/finanzas/CanalPills'
-import type { CanalPartner, DatosPartnerSamsung } from '@/lib/actions/partner-samsung'
+import type { CanalPartner, DatosPartnerSamsung, SkuVendido } from '@/lib/actions/partner-samsung'
+import PieMarcas from './PieMarcas'
+
+const PERIODOS_SKU = [
+  { key: 'hoy', label: 'Hoy' },
+  { key: 'ayer', label: 'Ayer' },
+  { key: 'd7', label: '7 días' },
+  { key: 'd30', label: '30 días' },
+  { key: 'mes', label: 'Este mes' },
+] as const
+type PeriodoSku = (typeof PERIODOS_SKU)[number]['key']
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -41,7 +51,10 @@ const NOMBRE_CANAL: Record<CanalPartner, string> = {
 export default function SamsungClient({ datos: todos }: { datos: Record<CanalPartner, DatosPartnerSamsung | null> }) {
   // El acuerdo aplica a la venta propia: es el canal por defecto
   const [canal, setCanal] = useState<Canal>('propia')
+  const [periodoSku, setPeriodoSku] = useState<PeriodoSku>('hoy')
   const datos = todos[canal]
+  // Los SKUs vendidos son de la tienda propia (alcance del acuerdo)
+  const skus: SkuVendido[] = todos.propia?.skusSamsung ?? []
   if (!datos) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
@@ -49,7 +62,7 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
       </div>
     )
   }
-  const { escenarios, ranking, historico, shareFijo, shareActual, muestraActual } = datos
+  const { escenarios, ranking, historico, shareFijo, shareActual, muestraActual, marcasFijo, marcasActual } = datos
 
   // Gráfico: real Samsung (contexto jun-sep) + proyección en dos escenarios
   // (promedio de ambos métodos como línea, el detalle por método vive en la tabla)
@@ -95,8 +108,8 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
             <p className="text-2xl font-bold text-[#1428a0]">{pct(shareActual)}</p>
             <p className="text-xs text-gray-400">
               {muestraActual.conMarca > 0
-                ? `${muestraActual.samsung.toLocaleString('es-AR')} de ${muestraActual.conMarca.toLocaleString('es-AR')} ventas con equipo asignado`
-                : 'sin ventas con equipo asignado aún — se usa la base fija'}
+                ? `${muestraActual.samsung.toLocaleString('es-AR')} de ${muestraActual.conMarca.toLocaleString('es-AR')} ventas`
+                : 'sin ventas aún — se usa la base fija'}
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -108,6 +121,14 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
             <p className="text-xs text-gray-500 mb-1">Plan {escenarios.length} meses · share actual</p>
             <p className="text-xl font-bold text-[#1428a0]">{totalPeriodo('actualHibrido', 'actualGocuotas')}</p>
             <p className="text-xs text-gray-400">unidades Samsung</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+          <h2 className="font-semibold text-gray-900 text-sm mb-3">Share de ventas por marca</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <PieMarcas titulo="Hasta el 30/9" subtitulo="jul – sep 2026, base del acuerdo" data={marcasFijo} />
+            <PieMarcas titulo="Desde el 1/10" subtitulo="acumulado del acuerdo, en vivo" data={marcasActual} />
           </div>
         </div>
 
@@ -132,8 +153,7 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
           <p className="text-xs text-gray-400 mt-2">
             Las líneas muestran el promedio de los dos métodos de proyección de GOcelular; el rango por
             método está en la tabla. El escenario &quot;desde 1/10&quot; usa el share real acumulado del
-            acuerdo y se recalcula con cada venta. El share se mide sobre ventas con equipo ya
-            asignado (las órdenes recién creadas aún no informan marca).
+            acuerdo y se recalcula con cada venta (por fecha de venta, marca del producto vendido).
           </p>
         </div>
 
@@ -205,9 +225,59 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
           </table>
         </div>
 
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mt-6">
+          <div className="px-4 pt-4">
+            <h2 className="font-semibold text-gray-900 text-sm">SKUs Samsung vendidos — tienda propia</h2>
+            <p className="text-xs text-gray-400">Unidades por SKU según la fecha de la venta, actualizado en cada visita.</p>
+            <div className="flex flex-wrap gap-1 mt-2 mb-3">
+              {PERIODOS_SKU.map(p => (
+                <button key={p.key} onClick={() => setPeriodoSku(p.key)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${periodoSku === p.key ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(() => {
+            const filas = skus.filter(s => s[periodoSku] > 0).sort((a, b) => b[periodoSku] - a[periodoSku])
+            const totalPeriodoSku = filas.reduce((a, s) => a + s[periodoSku], 0)
+            if (filas.length === 0) {
+              return <p className="text-sm text-gray-400 text-center py-6">Sin ventas Samsung en el período</p>
+            }
+            return (
+              <table className="w-full text-sm min-w-[420px]">
+                <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wide text-gray-600">
+                  <tr>
+                    <th className="text-left px-4 py-3">SKU</th>
+                    <th className="text-right px-4 py-3">Unidades</th>
+                    <th className="text-right px-4 py-3">% del período</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filas.map(s => (
+                    <tr key={s.sku}>
+                      <td className="px-4 py-2.5 font-medium">{s.sku}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[#1428a0]">{s[periodoSku].toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{pct(s[periodoSku] / totalPeriodoSku)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-gray-200 bg-gray-50">
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold">Total</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-[#1428a0]">{totalPeriodoSku.toLocaleString('es-AR')}</td>
+                    <td className="px-4 py-2.5" />
+                  </tr>
+                </tfoot>
+              </table>
+            )
+          })()}
+        </div>
+
         <p className="text-xs text-gray-400 mt-4">
           GOcelular · información confidencial para Samsung Argentina — proyecciones congeladas del run{' '}
-          {datos.runMes}, share y ranking recalculados en vivo sobre ventas confirmadas de la tienda propia.
+          {datos.runMes}, share, tortas y SKUs recalculados en vivo sobre las ventas (marca del producto
+          vendido en tienda propia; en terceros, equipo registrado por el comercio al vender).
         </p>
       </div>
     </div>
