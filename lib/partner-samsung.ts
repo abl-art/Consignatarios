@@ -75,47 +75,5 @@ export function shareSamsung(marcas: VentaMarca[]): number {
   return calcularShare(samsung, total)
 }
 
-// Los nombres de modelo en devices.model vienen en variantes libres
-// ("Galaxy A16", "Samsung Galaxy A16 4/128GB", "Celular Samsung Galaxy A17 4/128 GB").
-// Agrupamos por modelo comercial: familia + 5G si corresponde.
-export function modeloComercialSamsung(model: string | null): string {
-  if (!model) return 'Otro'
-  const limpio = model.replace(/\s+/g, ' ').trim()
-  const fam = limpio.match(/\b([AMSZ]\d{2,3})\b/i)
-  const es5g = /5\s*g/i.test(limpio)
-  if (fam) return `Galaxy ${fam[1].toUpperCase()}${es5g ? ' 5G' : ''}`
-  const sSerie = limpio.match(/\bS(\d{2})\b/i)
-  if (sSerie) return `Galaxy S${sSerie[1]}${es5g ? ' 5G' : ''}`
-  return limpio.replace(/^celular\s+/i, '').replace(/^samsung\s+/i, '')
-}
-
-export interface ModeloRanking {
-  modelo: string
-  unidades90d: number
-  mix: number // participación dentro de Samsung (0-1)
-  // plan mensual con el share actual (promedio de los meses proyectados), por método
-  planMensualHibrido: number
-  planMensualGocuotas: number
-}
-
-export function armarRankingConPlan(
-  unidadesPorModelo: { modelo: string; unidades: number }[],
-  escenarios: EscenarioMes[]
-): ModeloRanking[] {
-  const total = unidadesPorModelo.reduce((a, b) => a + b.unidades, 0)
-  const meses = escenarios.length || 1
-  const promActualHibrido = escenarios.reduce((a, e) => a + e.actualHibrido, 0) / meses
-  const promActualGocuotas = escenarios.reduce((a, e) => a + e.actualGocuotas, 0) / meses
-  return unidadesPorModelo
-    .map(m => {
-      const mix = total > 0 ? m.unidades / total : 0
-      return {
-        modelo: m.modelo,
-        unidades90d: m.unidades,
-        mix,
-        planMensualHibrido: Math.round(promActualHibrido * mix),
-        planMensualGocuotas: Math.round(promActualGocuotas * mix),
-      }
-    })
-    .sort((a, b) => b.unidades90d - a.unidades90d)
-}
+// (El ranking de modelos con plan mensual se mostró hasta el 2/10/2026 —
+// Emiliano lo sacó del link; la lista de SKUs vendidos lo reemplaza.)

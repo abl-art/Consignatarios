@@ -4,6 +4,7 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   ResponsiveContainer,
@@ -23,7 +24,11 @@ const PERIODOS_SKU = [
   { key: 'd30', label: '30 días' },
   { key: 'mes', label: 'Este mes' },
 ] as const
-type PeriodoSku = (typeof PERIODOS_SKU)[number]['key']
+type PeriodoSku = (typeof PERIODOS_SKU)[number]['key'] | 'custom'
+
+function fmtCant(v: unknown): string {
+  return typeof v === 'number' ? v.toLocaleString('es-AR') : ''
+}
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -52,9 +57,29 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
   // El acuerdo aplica a la venta propia: es el canal por defecto
   const [canal, setCanal] = useState<Canal>('propia')
   const [periodoSku, setPeriodoSku] = useState<PeriodoSku>('hoy')
+  const [rangoFechas, setRangoFechas] = useState({ desde: '', hasta: '' })
+  const [filasRango, setFilasRango] = useState<{ sku: string; unidades: number }[] | null>(null)
+  const [cargandoRango, setCargandoRango] = useState(false)
   const datos = todos[canal]
   // Los SKUs vendidos son de la tienda propia (alcance del acuerdo)
   const skus: SkuVendido[] = todos.propia?.skusSamsung ?? []
+
+  async function aplicarRango() {
+    if (!rangoFechas.desde || !rangoFechas.hasta) return
+    setCargandoRango(true)
+    try {
+      const token = new URLSearchParams(window.location.search).get('token') ?? ''
+      const res = await fetch(
+        `/partner/samsung/skus?token=${encodeURIComponent(token)}&desde=${rangoFechas.desde}&hasta=${rangoFechas.hasta}`
+      )
+      const json = await res.json()
+      setFilasRango(Array.isArray(json.skus) ? json.skus : [])
+    } catch {
+      setFilasRango([])
+    } finally {
+      setCargandoRango(false)
+    }
+  }
   if (!datos) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
@@ -62,18 +87,23 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
       </div>
     )
   }
-  const { escenarios, ranking, historico, shareFijo, shareActual, muestraActual, marcasFijo, marcasActual } = datos
+  const { escenarios, historico, shareFijo, shareActual, muestraActual, marcasFijo, marcasActual } = datos
 
-  // Gráfico: real Samsung (contexto jun-sep) + proyección en dos escenarios
-  // (promedio de ambos métodos como línea, el detalle por método vive en la tabla)
-  const dataChart = [
-    ...historico.map(h => ({ mes: nombreMes(h.mes), real: h.samsung })),
-    ...escenarios.map(e => ({
-      mes: nombreMes(e.mes),
-      preAcuerdo: Math.round((e.fijoHibrido + e.fijoGocuotas) / 2),
-      conAcuerdo: Math.round((e.actualHibrido + e.actualGocuotas) / 2),
-    })),
-  ]
+  // Gráfico: real Samsung (jun → hoy; la barra del mes en curso se va
+  // completando con el acumulado) + proyección en dos escenarios (promedio de
+  // ambos métodos como línea, el detalle por método vive en la tabla).
+  // Una fila por mes: en el mes actual conviven barra real y proyecciones.
+  const porMesChart = new Map<string, { mes: string; real?: number; preAcuerdo?: number; conAcuerdo?: number }>()
+  for (const h of historico) porMesChart.set(h.mes, { mes: h.mes, real: h.samsung })
+  for (const e of escenarios) {
+    const fila = porMesChart.get(e.mes) ?? { mes: e.mes }
+    fila.preAcuerdo = Math.round((e.fijoHibrido + e.fijoGocuotas) / 2)
+    fila.conAcuerdo = Math.round((e.actualHibrido + e.actualGocuotas) / 2)
+    porMesChart.set(e.mes, fila)
+  }
+  const dataChart = [...porMesChart.values()]
+    .sort((a, b) => a.mes.localeCompare(b.mes))
+    .map(f => ({ ...f, mes: nombreMes(f.mes) }))
 
   const totalPeriodo = (campoA: 'fijoHibrido' | 'actualHibrido', campoB: 'fijoGocuotas' | 'actualGocuotas') => {
     const a = escenarios.reduce((s, e) => s + e[campoA], 0)
@@ -144,9 +174,15 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(v) => (typeof v === 'number' ? v.toLocaleString('es-AR') : String(v ?? ''))} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="real" name="Real" fill="#94a3b8" radius={[3, 3, 0, 0]} />
-                <Line dataKey="preAcuerdo" name="Proyección share hasta 30/9" stroke="#9ca3af" strokeDasharray="6 4" strokeWidth={2} dot />
-                <Line dataKey="conAcuerdo" name="Proyección share desde 1/10" stroke="#1428a0" strokeWidth={2.5} dot />
+                <Bar dataKey="real" name="Real" fill="#94a3b8" radius={[3, 3, 0, 0]}>
+                  <LabelList dataKey="real" position="top" formatter={fmtCant} style={{ fontSize: 10, fill: '#475569', fontWeight: 600 }} />
+                </Bar>
+                <Line dataKey="preAcuerdo" name="Proyección share hasta 30/9" stroke="#9ca3af" strokeDasharray="6 4" strokeWidth={2} dot>
+                  <LabelList dataKey="preAcuerdo" position="bottom" formatter={fmtCant} style={{ fontSize: 10, fill: '#9ca3af' }} />
+                </Line>
+                <Line dataKey="conAcuerdo" name="Proyección share desde 1/10" stroke="#1428a0" strokeWidth={2.5} dot>
+                  <LabelList dataKey="conAcuerdo" position="top" formatter={fmtCant} style={{ fontSize: 10, fill: '#1428a0', fontWeight: 600 }} />
+                </Line>
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -191,56 +227,48 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
 
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <div className="px-4 pt-4">
-            <h2 className="font-semibold text-gray-900 text-sm">
-              Ranking de modelos Samsung (últimos 90 días) y plan mensual con el share vigente
-            </h2>
-            <p className="text-xs text-gray-400 mb-2">
-              Plan mensual = proyección Samsung con el share desde el 1/10 × participación del modelo.
-              Rango entre los dos métodos de proyección.
-            </p>
-          </div>
-          <table className="w-full text-sm min-w-[560px]">
-            <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wide text-gray-600">
-              <tr>
-                <th className="text-left px-4 py-3">#</th>
-                <th className="text-left px-4 py-3">Modelo</th>
-                <th className="text-right px-4 py-3">Unidades 90d</th>
-                <th className="text-right px-4 py-3">Mix Samsung</th>
-                <th className="text-right px-4 py-3">Plan mensual (share 1/10)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {ranking.map((m, i) => (
-                <tr key={m.modelo}>
-                  <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
-                  <td className="px-4 py-2.5 font-medium">{m.modelo}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{m.unidades90d.toLocaleString('es-AR')}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{pct(m.mix)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[#1428a0]">
-                    {rango(m.planMensualHibrido, m.planMensualGocuotas)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mt-6">
-          <div className="px-4 pt-4">
             <h2 className="font-semibold text-gray-900 text-sm">SKUs Samsung vendidos — tienda propia</h2>
             <p className="text-xs text-gray-400">Unidades por SKU según la fecha de la venta, actualizado en cada visita.</p>
-            <div className="flex flex-wrap gap-1 mt-2 mb-3">
+            <div className="flex flex-wrap items-center gap-1 mt-2 mb-3">
               {PERIODOS_SKU.map(p => (
                 <button key={p.key} onClick={() => setPeriodoSku(p.key)}
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${periodoSku === p.key ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   {p.label}
                 </button>
               ))}
+              <button onClick={() => setPeriodoSku('custom')}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${periodoSku === 'custom' ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                Personalizado
+              </button>
+              {periodoSku === 'custom' && (
+                <span className="flex items-center gap-1 ml-1">
+                  <input type="date" value={rangoFechas.desde} max={rangoFechas.hasta || undefined}
+                    onChange={e => setRangoFechas(r => ({ ...r, desde: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] text-gray-700" />
+                  <span className="text-[11px] text-gray-400">→</span>
+                  <input type="date" value={rangoFechas.hasta} min={rangoFechas.desde || undefined}
+                    onChange={e => setRangoFechas(r => ({ ...r, hasta: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] text-gray-700" />
+                  <button onClick={aplicarRango} disabled={!rangoFechas.desde || !rangoFechas.hasta || cargandoRango}
+                    className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-[#1428a0] text-white disabled:opacity-40">
+                    {cargandoRango ? '...' : 'Aplicar'}
+                  </button>
+                </span>
+              )}
             </div>
           </div>
           {(() => {
-            const filas = skus.filter(s => s[periodoSku] > 0).sort((a, b) => b[periodoSku] - a[periodoSku])
-            const totalPeriodoSku = filas.reduce((a, s) => a + s[periodoSku], 0)
+            const filas: { sku: string; unidades: number }[] =
+              periodoSku === 'custom'
+                ? (filasRango ?? [])
+                : skus
+                    .filter(s => s[periodoSku] > 0)
+                    .sort((a, b) => b[periodoSku] - a[periodoSku])
+                    .map(s => ({ sku: s.sku, unidades: s[periodoSku] }))
+            const totalPeriodoSku = filas.reduce((a, s) => a + s.unidades, 0)
+            if (periodoSku === 'custom' && filasRango === null) {
+              return <p className="text-sm text-gray-400 text-center py-6">Elegí el rango de fechas y tocá Aplicar</p>
+            }
             if (filas.length === 0) {
               return <p className="text-sm text-gray-400 text-center py-6">Sin ventas Samsung en el período</p>
             }
@@ -257,8 +285,8 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
                   {filas.map(s => (
                     <tr key={s.sku}>
                       <td className="px-4 py-2.5 font-medium">{s.sku}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[#1428a0]">{s[periodoSku].toLocaleString('es-AR')}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{pct(s[periodoSku] / totalPeriodoSku)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[#1428a0]">{s.unidades.toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{pct(s.unidades / totalPeriodoSku)}</td>
                     </tr>
                   ))}
                 </tbody>

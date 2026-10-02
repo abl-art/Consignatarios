@@ -86,7 +86,7 @@ export default function PieMarcas({ titulo, subtitulo, data }: { titulo: string;
               <div key={s.marca} className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                 <span className="text-xs text-gray-700">
-                  {s.marca} <span className="text-gray-400">{s.ventas.toLocaleString('es-AR')} · {s.pct.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%</span>
+                  {s.marca} <span className="text-gray-400">{s.pct.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%</span>
                 </span>
               </div>
             ))}

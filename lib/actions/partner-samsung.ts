@@ -17,15 +17,15 @@ import { CLIENT_IDS_PROPIOS, sqlCondicionClientes } from '@/lib/client-ids'
 import {
   agruparMarcas,
   armarEscenarios,
-  armarRankingConPlan,
-  modeloComercialSamsung,
   normalizarMarca,
   shareSamsung,
   type EscenarioMes,
   type MesProyeccion,
-  type ModeloRanking,
   type VentaMarca,
 } from '@/lib/partner-samsung'
+
+// Token del link público (también lo validan page.tsx y la ruta de SKUs)
+export const PARTNER_SAMSUNG_TOKEN = 'samsung2026go'
 
 // Ventana FIJA del share pre-acuerdo (definición de Emiliano: el histórico
 // hasta el 30/9 es un dato fijo). Límites en hora argentina.
@@ -48,7 +48,6 @@ function condCanal(canal: CanalPartner): string {
 // terceros (ver regla arriba). Requiere los joins de FROM_VENTAS.
 const COND_PROPIO = sqlCondicionClientes(CLIENT_IDS_PROPIOS, 'o.client_id')
 const MARCA_VENTA = `CASE WHEN ${COND_PROPIO} THEN SPLIT_PART(so.product_name, ' ', 1) ELSE d.marca END`
-const MODELO_VENTA = `CASE WHEN ${COND_PROPIO} THEN so.product_name ELSE d.model END`
 const FROM_VENTAS = `
   FROM gocuotas_orders o
   LEFT JOIN store_orders so ON so.gocuotas_order_id = o.order_id
@@ -74,11 +73,12 @@ export interface DatosPartnerSamsung {
   // Muestra desde el 1/10: ventas con marca conocida (en propia la marca sale
   // del producto vendido → cobertura inmediata; total = todas las órdenes)
   muestraActual: { samsung: number; conMarca: number; total: number }
-  historico: { mes: string; samsung: number; total: number }[] // jun-sep, contexto
+  // jun → mes en curso: el mes actual trae el acumulado al día (la barra
+  // "real" del gráfico se va completando a medida que avanza el mes)
+  historico: { mes: string; samsung: number; total: number }[]
   marcasFijo: VentaMarca[] // torta jul-sep (ventana del share fijo)
   marcasActual: VentaMarca[] // torta desde el 1/10
   escenarios: EscenarioMes[]
-  ranking: ModeloRanking[]
   skusSamsung: SkuVendido[] // SKUs propios vendidos (solo se llena en canal propia)
 }
 
@@ -88,15 +88,16 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
   const filtroCanal = condCanal(canal)
   const client = await pool.connect()
   try {
-    const [histRes, actualRes, rankRes, skuRes] = await Promise.all([
-      // Ventas por mes y marca (jun → sep, incluye la ventana del share fijo)
+    const [histRes, actualRes, skuRes] = await Promise.all([
+      // Ventas por mes y marca (jun → hoy: el mes en curso entra acumulado
+      // al día; la ventana del share fijo se recorta después en JS)
       client.query<{ mes: string; marca: string | null; ventas: string }>(
         `SELECT to_char(date_trunc('month', o.order_created_at AT TIME ZONE '${TZ_AR}'), 'YYYY-MM') AS mes,
                 ${MARCA_VENTA} AS marca,
                 count(*)::text AS ventas
          ${FROM_VENTAS}
          WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
-           AND o.order_created_at >= '${CONTEXTO_DESDE}' AND o.order_created_at < '${SHARE_FIJO_HASTA}'
+           AND o.order_created_at >= '${CONTEXTO_DESDE}'
          GROUP BY 1, 2 ORDER BY 1`
       ),
       // Ventas por marca desde el 1/10 (el "último share" que pide Emiliano)
@@ -105,15 +106,6 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
          ${FROM_VENTAS}
          WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
            AND o.order_created_at >= '${ACUERDO_DESDE}'
-         GROUP BY 1`
-      ),
-      // Ranking de modelos Samsung vendidos, últimos 90 días
-      client.query<{ model: string | null; u: string }>(
-        `SELECT ${MODELO_VENTA} AS model, count(*)::text AS u
-         ${FROM_VENTAS}
-         WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
-           AND (${MARCA_VENTA}) ILIKE '%samsung%'
-           AND o.order_created_at >= now() - interval '90 days'
          GROUP BY 1`
       ),
       // SKUs Samsung vendidos en la tienda propia, por período (píldoras).
@@ -144,9 +136,10 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
         : Promise.resolve({ rows: [] as { sku: string; hoy: string; ayer: string; d7: string; d30: string; mes: string }[] }),
     ])
 
-    // Tortas y shares: fijo = jul-sep (junio queda solo como contexto del gráfico)
+    // Tortas y shares: fijo = jul-sep (junio y el mes en curso quedan solo
+    // como contexto del gráfico)
     const histRows = histRes.rows.map(r => ({ mes: r.mes, marca: r.marca, ventas: Number(r.ventas) }))
-    const marcasFijo = agruparMarcas(histRows.filter(r => r.mes >= '2026-07'))
+    const marcasFijo = agruparMarcas(histRows.filter(r => r.mes >= '2026-07' && r.mes < '2026-10'))
     const shareFijo = shareSamsung(marcasFijo)
 
     const actualRows = actualRes.rows.map(r => ({ marca: r.marca, ventas: Number(r.ventas) }))
@@ -198,16 +191,6 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
 
     const escenarios = armarEscenarios(meses, shareFijo, shareActual)
 
-    const unidadesPorModelo = new Map<string, number>()
-    for (const r of rankRes.rows) {
-      const modelo = modeloComercialSamsung(r.model)
-      unidadesPorModelo.set(modelo, (unidadesPorModelo.get(modelo) ?? 0) + Number(r.u))
-    }
-    const ranking = armarRankingConPlan(
-      [...unidadesPorModelo.entries()].map(([modelo, unidades]) => ({ modelo, unidades })),
-      escenarios
-    )
-
     const skusSamsung = skuRes.rows.map(r => ({
       sku: r.sku,
       hoy: Number(r.hoy),
@@ -228,9 +211,34 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
       marcasFijo,
       marcasActual,
       escenarios,
-      ranking,
       skusSamsung,
     }
+  } finally {
+    client.release()
+  }
+}
+
+// SKUs Samsung vendidos en tienda propia para un rango de fechas ART
+// (filtro "personalizado" de la tarjeta; lo sirve app/partner/samsung/skus).
+export async function getSkusSamsungRango(desde: string, hasta: string): Promise<{ sku: string; unidades: number }[] | null> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null
+  const pool = getPool()
+  if (!pool) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ sku: string; unidades: string }>(
+      `SELECT so.product_name AS sku, count(*)::text AS unidades
+       FROM gocuotas_orders o
+       JOIN store_orders so ON so.gocuotas_order_id = o.order_id
+       WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL
+         AND ${COND_PROPIO}
+         AND so.product_name ILIKE 'samsung%'
+         AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date >= $1::date
+         AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date <= $2::date
+       GROUP BY 1 ORDER BY 2 DESC`,
+      [desde, hasta]
+    )
+    return res.rows.map(r => ({ sku: r.sku, unidades: Number(r.unidades) }))
   } finally {
     client.release()
   }
