@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { decidirAccionMail } from '@/lib/arrepentimientos'
 import { leerEstadoBuzon, leerMailsNuevos } from '@/lib/arrepentimientos-mail'
-import { fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
+import { fetchEstadoOrdenGocuotas, fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -84,6 +84,7 @@ export async function GET(request: Request) {
         email_fecha: mail.fecha,
         order_number: orden?.orderNumber ?? null,
         gocuotas_order_id: orden?.gocuotasOrderId ?? null,
+        gocuotas_status: orden?.gocuotasStatus ?? null,
         producto: orden?.producto ?? null,
         tracking: orden?.tracking ?? null,
         otras_ordenes: orden?.otrasOrdenes ?? 0,
@@ -114,32 +115,36 @@ export async function GET(request: Request) {
       .eq('id', 1)
   }
 
-  // Refrescar pendientes sin tracking: el arrepentimiento suele llegar ANTES
-  // del despacho — si el depósito despachó después del mail, la fila debe
-  // mostrar el tracking para que Yamila pueda confirmar el rescate
-  // (fix del review final; sin esto "sin despachar" quedaba congelado).
+  // Refrescar pendientes contra la réplica en cada corrida:
+  // - tracking de las sin despachar (el despacho suele salir DESPUÉS del
+  //   mail; sin esto "sin despachar" quedaba congelado — fix del review);
+  // - estado de la orden GOcuotas de TODAS (cuando Yamila anula la orden,
+  //   la fila pasa sola a "anulada" — lookup sin filtro de descartadas).
   let refrescados = 0
-  const { data: sinTracking } = await admin
+  const { data: pendRows } = await admin
     .from('arrepentimientos')
-    .select('id, dni, gocuotas_order_id')
+    .select('id, dni, tracking, gocuotas_order_id, gocuotas_status')
     .eq('estado', 'pendiente')
-    .is('tracking', null)
-  for (const p of sinTracking ?? []) {
-    const orden = await fetchOrdenPorDni(p.dni)
-    if (!orden) continue
-    // Solo refrescar la MISMA orden (o una fila "sin orden" que ahora matchea)
-    if (p.gocuotas_order_id && orden.gocuotasOrderId !== p.gocuotas_order_id) continue
-    if (!orden.tracking && p.gocuotas_order_id) continue
-    const { error } = await admin
-      .from('arrepentimientos')
-      .update({
-        tracking: orden.tracking,
-        order_number: orden.orderNumber,
-        gocuotas_order_id: orden.gocuotasOrderId,
-        producto: orden.producto,
-        otras_ordenes: orden.otrasOrdenes,
-      })
-      .eq('id', p.id)
+  for (const p of pendRows ?? []) {
+    const update: Record<string, unknown> = {}
+    if (p.gocuotas_order_id) {
+      const status = await fetchEstadoOrdenGocuotas(p.gocuotas_order_id)
+      if (status && status !== p.gocuotas_status) update.gocuotas_status = status
+    }
+    if (!p.tracking) {
+      const orden = await fetchOrdenPorDni(p.dni)
+      // Solo refrescar la MISMA orden (o una fila "sin orden" que ahora matchea)
+      if (orden && (!p.gocuotas_order_id || orden.gocuotasOrderId === p.gocuotas_order_id) && (orden.tracking || !p.gocuotas_order_id)) {
+        update.tracking = orden.tracking
+        update.order_number = orden.orderNumber
+        update.gocuotas_order_id = orden.gocuotasOrderId
+        update.gocuotas_status = orden.gocuotasStatus
+        update.producto = orden.producto
+        update.otras_ordenes = orden.otrasOrdenes
+      }
+    }
+    if (Object.keys(update).length === 0) continue
+    const { error } = await admin.from('arrepentimientos').update(update).eq('id', p.id)
     if (!error) refrescados++
   }
 

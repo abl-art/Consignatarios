@@ -17,6 +17,7 @@ export interface SolicitudArrepentimiento {
   emailFecha: string
   orderNumber: string | null
   gocuotasOrderId: string | null
+  gocuotasStatus: string | null
   producto: string | null
   tracking: string | null
   otrasOrdenes: number
@@ -40,6 +41,7 @@ export async function getArrepentimientos(): Promise<SolicitudArrepentimiento[]>
     emailFecha: r.email_fecha,
     orderNumber: r.order_number,
     gocuotasOrderId: r.gocuotas_order_id,
+    gocuotasStatus: r.gocuotas_status,
     producto: r.producto,
     tracking: r.tracking,
     otrasOrdenes: r.otras_ordenes,

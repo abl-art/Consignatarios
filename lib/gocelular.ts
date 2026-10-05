@@ -3035,12 +3035,14 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
     const res = await client.query<{
       order_number: string | null
       gocuotas_order_id: string
+      gocuotas_status: string | null
       producto: string | null
       tracking: string | null
       total: string
     }>(
       `SELECT so.order_number,
               go.order_id::text AS gocuotas_order_id,
+              go.order_status AS gocuotas_status,
               so.product_name AS producto,
               (SELECT s.tracking_number FROM shipments s
                 WHERE s.store_order_id = so.id
@@ -3060,10 +3062,31 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
     return {
       orderNumber: r.order_number,
       gocuotasOrderId: r.gocuotas_order_id,
+      gocuotasStatus: r.gocuotas_status,
       producto: r.producto,
       tracking: r.tracking,
       otrasOrdenes: Number(r.total) - 1,
     }
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Estado actual de una orden GOcuotas por order_id, SIN filtrar descartadas:
+ * el refresh del cron de arrepentimientos lo usa para que la fila muestre
+ * "anulada" cuando Yamila anula la orden (fetchOrdenPorDni excluye discarded).
+ */
+export async function fetchEstadoOrdenGocuotas(orderId: string): Promise<string | null> {
+  const pool = getPool()
+  if (!pool) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ order_status: string | null }>(
+      `SELECT order_status FROM gocuotas_orders WHERE order_id::text = $1 LIMIT 1`,
+      [orderId]
+    )
+    return res.rows[0]?.order_status ?? null
   } finally {
     client.release()
   }

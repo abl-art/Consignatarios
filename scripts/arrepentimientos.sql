@@ -48,3 +48,7 @@ alter table arrepentimientos add column if not exists uidvalidity bigint not nul
 alter table arrepentimientos drop constraint if exists arrepentimientos_email_uid_key;
 drop index if exists arrepentimientos_email_uid_key;
 create unique index if not exists arrepentimientos_uidv_uid_key on arrepentimientos (uidvalidity, email_uid);
+
+-- Estado de la orden GOcuotas (pedido de Emiliano 5/10): se guarda al crear
+-- y se refresca en cada corrida del cron para las pendientes.
+alter table arrepentimientos add column if not exists gocuotas_status text;

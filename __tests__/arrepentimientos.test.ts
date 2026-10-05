@@ -49,7 +49,7 @@ describe('esMailDelBoton', () => {
 })
 
 describe('decidirAccionMail', () => {
-  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0 }
+  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', gocuotasStatus: 'approved', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0 }
   it('misma orden ya solicitada → insistencia (cualquier estado)', () => {
     expect(decidirAccionMail({ orden, existentes: [{ id: 'a1', gocuotasOrderId: '123' }], rescateYaSolicitado: false }))
       .toEqual({ tipo: 'insistencia', solicitudId: 'a1' })

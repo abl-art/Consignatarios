@@ -35,6 +35,7 @@ export function esMailDelBoton(m: { from: string | null; asunto: string | null; 
 export interface OrdenDeDni {
   orderNumber: string | null
   gocuotasOrderId: string | null
+  gocuotasStatus: string | null // order_status de GOcuotas (approved/discarded/…)
   producto: string | null
   tracking: string | null
   otrasOrdenes: number

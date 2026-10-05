@@ -17,6 +17,28 @@ function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+// Estado de la orden en GOcuotas (refrescado por el cron): "anulada" confirma
+// que la gestión de Yamila impactó; "activa" = sigue vigente
+function EstadoOrdenChip({ status }: { status: string | null }) {
+  if (!status) return <span className="text-gray-300">—</span>
+  const esAnulada = status === 'discarded'
+  const esActiva = status === 'approved' || status === 'paid' || status === 'collected'
+  return (
+    <span
+      title={`order_status GOcuotas: ${status}`}
+      className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${
+        esAnulada
+          ? 'text-rose-700 bg-rose-50 border-rose-200'
+          : esActiva
+            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+            : 'text-gray-600 bg-gray-50 border-gray-200'
+      }`}
+    >
+      {esAnulada ? 'anulada' : esActiva ? 'activa' : status}
+    </span>
+  )
+}
+
 export default function ArrepentimientosTable({ solicitudes }: { solicitudes: SolicitudArrepentimiento[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -94,6 +116,7 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
                 <th className="text-left px-4 py-3">Solicitud</th>
                 <th className="text-left px-4 py-3">Cliente</th>
                 <th className="text-left px-4 py-3">Pedido · Order ID</th>
+                <th className="text-left px-4 py-3" title="Estado de la orden en GOcuotas, refrescado cada 30 min">Orden GOcuotas</th>
                 <th className="text-left px-4 py-3">Producto</th>
                 <th className="text-left px-4 py-3">Envío</th>
                 <th className="text-right px-4 py-3">Acciones</th>
@@ -131,6 +154,7 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
                       </span>
                     )}
                   </td>
+                  <td className="px-4 py-2.5"><EstadoOrdenChip status={s.gocuotasStatus} /></td>
                   <td className="px-4 py-2.5 text-xs">{s.producto ?? '—'}</td>
                   <td className="px-4 py-2.5 text-xs">
                     {s.tracking ? (
