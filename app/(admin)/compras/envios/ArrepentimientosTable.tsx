@@ -27,6 +27,9 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
 
   const pendientes = solicitudes.filter(s => s.estado === 'pendiente')
   const resueltas = solicitudes.filter(s => s.estado !== 'pendiente').reverse()
+  const confirmadas = resueltas.filter(s => s.estado === 'confirmada').length
+  const pendConDespacho = pendientes.filter(s => s.tracking).length
+  const pendSinDespacho = pendientes.length - pendConDespacho
 
   const ejecutar = (s: SolicitudArrepentimiento, accion: 'confirmar' | 'descartar') => {
     if (armada?.id !== s.id || armada.accion !== accion) {
@@ -49,6 +52,30 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Total arrepentimientos</p>
+          <p className="text-2xl font-bold text-gray-900">{solicitudes.length}</p>
+          <p className="text-xs text-gray-400">desde el inicio de la ingesta</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Resueltas</p>
+          <p className="text-2xl font-bold text-gray-900">{resueltas.length}</p>
+          <p className="text-xs text-gray-400">
+            {confirmadas} confirmadas · {resueltas.length - confirmadas} descartadas
+          </p>
+        </div>
+        <div className="bg-white border border-blue-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Pendientes con despacho</p>
+          <p className="text-2xl font-bold text-blue-700">{pendConDespacho}</p>
+          <p className="text-xs text-gray-400">candidatas a rescate Andreani</p>
+        </div>
+        <div className="bg-white border border-amber-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Pendientes sin despachar</p>
+          <p className="text-2xl font-bold text-amber-600">{pendSinDespacho}</p>
+          <p className="text-xs text-gray-400">anular la orden y descartar</p>
+        </div>
+      </div>
       {error && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <div className="px-4 pt-4">
