@@ -9,6 +9,7 @@ import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/con
 import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
+import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/actions/arrepentimientos'
 import { getDemorasDescartadas } from '@/lib/actions/demoras'
 import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
@@ -22,6 +23,7 @@ import AsnTable from './AsnTable'
 import ControlStockTable from './ControlStockTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
+import ArrepentimientosTable from './ArrepentimientosTable'
 import DemorasTable from './DemorasTable'
 import SiniestrosTable from './SiniestrosTable'
 import SiniestrosStockTable from './SiniestrosStockTable'
@@ -59,6 +61,9 @@ export default async function EnviosPage({
   }
   // Siniestros de almacenamiento (Supabase — no depende de GOcelular)
   const siniestrosStock: SiniestroStock[] = await getSiniestrosStock().catch(() => [])
+  // Cola del Botón de Arrepentimiento (Supabase — no depende de GOcelular)
+  const arrepentimientos: SolicitudArrepentimiento[] = await getArrepentimientos().catch(() => [])
+  const arrepPendientes = arrepentimientos.filter(a => a.estado === 'pendiente').length
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
@@ -173,6 +178,11 @@ export default async function EnviosPage({
           id: 'demoras',
           label: demoras.length > 0 ? `Demoras de entrega (${demoras.length})` : 'Demoras de entrega',
           content: <DemorasTable demoras={demoras} />,
+        },
+        {
+          id: 'arrepentimientos',
+          label: arrepPendientes > 0 ? `Arrepentimientos (${arrepPendientes})` : 'Arrepentimientos',
+          content: <ArrepentimientosTable solicitudes={arrepentimientos} />,
         },
         {
           id: 'rescates',
