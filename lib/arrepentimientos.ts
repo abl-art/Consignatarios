@@ -27,7 +27,9 @@ export function parsearAsuntoArrepentimiento(asunto: string | null): { nombre: s
 export function esMailDelBoton(m: { from: string | null; asunto: string | null; texto: string | null }): boolean {
   if ((m.from ?? '').toLowerCase() !== REMITENTE_BOTON) return false
   if (!parsearAsuntoArrepentimiento(m.asunto)) return false
-  return (m.texto ?? '').includes(MARCA_BOTON)
+  // El texto plano del mail viene con wrap a ~72 columnas y puede cortar la
+  // marca con un salto de línea — normalizar espacios antes de buscar
+  return (m.texto ?? '').replace(/\s+/g, ' ').includes(MARCA_BOTON)
 }
 
 export interface OrdenDeDni {

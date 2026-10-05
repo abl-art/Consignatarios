@@ -34,6 +34,12 @@ describe('esMailDelBoton', () => {
   it('acepta solo con las tres firmas', () => {
     expect(esMailDelBoton(base)).toBe(true)
   })
+  it('acepta la marca cortada por salto de línea (wrap real del texto plano del mail)', () => {
+    expect(esMailDelBoton({
+      ...base,
+      texto: 'Solicitud recibida: 2026-10-04T08:43:34.226Z — GOcelular Botón de\nArrepentimiento',
+    })).toBe(true)
+  })
   it('rechaza si falla cualquiera de las tres', () => {
     expect(esMailDelBoton({ ...base, from: 'cliente@gmail.com' })).toBe(false)
     expect(esMailDelBoton({ ...base, asunto: 'me arrepentí de la compra' })).toBe(false)
