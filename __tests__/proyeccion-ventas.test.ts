@@ -8,6 +8,7 @@ import {
   proyectarHibrido,
   proyectarPorGocuotas,
   armarProyVsReal,
+  fraccionMesTranscurrida,
   type MesCifras,
   type PuntoMensual,
   type VentaMensualDim,
@@ -226,5 +227,29 @@ describe('armarProyVsReal', () => {
     const snapshots = [snap('2026-10', 'hibrido', '2026-10', 100)]
     const filas = armarProyVsReal(snapshots, [], '2026-11')
     expect(filas[0].real).toEqual({ ventas: 0, monto: 0 })
+  })
+
+  it('el mes en curso lleva realParcial con el acumulado al día (real sigue null)', () => {
+    const snapshots = [snap('2026-10', 'hibrido', '2026-10', 100), snap('2026-10', 'hibrido', '2026-11', 120)]
+    const filas = armarProyVsReal(snapshots, [mes('2026-10', 38)], '2026-10')
+    expect(filas[0].real).toBeNull()
+    expect(filas[0].realParcial).toEqual({ ventas: 38, monto: 380 })
+    expect(filas[1].realParcial).toBeNull()
+  })
+
+  it('mes en curso sin ventas todavía: realParcial null, meses cerrados nunca lo llevan', () => {
+    const snapshots = [snap('2026-09', 'hibrido', '2026-09', 90), snap('2026-10', 'hibrido', '2026-10', 100)]
+    const filas = armarProyVsReal(snapshots, [mes('2026-09', 85)], '2026-10')
+    expect(filas[0].realParcial).toBeNull()
+    expect(filas[0].real?.ventas).toBe(85)
+    expect(filas[1].realParcial).toBeNull()
+  })
+})
+
+describe('fraccionMesTranscurrida', () => {
+  it('día del mes sobre los días del mes', () => {
+    expect(fraccionMesTranscurrida('2026-10-05')).toBeCloseTo(5 / 31)
+    expect(fraccionMesTranscurrida('2026-02-28')).toBeCloseTo(1)
+    expect(fraccionMesTranscurrida('2026-10-31')).toBeCloseTo(1)
   })
 })

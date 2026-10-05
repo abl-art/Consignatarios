@@ -43,6 +43,9 @@ export interface FilaProyReal {
   hibrido: { ventas: number; monto: number } | null
   gocuotas: { ventas: number; monto: number } | null
   real: { ventas: number; monto: number } | null
+  /** acumulado al día del mes EN CURSO (pedido de Emiliano 5/10: ver cómo
+   *  viene el mes sin esperar el cierre); null en cerrados y futuros */
+  realParcial: { ventas: number; monto: number } | null
 }
 
 // --- Helpers de meses 'YYYY-MM' ---
@@ -258,6 +261,16 @@ export function armarProyVsReal(
       hibrido: elegir(mes, 'hibrido'),
       gocuotas: elegir(mes, 'gocuotas'),
       real: cerrado ? { ventas: real?.ventas ?? 0, monto: real?.monto ?? 0 } : null,
+      realParcial:
+        mes === mesActual && real ? { ventas: real.ventas, monto: real.monto } : null,
     }
   })
+}
+
+/** Fracción del mes ya transcurrida (día de hoy inclusive / días del mes) —
+ *  para prorratear la proyección al comparar contra el acumulado parcial. */
+export function fraccionMesTranscurrida(hoyISO: string): number {
+  const [y, m, d] = hoyISO.slice(0, 10).split('-').map(Number)
+  const diasMes = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return Math.min(1, d / diasMes)
 }

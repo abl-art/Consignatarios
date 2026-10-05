@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Bar, ComposedChart, CartesianGrid, LabelList, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import CanalPills, { type Canal } from '../../finanzas/CanalPills'
 import { getProyeccionDimension, getProyeccionMarca, type MarcaFiltro } from '@/lib/actions/proyecciones'
-import type { FilaProyReal } from '@/lib/proyeccion-ventas'
+import { fraccionMesTranscurrida, type FilaProyReal } from '@/lib/proyeccion-ventas'
 import type { MerchantTercero } from '@/lib/actions/finanzas'
 import { formatearMoneda } from '@/lib/utils'
 
 // Paleta validada (dataviz): real azul, híbrido rosa, GOcuotas ámbar (línea
 // punteada + tabla como refuerzo por bajo contraste del ámbar)
 const COLOR_REAL = '#2563eb'
+const COLOR_REAL_PARCIAL = '#93c5fd' // mes en curso: mismo azul, aclarado
 const COLOR_HIBRIDO = '#e11d48'
 const COLOR_GOCUOTAS = '#f59e0b'
 
@@ -120,11 +121,16 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
       filas.map((f) => ({
         mes: etiquetaMes(f.mes),
         Real: f.real ? Math.round(f.real[metrica]) : null,
+        // el mes en curso se va completando con el acumulado al día
+        'Real en curso': f.realParcial ? Math.round(f.realParcial[metrica]) : null,
         'Proy. Híbrido': f.hibrido ? Math.round(f.hibrido[metrica]) : null,
         'Proy. GOcuotas': f.gocuotas ? Math.round(f.gocuotas[metrica]) : null,
       })),
     [filas, metrica]
   )
+
+  // Para la dif del mes en curso: proyección prorrateada a los días transcurridos
+  const fraccionMes = fraccionMesTranscurrida(new Date().toISOString())
 
   return (
     <div className="space-y-4">
@@ -220,8 +226,11 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Real" fill={COLOR_REAL} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                  <Bar dataKey="Real" stackId="real" fill={COLOR_REAL} radius={[4, 4, 0, 0]} maxBarSize={36}>
                     <LabelList dataKey="Real" position="top" formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#1e40af', fontWeight: 600 }} />
+                  </Bar>
+                  <Bar dataKey="Real en curso" stackId="real" fill={COLOR_REAL_PARCIAL} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                    <LabelList dataKey="Real en curso" position="top" formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#1e40af', fontWeight: 600 }} />
                   </Bar>
                   <Line type="monotone" dataKey="Proy. Híbrido" stroke={COLOR_HIBRIDO} strokeWidth={2} dot={{ r: 4 }}>
                     <LabelList dataKey="Proy. Híbrido" position="top" offset={10} formatter={fmtEtiqueta} style={{ fontSize: 10, fill: '#be123c', fontWeight: 600 }} />
@@ -249,21 +258,35 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
               <tbody>
                 {filas.map((f) => {
                   const futuro = f.real === null
+                  const enCurso = f.realParcial !== null
+                  const difDe = (proy: { ventas: number; monto: number } | null) => {
+                    if (!proy) return <>—</>
+                    if (f.real) return <Dif real={f.real[metrica]} proy={proy[metrica]} metrica={metrica} />
+                    if (f.realParcial)
+                      return <Dif real={f.realParcial[metrica]} proy={proy[metrica] * fraccionMes} metrica={metrica} />
+                    return <>—</>
+                  }
                   return (
                     <tr key={f.mes} className={`border-b border-gray-50 ${futuro ? 'text-gray-500' : 'text-gray-900'}`}>
                       <td className="px-4 py-2.5 font-medium">
                         {etiquetaMes(f.mes)}
-                        {futuro && <span className="ml-2 text-[10px] uppercase tracking-wide text-gray-400">proy.</span>}
+                        {futuro && (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-gray-400">
+                            {enCurso ? 'en curso' : 'proy.'}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{f.real ? fmt(f.real[metrica], metrica) : '—'}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold">
+                        {f.real
+                          ? fmt(f.real[metrica], metrica)
+                          : f.realParcial
+                            ? <span className="text-blue-700" title="Acumulado al día de hoy">{fmt(f.realParcial[metrica], metrica)}</span>
+                            : '—'}
+                      </td>
                       <td className="px-4 py-2.5 text-right">{f.hibrido ? fmt(f.hibrido[metrica], metrica) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {f.real && f.hibrido ? <Dif real={f.real[metrica]} proy={f.hibrido[metrica]} metrica={metrica} /> : '—'}
-                      </td>
+                      <td className="px-4 py-2.5 text-right">{difDe(f.hibrido)}</td>
                       <td className="px-4 py-2.5 text-right">{f.gocuotas ? fmt(f.gocuotas[metrica], metrica) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {f.real && f.gocuotas ? <Dif real={f.real[metrica]} proy={f.gocuotas[metrica]} metrica={metrica} /> : '—'}
-                      </td>
+                      <td className="px-4 py-2.5 text-right">{difDe(f.gocuotas)}</td>
                     </tr>
                   )
                 })}
@@ -271,7 +294,8 @@ export default function ProyeccionClient({ inicial, merchants }: Props) {
             </table>
             <p className="px-4 py-3 text-xs text-gray-400">
               La proyección de cada mes es la del run congelado más reciente que no lo vio (run del día 1 del mismo mes). Dif = real
-              vs proyectado: verde superó la proyección, rojo quedó abajo. Los meses sin cerrar muestran la proyección vigente.
+              vs proyectado: verde superó la proyección, rojo quedó abajo. El mes en curso muestra el acumulado al día (barra celeste)
+              y su dif se calcula contra la proyección prorrateada a los días transcurridos; los meses futuros muestran la proyección vigente.
             </p>
           </div>
         </>
