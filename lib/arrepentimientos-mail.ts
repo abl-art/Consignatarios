@@ -30,6 +30,7 @@ export async function leerMailsNuevos(desdeUid: number): Promise<{
   maxUid: number
   uidValidity: number
   descartadosFiltro: number
+  errores: number
 }> {
   const client = nuevoCliente()
   await client.connect()
@@ -40,6 +41,7 @@ export async function leerMailsNuevos(desdeUid: number): Promise<{
     let maxUid = desdeUid
     const mails: MailBoton[] = []
     let descartadosFiltro = 0
+    let errores = 0
 
     // SUBJECT de IMAP es substring case-insensitive; el filtro fino (las tres
     // firmas) corre después sobre el mail parseado.
@@ -52,28 +54,35 @@ export async function leerMailsNuevos(desdeUid: number): Promise<{
 
     for (const uid of nuevos) {
       maxUid = Math.max(maxUid, uid)
-      const dl = await client.download(String(uid), undefined, { uid: true })
-      if (!dl?.content) {
-        descartadosFiltro++
-        continue
+      // Un mail "veneno" (download/parse que revienta) no frena la cola:
+      // se loguea con su UID, se cuenta y se sigue (fix del review final)
+      try {
+        const dl = await client.download(String(uid), undefined, { uid: true })
+        if (!dl?.content) {
+          descartadosFiltro++
+          continue
+        }
+        const parsed = await simpleParser(dl.content)
+        const from = parsed.from?.value?.[0]?.address ?? null
+        const asunto = parsed.subject ?? null
+        const texto = parsed.text ?? null
+        if (!esMailDelBoton({ from, asunto, texto })) {
+          descartadosFiltro++
+          continue
+        }
+        const datos = parsearAsuntoArrepentimiento(asunto)!
+        mails.push({
+          uid,
+          fecha: (parsed.date ?? new Date()).toISOString(),
+          nombre: datos.nombre,
+          dni: datos.dni,
+        })
+      } catch (e) {
+        console.error(`arrepentimientos: error procesando mail UID ${uid}:`, e)
+        errores++
       }
-      const parsed = await simpleParser(dl.content)
-      const from = parsed.from?.value?.[0]?.address ?? null
-      const asunto = parsed.subject ?? null
-      const texto = parsed.text ?? null
-      if (!esMailDelBoton({ from, asunto, texto })) {
-        descartadosFiltro++
-        continue
-      }
-      const datos = parsearAsuntoArrepentimiento(asunto)!
-      mails.push({
-        uid,
-        fecha: (parsed.date ?? new Date()).toISOString(),
-        nombre: datos.nombre,
-        dni: datos.dni,
-      })
     }
-    return { mails, maxUid, uidValidity, descartadosFiltro }
+    return { mails, maxUid, uidValidity, descartadosFiltro, errores }
   } finally {
     lock.release()
     await client.logout()

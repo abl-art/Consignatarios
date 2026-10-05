@@ -80,6 +80,7 @@ export async function GET(request: Request) {
         dni: mail.dni,
         nombre: mail.nombre,
         email_uid: mail.uid,
+        uidvalidity: buzon.uidValidity,
         email_fecha: mail.fecha,
         order_number: orden?.orderNumber ?? null,
         gocuotas_order_id: orden?.gocuotasOrderId ?? null,
@@ -88,11 +89,11 @@ export async function GET(request: Request) {
         otras_ordenes: orden?.otrasOrdenes ?? 0,
         ultima_insistencia_at: mail.fecha,
       })
-      // unique violation en email_uid = reintento de un lote caído: seguir
-      if (error && !error.message.toLowerCase().includes('duplicate')) {
+      // 23505 en (uidvalidity, email_uid) = reintento de un lote caído: seguir
+      if (error && error.code !== '23505') {
         return NextResponse.json({ ok: false, resultado: error.message }, { status: 500 })
       }
-      nuevos++
+      if (!error) nuevos++
     } else {
       yaSolicitados++
     }
@@ -113,6 +114,35 @@ export async function GET(request: Request) {
       .eq('id', 1)
   }
 
+  // Refrescar pendientes sin tracking: el arrepentimiento suele llegar ANTES
+  // del despacho — si el depósito despachó después del mail, la fila debe
+  // mostrar el tracking para que Yamila pueda confirmar el rescate
+  // (fix del review final; sin esto "sin despachar" quedaba congelado).
+  let refrescados = 0
+  const { data: sinTracking } = await admin
+    .from('arrepentimientos')
+    .select('id, dni, gocuotas_order_id')
+    .eq('estado', 'pendiente')
+    .is('tracking', null)
+  for (const p of sinTracking ?? []) {
+    const orden = await fetchOrdenPorDni(p.dni)
+    if (!orden) continue
+    // Solo refrescar la MISMA orden (o una fila "sin orden" que ahora matchea)
+    if (p.gocuotas_order_id && orden.gocuotasOrderId !== p.gocuotas_order_id) continue
+    if (!orden.tracking && p.gocuotas_order_id) continue
+    const { error } = await admin
+      .from('arrepentimientos')
+      .update({
+        tracking: orden.tracking,
+        order_number: orden.orderNumber,
+        gocuotas_order_id: orden.gocuotasOrderId,
+        producto: orden.producto,
+        otras_ordenes: orden.otrasOrdenes,
+      })
+      .eq('id', p.id)
+    if (!error) refrescados++
+  }
+
   return NextResponse.json({
     ok: true,
     resultado: `procesados ${lote.mails.length} mails del botón`,
@@ -120,5 +150,7 @@ export async function GET(request: Request) {
     insistencias,
     yaSolicitados,
     descartadosFiltro: lote.descartadosFiltro,
+    erroresMail: lote.errores,
+    refrescados,
   })
 }

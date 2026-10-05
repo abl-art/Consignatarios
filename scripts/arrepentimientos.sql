@@ -40,3 +40,11 @@ create table if not exists arrepentimientos_estado (
 --        timeout_milliseconds := 55000
 --      ) $$
 -- );
+
+-- Fix review final (5/10): el unique por email_uid solo pierde mails en
+-- silencio si Gmail cambia UIDVALIDITY y re-numera solapando UIDs viejos.
+-- Unique compuesto (uidvalidity, email_uid).
+alter table arrepentimientos add column if not exists uidvalidity bigint not null default 0;
+alter table arrepentimientos drop constraint if exists arrepentimientos_email_uid_key;
+drop index if exists arrepentimientos_email_uid_key;
+create unique index if not exists arrepentimientos_uidv_uid_key on arrepentimientos (uidvalidity, email_uid);
