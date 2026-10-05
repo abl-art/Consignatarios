@@ -15,7 +15,24 @@ import {
 import { useState } from 'react'
 import CanalPills, { type Canal } from '@/app/(admin)/finanzas/CanalPills'
 import type { CanalPartner, DatosPartnerSamsung, SkuVendido } from '@/lib/actions/partner-samsung'
+import { agruparMarcas } from '@/lib/partner-samsung'
 import PieMarcas from './PieMarcas'
+
+// Períodos de la torta del acuerdo (pedido de Emiliano: solo la torta
+// derecha filtra; la base jul-sep queda fija)
+const PERIODOS_TORTA = [
+  { key: 'acuerdo', label: 'Desde el 1/10' },
+  { key: 'ayer', label: 'Ayer' },
+  { key: 'd7', label: '7 días' },
+  { key: 'd30', label: '30 días' },
+] as const
+type PeriodoTorta = (typeof PERIODOS_TORTA)[number]['key']
+
+function fechaLocal(diasAtras: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - diasAtras)
+  return d.toLocaleDateString('en-CA') // YYYY-MM-DD local
+}
 
 const PERIODOS_SKU = [
   { key: 'hoy', label: 'Hoy' },
@@ -57,6 +74,7 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
   // El acuerdo aplica a la venta propia: es el canal por defecto
   const [canal, setCanal] = useState<Canal>('propia')
   const [periodoSku, setPeriodoSku] = useState<PeriodoSku>('hoy')
+  const [periodoTorta, setPeriodoTorta] = useState<PeriodoTorta>('acuerdo')
   const [rangoFechas, setRangoFechas] = useState({ desde: '', hasta: '' })
   const [filasRango, setFilasRango] = useState<{ sku: string; unidades: number }[] | null>(null)
   const [cargandoRango, setCargandoRango] = useState(false)
@@ -87,7 +105,26 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
       </div>
     )
   }
-  const { escenarios, historico, shareFijo, shareActual, muestraActual, marcasFijo, marcasActual } = datos
+  const { escenarios, historico, shareFijo, shareActual, muestraActual, marcasFijo, marcasActual, marcasDiarias } = datos
+
+  // Torta derecha según la píldora elegida: 'acuerdo' usa el acumulado del
+  // server; el resto se agrupa de la serie diaria (fechas locales AR)
+  const tortaActual =
+    periodoTorta === 'acuerdo'
+      ? marcasActual
+      : agruparMarcas(
+          marcasDiarias.filter(d =>
+            periodoTorta === 'ayer' ? d.fecha === fechaLocal(1) : d.fecha >= fechaLocal(periodoTorta === 'd7' ? 7 : 30)
+          )
+        )
+  const subtituloTorta =
+    periodoTorta === 'acuerdo'
+      ? 'acumulado del acuerdo, en vivo'
+      : periodoTorta === 'ayer'
+        ? 'ventas de ayer'
+        : periodoTorta === 'd7'
+          ? 'últimos 7 días'
+          : 'últimos 30 días'
 
   // Gráfico: real Samsung (jun → hoy; la barra del mes en curso se va
   // completando con el acumulado) + proyección en dos escenarios (promedio de
@@ -158,7 +195,26 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
           <h2 className="font-semibold text-gray-900 text-sm mb-3">Share de ventas por marca</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <PieMarcas titulo="Hasta el 30/9" subtitulo="jul – sep 2026, base del acuerdo" data={marcasFijo} />
-            <PieMarcas titulo="Desde el 1/10" subtitulo="acumulado del acuerdo, en vivo" data={marcasActual} />
+            <div>
+              <div className="flex flex-wrap justify-center gap-1 mb-2">
+                {PERIODOS_TORTA.map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => setPeriodoTorta(p.key)}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
+                      periodoTorta === p.key ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <PieMarcas
+                titulo={PERIODOS_TORTA.find(p => p.key === periodoTorta)!.label}
+                subtitulo={subtituloTorta}
+                data={tortaActual}
+              />
+            </div>
           </div>
         </div>
 

@@ -78,6 +78,10 @@ export interface DatosPartnerSamsung {
   historico: { mes: string; samsung: number; total: number }[]
   marcasFijo: VentaMarca[] // torta jul-sep (ventana del share fijo)
   marcasActual: VentaMarca[] // torta desde el 1/10
+  // Serie diaria por marca de los últimos 30 días (fecha ART) para las
+  // píldoras de período de la torta del acuerdo (ayer/7d/30d) — se agrupa
+  // en el cliente con agruparMarcas, cambio de píldora sin round-trip
+  marcasDiarias: { fecha: string; marca: string | null; ventas: number }[]
   escenarios: EscenarioMes[]
   skusSamsung: SkuVendido[] // SKUs propios vendidos (solo se llena en canal propia)
 }
@@ -88,7 +92,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
   const filtroCanal = condCanal(canal)
   const client = await pool.connect()
   try {
-    const [histRes, actualRes, skuRes] = await Promise.all([
+    const [histRes, actualRes, diarioRes, skuRes] = await Promise.all([
       // Ventas por mes y marca (jun → hoy: el mes en curso entra acumulado
       // al día; la ventana del share fijo se recorta después en JS)
       client.query<{ mes: string; marca: string | null; ventas: string }>(
@@ -107,6 +111,17 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
          WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
            AND o.order_created_at >= '${ACUERDO_DESDE}'
          GROUP BY 1`
+      ),
+      // Serie diaria por marca (últimos 30 días ART) para las píldoras de
+      // período de la torta del acuerdo
+      client.query<{ fecha: string; marca: string | null; ventas: string }>(
+        `SELECT (o.order_created_at AT TIME ZONE '${TZ_AR}')::date::text AS fecha,
+                ${MARCA_VENTA} AS marca,
+                count(*)::text AS ventas
+         ${FROM_VENTAS}
+         WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${filtroCanal}
+           AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date >= (now() AT TIME ZONE '${TZ_AR}')::date - 30
+         GROUP BY 1, 2 ORDER BY 1`
       ),
       // SKUs Samsung vendidos en la tienda propia, por período (píldoras).
       // Ventana madre 30 días: "este mes" siempre cae adentro.
@@ -210,6 +225,7 @@ export async function getDatosPartnerSamsung(canal: CanalPartner = 'propia'): Pr
       historico,
       marcasFijo,
       marcasActual,
+      marcasDiarias: diarioRes.rows.map(r => ({ fecha: r.fecha, marca: r.marca, ventas: Number(r.ventas) })),
       escenarios,
       skusSamsung,
     }
