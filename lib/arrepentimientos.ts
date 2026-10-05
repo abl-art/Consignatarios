@@ -39,6 +39,21 @@ export interface OrdenDeDni {
   producto: string | null
   tracking: string | null
   otrasOrdenes: number
+  whEstado: string | null // andreani_wh_pedidos.estado (queued/sent/expedido/…)
+  pickeado: boolean // equipo ya asignado (shipment con IMEI o unidad assigned)
+}
+
+// Etiqueta operativa del pipeline de fulfillment (estados de la pestaña
+// Warehouse Andreani, pedido de Emiliano 5/10): si ya fue ENVIADO a Andreani
+// no alcanza con anular la orden — hay que pedir que no lo pickeen; si ya
+// está PICKEADO, frenar la expedición es urgente.
+export function etiquetaFulfillment(f: { whEstado: string | null; pickeado: boolean }): string | null {
+  if (f.whEstado === 'expedido') return 'expedido'
+  if (f.pickeado) return 'pickeado'
+  if (f.whEstado === 'sent') return 'enviado a Andreani'
+  if (f.whEstado === 'queued') return 'en cola'
+  if (f.whEstado === 'cancelled' || f.whEstado === 'cancel_requested') return 'cancelado'
+  return f.whEstado
 }
 
 export type AccionMail =

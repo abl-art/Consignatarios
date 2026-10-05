@@ -17,6 +17,26 @@ function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+// Pipeline de fulfillment (estados de la pestaña Warehouse Andreani,
+// refrescado por el cron): si ya fue ENVIADO a Andreani no alcanza con anular
+// la orden — hay que pedir que no lo pickeen; PICKEADO = frenar expedición ya.
+function FulfillmentChip({ fulfillment }: { fulfillment: string | null }) {
+  if (!fulfillment) return <span className="text-gray-300">—</span>
+  const estilos: Record<string, { clase: string; hint: string }> = {
+    'en cola': { clase: 'text-gray-600 bg-gray-50 border-gray-200', hint: 'Todavía no se envió a Andreani: con anular la orden alcanza' },
+    'enviado a Andreani': { clase: 'text-amber-700 bg-amber-50 border-amber-200', hint: 'Ya está en Andreani esperando picking: pedir que NO lo pickeen además de anular' },
+    pickeado: { clase: 'text-rose-700 bg-rose-50 border-rose-200', hint: 'Equipo ya asignado: frenar la expedición con urgencia' },
+    expedido: { clase: 'text-blue-700 bg-blue-50 border-blue-200', hint: 'Ya salió del depósito: corresponde rescate' },
+    cancelado: { clase: 'text-gray-500 bg-gray-50 border-gray-200', hint: 'Pedido warehouse cancelado' },
+  }
+  const e = estilos[fulfillment] ?? { clase: 'text-gray-600 bg-gray-50 border-gray-200', hint: `Estado warehouse: ${fulfillment}` }
+  return (
+    <span title={e.hint} className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${e.clase}`}>
+      {fulfillment === 'enviado a Andreani' || fulfillment === 'pickeado' ? '⚠ ' : ''}{fulfillment}
+    </span>
+  )
+}
+
 // Estado de la orden en GOcuotas (refrescado por el cron): "anulada" confirma
 // que la gestión de Yamila impactó; "activa" = sigue vigente
 function EstadoOrdenChip({ status }: { status: string | null }) {
@@ -119,6 +139,7 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
                 <th className="text-left px-4 py-3" title="Estado de la orden en GOcuotas, refrescado cada 30 min">Orden GOcuotas</th>
                 <th className="text-left px-4 py-3">Producto</th>
                 <th className="text-left px-4 py-3">Envío</th>
+                <th className="text-left px-4 py-3" title="Pipeline del warehouse (pestaña Warehouse Andreani), refrescado cada 30 min">Fulfillment</th>
                 <th className="text-right px-4 py-3">Acciones</th>
               </tr>
             </thead>
@@ -172,6 +193,7 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
                       </span>
                     )}
                   </td>
+                  <td className="px-4 py-2.5"><FulfillmentChip fulfillment={s.fulfillment} /></td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => ejecutar(s, 'confirmar')}

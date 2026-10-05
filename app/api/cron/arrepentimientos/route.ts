@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { decidirAccionMail } from '@/lib/arrepentimientos'
+import { decidirAccionMail, etiquetaFulfillment } from '@/lib/arrepentimientos'
 import { leerEstadoBuzon, leerMailsNuevos } from '@/lib/arrepentimientos-mail'
-import { fetchEstadoOrdenGocuotas, fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
+import { fetchEstadoOrdenGocuotas, fetchFulfillmentPedido, fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
         order_number: orden?.orderNumber ?? null,
         gocuotas_order_id: orden?.gocuotasOrderId ?? null,
         gocuotas_status: orden?.gocuotasStatus ?? null,
+        fulfillment: orden ? etiquetaFulfillment(orden) : null,
         producto: orden?.producto ?? null,
         tracking: orden?.tracking ?? null,
         otras_ordenes: orden?.otrasOrdenes ?? 0,
@@ -119,17 +120,24 @@ export async function GET(request: Request) {
   // - tracking de las sin despachar (el despacho suele salir DESPUÉS del
   //   mail; sin esto "sin despachar" quedaba congelado — fix del review);
   // - estado de la orden GOcuotas de TODAS (cuando Yamila anula la orden,
-  //   la fila pasa sola a "anulada" — lookup sin filtro de descartadas).
+  //   la fila pasa sola a "anulada" — lookup sin filtro de descartadas);
+  // - pipeline de fulfillment de TODAS (en cola → enviado a Andreani →
+  //   pickeado: si avanzó, Yamila sabe que hay que frenar el picking).
   let refrescados = 0
   const { data: pendRows } = await admin
     .from('arrepentimientos')
-    .select('id, dni, tracking, gocuotas_order_id, gocuotas_status')
+    .select('id, dni, tracking, order_number, gocuotas_order_id, gocuotas_status, fulfillment')
     .eq('estado', 'pendiente')
   for (const p of pendRows ?? []) {
     const update: Record<string, unknown> = {}
     if (p.gocuotas_order_id) {
       const status = await fetchEstadoOrdenGocuotas(p.gocuotas_order_id)
       if (status && status !== p.gocuotas_status) update.gocuotas_status = status
+    }
+    if (p.order_number) {
+      const ful = await fetchFulfillmentPedido(p.order_number)
+      const etiqueta = ful ? etiquetaFulfillment(ful) : null
+      if (etiqueta && etiqueta !== p.fulfillment) update.fulfillment = etiqueta
     }
     if (!p.tracking) {
       const orden = await fetchOrdenPorDni(p.dni)
@@ -139,6 +147,7 @@ export async function GET(request: Request) {
         update.order_number = orden.orderNumber
         update.gocuotas_order_id = orden.gocuotasOrderId
         update.gocuotas_status = orden.gocuotasStatus
+        update.fulfillment = etiquetaFulfillment(orden)
         update.producto = orden.producto
         update.otras_ordenes = orden.otrasOrdenes
       }

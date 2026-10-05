@@ -2,8 +2,23 @@ import { describe, expect, it } from 'vitest'
 import {
   decidirAccionMail,
   esMailDelBoton,
+  etiquetaFulfillment,
   parsearAsuntoArrepentimiento,
 } from '@/lib/arrepentimientos'
+
+describe('etiquetaFulfillment', () => {
+  it('mapea el pipeline del warehouse a la etiqueta operativa', () => {
+    expect(etiquetaFulfillment({ whEstado: 'queued', pickeado: false })).toBe('en cola')
+    expect(etiquetaFulfillment({ whEstado: 'sent', pickeado: false })).toBe('enviado a Andreani')
+    expect(etiquetaFulfillment({ whEstado: 'sent', pickeado: true })).toBe('pickeado')
+    expect(etiquetaFulfillment({ whEstado: 'expedido', pickeado: true })).toBe('expedido')
+    expect(etiquetaFulfillment({ whEstado: 'cancelled', pickeado: false })).toBe('cancelado')
+    expect(etiquetaFulfillment({ whEstado: 'cancel_requested', pickeado: false })).toBe('cancelado')
+    expect(etiquetaFulfillment({ whEstado: null, pickeado: false })).toBeNull()
+    // pickeado manda aunque el pedido WH diga otra cosa rara (salvo expedido)
+    expect(etiquetaFulfillment({ whEstado: 'requires_attention', pickeado: true })).toBe('pickeado')
+  })
+})
 
 describe('parsearAsuntoArrepentimiento', () => {
   it('parsea el formato real de n8n (dobles espacios, tildes, nombres compuestos)', () => {
@@ -49,7 +64,7 @@ describe('esMailDelBoton', () => {
 })
 
 describe('decidirAccionMail', () => {
-  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', gocuotasStatus: 'approved', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0 }
+  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', gocuotasStatus: 'approved', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0, whEstado: 'expedido', pickeado: true }
   it('misma orden ya solicitada → insistencia (cualquier estado)', () => {
     expect(decidirAccionMail({ orden, existentes: [{ id: 'a1', gocuotasOrderId: '123' }], rescateYaSolicitado: false }))
       .toEqual({ tipo: 'insistencia', solicitudId: 'a1' })

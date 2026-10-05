@@ -52,3 +52,8 @@ create unique index if not exists arrepentimientos_uidv_uid_key on arrepentimien
 -- Estado de la orden GOcuotas (pedido de Emiliano 5/10): se guarda al crear
 -- y se refresca en cada corrida del cron para las pendientes.
 alter table arrepentimientos add column if not exists gocuotas_status text;
+
+-- Estado del pipeline de fulfillment (pedido de Emiliano 5/10): en cola /
+-- enviado a Andreani / pickeado / expedido — para saber si hay que frenar
+-- el picking además de anular la orden. Refrescado por el cron.
+alter table arrepentimientos add column if not exists fulfillment text;

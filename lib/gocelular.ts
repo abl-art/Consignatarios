@@ -3038,6 +3038,8 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
       gocuotas_status: string | null
       producto: string | null
       tracking: string | null
+      wh_estado: string | null
+      pickeado: boolean
       total: string
     }>(
       `SELECT so.order_number,
@@ -3047,6 +3049,14 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
               (SELECT s.tracking_number FROM shipments s
                 WHERE s.store_order_id = so.id
                 ORDER BY s.created_at DESC LIMIT 1) AS tracking,
+              (SELECT p.estado FROM andreani_wh_pedidos p
+                WHERE p.store_order_id = so.id
+                ORDER BY p.created_at DESC LIMIT 1) AS wh_estado,
+              (EXISTS (SELECT 1 FROM shipments s2
+                 WHERE s2.store_order_id = so.id AND s2.type = 'outbound'
+                   AND s2.status <> 'cancelled' AND s2.imei IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM inventory_items ii
+                 WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text)) AS pickeado,
               count(*) OVER ()::text AS total
        FROM gocuotas_orders go
        LEFT JOIN store_orders so ON so.gocuotas_order_id::text = go.order_id::text
@@ -3066,7 +3076,40 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
       producto: r.producto,
       tracking: r.tracking,
       otrasOrdenes: Number(r.total) - 1,
+      whEstado: r.wh_estado,
+      pickeado: r.pickeado,
     }
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Pipeline de fulfillment de un pedido (por order_number SO-…): estado del
+ * pedido warehouse + si el equipo ya fue pickeado — el refresh del cron de
+ * arrepentimientos lo usa para que Yamila sepa si hay que frenar el picking.
+ */
+export async function fetchFulfillmentPedido(orderNumber: string): Promise<{ whEstado: string | null; pickeado: boolean } | null> {
+  const pool = getPool()
+  if (!pool) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ wh_estado: string | null; pickeado: boolean }>(
+      `SELECT (SELECT p.estado FROM andreani_wh_pedidos p
+                WHERE p.store_order_id = so.id
+                ORDER BY p.created_at DESC LIMIT 1) AS wh_estado,
+              (EXISTS (SELECT 1 FROM shipments s2
+                 WHERE s2.store_order_id = so.id AND s2.type = 'outbound'
+                   AND s2.status <> 'cancelled' AND s2.imei IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM inventory_items ii
+                 WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text)) AS pickeado
+       FROM store_orders so
+       WHERE so.order_number = $1
+       LIMIT 1`,
+      [orderNumber]
+    )
+    const r = res.rows[0]
+    return r ? { whEstado: r.wh_estado, pickeado: r.pickeado } : null
   } finally {
     client.release()
   }
