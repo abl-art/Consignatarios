@@ -1,6 +1,7 @@
 import { getPool, getGocuotasPool } from './db-pool'
 import type { VentaMensualDim, PuntoMensual } from './proyeccion-ventas'
 import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS, CLIENTES_TODOS, sqlCondicionClientes, type FiltroClientes } from './client-ids'
+import type { OrdenDeDni } from './arrepentimientos'
 
 export { CLIENT_IDS_PROPIOS }
 
@@ -3016,6 +3017,71 @@ export async function fetchLecturaControlStock(): Promise<LecturaControlStock> {
         .map(r => ({ nombre: r.nombre, unidades: Number(r.unidades) }))
         .sort((a, b) => b.unidades - a.unidades),
     }
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Arrepentimientos: cruce DNI → orden propia más reciente (ver spec
+// docs/superpowers/specs/2026-10-05-arrepentimientos-design.md)
+// ---------------------------------------------------------------------------
+
+export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> {
+  const pool = getPool()
+  if (!pool || !/^\d{6,9}$/.test(dni)) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      order_number: string | null
+      gocuotas_order_id: string
+      producto: string | null
+      tracking: string | null
+      total: string
+    }>(
+      `SELECT so.order_number,
+              go.order_id::text AS gocuotas_order_id,
+              so.product_name AS producto,
+              (SELECT s.tracking_number FROM shipments s
+                WHERE s.store_order_id = so.id
+                ORDER BY s.created_at DESC LIMIT 1) AS tracking,
+              count(*) OVER ()::text AS total
+       FROM gocuotas_orders go
+       LEFT JOIN store_orders so ON so.gocuotas_order_id::text = go.order_id::text
+       WHERE go.user_dni = $1
+         AND go.order_discarded_at IS NULL
+         AND go.client_id::text IN (${SQL_IDS_PROPIOS})
+       ORDER BY go.order_created_at DESC
+       LIMIT 1`,
+      [dni]
+    )
+    const r = res.rows[0]
+    if (!r) return null
+    return {
+      orderNumber: r.order_number,
+      gocuotasOrderId: r.gocuotas_order_id,
+      producto: r.producto,
+      tracking: r.tracking,
+      otrasOrdenes: Number(r.total) - 1,
+    }
+  } finally {
+    client.release()
+  }
+}
+
+/** ¿El envío ya tiene SolicitudDeRescate en el tracking de Andreani? */
+export async function fetchRescateYaSolicitado(tracking: string): Promise<boolean> {
+  const pool = getPool()
+  if (!pool) return false
+  const client = await pool.connect()
+  try {
+    const res = await client.query(
+      `SELECT 1 FROM shipments s
+       WHERE s.tracking_number = $1 AND s.traces::text ILIKE '%SolicitudDeRescate%'
+       LIMIT 1`,
+      [tracking]
+    )
+    return res.rows.length > 0
   } finally {
     client.release()
   }
