@@ -271,12 +271,11 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Pedido GOcelular · Order ID de GOcuotas (para anular la orden)">Orden · Order ID</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
@@ -288,7 +287,10 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
             <tbody className="divide-y divide-gray-100">
               {visibles.map((r) => (
                 <tr key={r.orderNumber} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">{r.orderNumber}</td>
+                  <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">
+                    {r.orderNumber}
+                    {r.gocuotasOrderId && <span className="text-gray-500 font-normal"> · {r.gocuotasOrderId}</span>}
+                  </td>
                   <td className="px-4 py-3 text-gray-900">
                     {r.cliente || '—'}
                     <div className="text-xs text-gray-500">
@@ -298,7 +300,6 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
                   <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={r.producto ?? undefined}>{r.producto ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{r.destino || '—'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.gocuotasOrderId ?? '—'}</td>
                   <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
                   <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
