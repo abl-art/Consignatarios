@@ -226,7 +226,21 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
               </td>
               <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={r.producto ?? undefined}>{r.producto ?? '—'}</td>
               <td className="px-4 py-3 text-gray-600">{r.destino || '—'}</td>
-              <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
+              <td className="px-4 py-3 font-mono text-xs">
+                {r.tracking ? (
+                  <a
+                    href={`https://www.andreani.com/envio/${r.tracking}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-700 hover:underline"
+                    title="Ver el tracking en vivo en Andreani (los traces de acá pueden estar desactualizados)"
+                  >
+                    {r.tracking}
+                  </a>
+                ) : (
+                  <span className="text-gray-600">—</span>
+                )}
+              </td>
               <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
               <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
               <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
