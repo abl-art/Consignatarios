@@ -192,14 +192,73 @@ function SelectMotivo({ rescate }: { rescate: Rescate }) {
   )
 }
 
+function TablaRescates({ rescates }: { rescates: Rescate[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Pedido GOcelular · Order ID de GOcuotas (para anular la orden)">Orden · Order ID</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
+            <th className="text-right px-4 py-3 font-medium text-gray-600" title="Terminados: días de solicitud a resolución. Activos: días corriendo.">Días</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rescates.map((r) => (
+            <tr key={r.orderNumber} className="hover:bg-gray-50">
+              <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">
+                {r.orderNumber}
+                {r.gocuotasOrderId && <span className="text-gray-500 font-normal"> · {r.gocuotasOrderId}</span>}
+              </td>
+              <td className="px-4 py-3 text-gray-900">
+                {r.cliente || '—'}
+                <div className="text-xs text-gray-500">
+                  {[r.dni && `DNI ${r.dni}`, r.telefono].filter(Boolean).join(' · ')}
+                </div>
+              </td>
+              <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={r.producto ?? undefined}>{r.producto ?? '—'}</td>
+              <td className="px-4 py-3 text-gray-600">{r.destino || '—'}</td>
+              <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
+              <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
+              <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
+              <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
+              <td className="px-4 py-3 text-gray-600">
+                {r.ultimoEvento}
+                <div className="text-xs text-gray-400">{fecha(r.ultimoEventoAt)}</div>
+              </td>
+              <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{r.dias}</td>
+              <td className="px-4 py-3"><EstadoChip estado={r.estado} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoRescate | null>(null)
+  const [verResueltos, setVerResueltos] = useState(false)
 
   const porFecha = useMemo(() => filtrarRescatesPorFecha(rescates, desde, hasta), [rescates, desde, hasta])
   const resumen = useMemo(() => contarPorEstado(porFecha), [porFecha])
   const visibles = estadoFiltro ? porFecha.filter(r => r.estado === estadoFiltro) : porFecha
+  // Resueltos (rendido/entregado: no hay nada que gestionar) separados de los
+  // que necesitan gestión, como en Arrepentimientos; colapsados por defecto.
+  const activos = visibles.filter(r => !metaEstado(r.estado).terminal)
+  const resueltos = visibles.filter(r => metaEstado(r.estado).terminal)
+  // Al filtrar por una tarjeta de estado terminal, los resueltos se abren solos
+  const resueltosAbiertos = verResueltos || (estadoFiltro !== null && metaEstado(estadoFiltro).terminal)
 
   if (rescates.length === 0) {
     return (
@@ -262,57 +321,28 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
 
       <Pipeline rescates={porFecha} />
 
-      {visibles.length === 0 ? (
+      {activos.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-          <p className="text-sm text-gray-600">Ningún rescate coincide con los filtros.</p>
+          <p className="text-sm text-gray-600">
+            {visibles.length === 0 ? 'Ningún rescate coincide con los filtros.' : 'No hay rescates que necesiten gestión. 🎉'}
+          </p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Pedido GOcelular · Order ID de GOcuotas (para anular la orden)">Orden · Order ID</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600" title="Terminados: días de solicitud a resolución. Activos: días corriendo.">Días</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {visibles.map((r) => (
-                <tr key={r.orderNumber} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">
-                    {r.orderNumber}
-                    {r.gocuotasOrderId && <span className="text-gray-500 font-normal"> · {r.gocuotasOrderId}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {r.cliente || '—'}
-                    <div className="text-xs text-gray-500">
-                      {[r.dni && `DNI ${r.dni}`, r.telefono].filter(Boolean).join(' · ')}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={r.producto ?? undefined}>{r.producto ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{r.destino || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{r.tracking ?? '—'}</td>
-                  <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
-                  <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {r.ultimoEvento}
-                    <div className="text-xs text-gray-400">{fecha(r.ultimoEventoAt)}</div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{r.dias}</td>
-                  <td className="px-4 py-3"><EstadoChip estado={r.estado} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-white border border-gray-200 rounded-xl">
+          <TablaRescates rescates={activos} />
+        </div>
+      )}
+
+      {resueltos.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl mt-4">
+          <button
+            onClick={() => setVerResueltos(v => !v)}
+            className="w-full text-left px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            title="Rendidos y entregados igual: ya no hay nada que gestionar"
+          >
+            {resueltosAbiertos ? '▾' : '▸'} Resueltos ({resueltos.length})
+          </button>
+          {resueltosAbiertos && <TablaRescates rescates={resueltos} />}
         </div>
       )}
     </div>
