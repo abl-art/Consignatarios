@@ -56,6 +56,7 @@ export interface WarehouseReport {
     colaAExpedido: EtapaPromedio
     enviadoAExpedido: EtapaPromedio
   }
+  /** Serie completa desde el primer expedido — NO se recorta al período */
   expedidosPorDia: { dia: string; cantidad: number }[]
 }
 
@@ -71,7 +72,8 @@ function promedio(valores: number[]): EtapaPromedio {
  *   Timestamps por etapa: created_at (En Cola) → sent_at (Enviado) →
  *   webhook CUSTOMERORDERPACKED (Picking) → updated_at del pedido expedido (Expedido).
  * - Promedios: sobre las transiciones cuyo evento final cae dentro del período.
- * - Serie de expedidos: pedidos expedidos en el período según fecha de expedición.
+ * - Serie de expedidos: historia completa por día de expedición, independiente
+ *   del período (el gráfico muestra "desde que empezamos").
  */
 export async function getWarehouseReport(desdeISO: string, hastaISO: string): Promise<WarehouseReport> {
   const vacio: WarehouseReport = {
@@ -128,15 +130,16 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
             OR (p.updated_at >= $1 AND p.updated_at < $2)`,
         [desdeISO, hastaISO]
       ),
+      // Serie completa desde el primer expedido: el gráfico no depende del
+      // filtro de fechas (si no, la vista por mes queda con 1-2 valores)
       client.query<{ dia: string; cantidad: string }>(
         `SELECT
            to_char(p.updated_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD') AS dia,
            COUNT(*)::text AS cantidad
          FROM andreani_wh_pedidos p
-         WHERE p.estado = 'expedido' AND p.updated_at >= $1 AND p.updated_at < $2
+         WHERE p.estado = 'expedido'
          GROUP BY 1
-         ORDER BY 1`,
-        [desdeISO, hastaISO]
+         ORDER BY 1`
       ),
       // Snapshot en tiempo real: pedidos actualmente en tránsito por el warehouse
       client.query<{

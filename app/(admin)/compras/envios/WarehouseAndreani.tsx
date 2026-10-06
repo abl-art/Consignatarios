@@ -330,7 +330,7 @@ export default function WarehouseAndreani() {
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
                   Expedidos por {granularidad === 'dia' ? 'día' : 'mes'}
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">Según fecha de expedición dentro del período</p>
+                <p className="text-xs text-gray-500 mt-0.5">Historia completa desde el primer expedido — no depende del filtro de fechas</p>
               </div>
               <div className="flex gap-2">
                 {(['dia', 'mes'] as const).map(g => (
