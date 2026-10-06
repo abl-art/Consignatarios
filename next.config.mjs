@@ -11,6 +11,7 @@ const nextConfig = {
     // ruta autenticada que lo lee de docs/ — incluirlo en el bundle
     outputFileTracingIncludes: {
       '/canales/lista-precios/manual': ['./docs/manual-lista-precios/manual-inline.html'],
+      '/compras/envios/manual': ['./docs/manual-envios-posventa/manual-inline.html'],
     },
   },
 };
