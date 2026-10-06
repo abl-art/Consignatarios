@@ -24,7 +24,18 @@ export default async function ListaPreciosPage() {
       <div className="mb-1">
         <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">&larr; Canales</Link>
       </div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Lista de Precios</h1>
+      <div className="flex items-center gap-3 mb-1">
+        <h1 className="text-2xl font-bold text-gray-900">Lista de Precios</h1>
+        <a
+          href="/canales/lista-precios/manual"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 hover:bg-violet-100"
+          title="Cómo fijar precios, publicar en tienda, cargar bonos y reclamar NC — con capturas"
+        >
+          📖 Manual operativo
+        </a>
+      </div>
       <p className="text-sm text-gray-500 mb-6">
         Costo sin IVA del proveedor de cada marca × múltiplo = PVP con cuota redonda (÷9 en centenas, siempre para
         arriba). Celulares con ventas en los últimos 30 días; tablets y accesorios se suman con &quot;+ Agregar modelo&quot;.
