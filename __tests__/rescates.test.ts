@@ -195,6 +195,59 @@ describe('rescates cargados a mano (pendientes de aceptación)', () => {
     expect(r.motivo).toBeNull()
   })
 
+  // Casos reales (SO-C98LS4, SO-QJ7XPP): el paquete vuelve solo por ciclo de
+  // rendición sin que SolicitudDeRescate aparezca nunca en el trace.
+  it('un manual cuyo trace tiene EnvioRendido queda rendido, no pendiente', () => {
+    const [r] = armarRescatesManuales(
+      [raw('SO-C98LS4', [
+        ev('EnvioNoEntregado', '2026-08-25T10:00:00-03:00'),
+        ev('InicioCicloDeRendicion', '2026-08-26T10:00:00-03:00'),
+        ev('EnvioRendido', '2026-08-30T10:00:00-03:00'),
+      ])],
+      [seg('360003081525590', { createdAt: '2026-08-28T10:00:00-03:00' })],
+      AHORA,
+    )
+    expect(r.estado).toBe('rendido')
+    expect(r.ultimoEvento).toBe('EnvioRendido')
+    // terminal: días de carga a resolución, no hasta hoy
+    expect(r.dias).toBe(2)
+  })
+
+  it('un manual con ciclo de rendición en curso queda en viaje de vuelta', () => {
+    const [r] = armarRescatesManuales(
+      [raw('SO-7SEP57', [
+        ev('EnvioNoEntregado', '2026-08-25T10:00:00-03:00'),
+        ev('InicioCicloDeRendicion', '2026-08-26T10:00:00-03:00'),
+        ev('EnvioEnInformeDeRendicion', '2026-08-27T10:00:00-03:00'),
+      ])],
+      [seg('360003081525590')],
+      AHORA,
+    )
+    expect(r.estado).toBe('en_viaje')
+  })
+
+  it('un manual cuyo envío se entregó igual queda entregado', () => {
+    const [r] = armarRescatesManuales(
+      [raw('SO-FR2YK6', [
+        ev('Visita', '2026-09-01T14:00:00-03:00', { descripcion: 'Entregado' }),
+        ev('EnvioEntregado', '2026-09-01T15:00:00-03:00', { descripcion: 'Entregado' }),
+      ])],
+      [seg('360003081525590')],
+      AHORA,
+    )
+    expect(r.estado).toBe('entregado')
+  })
+
+  it('los manuales resueltos por rendición no aportan hitos al pipeline de rescates', () => {
+    const manuales = armarRescatesManuales(
+      [raw('SO-C98LS4', [ev('EnvioRendido', '2026-08-30T10:00:00-03:00')])],
+      [seg('360003081525590')],
+      AHORA,
+    )
+    const p = pipelineRescates(manuales)
+    expect(p.total).toEqual({ promedioDias: null, muestras: 0 })
+  })
+
   it('los pendientes cuentan en el resumen por estado', () => {
     const pendientes = armarRescatesManuales([raw('SO-MANUAL', [])], [seg('360003081525590')], AHORA)
     const conteo = contarPorEstado(pendientes)

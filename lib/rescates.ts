@@ -164,11 +164,30 @@ export function armarRescates(rows: RescateRaw[], ahora: Date, seguimientos: Seg
   return ordenar(rescates)
 }
 
+// Ciclo de rendición de Andreani: el envío no se pudo entregar y vuelve solo
+// al depósito, SIN que SolicitudDeRescate aparezca nunca en el trace.
+const EVENTOS_RENDICION = new Set(['InicioCicloDeRendicion', 'RemisionDeEnvio', 'EnvioEnInformeDeRendicion'])
+
 /**
- * Rescates cargados a mano cuyo envío todavía no muestra la SolicitudDeRescate
- * en el tracking de Andreani: quedan "Pendientes de aceptación" con la fecha
- * de carga como solicitud. excluir = trackings ya listados como automáticos
- * (cuando la API los muestra, esta fila desaparece y el estado sigue solo).
+ * Estado de un rescate cargado a mano según su trace. La SolicitudDeRescate
+ * puede no aparecer nunca: hay envíos que vuelven solos por ciclo de rendición
+ * (rendido/en viaje) o que se terminan entregando igual — sin esto quedaban
+ * "Pendientes de aceptación" para siempre (casos reales SO-C98LS4, SO-FR2YK6).
+ */
+function estadoManual(eventos: TraceEvento[]): EstadoRescate {
+  if (eventos.some(e => e.evento === 'EnvioEntregado')) return 'entregado'
+  if (eventos.some(e => e.evento === 'EnvioRendido')) return 'rendido'
+  if (eventos.some(e => EVENTOS_RENDICION.has(e.evento))) return 'en_viaje'
+  return 'pendiente'
+}
+
+/**
+ * Rescates cargados a mano cuyo envío no muestra la SolicitudDeRescate en el
+ * tracking de Andreani, con la fecha de carga como solicitud y el estado
+ * derivado del trace (ver estadoManual). No aportan hitos al pipeline: la
+ * rendición es otro camino de vuelta, sus tiempos no son los del rescate.
+ * excluir = trackings ya listados como automáticos (cuando la API los
+ * muestra, esta fila desaparece y el estado sigue solo).
  */
 export function armarRescatesManuales(
   rows: RescateRaw[],
@@ -184,16 +203,18 @@ export function armarRescatesManuales(
     if (!seguimiento) continue
     const eventos = [...(r.traces ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
     const ultimo = eventos[eventos.length - 1]
+    const estado = estadoManual(eventos)
+    const hasta = metaEstado(estado).terminal && ultimo ? new Date(ultimo.fecha) : ahora
     rescates.push({
       ...base(r, seguimiento),
-      estado: 'pendiente',
+      estado,
       solicitadoAt: seguimiento.createdAt,
       rescatadoAt: null,
       enViajeAt: null,
       rendidoAt: null,
       ultimoEvento: ultimo ? [ultimo.evento, ultimo.descripcion].filter(Boolean).join(' — ') : 'Cargado a mano',
       ultimoEventoAt: ultimo?.fecha ?? seguimiento.createdAt,
-      dias: Math.max(0, Math.floor((ahora.getTime() - new Date(seguimiento.createdAt).getTime()) / DIA_MS)),
+      dias: Math.max(0, Math.floor((hasta.getTime() - new Date(seguimiento.createdAt).getTime()) / DIA_MS)),
     })
   }
   return ordenar(rescates)
