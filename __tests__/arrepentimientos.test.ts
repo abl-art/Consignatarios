@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decidirAccionMail,
+  evaluarVentanaArrepentimiento,
   esMailDelBoton,
   etiquetaFulfillment,
   parsearAsuntoArrepentimiento,
@@ -64,7 +65,7 @@ describe('esMailDelBoton', () => {
 })
 
 describe('decidirAccionMail', () => {
-  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', gocuotasStatus: 'approved', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0, whEstado: 'expedido', pickeado: true }
+  const orden = { orderNumber: 'SO-X', gocuotasOrderId: '123', gocuotasStatus: 'approved', deliveredAt: '2026-10-01T09:00:00Z', producto: 'Moto G17', tracking: '360001', otrasOrdenes: 0, whEstado: 'expedido', pickeado: true }
   it('misma orden ya solicitada → insistencia (cualquier estado)', () => {
     expect(decidirAccionMail({ orden, existentes: [{ id: 'a1', gocuotasOrderId: '123' }], rescateYaSolicitado: false }))
       .toEqual({ tipo: 'insistencia', solicitudId: 'a1' })
@@ -84,5 +85,32 @@ describe('decidirAccionMail', () => {
   it('DNI sin orden y sin solicitudes previas → nueva (fila "sin orden")', () => {
     expect(decidirAccionMail({ orden: null, existentes: [], rescateYaSolicitado: false }))
       .toEqual({ tipo: 'nueva' })
+  })
+})
+
+describe('evaluarVentanaArrepentimiento', () => {
+  // Regla de Emiliano (7/10): order_delivered_at de gocuotas_orders es la
+  // fecha de confirmación de la compra. Sin delivered_at la compra nunca se
+  // aprobó → no corresponde arrepentimiento. Más de 10 días corridos desde
+  // la confirmación → se gestiona por otro canal.
+  it('sin delivered_at la compra no se aprobó: no corresponde', () => {
+    expect(evaluarVentanaArrepentimiento(null, '2026-10-07T10:00:00Z')).toBe('no_aprobada')
+  })
+
+  it('mail dentro de los 10 días corridos: vigente', () => {
+    expect(evaluarVentanaArrepentimiento('2026-10-01T09:00:00Z', '2026-10-07T10:00:00Z')).toBe('vigente')
+  })
+
+  it('el día 10 exacto sigue vigente', () => {
+    expect(evaluarVentanaArrepentimiento('2026-09-27T10:00:00Z', '2026-10-07T10:00:00Z')).toBe('vigente')
+  })
+
+  it('pasados los 10 días corridos: vencida', () => {
+    expect(evaluarVentanaArrepentimiento('2026-09-26T09:59:00Z', '2026-10-07T10:00:00Z')).toBe('vencida')
+  })
+
+  it('cuenta contra la fecha del mail, no contra ahora', () => {
+    // Entregada hace mucho pero el mail fue al día 3: vigente
+    expect(evaluarVentanaArrepentimiento('2026-06-01T09:00:00Z', '2026-06-04T10:00:00Z')).toBe('vigente')
   })
 })

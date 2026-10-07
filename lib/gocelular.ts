@@ -3036,6 +3036,7 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
       order_number: string | null
       gocuotas_order_id: string
       gocuotas_status: string | null
+      delivered_at: string | null
       producto: string | null
       tracking: string | null
       wh_estado: string | null
@@ -3045,6 +3046,7 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
       `SELECT so.order_number,
               go.order_id::text AS gocuotas_order_id,
               go.order_status AS gocuotas_status,
+              go.order_delivered_at::text AS delivered_at,
               so.product_name AS producto,
               (SELECT s.tracking_number FROM shipments s
                 WHERE s.store_order_id = so.id
@@ -3073,6 +3075,7 @@ export async function fetchOrdenPorDni(dni: string): Promise<OrdenDeDni | null> 
       orderNumber: r.order_number,
       gocuotasOrderId: r.gocuotas_order_id,
       gocuotasStatus: r.gocuotas_status,
+      deliveredAt: r.delivered_at,
       producto: r.producto,
       tracking: r.tracking,
       otrasOrdenes: Number(r.total) - 1,

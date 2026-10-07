@@ -36,6 +36,7 @@ export interface OrdenDeDni {
   orderNumber: string | null
   gocuotasOrderId: string | null
   gocuotasStatus: string | null // order_status de GOcuotas (approved/discarded/…)
+  deliveredAt: string | null // order_delivered_at = confirmación de la compra
   producto: string | null
   tracking: string | null
   otrasOrdenes: number
@@ -54,6 +55,25 @@ export function etiquetaFulfillment(f: { whEstado: string | null; pickeado: bool
   if (f.whEstado === 'queued') return 'en cola'
   if (f.whEstado === 'cancelled' || f.whEstado === 'cancel_requested') return 'cancelado'
   return f.whEstado
+}
+
+export const DIAS_VENTANA_ARREPENTIMIENTO = 10
+
+export type VentanaArrepentimiento = 'vigente' | 'vencida' | 'no_aprobada'
+
+// Regla de Emiliano (7/10): order_delivered_at de gocuotas_orders es la fecha
+// de confirmación de la compra. Sin delivered_at la compra nunca se aprobó →
+// no corresponde arrepentimiento. Pasados los 10 días corridos desde la
+// confirmación (contados contra la fecha del mail, no contra el momento de
+// procesarlo) → se gestiona por otro canal. En ambos casos el cron inserta
+// la solicitud ya descartada: no aparece en pendientes pero queda la traza.
+export function evaluarVentanaArrepentimiento(
+  deliveredAt: string | null,
+  fechaMail: string
+): VentanaArrepentimiento {
+  if (!deliveredAt) return 'no_aprobada'
+  const limite = new Date(deliveredAt).getTime() + DIAS_VENTANA_ARREPENTIMIENTO * 24 * 60 * 60 * 1000
+  return new Date(fechaMail).getTime() <= limite ? 'vigente' : 'vencida'
 }
 
 export type AccionMail =

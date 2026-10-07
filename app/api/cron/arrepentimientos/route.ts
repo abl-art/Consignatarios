@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { decidirAccionMail, etiquetaFulfillment } from '@/lib/arrepentimientos'
+import { decidirAccionMail, etiquetaFulfillment, evaluarVentanaArrepentimiento } from '@/lib/arrepentimientos'
 import { leerEstadoBuzon, leerMailsNuevos } from '@/lib/arrepentimientos-mail'
 import { fetchEstadoOrdenGocuotas, fetchFulfillmentPedido, fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
 
@@ -48,6 +48,7 @@ export async function GET(request: Request) {
   let nuevos = 0
   let insistencias = 0
   let yaSolicitados = 0
+  let autoDescartados = 0
 
   for (const mail of lote.mails) {
     const orden = await fetchOrdenPorDni(mail.dni)
@@ -76,6 +77,18 @@ export async function GET(request: Request) {
       if (err2) return NextResponse.json({ ok: false, resultado: err2.message }, { status: 500 })
       insistencias++
     } else if (accion.tipo === 'nueva') {
+      // Ventana de arrepentimiento (solo con orden identificada; sin orden
+      // queda pendiente para que Yamila investigue): compra sin confirmar o
+      // con más de 10 días desde la confirmación → se inserta ya descartada
+      // (no aparece en pendientes pero queda la traza y dedupea insistencias)
+      const ventana = orden ? evaluarVentanaArrepentimiento(orden.deliveredAt, mail.fecha) : 'vigente'
+      const autoDescarte =
+        ventana === 'vencida'
+          ? 'Gestionado por otro canal'
+          : ventana === 'no_aprobada'
+            ? 'Compra no aprobada'
+            : null
+
       const { error } = await admin.from('arrepentimientos').insert({
         dni: mail.dni,
         nombre: mail.nombre,
@@ -90,12 +103,20 @@ export async function GET(request: Request) {
         tracking: orden?.tracking ?? null,
         otras_ordenes: orden?.otrasOrdenes ?? 0,
         ultima_insistencia_at: mail.fecha,
+        ...(autoDescarte && {
+          estado: 'descartada',
+          descarte_motivo: autoDescarte,
+          resuelto_at: new Date().toISOString(),
+        }),
       })
       // 23505 en (uidvalidity, email_uid) = reintento de un lote caído: seguir
       if (error && error.code !== '23505') {
         return NextResponse.json({ ok: false, resultado: error.message }, { status: 500 })
       }
-      if (!error) nuevos++
+      if (!error) {
+        if (autoDescarte) autoDescartados++
+        else nuevos++
+      }
     } else {
       yaSolicitados++
     }
@@ -163,6 +184,7 @@ export async function GET(request: Request) {
     nuevos,
     insistencias,
     yaSolicitados,
+    autoDescartados,
     descartadosFiltro: lote.descartadosFiltro,
     erroresMail: lote.errores,
     refrescados,
