@@ -90,10 +90,11 @@
   <p class="eyebrow">GOcelular360 · Manual operativo</p>
   <h1>📮 Posventa de envíos — Arrepentimientos, Rescates y Siniestros</h1>
   <p class="sub">Las 4 pestañas de <b>Compras → Control de Envíos</b> que resuelven lo que pasa <b>después</b> de vender: el cliente se arrepintió, hay que frenar un envío, o un equipo se perdió. Con capturas reales.</p>
-  <p class="meta">Actualizado el 6/10/2026 · Los números de las capturas son del día en que se sacaron.</p>
+  <p class="meta">Actualizado el 7/10/2026 · Los números de las capturas son del día en que se sacaron.</p>
 
   <nav class="toc">
     <a href="#mapa">🧭 El mapa</a>
+    <a href="#buscador">🔍 Buscador</a>
     <a href="#arrepentimientos">🙋 Arrepentimientos</a>
     <a href="#rescates">🚚 Rescates</a>
     <a href="#sin-dist">📦 Siniestros Distribución</a>
@@ -111,6 +112,22 @@
     <tr><td>🏭 <b>Siniestros Warehouse</b></td><td>Equipos perdidos, rotos o hurtados <b>dentro del depósito</b> (sin guía de envío).</td><td>El control de stock detecta un faltante en el warehouse: hay que registrarlo y reclamar al seguro.</td></tr>
   </table></div>
   <div class="callout tip"><b>💡 La distinción clave</b>¿El equipo estaba <b>viajando</b>? → es de Distribución (rescate si se puede frenar, siniestro si se perdió). ¿Estaba <b>en el depósito</b>? → Siniestro Warehouse. ¿Todavía <b>no salió</b>? → se resuelve anulando la orden, sin tocar a Andreani.</div>
+
+  <h2 id="buscador">🔍 El buscador: encontrá el caso sin recorrer pestañas</h2>
+  <p><b>Qué es:</b> la caja de búsqueda arriba de las pestañas. Le pegás un <b>DNI</b>, un <b>número de seguimiento de Andreani</b>, una <b>orden</b> (SO-…) o un <b>IMEI</b>, y te dice <b>en qué pestañas aparece ese caso</b>: Alertas, Demoras, Arrepentimientos, Rescates, Siniestros Distribución y Siniestros Warehouse.</p>
+  <p><b>Para qué:</b> cuando te llega un reclamo ("soy el DNI tal, ¿dónde está mi equipo?") no hace falta saber de antemano en qué pestaña buscar — el buscador te lo dice, y hasta te deja resolver desde ahí mismo.</p>
+  <h3>Cómo se usa</h3>
+  <ol class="pasos">
+    <li>Escribí el dato en la caja (4 caracteres o más). Da igual si el DNI viene con puntos o espacios: <b>28.456.123</b> y <b>28456123</b> encuentran lo mismo. También funciona con un pedazo del tracking.</li>
+    <li>Cada resultado es una tarjeta con el <b>chip violeta de la pestaña</b> donde está, el cliente, la orden, el tracking (clickeable al seguimiento de Andreani), el producto y el estado. Si el mismo caso vive en dos pestañas (ej. un arrepentimiento que ya tiene rescate), aparecen las dos tarjetas.</li>
+    <li>¿Querés el contexto completo? Tocá el <b>chip violeta</b> y la página salta a esa pestaña.</li>
+    <li>¿Querés resolverlo ya? Usá los <b>botones de acción de la tarjeta</b> — son los mismos de cada tabla, con la misma confirmación en dos pasos (primer click arma el botón, segundo ejecuta): <b>Arrepentimientos</b> pendientes → Confirmar / Descartar (con motivo) · <b>Demoras</b> → Rescate / Siniestro / Descartar · <b>Siniestros Distribución</b> → tildar NC emitida · <b>Siniestros Warehouse</b> abiertos → Resolver.</li>
+  </ol>
+  <div class="callout tip"><b>💡 En Siniestros Warehouse se busca por IMEI</b>Esas filas no tienen DNI ni tracking (el equipo nunca salió del depósito), así que el buscador las encuentra solo por IMEI. Alertas y Rescates no tienen botones de acción: son informativas (en Rescates el estado avanza solo con el tracking).</div>
+  <figure>
+    <div class="frame"><img src="img/doc-buscador.png" alt="Buscador de Control de Envíos: un DNI encontrado en Arrepentimientos y en Rescates, con chips para saltar a cada pestaña"></div>
+    <figcaption>📸 El <b>buscador</b> — un DNI real encontrado en dos pestañas a la vez: el arrepentimiento ya confirmado y su rescate en curso.</figcaption>
+  </figure>
 
   <h2 id="arrepentimientos">🙋 Arrepentimientos</h2>
   <p><b>Qué es:</b> cada vez que un cliente toca el <b>Botón de Arrepentimiento</b> en la tienda, llega un mail. El sistema lee ese buzón <b>solo, cada 30 minutos</b>, busca la compra por DNI y la deja acá como solicitud pendiente. Nadie tiene que revisar el correo.</p>
@@ -178,6 +195,7 @@
   <h2 id="oro">⭐ Reglas de oro (resumen para la heladera)</h2>
   <div class="tablewrap"><table>
     <tr><th></th><th>Regla</th></tr>
+    <tr><td>0️⃣</td><td><b>¿Te llegó un reclamo y no sabés dónde está el caso?</b> Pegá el DNI o el tracking en el <b>buscador</b> de arriba: te dice en qué pestañas aparece y te deja accionar desde ahí.</td></tr>
     <tr><td>1️⃣</td><td><b>¿Dónde está el equipo?</b> No salió → anular orden. Viaja → rescate. Se perdió viajando → Siniestro Distribución. Se perdió en el depósito → Siniestro Warehouse.</td></tr>
     <tr><td>2️⃣</td><td>Arrepentimiento <b>con tracking → Confirmar</b> (rescate). <b>Sin despacho → anular en GOcuotas + Descartar</b>. El Order ID está en la fila.</td></tr>
     <tr><td>3️⃣</td><td>En Arrepentimientos, el chip <b>Fulfillment</b> manda: <span class="pill ambar">⚠ enviado a Andreani</span> = pedir que no lo pickeen; <span class="pill rojo">⚠ pickeado</span> = frenar la expedición ya.</td></tr>
