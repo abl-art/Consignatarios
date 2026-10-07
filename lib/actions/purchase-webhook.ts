@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { sendPurchaseWebhook, buildTimestamp, type PurchaseLine, type PurchasePayload } from '@/lib/gocelular-webhook'
 import { parseImeiExcel } from '@/lib/imei-excel-parser'
 import { validarCompra, verificarAliasVsPedido, type CatalogoGocelular } from '@/lib/purchase-validation'
-import { plataformaDePedido, armarLineasGomarket, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
+import { plataformaDePedido, armarLineasGomarket, armarSupplierCommerce, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
 import { sendCommercePurchaseWebhook, type CommercePurchasePayload } from '@/lib/gomarket-webhook'
 import type { Pedido, GocelularEstado } from '@/lib/actions/compras'
 
@@ -363,9 +363,10 @@ async function cargarCatalogoCommerce(skus: string[]): Promise<Map<string, SkuCo
   }
 }
 
-// Armado + prevalidacion local de una compra GOmarket (comun a informar y validate)
+// Armado + prevalidacion local de una compra GOmarket (comun a informar y
+// validate — el mode OBLIGATORIO lo agrega cada caller)
 async function prepararCompraGomarket(pedido: Pedido): Promise<
-  | { ok: true; payload: CommercePurchasePayload; warnings: string[] }
+  | { ok: true; payload: Omit<CommercePurchasePayload, 'mode'>; warnings: string[] }
   | { ok: false; errores: string[]; warnings: string[]; reintentable?: boolean }
 > {
   const { lines, errores: erroresLineas } = armarLineasGomarket(pedido.items.map(i => ({
@@ -387,12 +388,23 @@ async function prepararCompraGomarket(pedido: Pedido): Promise<
     return { ok: false, errores: val.errores, warnings: val.warnings }
   }
 
+  // supplier opcional (novedad 7/10): registra el proveedor en el lote de
+  // GOcelular. El CUIT vive en compras_proveedores; sin CUIT se omite.
+  const supabase = createAdminClient()
+  const { data: prov } = await supabase
+    .from('compras_proveedores')
+    .select('nombre, cuit')
+    .eq('id', pedido.proveedorId)
+    .maybeSingle()
+  const supplier = armarSupplierCommerce(prov?.nombre ?? pedido.proveedorNombre, prov?.cuit ?? null)
+
   return {
     ok: true,
     payload: {
       storefront: 'go-market',
       destination: pedido.destino ?? 'andreani_wh',
       purchase_ref: pedido.id,
+      ...(supplier && { supplier }),
       lines,
     },
     warnings: val.warnings,
@@ -432,7 +444,7 @@ export async function validarCompraGomarket(pedidoId: string): Promise<{ ok: boo
     return {
       ok: true,
       mensajes: [
-        `GOmarket validó la compra (${res.body?.result ?? 'validated'}) — lista para el envío real cuando Pedro prenda el apply`,
+        `GOmarket validó la compra (${res.body?.result ?? 'validated'}) — lista para informar (el apply está habilitado desde el 7/10)`,
         ...prep.warnings,
         ...(res.body?.warnings ?? []),
       ],
@@ -457,7 +469,8 @@ async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise
   }
   const val = { warnings: prep.warnings }
   const lines = prep.payload.lines
-  const res = await sendCommercePurchaseWebhook(prep.payload)
+  // mode es obligatorio en el contrato (novedad 30/9): el envío real va 'apply'
+  const res = await sendCommercePurchaseWebhook({ ...prep.payload, mode: 'apply' })
 
   if (res.ok) {
     await persistir(pedidoId, {

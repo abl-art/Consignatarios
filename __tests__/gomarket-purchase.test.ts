@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { plataformaDePedido, armarLineasGomarket, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
+import { plataformaDePedido, armarLineasGomarket, armarSupplierCommerce, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
 
 const item = (codigo: string, cantidad: number, precio: number, nombre = codigo) => ({
   productoCodigo: codigo,
@@ -91,5 +91,26 @@ describe('validarSkusCommerce', () => {
     const { errores, warnings } = validarSkusCommerce([{ sku: 'OK', quantity: 3 }], catalogo)
     expect(errores).toEqual([])
     expect(warnings).toEqual([])
+  })
+})
+
+describe('armarSupplierCommerce', () => {
+  // Novedad de Pedro 7/10: el contrato v1 acepta supplier opcional con name y
+  // cuit — solo se manda si tenemos los dos datos.
+  it('con nombre y cuit arma el supplier', () => {
+    expect(armarSupplierCommerce('IATEC S.A.', '30-12345678-9')).toEqual({ name: 'IATEC S.A.', cuit: '30-12345678-9' })
+  })
+
+  it('sin cuit (o vacío) no manda supplier', () => {
+    expect(armarSupplierCommerce('IATEC S.A.', null)).toBeUndefined()
+    expect(armarSupplierCommerce('IATEC S.A.', '  ')).toBeUndefined()
+  })
+
+  it('sin nombre no manda supplier', () => {
+    expect(armarSupplierCommerce('', '30-12345678-9')).toBeUndefined()
+  })
+
+  it('recorta espacios', () => {
+    expect(armarSupplierCommerce(' IATEC ', ' 30-12345678-9 ')).toEqual({ name: 'IATEC', cuit: '30-12345678-9' })
   })
 })

@@ -76,6 +76,23 @@ export function armarLineasGomarket(items: ItemCompraGomarket[]): { lines: Comme
   return { lines: [...porSku.values()], errores }
 }
 
+export interface CommerceSupplier {
+  name: string
+  cuit: string
+}
+
+/**
+ * Supplier opcional del contrato Commerce v1 (novedad de Pedro 7/10/2026):
+ * con name y cuit el proveedor queda registrado en el lote de GOcelular.
+ * Solo se manda con los dos datos — a medias no sirve.
+ */
+export function armarSupplierCommerce(nombre: string | null, cuit: string | null): CommerceSupplier | undefined {
+  const name = nombre?.trim()
+  const c = cuit?.trim()
+  if (!name || !c) return undefined
+  return { name, cuit: c }
+}
+
 export interface SkuCommerce {
   sku: string
   activo: boolean

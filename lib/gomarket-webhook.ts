@@ -1,22 +1,25 @@
 import { signWebhook, buildTimestamp } from '@/lib/gocelular-webhook'
-import type { CommercePurchaseLine } from '@/lib/gomarket-purchase'
+import type { CommercePurchaseLine, CommerceSupplier } from '@/lib/gomarket-purchase'
 
 // Webhook de compras de GOmarket (Commerce v1 de GOcelular). Contrato según las
-// novedades de Pedro del 22 sep 2026: storefront "go-market", destination,
-// purchase_ref único por compra y una línea por SKU; mode "validate" corre la
-// validación completa sin escribir nada (omitido = apply). Secret PROPIO,
-// distinto del de los webhooks GOcelular (GOMARKET_WEBHOOK_SECRET). La firma es
-// la misma HMAC-SHA256 sobre `${timestamp}.${rawBody}` en hex, pero los headers
-// son PROPIOS: X-Commerce-Signature, X-Commerce-Timestamp e Idempotency-Key —
-// con los X-Gocelular-* responde 401. Al 22/9: validate funciona; el apply
-// sigue apagado (403 endpoint_disabled) hasta que Pedro prenda el flag.
+// novedades de Pedro del 22 sep 2026 + 30/9 + 7/10: storefront "go-market",
+// destination, purchase_ref único por compra y una línea por SKU. `mode` es
+// OBLIGATORIO en toda llamada ('validate' = dry run sin escribir, 'apply' =
+// envío real; sin default — omitirlo rebota 400 invalid_payload path mode,
+// novedad del 30/9). `supplier` opcional {name, cuit} registra el proveedor en
+// el lote (novedad del 7/10). Secret PROPIO, distinto del de los webhooks
+// GOcelular (GOMARKET_WEBHOOK_SECRET). La firma es la misma HMAC-SHA256 sobre
+// `${timestamp}.${rawBody}` en hex, pero los headers son PROPIOS:
+// X-Commerce-Signature, X-Commerce-Timestamp e Idempotency-Key — con los
+// X-Gocelular-* responde 401. El apply está habilitado desde el 7/10.
 
 export interface CommercePurchasePayload {
   storefront: 'go-market'
   destination: string
   purchase_ref: string
+  supplier?: CommerceSupplier
   lines: CommercePurchaseLine[]
-  mode?: 'validate'
+  mode: 'validate' | 'apply'
 }
 
 export type CommerceResponseBody = {
