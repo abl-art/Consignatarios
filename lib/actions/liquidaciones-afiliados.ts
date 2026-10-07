@@ -4,13 +4,23 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPool } from '@/lib/db-pool'
 import { revalidatePath } from 'next/cache'
-import type { LiquidacionAfiliado } from '@/lib/types'
+import type { LiquidacionAfiliado, LiquidacionAfiliadoAjuste } from '@/lib/types'
+import {
+  calcularLiquidacion,
+  detectarAjustes,
+  saldoArrastre,
+  type OrdenAnulada,
+} from '@/lib/liquidaciones-afiliados-calc'
 
 const PARTNERS_EXCLUIDOS = ['smoke']
 
 /**
  * Genera liquidaciones de afiliados para un mes dado (YYYY-MM).
- * Consulta store_orders de GOcelular DB agrupadas por partner.
+ * Consulta store_orders de GOcelular DB agrupadas por partner, y descuenta
+ * como ajuste las órdenes de meses ya liquidados que se anularon después
+ * de generada su liquidación (arrepentimientos post-pago). Si el monto
+ * queda <= 0 la liquidación nace 'compensada' y el saldo negativo se
+ * arrastra al mes siguiente.
  * Llamada desde el cron — usa admin client (no depende de session).
  */
 export async function generarLiquidacionesAfiliados(mes: string) {
@@ -32,9 +42,23 @@ export async function generarLiquidacionesAfiliados(mes: string) {
     return { ok: true, message: `Liquidaciones afiliados de ${mes} ya existen (${count})`, creadas: 0 }
   }
 
-  // Query GOcelular DB for paid orders with commission
+  // Liquidaciones previas: para saber qué órdenes anuladas ya habían sido
+  // liquidadas (ajustes) y qué saldo negativo arrastra cada partner.
+  const { data: previas, error: previasErr } = await sb
+    .from('liquidaciones_afiliados')
+    .select('partner_slug, partner_name, mes, created_at, monto_a_pagar')
+  if (previasErr) return { error: previasErr.message }
+
+  // Órdenes ya descontadas en liquidaciones anteriores (no repetir)
+  const { data: aplicadasRows, error: aplicadasErr } = await sb
+    .from('liquidaciones_afiliados_ajustes')
+    .select('order_id')
+  if (aplicadasErr) return { error: aplicadasErr.message }
+  const yaAplicadas = new Set((aplicadasRows ?? []).map(r => r.order_id as string))
+
   const client = await pool.connect()
   try {
+    // Comisiones del mes (órdenes pagas)
     const result = await client.query<{
       partner_slug: string
       partner_name: string
@@ -51,6 +75,9 @@ export async function generarLiquidacionesAfiliados(mes: string) {
       FROM store_orders so
       JOIN affiliate_partners ap ON ap.id = so.attributed_partner_id
       WHERE so.status = 'paid'
+        -- Al anularse una orden el status queda 'paid' y solo se setea
+        -- cancelled_at: sin este filtro se pagaría comisión por anuladas
+        AND so.cancelled_at IS NULL
         AND so.created_at >= $1::date
         AND so.created_at < ($2::date + 1)
         AND ap.slug != ALL($3)
@@ -63,21 +90,120 @@ export async function generarLiquidacionesAfiliados(mes: string) {
       [fechaInicio, fechaFin, PARTNERS_EXCLUIDOS]
     )
 
-    let creadas = 0
-    for (const row of result.rows) {
-      const comisiones = Number(row.total_comisiones)
-      const { error } = await sb.from('liquidaciones_afiliados').insert({
-        partner_slug: row.partner_slug,
-        partner_name: row.partner_name,
-        mes,
-        total_comisiones: comisiones,
-        monto_a_pagar: comisiones,
-        estado: 'pendiente',
-      })
-      if (!error) creadas++
+    // Candidatas a ajuste: órdenes de meses ANTERIORES al liquidado, pagas en
+    // algún momento y hoy anuladas. detectarAjustes filtra las que realmente
+    // entraron en una liquidación generada (pagas antes, anuladas después).
+    const anuladasRes = await client.query<{
+      orderId: string
+      orderNumber: string | null
+      partnerSlug: string
+      partnerName: string
+      producto: string | null
+      comision: number
+      mes: string
+      paidAt: Date
+      cancelledAt: Date
+    }>(
+      `SELECT so.id::text AS "orderId",
+              so.order_number AS "orderNumber",
+              ap.slug AS "partnerSlug",
+              ap.display_name AS "partnerName",
+              so.product_name AS producto,
+              ((so.product_price / 100) / 1.21 * ap.commission_value / 100)::numeric AS comision,
+              to_char(so.created_at, 'YYYY-MM') AS mes,
+              so.paid_at AS "paidAt",
+              so.cancelled_at AS "cancelledAt"
+       FROM store_orders so
+       JOIN affiliate_partners ap ON ap.id = so.attributed_partner_id
+       WHERE so.cancelled_at IS NOT NULL
+         AND so.paid_at IS NOT NULL
+         AND ap.commission_type = 'percent'
+         AND so.created_at < $1::date
+         AND ap.slug != ALL($2)`,
+      [fechaInicio, PARTNERS_EXCLUIDOS]
+    )
+
+    const candidatas: OrdenAnulada[] = anuladasRes.rows.map(r => ({
+      orderId: r.orderId,
+      orderNumber: r.orderNumber,
+      partnerSlug: r.partnerSlug,
+      producto: r.producto,
+      comision: Number(r.comision),
+      mes: r.mes,
+      paidAt: r.paidAt.toISOString(),
+      cancelledAt: r.cancelledAt.toISOString(),
+    }))
+
+    const ajustes = detectarAjustes(
+      candidatas,
+      (previas ?? []).map(l => ({ partnerSlug: l.partner_slug, mes: l.mes, createdAt: l.created_at })),
+      yaAplicadas
+    )
+
+    // Saldo anterior por partner: el monto negativo de su última liquidación
+    const ultimaPorPartner = new Map<string, { mes: string; monto: number }>()
+    for (const l of previas ?? []) {
+      const prev = ultimaPorPartner.get(l.partner_slug)
+      if (!prev || l.mes > prev.mes) {
+        ultimaPorPartner.set(l.partner_slug, { mes: l.mes, monto: Number(l.monto_a_pagar) })
+      }
     }
 
-    return { ok: true, mes, creadas }
+    // Nombres para partners sin ventas este mes (solo ajustes o saldo)
+    const nombres = new Map<string, string>()
+    for (const l of previas ?? []) nombres.set(l.partner_slug, l.partner_name)
+    for (const a of anuladasRes.rows) nombres.set(a.partnerSlug, a.partnerName)
+    for (const r of result.rows) nombres.set(r.partner_slug, r.partner_name)
+
+    // Partners a liquidar: con comisiones, con ajustes, o con saldo negativo
+    const comisionesPorPartner = new Map(result.rows.map(r => [r.partner_slug, Number(r.total_comisiones)]))
+    const partners = new Set<string>(comisionesPorPartner.keys())
+    for (const a of ajustes) partners.add(a.partnerSlug)
+    for (const [slug, u] of ultimaPorPartner) {
+      if (saldoArrastre(u.monto) < 0) partners.add(slug)
+    }
+
+    let creadas = 0
+    let ajustesAplicados = 0
+    for (const slug of partners) {
+      const ajustesPartner = ajustes.filter(a => a.partnerSlug === slug)
+      const resumen = calcularLiquidacion({
+        totalComisiones: comisionesPorPartner.get(slug) ?? 0,
+        comisionesAnuladas: ajustesPartner.map(a => a.comision),
+        saldoAnterior: saldoArrastre(ultimaPorPartner.get(slug)?.monto ?? 0),
+      })
+
+      const { error } = await sb.from('liquidaciones_afiliados').insert({
+        partner_slug: slug,
+        partner_name: nombres.get(slug) ?? slug,
+        mes,
+        total_comisiones: resumen.totalComisiones,
+        ajustes: resumen.ajustes,
+        saldo_anterior: resumen.saldoAnterior,
+        monto_a_pagar: resumen.montoAPagar,
+        estado: resumen.estado,
+      })
+      if (error) continue
+      creadas++
+
+      if (ajustesPartner.length > 0) {
+        const { error: ajErr } = await sb.from('liquidaciones_afiliados_ajustes').insert(
+          ajustesPartner.map(a => ({
+            order_id: a.orderId,
+            order_number: a.orderNumber,
+            partner_slug: slug,
+            mes_original: a.mes,
+            mes_aplicado: mes,
+            comision: a.comision,
+            producto: a.producto,
+            cancelled_at: a.cancelledAt,
+          }))
+        )
+        if (!ajErr) ajustesAplicados += ajustesPartner.length
+      }
+    }
+
+    return { ok: true, mes, creadas, ajustesAplicados }
   } finally {
     client.release()
   }
@@ -170,6 +296,23 @@ export async function obtenerLiquidacionesAfiliado(slug: string) {
 
   if (error) return { error: error.message }
   return { data: data ?? [] }
+}
+
+/**
+ * Obtener los ajustes (órdenes anuladas descontadas) de un afiliado,
+ * para mostrar el detalle en las liquidaciones (pagina publica y PDF).
+ */
+export async function obtenerAjustesAfiliado(slug: string): Promise<LiquidacionAfiliadoAjuste[]> {
+  const supabase = createAdminClient()
+
+  const { data } = await supabase
+    .from('liquidaciones_afiliados_ajustes')
+    .select('*')
+    .eq('partner_slug', slug)
+    .order('mes_aplicado', { ascending: false })
+    .returns<LiquidacionAfiliadoAjuste[]>()
+
+  return data ?? []
 }
 
 /**

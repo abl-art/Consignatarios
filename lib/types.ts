@@ -280,7 +280,9 @@ export interface DeudaAlerta {
 }
 
 // Liquidaciones Afiliados
-export type EstadoLiquidacionAfiliado = 'pendiente' | 'pagada'
+// 'compensada': monto_a_pagar <= 0 por ajustes de anulaciones; no se paga
+// ni pide factura y el saldo negativo se arrastra al mes siguiente.
+export type EstadoLiquidacionAfiliado = 'pendiente' | 'pagada' | 'compensada'
 
 export interface LiquidacionAfiliado {
   id: string
@@ -288,10 +290,26 @@ export interface LiquidacionAfiliado {
   partner_name: string
   mes: string
   total_comisiones: number
+  ajustes: number // <= 0: comisiones de órdenes anuladas post-liquidación
+  saldo_anterior: number // <= 0: arrastre de liquidaciones compensadas
   monto_a_pagar: number
   estado: EstadoLiquidacionAfiliado
   factura_url: string | null
   fecha_pago: string | null
+  created_at: string
+}
+
+// Orden anulada después de liquidada, descontada en una liquidación posterior
+export interface LiquidacionAfiliadoAjuste {
+  id: string
+  order_id: string
+  order_number: string | null
+  partner_slug: string
+  mes_original: string
+  mes_aplicado: string
+  comision: number
+  producto: string | null
+  cancelled_at: string | null
   created_at: string
 }
 

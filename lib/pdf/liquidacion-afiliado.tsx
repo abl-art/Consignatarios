@@ -116,6 +116,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     color: MAGENTA,
   },
+  ajustesHeader: {
+    backgroundColor: '#b91c1c',
+  },
+  montoNegativo: {
+    color: '#b91c1c',
+  },
+  ajustesNota: {
+    fontSize: 8,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  desgloseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginBottom: 3,
+  },
+  desgloseLabel: {
+    fontSize: 9,
+    color: '#6b7280',
+  },
+  desgloseValue: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+  },
 })
 
 function formatCurrency(amount: number): string {
@@ -133,6 +158,8 @@ export interface LiquidacionAfiliadoPDFProps {
   fechaEmision: string
   estado: string
   totalComisiones: number
+  ajustes: number // <= 0
+  saldoAnterior: number // <= 0
   montoAPagar: number
   ventas: {
     fecha: string
@@ -140,10 +167,17 @@ export interface LiquidacionAfiliadoPDFProps {
     precio: number
     comision: number
   }[]
+  anuladas: {
+    orderNumber: string | null
+    producto: string | null
+    mesOriginal: string
+    comision: number
+  }[]
 }
 
 export function LiquidacionAfiliadoPDF(props: LiquidacionAfiliadoPDFProps) {
-  const { afiliado, mes, fechaEmision, estado, totalComisiones, montoAPagar, ventas } = props
+  const { afiliado, mes, fechaEmision, estado, totalComisiones, ajustes, saldoAnterior, montoAPagar, ventas, anuladas } = props
+  const tieneDesglose = ajustes < 0 || saldoAnterior < 0
 
   return (
     <Document>
@@ -199,9 +233,55 @@ export function LiquidacionAfiliadoPDF(props: LiquidacionAfiliadoPDFProps) {
           ))}
         </View>
 
+        {/* Ajustes por ordenes anuladas despues de liquidadas */}
+        {anuladas.length > 0 && (
+          <View style={styles.table}>
+            <View style={[styles.tableHeader, styles.ajustesHeader]}>
+              <Text style={[styles.tableHeaderCell, styles.colFecha]}>Orden</Text>
+              <Text style={[styles.tableHeaderCell, styles.colProducto]}>Producto</Text>
+              <Text style={[styles.tableHeaderCell, styles.colNeto]}>Liquidada en</Text>
+              <Text style={[styles.tableHeaderCell, styles.colComision]}>Ajuste</Text>
+            </View>
+            {anuladas.map((a, index) => (
+              <View
+                key={`${a.orderNumber}-${index}`}
+                style={[styles.tableRow, index % 2 === 1 ? styles.tableRowAlt : {}]}
+              >
+                <Text style={styles.colFecha}>{a.orderNumber ?? '-'}</Text>
+                <Text style={styles.colProducto}>{a.producto ?? '-'}</Text>
+                <Text style={styles.colNeto}>{a.mesOriginal}</Text>
+                <Text style={[styles.colComision, styles.montoNegativo]}>-{formatCurrency(a.comision)}</Text>
+              </View>
+            ))}
+            <Text style={styles.ajustesNota}>
+              Ordenes anuladas por el cliente luego de liquidada su comision.
+            </Text>
+          </View>
+        )}
+
         {/* Grand total */}
         <View style={styles.grandTotalRow}>
           <View style={styles.grandTotalBox}>
+            {tieneDesglose && (
+              <>
+                <View style={styles.desgloseRow}>
+                  <Text style={styles.desgloseLabel}>Comisiones del mes</Text>
+                  <Text style={styles.desgloseValue}>{formatCurrency(totalComisiones)}</Text>
+                </View>
+                {ajustes < 0 && (
+                  <View style={styles.desgloseRow}>
+                    <Text style={styles.desgloseLabel}>Ajustes por anulaciones</Text>
+                    <Text style={[styles.desgloseValue, styles.montoNegativo]}>{formatCurrency(ajustes)}</Text>
+                  </View>
+                )}
+                {saldoAnterior < 0 && (
+                  <View style={styles.desgloseRow}>
+                    <Text style={styles.desgloseLabel}>Saldo mes anterior</Text>
+                    <Text style={[styles.desgloseValue, styles.montoNegativo]}>{formatCurrency(saldoAnterior)}</Text>
+                  </View>
+                )}
+              </>
+            )}
             <Text style={styles.grandTotalLabel}>Total a pagar</Text>
             <Text style={styles.grandTotalValue}>{formatCurrency(montoAPagar)}</Text>
           </View>

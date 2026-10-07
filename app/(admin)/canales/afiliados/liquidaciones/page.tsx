@@ -3,12 +3,13 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda } from '@/lib/utils'
-import type { LiquidacionAfiliado } from '@/lib/types'
+import type { LiquidacionAfiliado, LiquidacionAfiliadoAjuste } from '@/lib/types'
 import { RowActions, CopiarLinkButton } from './LiquidacionesAfiliadosActions'
 
 const ESTADO_COLORS: Record<string, string> = {
   pendiente: 'bg-blue-100 text-blue-700',
   pagada: 'bg-green-100 text-green-700',
+  compensada: 'bg-amber-100 text-amber-700',
 }
 
 export default async function LiquidacionesAfiliadosPage({
@@ -29,6 +30,17 @@ export default async function LiquidacionesAfiliadosPage({
 
   const { data: liquidaciones } = await query.returns<LiquidacionAfiliado[]>()
   const liqs = liquidaciones ?? []
+
+  // Detalle de órdenes anuladas descontadas, agrupado por liquidación
+  const { data: ajustesRows } = await supabase
+    .from('liquidaciones_afiliados_ajustes')
+    .select('*')
+    .returns<LiquidacionAfiliadoAjuste[]>()
+  const ajustesPorLiq = new Map<string, LiquidacionAfiliadoAjuste[]>()
+  for (const a of ajustesRows ?? []) {
+    const clave = `${a.partner_slug}|${a.mes_aplicado}`
+    ajustesPorLiq.set(clave, [...(ajustesPorLiq.get(clave) ?? []), a])
+  }
 
   // Get unique partner slugs for filter dropdown
   const { data: allLiqs } = await supabase
@@ -111,6 +123,7 @@ export default async function LiquidacionesAfiliadosPage({
             <option value="">Todos</option>
             <option value="pendiente">Pendiente</option>
             <option value="pagada">Pagada</option>
+            <option value="compensada">Compensada</option>
           </select>
         </div>
 
@@ -135,6 +148,7 @@ export default async function LiquidacionesAfiliadosPage({
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mes</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Afiliado</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Comisiones</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ajustes</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">A pagar</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Factura</th>
@@ -147,7 +161,28 @@ export default async function LiquidacionesAfiliadosPage({
                   <td className="px-4 py-3 text-gray-700">{liq.mes}</td>
                   <td className="px-4 py-3 text-gray-700">{liq.partner_name}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatearMoneda(liq.total_comisiones)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900">{formatearMoneda(liq.monto_a_pagar)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {(liq.ajustes ?? 0) < 0 || (liq.saldo_anterior ?? 0) < 0 ? (
+                      <details>
+                        <summary className="cursor-pointer text-red-600 font-medium whitespace-nowrap">
+                          {formatearMoneda((liq.ajustes ?? 0) + (liq.saldo_anterior ?? 0))}
+                        </summary>
+                        <div className="mt-2 text-left text-xs text-gray-600 space-y-1 min-w-[220px]">
+                          {(ajustesPorLiq.get(`${liq.partner_slug}|${liq.mes}`) ?? []).map((a) => (
+                            <p key={a.id} className="whitespace-nowrap">
+                              {a.order_number ?? a.order_id} · {a.producto ?? 'producto s/d'} · liquidada {a.mes_original} · <span className="text-red-600">-{formatearMoneda(a.comision)}</span>
+                            </p>
+                          ))}
+                          {(liq.saldo_anterior ?? 0) < 0 && (
+                            <p>Saldo del mes anterior: <span className="text-red-600">{formatearMoneda(liq.saldo_anterior)}</span></p>
+                          )}
+                        </div>
+                      </details>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-bold ${liq.monto_a_pagar < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatearMoneda(liq.monto_a_pagar)}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ESTADO_COLORS[liq.estado] ?? 'bg-gray-100 text-gray-600'}`}>
                       {liq.estado}
