@@ -155,6 +155,7 @@ export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
 
 import { armarAsns, type AsnResumen } from './asn'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
+import { armarComprasMismoDia, type CasoMismoDia, type StoreMismoDia } from './compras-mismo-dia'
 import { armarRescates, type Rescate, type RescateRaw, type SeguimientoRescate } from './rescates'
 import { armarDemoras, type DemoraEntrega, type DemoraRaw } from './demoras'
 import { armarSiniestros, type SeguimientoSiniestro, type Siniestro, type SiniestroRaw } from './siniestros'
@@ -2348,6 +2349,66 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
     }
 
     return Array.from(map.values()).sort((a, b) => b.usuariosMulti - a.usuariosMulti)
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Compras múltiples el mismo día por sucursal (solo terceros): un DNI con 2+
+ * órdenes confirmadas el mismo día en la misma tienda. La clasificación por
+ * ritmo (pico vs ruido de fondo) vive en lib/compras-mismo-dia.ts.
+ */
+export async function fetchComprasMismoDia(): Promise<StoreMismoDia[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      store_name: string; client_id: string; user_dni: string; user_name: string | null
+      fecha: string; ordenes: string; monto: string; sin_activar: string; bloqueados: string
+      primera_venta_store: string
+    }>(
+      `WITH dev AS (
+        SELECT order_id, MIN(trustonic_status::text) AS ts FROM devices GROUP BY order_id
+      ), base AS (
+        SELECT o.store_name, o.client_id::text AS client_id, o.user_dni::text AS user_dni,
+          o.user_name, o.order_created_at::date AS fecha, o.order_id,
+          CASE WHEN o.total_order_amount > 5000000 THEN o.total_order_amount / 100.0
+               ELSE o.total_order_amount END AS monto,
+          d.ts,
+          MIN(o.order_created_at::date) OVER (PARTITION BY o.store_name) AS primera_venta
+        FROM gocuotas_orders o
+        LEFT JOIN dev d ON d.order_id = o.order_id::text
+        WHERE o.order_delivered_at IS NOT NULL AND o.order_discarded_at IS NULL
+          AND o.user_dni IS NOT NULL AND o.store_name IS NOT NULL
+          AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
+      )
+      SELECT store_name, client_id, user_dni, MAX(user_name) AS user_name, fecha::text AS fecha,
+        COUNT(DISTINCT order_id)::text AS ordenes, ROUND(SUM(monto))::text AS monto,
+        COUNT(*) FILTER (WHERE ts = 'ready_for_use')::text AS sin_activar,
+        COUNT(*) FILTER (WHERE ts = 'locked')::text AS bloqueados,
+        MAX(primera_venta)::text AS primera_venta_store
+      FROM base
+      GROUP BY store_name, client_id, user_dni, fecha
+      HAVING COUNT(DISTINCT order_id) > 1
+      ORDER BY fecha DESC`
+    )
+
+    const casos: CasoMismoDia[] = res.rows.map(r => ({
+      storeName: r.store_name,
+      clientId: r.client_id,
+      userDni: r.user_dni,
+      userName: r.user_name || 'Sin nombre',
+      fecha: r.fecha,
+      ordenes: Number(r.ordenes),
+      monto: Number(r.monto),
+      sinActivar: Number(r.sin_activar),
+      bloqueados: Number(r.bloqueados),
+      primeraVentaStore: r.primera_venta_store,
+    }))
+    return armarComprasMismoDia(casos, new Date())
   } finally {
     client.release()
   }

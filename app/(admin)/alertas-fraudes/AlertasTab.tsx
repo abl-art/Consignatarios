@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import type { AlertaSucursal, AlertaCuota1, AlertaDNI, AlertaTiendaDNI, AlertaSinImeiTienda, AlertaCuotasPagadas, TiempoAsignacionTienda } from '@/lib/gocelular'
+import type { StoreMismoDia } from '@/lib/compras-mismo-dia'
 import { formatearMoneda } from '@/lib/utils'
 
 const MERCHANTS: Record<string, string> = {
@@ -25,6 +26,7 @@ interface Props {
   sinImei: AlertaSinImeiTienda[]
   cuotasPagadas: AlertaCuotasPagadas
   tiempoAsignacion: TiempoAsignacionTienda[]
+  mismoDia: StoreMismoDia[]
 }
 
 function formatMin(min: number): string {
@@ -36,7 +38,7 @@ function formatMin(min: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
-export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas, sinImei, cuotasPagadas, tiempoAsignacion }: Props) {
+export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas, sinImei, cuotasPagadas, tiempoAsignacion, mismoDia }: Props) {
   const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
   const [expandedStore, setExpandedStore] = useState<string | null>(null)
   const [showCuotasPagadas, setShowCuotasPagadas] = useState(false)
@@ -44,6 +46,7 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
   const [expandedC1Store, setExpandedC1Store] = useState<string | null>(null)
   const [expandedDni, setExpandedDni] = useState<string | null>(null)
   const [expandedTienda, setExpandedTienda] = useState<string | null>(null)
+  const [expandedMismoDia, setExpandedMismoDia] = useState<string | null>(null)
   const [expandedImeiMerchant, setExpandedImeiMerchant] = useState<string | null>(null)
   const [expandedImeiStore, setExpandedImeiStore] = useState<string | null>(null)
   const [expandedAsigMerchant, setExpandedAsigMerchant] = useState<string | null>(null)
@@ -430,6 +433,80 @@ export default function AlertasTab({ sucursales, cuota1, dniUsuarios, dniTiendas
                         <td className="px-3 py-1.5"></td>
                         <td className={`px-3 py-1.5 text-right font-bold ${u.ordenes >= 3 ? 'text-red-700' : 'text-amber-700'}`}>{u.ordenes}</td>
                         <td className={`px-3 py-1.5 text-right font-bold ${u.bloqueados > 0 ? 'text-red-700' : 'text-gray-400'}`}>{u.bloqueados > 0 ? u.bloqueados : '—'}</td>
+                      </tr>
+                    )) : []),
+                  ]
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>}
+      </div>
+
+      {/* ── Alerta 8: Compras múltiples el mismo día (pico por sucursal) ── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button onClick={() => toggleAlert(8)} className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+          <span className="text-gray-400 text-xs">{openAlert === 8 ? '▼' : '▶'}</span>
+          <div className="w-3 h-3 rounded-full bg-rose-500 shrink-0"></div>
+          <div className="flex-1 text-left">
+            <h3 className="text-sm font-semibold text-gray-900">Compras múltiples el mismo día</h3>
+            <p className="text-[10px] text-gray-400">Solo terceros, últimos 30 días. DNI con 2+ órdenes el mismo día en la misma tienda; rojo = el ritmo triplica el histórico de la tienda.</p>
+          </div>
+          {mismoDia.filter(s => s.nivel === 'rojo').length > 0 && (
+            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold shrink-0">{mismoDia.filter(s => s.nivel === 'rojo').length} pico{mismoDia.filter(s => s.nivel === 'rojo').length > 1 ? 's' : ''}</span>
+          )}
+          <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium shrink-0">{mismoDia.length}</span>
+        </button>
+        {openAlert === 8 && <div className="overflow-auto max-h-[500px] border-t border-gray-100">
+          {mismoDia.length === 0 ? (
+            <div className="p-6 text-center text-green-700 text-sm">Sin alertas</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="w-6 px-2 py-2"></th>
+                  <th className="text-left px-2 py-2 font-medium text-gray-600">Tienda / Caso</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">Merchant</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">DNI</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-600">Nombre</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Casos 30d</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Ritmo previo</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Ordenes</th>
+                  <th className="text-right px-3 py-2 font-medium text-gray-600">Monto</th>
+                  <th className="text-right px-3 py-2 font-medium text-amber-700">Sin activar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {mismoDia.flatMap(s => {
+                  const isExp = expandedMismoDia === s.storeName
+                  return [
+                    <tr key={s.storeName} onClick={() => setExpandedMismoDia(isExp ? null : s.storeName)}
+                      className={`cursor-pointer hover:bg-gray-100 ${isExp ? 'font-semibold bg-gray-50' : ''} ${s.nivel === 'rojo' ? 'bg-red-50' : 'bg-amber-50/50'}`}>
+                      <td className="px-2 py-2 text-gray-400">{isExp ? '▼' : '▶'}</td>
+                      <td className="px-2 py-2 text-gray-900 truncate max-w-[250px]" title={s.storeName}>
+                        {s.storeName}
+                        {s.nivel === 'rojo' && <span className="ml-2 text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded-full">PICO</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">{merchantName(s.clientId)}</td>
+                      <td className="px-3 py-2" colSpan={2}></td>
+                      <td className={`px-3 py-2 text-right font-bold ${s.nivel === 'rojo' ? 'text-red-700' : 'text-amber-700'}`}>{s.casos30}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">{s.ritmoPrevio}/mes</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{s.ordenes30}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{formatearMoneda(s.monto30)}</td>
+                      <td className={`px-3 py-2 text-right font-bold ${s.sinActivar30 > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{s.sinActivar30 > 0 ? s.sinActivar30 : '—'}</td>
+                    </tr>,
+                    ...(isExp ? s.casos.map(c => (
+                      <tr key={`${s.storeName}-${c.userDni}-${c.fecha}`} className={`border-l-4 ${c.bloqueados > 0 ? 'border-l-red-500 bg-red-50/50' : 'border-l-rose-300 bg-rose-50/30'}`}>
+                        <td className="px-2 py-1.5"></td>
+                        <td className="px-2 py-1.5 text-gray-500">{c.fecha}</td>
+                        <td className="px-3 py-1.5"></td>
+                        <td className="px-3 py-1.5 font-mono text-gray-600">{c.userDni}</td>
+                        <td className="px-3 py-1.5 text-gray-600">{c.userName}</td>
+                        <td className="px-3 py-1.5"></td>
+                        <td className="px-3 py-1.5"></td>
+                        <td className={`px-3 py-1.5 text-right font-bold ${c.ordenes >= 3 ? 'text-red-700' : 'text-amber-700'}`}>{c.ordenes}</td>
+                        <td className="px-3 py-1.5 text-right text-gray-600">{formatearMoneda(c.monto)}</td>
+                        <td className={`px-3 py-1.5 text-right ${c.sinActivar > 0 ? 'text-amber-700 font-bold' : 'text-gray-400'}`}>{c.sinActivar > 0 ? c.sinActivar : '—'}</td>
                       </tr>
                     )) : []),
                   ]
