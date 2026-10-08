@@ -1,0 +1,201 @@
+<title>Manual — Inventario: cobertura, reposición y valorización</title>
+<style>
+  :root {
+    --bg: #fcfcfa;
+    --surface: #ffffff;
+    --ink: #221e28;
+    --muted: #6d6678;
+    --line: #e9e4ee;
+    --accent: #c21a5f;
+    --accent-soft: #fdeef4;
+    --bono: #6d28d9;
+    --bono-soft: #f3eefe;
+    --ok: #047857;
+    --ok-soft: #ecfdf3;
+    --warn: #b45309;
+    --warn-soft: #fff7e8;
+    --danger: #be123c;
+    --danger-soft: #fef1f3;
+    --chip: #f4f1f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17141b; --surface: #201c26; --ink: #efeaf3; --muted: #a79fb3;
+      --line: #352f3d; --accent: #f06ba3; --accent-soft: #3a1f2d;
+      --bono: #b49afc; --bono-soft: #2c2440; --ok: #4ade80; --ok-soft: #16301f;
+      --warn: #fbbf24; --warn-soft: #362a12; --danger: #fb7185; --danger-soft: #3b1c24;
+      --chip: #2a2531;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17141b; --surface: #201c26; --ink: #efeaf3; --muted: #a79fb3;
+    --line: #352f3d; --accent: #f06ba3; --accent-soft: #3a1f2d;
+    --bono: #b49afc; --bono-soft: #2c2440; --ok: #4ade80; --ok-soft: #16301f;
+    --warn: #fbbf24; --warn-soft: #362a12; --danger: #fb7185; --danger-soft: #3b1c24;
+    --chip: #2a2531;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 0 20px 80px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1, h2, h3 { line-height: 1.25; text-wrap: balance; }
+  h1 { font-size: 2rem; margin: 40px 0 6px; }
+  h2 { font-size: 1.45rem; margin: 56px 0 4px; padding-top: 16px; border-top: 3px solid var(--accent); }
+  h3 { font-size: 1.05rem; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  .sub { color: var(--muted); margin: 0 0 8px; }
+  .meta { font-size: .8rem; color: var(--muted); }
+  .eyebrow { text-transform: uppercase; letter-spacing: .09em; font-size: .72rem; font-weight: 700; color: var(--accent); }
+
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 10px; position: sticky; top: 0; background: var(--bg); padding: 12px 0; z-index: 5; border-bottom: 1px solid var(--line); }
+  nav.toc a { font-size: .82rem; font-weight: 600; color: var(--ink); text-decoration: none; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+  nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin: 14px 0; }
+  th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  ol.pasos { counter-reset: paso; list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 10px; }
+  ol.pasos li { counter-increment: paso; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px 12px 54px; position: relative; }
+  ol.pasos li::before {
+    content: counter(paso); position: absolute; left: 14px; top: 12px;
+    width: 28px; height: 28px; border-radius: 999px; background: var(--accent); color: #fff;
+    display: grid; place-items: center; font-weight: 800; font-size: .9rem;
+  }
+  .callout { border-radius: 12px; padding: 12px 16px; margin: 14px 0; border: 1px solid; font-size: .93rem; }
+  .callout.oro { background: var(--warn-soft); border-color: var(--warn); }
+  .callout.tip { background: var(--ok-soft); border-color: var(--ok); }
+  .callout.ojo { background: var(--danger-soft); border-color: var(--danger); }
+  .callout b:first-child { display: block; margin-bottom: 2px; }
+
+  figure { margin: 18px 0; }
+  figure .frame { max-height: 540px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+
+  .pill { display: inline-block; font-size: .76rem; font-weight: 700; border-radius: 999px; padding: 2px 10px; }
+  .pill.vig { background: var(--ok-soft); color: var(--ok); }
+  .pill.ven { background: var(--chip); color: var(--muted); }
+  .pill.rojo { background: var(--danger-soft); color: var(--danger); }
+  .pill.ambar { background: var(--warn-soft); color: var(--warn); }
+</style>
+
+<main>
+  <p class="eyebrow">GOcelular360 · Manual operativo</p>
+  <h1>📦 Inventario — cuánto stock hay, cuánto dura y qué reponer</h1>
+  <p class="sub">Qué es, para qué sirve y cómo se usa cada bloque de la página <b>Inventario</b>: los indicadores de cobertura, la lista de modelos a comprar, la valorización y las dos sub-páginas (Stock por Depósito y Gestión). Con capturas reales.</p>
+  <p class="meta">Actualizado el 6/10/2026 · Los números de las capturas son del día en que se sacaron.</p>
+
+  <nav class="toc">
+    <a href="#mapa">🧭 El mapa</a>
+    <a href="#tarjetas">🚦 Las 4 tarjetas</a>
+    <a href="#comprar">🛒 Modelos a comprar</a>
+    <a href="#valor">💰 Valorización</a>
+    <a href="#indicadores">📊 Indicadores y gráfico</a>
+    <a href="#subpaginas">🏭 Stock y Gestión</a>
+    <a href="#oro">⭐ Reglas de oro</a>
+  </nav>
+
+  <h2 id="mapa">🧭 El mapa en 30 segundos</h2>
+  <p>La página responde, de arriba hacia abajo, cuatro preguntas:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Bloque</th><th>Responde…</th></tr>
+    <tr><td>🚦 Tarjetas de arriba</td><td>¿La venta está protegida? (% con cobertura vs. % en riesgo) + accesos a las sub-páginas.</td></tr>
+    <tr><td>🛒 Modelos a comprar</td><td>¿Qué modelos están por quebrar stock y cuánta venta se pierde si no repongo?</td></tr>
+    <tr><td>💰 Valorización del stock</td><td>¿Cuánta plata hay inmovilizada en stock, a costo y a precio de venta?</td></tr>
+    <tr><td>📊 Indicadores + Stock sin movimiento + Ventas por producto</td><td>¿A qué velocidad rota cada categoría, qué capital está dormido y qué se está vendiendo?</td></tr>
+  </table></div>
+  <p>El concepto que ordena toda la página es la <b>cobertura</b>: <i>¿cuántos días de venta aguanta el stock que tengo?</i> Se calcula como stock ÷ venta diaria de los últimos 30 días. Los umbrales son siempre los mismos: <span class="pill ambar">menos de 14 días = riesgo</span> · <span class="pill rojo">10 días o menos = crítico</span>. Los 14 días salen del tiempo real que tardan los proveedores en entregar.</p>
+
+  <h2 id="tarjetas">🚦 Las 4 tarjetas de arriba</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Tarjeta</th><th>Qué es</th><th>Cómo se usa</th></tr>
+    <tr><td>🏭 <b>Stock por Depósito</b></td><td>Acceso a la sub-página con el stock SKU por SKU y por ubicación (depósito Andreani, local, tránsito).</td><td>Para buscar un modelo puntual o auditar una diferencia. Detalle abajo ⬇️.</td></tr>
+    <tr><td>📋 <b>Gestión</b></td><td>Acceso al control de stock contable (cargas, ajustes).</td><td>Para movimientos manuales de stock.</td></tr>
+    <tr><td>✅ <b>Ventas con Cobertura</b></td><td>% de la venta de los últimos 30 días cuyos modelos tienen 14+ días de stock, <b>contando lo que ya viene en camino</b> (tránsito + pedidos hechos).</td><td>Es el número de salud general. Arriba de ~85-90%, tranquilo.</td></tr>
+    <tr><td>⚠️ <b>Ventas en Riesgo</b></td><td>El complemento: % de la venta cuyos modelos tienen menos de 14 días de stock <b>aun contando la reposición en camino</b>.</td><td>Si crece, la lista 🛒 de abajo te dice exactamente qué comprar. Las dos tarjetas siempre suman 100%.</td></tr>
+  </table></div>
+  <div class="callout tip"><b>💡 "Proyectada" es la palabra clave</b>Las dos tarjetas usan cobertura <b>proyectada</b>: si un modelo está flojo de stock pero ya tiene un pedido hecho o unidades en tránsito, no cuenta como riesgo. O sea: riesgo = lo que falta comprar, no lo que falta llegar.</div>
+
+  <h2 id="comprar">🛒 Modelos a comprar: la lista de acción</h2>
+  <p><b>Qué es:</b> todos los modelos con cobertura proyectada menor a 14 días, <b>ordenados por peso en la venta</b> — lo primero de la lista es lo que más venta salva si se repone ya.</p>
+  <h3>Cómo leer cada columna</h3>
+  <ul>
+    <li>📊 <b>% venta total</b>: cuánto pesa el modelo en la venta de los últimos 30 días. En rojo/ámbar si pesa mucho y está por quebrar — esa es la venta que se pierde.</li>
+    <li>📦 <b>Stock</b>: el disponible <b>real</b> (ya descontados los pedidos pendientes de picking en GO y Andreani — mismo número que Stock por Depósito).</li>
+    <li>⏳ <b>Cobertura</b>: días de venta que aguanta ese stock. <span class="pill rojo">Rojo si quedan ≤10 días</span>.</li>
+    <li>🚚 <b>En tránsito</b> / 📦 <b>Pedidos</b>: lo que ya viene en camino — informado a GOcelular viajando a Andreani, o comprado en el Gestor y aún sin informar.</li>
+    <li>🎯 <b>Próx. cobertura</b>: los días de stock que va a haber <b>cuando llegue todo lo que está en camino</b>. <span class="pill vig">Verde si alcanza 14 días</span> (ya está resuelto, solo esperar) · <span class="pill ambar">ámbar = aun con lo que viene, hay que comprar</span>.</li>
+  </ul>
+  <h3>Paso a paso: qué hacer con la lista</h3>
+  <ol class="pasos">
+    <li>Mirá de arriba hacia abajo (ya está ordenada por importancia).</li>
+    <li>Fila con <b>Próx. cobertura verde</b>: no hacer nada — la reposición ya está en camino.</li>
+    <li>Fila con <b>Próx. cobertura ámbar</b>: hay que comprar. Las cantidades exactas salen del <b>Forecast de Compras</b> y el pedido se arma en el <b>Gestor</b> (Compras → tiene su propio manual 📖).</li>
+    <li>Fila con stock 0 y ventas: es venta que se está perdiendo HOY — prioridad máxima.</li>
+  </ol>
+  <figure>
+    <div class="frame"><img src="img/doc-inventario.png" alt="Página Inventario completa: tarjetas de cobertura, modelos a comprar, valorización, indicadores y gráfico de ventas"></div>
+    <figcaption>📸 La página <b>Inventario</b> completa — deslizá dentro del marco para recorrer todos los bloques.</figcaption>
+  </figure>
+
+  <h2 id="valor">💰 Valorización del stock</h2>
+  <p><b>Qué es:</b> cuánta plata hay en el stock, por categoría, medida de dos formas:</p>
+  <ul>
+    <li>🧾 <b>Costo de Reposición</b>: stock × lo que costaría recomprarlo hoy (precio del proveedor preferido de cada marca; si no tiene, el más barato).</li>
+    <li>🏷️ <b>Valor de Venta</b>: stock × el precio publicado en la tienda, <b>sin IVA</b> (÷1,21). Los kits van a $9.000 fijo por unidad.</li>
+  </ul>
+  <p><b>Cómo se usa:</b> la diferencia entre ambas columnas es el margen latente del stock. La fila <b>Kits de Seguridad →</b> es un link a su página propia de control. El stock acá también es el disponible real (neto de picking).</p>
+
+  <h2 id="indicadores">📊 Indicadores por producto, stock dormido y ventas</h2>
+  <h3>Indicadores por producto</h3>
+  <ul>
+    <li>🧮 <b>Meses de Stock</b> (el número grande del encabezado): cuántos meses de venta representa todo el inventario, ponderado por valor. Cerca de 1 = un mes de stock, sano para este negocio.</li>
+    <li>🏃 <b>u/día 7d vs. u/día 30d</b>: velocidad de venta reciente vs. del mes — si la de 7 días es mucho mayor, la demanda se está acelerando y la cobertura se va a quedar corta.</li>
+    <li>🔄 <b>Rotación 30d</b>: cuántas veces se vendió el stock promedio en el mes (1× = rotó entero una vez).</li>
+    <li>👆 <b>Click en una categoría</b> para desplegar el detalle modelo por modelo, ordenado por urgencia — los modelos que venden con stock 0 aparecen primero.</li>
+  </ul>
+  <h3>Stock sin movimiento (30 días)</h3>
+  <p>Modelos con stock disponible y <b>cero ventas en 30 días</b>, valuados al último costo: es el capital inmovilizado. <b>Cómo se usa:</b> candidatos a bono/promoción o baja de precio para moverlos — se gestiona desde Lista de Precios (tiene su manual 📖).</p>
+  <h3>Ventas por producto</h3>
+  <p>El gráfico de barras del final: unidades vendidas por modelo, con píldoras de <b>categoría</b> (Celulares, Smartwatches…) y de <b>período</b> (30 días, 7 días, Ayer, Hoy, Personalizado). Útil para contestar rápido "¿cuánto vendimos de X esta semana?" sin salir de la página.</p>
+
+  <h2 id="subpaginas">🏭 Las dos sub-páginas</h2>
+  <h3>🏭 Stock por Depósito</h3>
+  <p><b>Qué es:</b> el stock SKU por SKU con su ubicación: depósito Andreani, local, y lo que viaja. <b>La columna que manda es "Disponible real"</b>: lo físico menos los pedidos ya vendidos pendientes de picking — lo que de verdad se puede vender.</p>
+  <ul>
+    <li>🚚 Muestra también el <b>tránsito a Andreani</b> y los <b>pedidos del gestor</b> sin ingresar, para ver el pipeline completo de cada SKU.</li>
+    <li>🔔 Si aparece el aviso de <b>unidades trabadas en tránsito</b> (más de lo normal viajando a Andreani), es para reclamar el ingreso.</li>
+    <li>⚠️ En accesorios, si el físico de Andreani y el stock de la tienda difieren, la página muestra el menor de los dos — una diferencia grande y persistente se audita (recepciones sin impactar en la tienda).</li>
+  </ul>
+  <figure>
+    <div class="frame"><img src="img/doc-stock.png" alt="Sub-página Stock por Depósito: SKU por ubicación con disponible real, tránsito y pedidos"></div>
+    <figcaption>📸 <b>Stock por Depósito</b> — el disponible real por SKU con su pipeline.</figcaption>
+  </figure>
+  <h3>📋 Gestión</h3>
+  <p><b>Qué es:</b> el control contable del stock: cargas manuales (individual o por CSV) y ajustes. <b>Cuándo se usa:</b> casi nunca en la operación diaria — el stock se mueve solo con compras y ventas. Es para correcciones puntuales y siempre con criterio de Emiliano.</p>
+  <figure>
+    <div class="frame"><img src="img/doc-gestion.png" alt="Sub-página Gestión: control de stock y contabilidad"></div>
+    <figcaption>📸 <b>Gestión</b> — movimientos y ajustes manuales de stock.</figcaption>
+  </figure>
+
+  <h2 id="oro">⭐ Reglas de oro (resumen para la heladera)</h2>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>Regla</th></tr>
+    <tr><td>1️⃣</td><td>La cobertura se mide siempre igual: <span class="pill ambar">&lt;14 días = riesgo</span>, <span class="pill rojo">≤10 = crítico</span>. Los 14 días son el tiempo real de reposición de los proveedores.</td></tr>
+    <tr><td>2️⃣</td><td>Riesgo = lo que <b>falta comprar</b>, no lo que falta llegar: todo se mira con la reposición en camino ya contada (Próx. cobertura).</td></tr>
+    <tr><td>3️⃣</td><td>La lista 🛒 está ordenada por venta que salva: se ataca de arriba hacia abajo. Modelo vendiendo con stock 0 = prioridad máxima.</td></tr>
+    <tr><td>4️⃣</td><td>De acá sale el QUÉ; el CUÁNTO sale del Forecast y el pedido se hace en el Gestor (manual de Compras 📖).</td></tr>
+    <tr><td>5️⃣</td><td>El "Stock" de toda la página es el <b>disponible real</b> (neto de lo vendido pendiente de picking) — por eso puede ser menor que el físico.</td></tr>
+    <tr><td>6️⃣</td><td>u/día 7d &gt;&gt; u/día 30d = la demanda se acelera: anticipar la compra aunque la cobertura de hoy parezca sana.</td></tr>
+    <tr><td>7️⃣</td><td>Stock sin movimiento = plata dormida: candidatos a bono o baja de precio (Lista de Precios).</td></tr>
+    <tr><td>8️⃣</td><td>Los kits de seguridad se regalan: su reposición se mira acá (cobertura), NO en el Forecast.</td></tr>
+  </table></div>
+
+  <p class="meta" style="margin-top:40px">Manual generado desde el código y la pantalla real de GOcelular360 · dudas de fondo: Emiliano · este documento se regenera cuando cambia la página.</p>
+</main>

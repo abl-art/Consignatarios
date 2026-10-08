@@ -44,13 +44,13 @@ const REGLAS: ReglaMarca[] = [
     marca: 'Xiaomi',
     solucion: 'Bloqueo Xiaomi',
     headerClass: 'bg-orange-600',
-    regla: 'Línea 15 en adelante (a la venta desde agosto 2025) — y la línea 14, que ya está habilitada y funcionando.',
+    regla: 'Modelos lanzados desde 2025: línea 15 en adelante, línea 14 y Redmi A5. Las líneas anteriores no.',
     detalle: [
       'El número de línea va en el nombre: Redmi 15, Redmi 15C, Redmi Note 15, Note 15 Pro… y todo lo que venga después.',
-      'La línea 14 (Redmi 14C, Note 14, Note 14 Pro) también está habilitada.',
+      'La línea 14 (Redmi 14C, Note 14, Note 14 Pro) y el Redmi A5 también están habilitados y funcionando.',
     ],
-    si: ['Redmi 15', 'Redmi 15C', 'Redmi Note 15', 'Redmi Note 15 Pro', 'Redmi 14C', 'Redmi Note 14'],
-    no: ['Redmi A5', 'Redmi 13 / 13C', 'Redmi Note 13', 'POCO y líneas viejas', 'Toda línea 13 o anterior'],
+    si: ['Redmi 15', 'Redmi 15C', 'Redmi Note 15', 'Redmi Note 15 Pro', 'Redmi 14C', 'Redmi Note 14', 'Redmi A5'],
+    no: ['Redmi 13 / 13C', 'Redmi Note 13', 'Redmi A3', 'POCO y líneas viejas', 'Toda línea 13 o anterior'],
   },
   {
     marca: 'Nubia',
