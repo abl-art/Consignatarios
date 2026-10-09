@@ -95,13 +95,22 @@ export function promptAnalisisEntrevista(
   criterios: Criterio[],
   mandato: string | null,
   ficha: { nombre: string; resumen: string | null; scores: Record<string, number> },
-  transcript: string
+  transcript: string,
+  caso?: string | null
 ): string {
+  const bloqueCaso = caso
+    ? `
+CASO TÉCNICO que el candidato resuelve en la entrevista (los datos los tiene a la vista; la entrevistadora guía las preguntas):
+${caso}
+
+Contrastá cada respuesta contra el caso: ¿usa bien los números de las tablas? ¿detecta las restricciones cruzadas (crédito por proveedor no es caja, tránsitos ya comprometidos, saldo negativo proyectado)? ¿sus decisiones son consistentes con esos datos o inventa supuestos que el caso contradice?
+`
+    : ''
   return `Sos un reclutador experto senior. Analizá esta transcripción de entrevista técnica (caso práctico) para la búsqueda con mandato:
 ${mandato || 'No especificado'}
 
 Candidato: ${ficha.nombre}. Contexto del CV: ${ficha.resumen || 's/d'}. Puntajes actuales (1-5): ${JSON.stringify(ficha.scores)}.
-
+${bloqueCaso}
 La transcripción es automática y tiene errores fonéticos — juzgá el hilo argumental, no la literalidad. Evaluá: ¿decide o solo diagnostica? ¿cuantifica impactos? ¿integra restricciones (caja, stock, riesgo)? ¿pide datos? ¿qué evidencia da en los criterios prioritarios (${criterios.filter((c) => c.prioritario).map((c) => c.nombre).join(', ')})?
 
 TRANSCRIPCIÓN:

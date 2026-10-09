@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
     const { data: busqueda } = await supabase
       .from('rec_busquedas')
-      .select('mandato, criterios')
+      .select('mandato, criterios, caso')
       .eq('id', candidato.busqueda_id)
       .single()
     const criterios = ((busqueda?.criterios as Criterio[]) || [])
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: promptAnalisisEntrevista(criterios, busqueda?.mandato || null, candidato, fila.transcript || ''),
+          content: promptAnalisisEntrevista(criterios, busqueda?.mandato || null, candidato, fila.transcript || '', busqueda?.caso || null),
         },
       ],
     })

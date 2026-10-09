@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS rec_busquedas (
   mandato text,
   -- [{clave, nombre, prioritario}] — default: criterios v2 del Business Owner
   criterios jsonb NOT NULL DEFAULT '[]',
+  caso text,                       -- caso técnico que resuelven los candidatos (entra al prompt de análisis)
   recomendacion text,              -- markdown generado por Claude (botón Regenerar)
   recomendacion_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
