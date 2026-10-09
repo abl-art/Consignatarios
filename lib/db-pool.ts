@@ -39,7 +39,11 @@ export function getGocuotasPool(): Pool | null {
       ssl: { rejectUnauthorized: false },
       max: 3,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      // El income de /finanzas retiene una conexión >20s; con 10s las queries
+      // que esperan turno en el pool morían antes de conseguir conexión
+      // (connectionTimeoutMillis también aplica a la espera por un slot libre).
+      // 55s acompaña el maxDuration=60 de las páginas que usan esta base.
+      connectionTimeoutMillis: 55000,
     })
     gocuotasPool.on('error', (err) => {
       console.error('GOcuotas pool error:', err.message)
