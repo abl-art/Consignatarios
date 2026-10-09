@@ -193,6 +193,12 @@ async function fetchIncomePorCanalFromGocuotas(universo: string[]): Promise<{ pr
 
   const client = await pool.connect()
   try {
+    // El planner de GOcuotas elige seq scan de installments (80M+ filas, ~10GB)
+    // en vez del índice por order_id porque sobrestima ~3x las órdenes del
+    // universo. Forzarlo baja la query de ~22s a ~12s y hace que el tiempo
+    // escale con NUESTRAS cuotas (~290k) y no con la tabla de la plataforma.
+    await client.query('BEGIN')
+    await client.query('SET LOCAL enable_seqscan = off')
     const res = await client.query<{
       cash_date: Date | string
       es_propio: boolean
@@ -241,6 +247,7 @@ async function fetchIncomePorCanalFromGocuotas(universo: string[]): Promise<{ pr
       FROM base b
       GROUP BY 1, 2
     `, [...propiosNum, ...universoNum])
+    await client.query('COMMIT')
     const filas = res.rows
       .filter((r) => r.cash_date != null)
       .map((r) => ({
@@ -258,6 +265,9 @@ async function fetchIncomePorCanalFromGocuotas(universo: string[]): Promise<{ pr
       propia: filas.filter(f => f.es_propio).map(f => f.row),
       terceros: filas.filter(f => !f.es_propio).map(f => f.row),
     }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
   } finally {
     client.release()
   }
