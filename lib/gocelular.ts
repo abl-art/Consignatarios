@@ -2452,7 +2452,10 @@ export async function fetchAlertasSinImei(): Promise<AlertaSinImeiTienda[]> {
         o.total_order_amount::text AS monto
       FROM gocuotas_orders o
       LEFT JOIN devices d ON d.order_id = o.order_id::text
-      WHERE o.order_delivered_at IS NOT NULL
+      WHERE (o.order_delivered_at IS NOT NULL
+          OR EXISTS (SELECT 1 FROM gocuotas_installments gi
+                     WHERE gi.order_id = o.order_id
+                       AND gi.installment_collected_at IS NOT NULL))
         AND o.order_discarded_at IS NULL
         AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
         AND d.imei IS NULL
@@ -2484,7 +2487,11 @@ export async function fetchAlertasSinImei(): Promise<AlertaSinImeiTienda[]> {
     const totRes = await client.query<{ store_name: string; total: string }>(
       `SELECT o.store_name, COUNT(*)::text AS total
        FROM gocuotas_orders o
-       WHERE o.order_delivered_at IS NOT NULL AND o.order_discarded_at IS NULL
+       WHERE (o.order_delivered_at IS NOT NULL
+           OR EXISTS (SELECT 1 FROM gocuotas_installments gi
+                      WHERE gi.order_id = o.order_id
+                        AND gi.installment_collected_at IS NOT NULL))
+         AND o.order_discarded_at IS NULL
          AND o.client_id::text NOT IN (${SQL_IDS_PROPIOS})
        GROUP BY o.store_name`
     )
@@ -2809,18 +2816,21 @@ export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
         go.order_id::text AS order_id,
         go.store_name,
         go.client_id::text AS client_id,
-        go.order_delivered_at::date::text AS fecha,
+        COALESCE(go.order_delivered_at, go.order_created_at)::date::text AS fecha,
         go.total_order_amount::text AS monto,
         d.imei,
         COALESCE(go.user_dni::text, '') AS user_dni,
         COALESCE(go.user_name, '') AS user_name
       FROM devices d
       JOIN gocuotas_orders go ON go.order_id = d.order_id
-      WHERE go.order_delivered_at IS NOT NULL
+      WHERE (go.order_delivered_at IS NOT NULL
+          OR EXISTS (SELECT 1 FROM gocuotas_installments gi
+                     WHERE gi.order_id = go.order_id
+                       AND gi.installment_collected_at IS NOT NULL))
         AND go.order_discarded_at IS NULL
         AND go.client_id::text NOT IN (${SQL_IDS_PROPIOS})
         AND (d.is_test_device = false OR d.is_test_device IS NULL)
-      ORDER BY go.order_delivered_at DESC`
+      ORDER BY COALESCE(go.order_delivered_at, go.order_created_at) DESC`
     )
     return res.rows.map(r => {
       let monto = Number(r.monto)
