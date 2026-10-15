@@ -10,6 +10,8 @@ import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
 import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/actions/arrepentimientos'
+import { getDevoluciones, type FilaDevolucion } from '@/lib/actions/devoluciones'
+import { esDevolucionFinalizada } from '@/lib/devoluciones'
 import { getDemorasDescartadas } from '@/lib/actions/demoras'
 import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
@@ -27,8 +29,13 @@ import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
 import ArrepentimientosTable from './ArrepentimientosTable'
 import DemorasTable from './DemorasTable'
+import DevolucionesTable from './DevolucionesTable'
 import SiniestrosTable from './SiniestrosTable'
 import SiniestrosStockTable from './SiniestrosStockTable'
+
+// La pestaña Devoluciones consulta Andreani en vivo (hasta ~8s por tracking);
+// damos margen sobre el default de 10s de Vercel.
+export const maxDuration = 30
 
 export default async function EnviosPage({
   searchParams,
@@ -68,6 +75,12 @@ export default async function EnviosPage({
   const arrepPendientes = arrepentimientos.filter(a => a.estado === 'pendiente').length
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
+  // Devoluciones: estado en vivo de los dos seguimientos de Andreani (entrega + devolución)
+  const devoluciones: FilaDevolucion[] = await getDevoluciones().catch(() => [])
+  // Pendientes de gestión = las que no están devueltas/cerradas (badge de la pestaña)
+  const devolucionesPendientes = devoluciones.filter(
+    d => !esDevolucionFinalizada(d.devolucion.estadoActual, d.banderas),
+  ).length
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const siniestrosWhAbiertos = siniestrosStock.filter(s => s.estado === 'abierto').length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
@@ -231,6 +244,11 @@ export default async function EnviosPage({
           id: 'rescates',
           label: rescatesActivos > 0 ? `Rescates (${rescatesActivos})` : 'Rescates',
           content: <RescatesTable rescates={rescates} />,
+        },
+        {
+          id: 'devoluciones',
+          label: devolucionesPendientes > 0 ? `Devoluciones (${devolucionesPendientes})` : 'Devoluciones',
+          content: <DevolucionesTable devoluciones={devoluciones} />,
         },
         {
           id: 'siniestros',
