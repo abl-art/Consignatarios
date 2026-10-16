@@ -1,6 +1,8 @@
 'use server'
 
 import { getPool } from '@/lib/db-pool'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
 import {
   payloadAndreani,
   parseTimelineAndreani,
@@ -45,6 +47,8 @@ export interface FilaDevolucion {
   entrega: SeguimientoAndreani
   devolucion: SeguimientoAndreani
   banderas: string[]
+  /** Tilde manual: el equipo entró físicamente al depósito de GOcuotas */
+  recibidoWhGo: boolean
 }
 
 interface ReturnRaw {
@@ -94,9 +98,42 @@ async function consultarAndreani(tracking: string | null, ahora: Date): Promise<
   }
 }
 
+// Tildes "Recibido WH GO" de devoluciones_seguimiento en Supabase, por tracking
+// del retorno. Si la query falla, nadie aparece tildado (no bloquea la pestaña).
+async function getRecibidosWh(): Promise<Set<string>> {
+  try {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+      .from('devoluciones_seguimiento')
+      .select('tracking, recibido_wh')
+    return new Set((data ?? []).filter(r => r.recibido_wh).map(r => r.tracking))
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * Marca/desmarca que el equipo de una devolución se recibió físicamente en el
+ * depósito de GOcuotas. Clave = tracking del envío de retorno.
+ */
+export async function setRecibidoWhGo(tracking: string, recibido: boolean): Promise<{ ok?: true; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('devoluciones_seguimiento')
+    .upsert(
+      { tracking, recibido_wh: recibido, recibido_wh_at: recibido ? new Date().toISOString() : null },
+      { onConflict: 'tracking' }
+    )
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/envios')
+  return { ok: true }
+}
+
 // Lista de devoluciones (shipments type='return') con el contexto de la orden y el
 // equipo, más los dos seguimientos de Andreani (entrega + devolución) consultados
-// en vivo. No guarda nada: el estado real sale siempre de la API del momento.
+// en vivo. Lo único persistido nuestro es el tilde Recibido WH GO: el estado real
+// del envío sale siempre de la API del momento.
 export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   const pool = getPool()
   if (!pool) return []
@@ -125,6 +162,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   )
 
   const ahora = new Date()
+  const recibidos = await getRecibidosWh()
   return Promise.all(
     rows.map(async (r): Promise<FilaDevolucion> => {
       const [entrega, devolucion] = await Promise.all([
@@ -147,6 +185,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         trustonicObservado: r.tru_obs,
         entrega,
         devolucion,
+        recibidoWhGo: recibidos.has(r.ret_tracking),
         banderas: banderasDevolucion({
           entregaEstado: entrega.estadoActual,
           inventarioStatus: r.inv_status,

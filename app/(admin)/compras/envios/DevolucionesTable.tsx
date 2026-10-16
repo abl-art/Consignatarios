@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import type { FilaDevolucion, SeguimientoAndreani } from '@/lib/actions/devoluciones'
+import { setRecibidoWhGo } from '@/lib/actions/devoluciones'
 import { formatearDuracion, esDevolucionFinalizada } from '@/lib/devoluciones'
 
 function fecha(iso: string): string {
@@ -59,6 +60,31 @@ function Seguimiento({ s }: { s: SeguimientoAndreani }) {
         <div className="text-[10px] text-gray-400">total {formatearDuracion(s.totalHoras)}</div>
       )}
     </div>
+  )
+}
+
+// Tilde manual (devoluciones_seguimiento en Supabase, clave = tracking del
+// retorno): el equipo entró físicamente al depósito de GOcuotas.
+function RecibidoWhCheck({ tracking, recibido }: { tracking: string | null; recibido: boolean }) {
+  const [checked, setChecked] = useState(recibido)
+  const [pending, startTransition] = useTransition()
+  if (!tracking) return <span className="text-gray-400" title="Sin tracking de devolución no se puede guardar el tilde">—</span>
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={pending}
+      onChange={(e) => {
+        const valor = e.target.checked
+        setChecked(valor)
+        startTransition(async () => {
+          const res = await setRecibidoWhGo(tracking, valor)
+          if (res.error) setChecked(!valor)
+        })
+      }}
+      className="w-4 h-4 accent-green-600 cursor-pointer"
+      title="Tildar cuando el equipo se recibió físicamente en el depósito de GOcuotas"
+    />
   )
 }
 
@@ -134,6 +160,7 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
             <th className="py-2 pr-3 font-medium">Producto / IMEI</th>
             <th className="py-2 pr-3 font-medium">🚚 Entrega</th>
             <th className="py-2 pr-3 font-medium">↩️ Devolución</th>
+            <th className="py-2 pr-3 font-medium text-center" title="El equipo se recibió físicamente en el depósito de GOcuotas">Recibido WH GO</th>
             <th className="py-2 pr-3 font-medium">Alertas</th>
           </tr>
         </thead>
@@ -156,6 +183,7 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
               </td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.entrega} /></td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.devolucion} /></td>
+              <td className="py-2 pr-3 text-center"><RecibidoWhCheck tracking={d.devolucion.tracking} recibido={d.recibidoWhGo} /></td>
               <td className="py-2 pr-3">
                 {d.banderas.length === 0 ? (
                   <span className="text-green-600 text-[11px]">✓ ok</span>
