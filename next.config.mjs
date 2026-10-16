@@ -13,6 +13,7 @@ const nextConfig = {
       '/canales/lista-precios/manual': ['./docs/manual-lista-precios/manual-inline.html'],
       '/compras/envios/manual': ['./docs/manual-envios-posventa/manual-inline.html'],
       '/compras/manual': ['./docs/manual-compras/manual-inline.html'],
+      '/grupo-go/pnl': ['./docs/pnl-mensual-gocuotas/pnl-mensual.html'],
     },
   },
 };

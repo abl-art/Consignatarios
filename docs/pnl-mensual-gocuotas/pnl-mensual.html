@@ -1,0 +1,1088 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PNL Mensual GOcuotas</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Estilos según el design system GOcuotas (skill gocuotas-design):
+   Poppins 400/500/700 · rosa #EE2A7B · ink #1C263F · cards 8px con una sola sombra · botones pill.
+   Solo modo claro: la marca no define paleta oscura. */
+:root {
+  color-scheme: light;
+  --gc-pink: #EE2A7B;
+  --gc-pink-hover: #D21E69;
+  --gc-pink-50: #FDEAF2;
+  --gc-ink: #1C263F;
+  --gc-ink-soft: #333C4C;
+  --gc-gray-500: #6C757D;
+  --gc-gray-400: #828282;
+  --gc-surface: #F8F9FA;
+  --gc-line: #E9ECEF;
+  --gc-white: #FFFFFF;
+  --gc-orange: #EF9300;
+  --gc-green: #00AA31;
+  --gc-red: #EB001B;
+  --gc-blue: #00A1DF;
+  --gc-violet: #5B19AE;
+  --gc-yellow: #FDBC46;
+  --gc-bg-info: #E3EBFF;
+  --gc-bg-info-soft: #EFF3FF;
+  --shadow-card: 3px 3px 3px 0 rgba(209, 213, 223, 0.3);
+  --radius-md: 8px;
+  --radius-pill: 999999px;
+
+  /* roles del tablero */
+  --bg: var(--gc-white);
+  --surface: var(--gc-surface);
+  --line: var(--gc-line);
+  --line-strong: #C3C8D2; /* barras de meses anteriores en gráficos de columnas */
+  --text: var(--gc-ink);
+  --text-2: var(--gc-ink-soft);
+  --text-3: var(--gc-gray-500);
+  --accent: var(--gc-pink);
+  --pos: var(--gc-blue);      /* aporte positivo al resultado */
+  --neg: var(--gc-orange);    /* aporte negativo al resultado */
+  --total: var(--gc-pink);    /* totales / resultado */
+  --good-text: #00862A;       /* #00AA31 oscurecido lo justo para texto chico legible */
+  --bad-text: var(--gc-red);
+  /* modelos: color fijo por modelo (sigue a la entidad, no al ranking) */
+  --m-cuotas: var(--gc-pink); --m-premium: var(--gc-blue); --m-adelantos: var(--gc-orange);
+  --m-celular: var(--gc-green); --m-qr: var(--gc-violet); --m-big: var(--gc-gray-500); --m-tarjetas: var(--gc-yellow);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 124px; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px; line-height: 1.45; font-weight: 400;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4 { margin: 0; font-weight: 700; }
+a { color: var(--gc-pink); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--gc-pink); outline-offset: 2px; }
+.bi { line-height: 1; }
+
+/* ---------- barra superior ---------- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 10px 64px; background: var(--gc-white); box-shadow: var(--shadow-card);
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo { display: flex; align-items: center; gap: 6px; text-decoration: none; }
+.logo img:first-child { height: 30px; }
+.logo img:last-child { height: 14px; }
+.brand-sub { color: var(--text-3); font-size: 12px; border-left: 1px solid var(--line); padding-left: 12px; }
+.filtros { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.ctl { display: flex; flex-direction: column; gap: 2px; }
+.ctl > span { font-size: 12px; font-weight: 500; color: var(--text-3); padding-left: 12px; }
+select {
+  font: inherit; font-size: 14px; color: var(--text); background-color: var(--gc-surface);
+  border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 6px 34px 6px 14px; min-height: 36px;
+  appearance: none; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--gc-pink) 50%), linear-gradient(135deg, var(--gc-pink) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 55%, calc(100% - 14px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+select:disabled { color: var(--gc-gray-500); cursor: not-allowed; background-image: none; padding-right: 14px; }
+.seg { display: inline-flex; background: var(--gc-surface); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 2px; }
+.seg button {
+  font: inherit; font-size: 14px; font-weight: 500; border: 0; background: transparent; color: var(--text-2);
+  padding: 5px 14px; min-height: 30px; border-radius: var(--radius-pill); cursor: pointer; transition: background-color .15s ease, color .15s ease;
+}
+.seg button[aria-checked="true"] { background: var(--gc-pink); color: var(--gc-white); }
+.btn, .btn-present {
+  font: inherit; font-size: 14px; font-weight: 500; line-height: 18px;
+  border: 1px solid var(--gc-pink); color: var(--gc-pink); background: transparent;
+  border-radius: var(--radius-pill); padding: 8px 18px; min-height: 36px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; transition: background-color .15s ease, color .15s ease;
+}
+.btn:hover, .btn-present:hover { background: var(--gc-pink); color: var(--gc-white); }
+.btn:active, .btn-present:active { transform: translateY(1px); }
+
+.secnav {
+  position: sticky; top: var(--topbar-h, 64px); z-index: 19; display: flex; gap: 4px; overflow-x: auto;
+  padding: 8px 64px; background: var(--gc-white); border-bottom: 1px solid var(--line); scrollbar-width: none;
+}
+.secnav a {
+  flex: none; padding: 5px 14px; border-radius: var(--radius-pill); color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px;
+  transition: background-color .15s ease, color .15s ease;
+}
+.secnav a:hover { color: var(--gc-pink); }
+.secnav a.on { background: var(--gc-pink-50); color: var(--gc-pink); }
+
+/* ---------- secciones ---------- */
+main { max-width: 1440px; margin: 0 auto; padding: 0 64px 96px; }
+section { padding: 56px 0 8px; }
+.sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.eyebrow { font-size: 16px; line-height: 20px; font-weight: 400; color: var(--gc-pink); margin-bottom: 4px; }
+.sec-head h2 { font-size: 24px; line-height: 28px; }
+.sec-head .sub { color: var(--text-3); font-size: 13px; margin-top: 6px; }
+
+.card { background: var(--gc-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 20px 22px; }
+.card h3 { font-size: 16px; line-height: 20px; margin-bottom: 12px; }
+.card .card-sub { color: var(--text-3); font-size: 12px; margin: -6px 0 14px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g-7-5 { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+@media (max-width: 900px) { .g2, .g3, .g-7-5 { grid-template-columns: minmax(0, 1fr); } }
+
+.aviso {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  background: var(--gc-bg-info-soft); border-radius: var(--radius-md); padding: 14px 16px; color: var(--text-2); font-size: 13px;
+}
+.aviso .bi { color: var(--gc-pink); font-size: 16px; }
+.vacio { color: var(--text-3); font-size: 13px; }
+
+/* ---------- portada: muro rosa ---------- */
+#s-portada {
+  background: var(--gc-pink); color: var(--gc-white);
+  margin: 0 -64px; padding: 56px 64px 64px;
+}
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px; align-items: start; }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+.hero .eyebrow { color: var(--gc-white); }
+.hero-title h1 { font-size: 60px; line-height: 64px; color: var(--gc-white); }
+.hero-title p { margin: 12px 0 0; font-size: 16px; line-height: 20px; }
+.hero-big { margin-top: 36px; display: grid; gap: 20px; }
+.hero-big .v { font-size: 36px; line-height: 42px; font-weight: 700; }
+.hero-big .l { font-size: 14px; }
+.novedades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .novedades { grid-template-columns: minmax(0, 1fr); } }
+.nov { background: var(--gc-white); color: var(--text); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: var(--shadow-card); }
+.nov h4 { font-size: 16px; line-height: 20px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+.nov h4 .bi { color: var(--gc-pink); font-size: 18px; }
+.nov p { margin: 0; color: var(--text-2); font-size: 13px; }
+#s-portada .aviso { background: var(--gc-white); }
+
+/* ---------- KPIs ---------- */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--gc-surface); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: var(--shadow-card); }
+.kpi .l { font-size: 13px; color: var(--text-3); font-weight: 500; }
+.kpi .v { font-size: 24px; line-height: 28px; font-weight: 700; margin: 4px 0; }
+.kpi .d { font-size: 12px; color: var(--text-3); }
+.kpi .x { font-size: 12px; color: var(--text-3); margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.kpi.hl { background: var(--gc-pink-50); }
+.kpi.hl .v { color: var(--gc-pink); }
+.delta { font-weight: 500; font-size: 12px; display: inline-flex; align-items: center; gap: 3px; }
+.delta.good { color: var(--good-text); }
+.delta.bad { color: var(--bad-text); }
+.delta.neu { color: var(--text-3); }
+
+.drivers { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.drivers li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--gc-white); border-radius: var(--radius-md); font-size: 13px; }
+.drivers li .bi { color: var(--gc-pink); font-size: 16px; margin-top: 1px; flex: none; }
+
+/* ---------- tablas ---------- */
+.tabla-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: right; font-weight: 500; font-size: 12px; color: var(--text-3); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td:first-child { white-space: normal; min-width: 180px; }
+tr.rubro td { font-weight: 500; cursor: pointer; }
+tr.rubro td:first-child::before { content: ""; width: 11px !important; height: 11px; margin-right: 7px; background: var(--gc-pink); -webkit-mask: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiAzLjUgMTAuNSA4IDYgMTIuNSIvPjwvc3ZnPg==") center/contain no-repeat; mask: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiAzLjUgMTAuNSA4IDYgMTIuNSIvPjwvc3ZnPg==") center/contain no-repeat; display: inline-block; width: 18px; color: var(--gc-pink); transition: transform .15s ease; }
+tr.rubro.open td:first-child::before { transform: rotate(90deg); }
+tr.rubro.fijo td:first-child::before { content: ""; }
+tr.rubro:not(.fijo):hover td { color: var(--gc-pink); }
+tr.cuenta td { color: var(--text-2); font-size: 12.5px; background: var(--gc-white); }
+tr.cuenta td:first-child { padding-left: 36px; }
+tr.cuenta.hide { display: none; }
+tr.sub td { font-weight: 700; background: var(--gc-bg-info-soft); }
+tr.total td { font-weight: 700; font-size: 14px; background: var(--gc-pink-50); color: var(--text); border-bottom: 0; }
+tr.pct td { color: var(--text-3); }
+tr.clic { cursor: pointer; }
+tr.clic:hover td { background: var(--gc-white); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+.tabla-nota { color: var(--text-3); font-size: 12px; margin-top: 10px; }
+.compacta th, .compacta td { padding: 8px 7px; font-size: 12.5px; }
+.compacta td:first-child { min-width: 130px; }
+
+/* ---------- gráficos ---------- */
+.chart { width: 100%; overflow: visible; font-family: inherit; }
+.scroll-x { overflow-x: auto; }
+.chart text { fill: var(--text-2); font-size: 12px; font-family: inherit; }
+.chart .lbl-strong { fill: var(--text); font-weight: 500; }
+.chart .axis-l { stroke: #D1D5DF; stroke-width: 1; }
+.chart .conn { stroke: var(--gc-gray-400); stroke-width: 1; stroke-dasharray: 2 3; }
+.chart rect[data-tip]:hover { filter: brightness(.94); }
+
+.hbar { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; }
+.hbar .n { font-size: 13px; font-weight: 500; }
+.hbar .n small { display: block; color: var(--text-3); font-size: 11.5px; font-weight: 400; }
+.hbar .track { height: 12px; background: var(--gc-white); border-radius: var(--radius-pill); overflow: hidden; }
+.hbar .fill { height: 100%; border-radius: var(--radius-pill); background: var(--gc-pink); }
+.hbar .v { font-size: 13px; font-weight: 700; text-align: right; }
+.hbar .v small { color: var(--text-3); font-weight: 400; margin-left: 6px; }
+.hbar .det { grid-column: 1 / -1; color: var(--text-3); font-size: 12px; margin: -2px 0 10px; }
+
+.stack { display: flex; height: 28px; border-radius: var(--radius-pill); overflow: hidden; gap: 2px; margin: 6px 0 12px; background: var(--gc-white); }
+.stack div { height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--text-2); }
+.legend b { color: var(--text); font-weight: 700; }
+
+.tabs { display: inline-flex; gap: 2px; background: var(--gc-surface); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 2px; }
+.tabs button { font: inherit; font-size: 13px; font-weight: 500; border: 0; background: transparent; color: var(--text-2); padding: 5px 14px; border-radius: var(--radius-pill); cursor: pointer; }
+.tabs button.on { background: var(--gc-pink); color: var(--gc-white); }
+
+.area-list { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; }
+.area-list li + li { margin-top: 6px; }
+.area-list li::marker { color: var(--gc-pink); }
+
+.tip {
+  position: fixed; z-index: 50; pointer-events: none; opacity: 0;
+  background: var(--gc-ink); color: var(--gc-white); font-size: 12px; padding: 8px 10px; border-radius: var(--radius-md); max-width: 280px; line-height: 1.4;
+}
+.tip.on { opacity: 1; }
+
+/* ---------- modo presentación ---------- */
+.present-hud { display: none; }
+body.present .secnav { display: none; }
+body.present section { min-height: calc(100vh - var(--topbar-h, 64px)); }
+body.present .present-hud {
+  display: block; position: fixed; right: 18px; bottom: 16px; z-index: 30;
+  background: var(--gc-ink); color: var(--gc-white); font-size: 12px; padding: 6px 12px; border-radius: var(--radius-pill);
+}
+body.present .btn-present { background: var(--gc-pink); color: var(--gc-white); }
+
+@media (max-width: 900px) {
+  .topbar, .secnav { padding-left: 20px; padding-right: 20px; }
+  main { padding: 0 20px 64px; }
+  #s-portada { margin: 0 -20px; padding: 40px 20px 48px; }
+}
+@media (max-width: 640px) {
+  .topbar { position: static; }
+  .secnav { top: 0; }
+  html { scroll-padding-top: 60px; }
+  .hero-title h1 { font-size: 36px; line-height: 42px; }
+  .hero-big .v { font-size: 28px; line-height: 32px; }
+  .kpi .v { font-size: 20px; }
+  .hbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .hbar .track { grid-column: 1 / -1; grid-row: 2; }
+  .brand-sub { display: none; }
+}
+@media print {
+  .topbar, .secnav, .present-hud { display: none; }
+  section { break-inside: avoid; page-break-after: always; }
+}
+
+/* Interanual y consumo por área */
+th.grupo { text-align: center; color: var(--gc-pink); border-bottom: 1px solid var(--line); }
+th.sep, td.sep { border-left: 1px solid var(--line); }
+.efemerides { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 13px; line-height: 1.45; }
+.efemerides li { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 10px; }
+.efemerides .efe-fecha { grid-row: span 2; font-weight: 500; color: var(--text-3); font-size: 12px; }
+.efemerides .efe-mod { font-weight: 500; color: var(--gc-pink); font-size: 12px; }
+@media (max-width: 640px) { .efemerides li { grid-template-columns: minmax(0, 1fr); } .efemerides .efe-fecha { grid-row: auto; } }
+
+/* Ajustes (DDJJ Ganancias, Fideicomiso) */
+.chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 12px; font-weight: 500; padding: 7px 12px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--gc-surface); color: var(--text-2, inherit); cursor: pointer; white-space: nowrap; }
+.chip[aria-checked="true"] { background: var(--gc-pink); border-color: var(--gc-pink); color: var(--gc-white); }
+.chip:focus-visible { outline: 2px solid var(--gc-pink); outline-offset: 2px; }
+.aviso-aj { margin: 16px 0 0; align-items: flex-start; }
+.aviso-aj .link { font: inherit; background: none; border: 0; padding: 0; color: var(--gc-pink); text-decoration: underline; cursor: pointer; }
+#ctl-aj[hidden] { display: none !important; }
+.kpis.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .kpis.k5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .kpis.k5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Novedad destacada (ej. Fideicomiso) a todo el ancho y el resto debajo en tres columnas */
+.novedades.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nov-dest { grid-column: 1 / -1; padding: 20px 22px; }
+.nov-dest h4 { font-size: 18px; line-height: 24px; }
+.nov-dest > p { font-size: 14px; }
+.nov-bloques { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.nov-bloques h5 { font-size: 13px; line-height: 18px; font-weight: 700; color: var(--gc-pink); margin: 0 0 4px; }
+.nov-bloques p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 19px; }
+@media (max-width: 1100px) { .novedades.n3 { grid-template-columns: minmax(0, 1fr); } .nov-bloques { grid-template-columns: minmax(0, 1fr); } }
+
+.bi{display:inline-block;width:1em;height:1em;background:currentColor;vertical-align:-.125em;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}
+.bi-arrow-up-short{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCAxMi41di05TTQuNSA3IDggMy41IDExLjUgNyIvPjwvc3ZnPg==")}
+.bi-arrow-down-short{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCAzLjV2OU00LjUgOSA4IDEyLjUgMTEuNSA5Ii8+PC9zdmc+")}
+.bi-dash{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCA4aDgiLz48L3N2Zz4=")}
+.bi-chevron-right{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiAzLjUgMTAuNSA4IDYgMTIuNSIvPjwvc3ZnPg==")}
+.bi-info-circle{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iNi41Ii8+PHBhdGggZD0iTTggNy4zVjExLjUiLz48Y2lyY2xlIGN4PSI4IiBjeT0iNC45IiByPSIuNCIgZmlsbD0iIzAwMCIvPjwvc3ZnPg==")}
+.bi-exclamation-triangle{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCAxLjggMTUgMTQuMkgxWiIvPjxwYXRoIGQ9Ik04IDYuMnYzLjkiLz48Y2lyY2xlIGN4PSI4IiBjeT0iMTIiIHI9Ii40IiBmaWxsPSIjMDAwIi8+PC9zdmc+")}
+.bi-check-circle{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iNi41Ii8+PHBhdGggZD0ibTUuMiA4LjMgMS45IDEuOSAzLjgtNCIvPjwvc3ZnPg==")}
+.bi-graph-up-arrow{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMS41IDE0LjVoMTMiLz48cGF0aCBkPSJNMi41IDExLjUgNi41IDcuNSA5IDEwbDQuNS00LjUiLz48cGF0aCBkPSJNMTAuNSA1LjVoM3YzIi8+PC9zdmc+")}
+.bi-graph-down-arrow{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMS41IDE0LjVoMTMiLz48cGF0aCBkPSJNMi41IDMuNSA2LjUgNy41IDkgNWw0LjUgNC41Ii8+PHBhdGggZD0iTTEzLjUgNi41djNoLTMiLz48L3N2Zz4=")}
+.bi-play-fill{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSAzdjEwbDgtNVoiIGZpbGw9IiMwMDAiLz48L3N2Zz4=")}
+.bi-x-lg{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJtMy41IDMuNSA5IDlNMTIuNSAzLjVsLTkgOSIvPjwvc3ZnPg==")}
+.bi-box-arrow-up-right{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOS41IDIuNWg0djRNMTMuNSAyLjUgNy41IDguNSIvPjxwYXRoIGQ9Ik0xMS41IDkuNXY0aC05di05aDQiLz48L3N2Zz4=")}
+.bi-qr-code{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIyIiB5PSIyIiB3aWR0aD0iNC41IiBoZWlnaHQ9IjQuNSIvPjxyZWN0IHg9IjkuNSIgeT0iMiIgd2lkdGg9IjQuNSIgaGVpZ2h0PSI0LjUiLz48cmVjdCB4PSIyIiB5PSI5LjUiIHdpZHRoPSI0LjUiIGhlaWdodD0iNC41Ii8+PHBhdGggZD0iTTkuNSA5LjVoMnYyTTE0IDkuNXY0LjVoLTQuNU0xMS41IDE0di0xIi8+PC9zdmc+")}
+.bi-bank{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMS41IDYgOCAyLjUgMTQuNSA2WiIvPjxwYXRoIGQ9Ik0zLjIgNy41djVNNi40IDcuNXY1TTkuNiA3LjV2NU0xMi44IDcuNXY1TTEuNSAxNGgxMyIvPjwvc3ZnPg==")}
+.bi-cash-coin{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIxLjUiIHk9IjMiIHdpZHRoPSIxMCIgaGVpZ2h0PSI2IiByeD0iMSIvPjxjaXJjbGUgY3g9IjYuNSIgY3k9IjYiIHI9IjEuMyIvPjxjaXJjbGUgY3g9IjExIiBjeT0iMTEiIHI9IjMuNSIvPjwvc3ZnPg==")}
+.bi-bar-chart-line{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMS41IDE0LjVoMTNNMy41IDE0VjkuNU03IDE0VjUuNU0xMC41IDE0VjhNMTMuNSAxNFYzIi8+PC9zdmc+")}
+.bi-file-earmark-text{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCAxLjVoNWwzLjUgMy41djkuNUg0WiIvPjxwYXRoIGQ9Ik05IDEuNVY1aDMuNU02IDguNWg0LjVNNiAxMWg0LjUiLz48L3N2Zz4=")}
+.bi-megaphone{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMiA2LjV2M2gybDYgMy41di0xMEw0IDYuNVoiLz48cGF0aCBkPSJNNC41IDkuNSA1LjUgMTMuNSIvPjxwYXRoIGQ9Ik0xMi41IDYuNWEyIDIgMCAwIDEgMCAzIi8+PC9zdmc+")}
+.bi-dot{--i:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMiIgZmlsbD0iIzAwMCIvPjwvc3ZnPg==")}
+</style>
+<header class="topbar">
+    <div class="brand">
+      <a class="logo" href="#s-portada" aria-label="GOcuotas"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzNC40MjQiIGhlaWdodD0iMzQiIHZpZXdCb3g9IjAgMCAzNC40MjQgMzQiIGZpbGw9IiNFRTJBN0IiPgogIDxwYXRoIGQ9Ik0gMTEuMDAyIDE4LjA0MyBMIDEzLjkwNiAxOC4wNDMgTCAxMy45MDYgMjAuMDMyIEMgMTMuMTk0IDIwLjYzNyAxMi4yNzggMjAuOTU4IDExLjMzOSAyMC45MzMgQyAxMC44MjMgMjAuOTc4IDEwLjMwMiAyMC45MTMgOS44MTQgMjAuNzQyIEMgOS4zMjUgMjAuNTcxIDguODggMjAuMjk4IDguNTA4IDE5Ljk0MSBDIDguMTM2IDE5LjU4NSA3Ljg0NyAxOS4xNTMgNy42NTkgMTguNjc2IEMgNy40NzIgMTguMTk4IDcuMzkxIDE3LjY4NyA3LjQyMiAxNy4xNzYgQyA3LjQyMiAxNC44NjQgOC45IDEzLjAzNCAxMS4zMzkgMTMuMDM0IEMgMTIuNDE0IDEzLjA0MyAxMy40NDkgMTMuNDQ0IDE0LjI0MyAxNC4xNjEgTCAxNS41NzYgMTIuODExIEMgMTQuNDUyIDExLjcxMiAxMi45MzMgMTEuMDk1IDExLjM1MSAxMS4wOTUgQyA3LjMzIDExLjA5NSA1LjMyMyAxNC4wMTUgNS4zMjMgMTcuMTc3IEMgNS4zMjMgMjAuMTMxIDcuMDYzIDIyLjkxMiAxMS4zMzkgMjIuOTEyIEMgMTIuMjAxIDIyLjkzNyAxMy4wNTcgMjIuNzY4IDEzLjg0MyAyMi40MTcgQyAxNC42MjkgMjIuMDY3IDE1LjMyMyAyMS41NDMgMTUuODc0IDIwLjg4OCBMIDE1Ljg3NCAxNi4xNSBMIDExLjAwMiAxNi4xNSBMIDExLjAwMiAxOC4wNDMgWiBNIDIzLjMxIDExLjE4OSBDIDIyLjUyMSAxMS4xNjggMjEuNzM2IDExLjMwOSAyMS4wMDQgMTEuNiBDIDIwLjI3MyAxMS44OTIgMTkuNjEgMTIuMzI5IDE5LjA1NiAxMi44ODUgQyAxOC41MDMgMTMuNDQgMTguMDcxIDE0LjEwMyAxNy43ODcgMTQuODMgQyAxNy41MDQgMTUuNTU3IDE3LjM3NSAxNi4zMzQgMTcuNDA4IDE3LjExMyBDIDE3LjQwOCAyMC4wNjcgMTkuMjYxIDIyLjkwNSAyMy4yNTkgMjIuOTA1IEMgMjcuMjU3IDIyLjkwNSAyOS4wNjYgMjAgMjkuMDk2IDE3LjA5MyBDIDI5LjEzNyAxNi4zMjMgMjkuMDE4IDE1LjU1MiAyOC43NDQgMTQuODMgQyAyOC40NzEgMTQuMTA4IDI4LjA0OSAxMy40NDkgMjcuNTA2IDEyLjg5NSBDIDI2Ljk2MyAxMi4zNDEgMjYuMzEgMTEuOTAzIDI1LjU4OCAxMS42MSBDIDI0Ljg2NiAxMS4zMTYgMjQuMDkgMTEuMTczIDIzLjMxIDExLjE4OSBaIE0gMjMuMjU5IDIwLjk2NiBDIDIwLjU3OCAyMC45NjYgMTkuNTcyIDE4Ljk5MiAxOS41MiAxNy4xNDIgQyAxOS40NjcgMTYuNjI0IDE5LjUyNiAxNi4xMDEgMTkuNjk0IDE1LjYwOCBDIDE5Ljg2MSAxNS4xMTUgMjAuMTM0IDE0LjY2MiAyMC40OTIgMTQuMjgxIEMgMjAuODUxIDEzLjkgMjEuMjg4IDEzLjU5OCAyMS43NzMgMTMuMzk3IEMgMjIuMjU5IDEzLjE5NiAyMi43ODMgMTMuMDk5IDIzLjMxIDEzLjExMyBDIDI1LjkyNSAxMy4xNjEgMjcuMDE0IDE1LjI0NyAyNi45ODMgMTcuMTI2IEMgMjYuOTUxIDE5LjAwNCAyNS45NDIgMjAuOTY2IDIzLjI1OSAyMC45NjYgWiBNIDI3LjE1MiAwIEwgNy4yNzQgMCBDIDUuMzQ3IDAuMDA2IDMuNSAwLjc2NCAyLjEzNyAyLjExIEMgMC43NzQgMy40NTYgMC4wMDYgNS4yOCAwIDcuMTg0IEwgMCAyNi44MTggQyAwLjAwNSAyOC43MjIgMC43NzMgMzAuNTQ2IDIuMTM2IDMxLjg5MiBDIDMuNDk5IDMzLjIzOCA1LjM0NyAzMy45OTYgNy4yNzQgMzQgTCAyNy4xNSAzNCBDIDI5LjA3NyAzMy45OTcgMzAuOTI1IDMzLjIzOSAzMi4yODkgMzEuODkzIEMgMzMuNjUyIDMwLjU0NyAzNC40MiAyOC43MjIgMzQuNDI0IDI2LjgxOCBMIDM0LjQyNCA3LjE4NCBDIDM0LjQxOSA1LjI4IDMzLjY1MiAzLjQ1NiAzMi4yODkgMi4xMSBDIDMwLjkyNyAwLjc2MyAyOS4wOCAwLjAwNSAyNy4xNTIgMCBaIE0gMzIuMTAxIDI2LjgxOCBDIDMyLjA5NiAyOC4xMTMgMzEuNTczIDI5LjM1MyAzMC42NDYgMzAuMjY4IEMgMjkuNzE5IDMxLjE4MiAyOC40NjMgMzEuNjk4IDI3LjE1MiAzMS43MDEgTCA3LjI3NCAzMS43MDEgQyA1Ljk2NCAzMS42OTggNC43MDggMzEuMTgyIDMuNzgxIDMwLjI2NyBDIDIuODU0IDI5LjM1MyAyLjMzMiAyOC4xMTIgMi4zMjggMjYuODE4IEwgMi4zMjggNy4xODQgQyAyLjMzMSA1Ljg5IDIuODUzIDQuNjQ5IDMuNzggMy43MzMgQyA0LjcwNyAyLjgxOCA1Ljk2MyAyLjMwMiA3LjI3NCAyLjI5OSBMIDI3LjE1IDIuMjk5IEMgMjguNDYxIDIuMzAyIDI5LjcxOCAyLjgxNyAzMC42NDYgMy43MzIgQyAzMS41NzQgNC42NDggMzIuMDk3IDUuODg5IDMyLjEwMSA3LjE4NCBMIDMyLjEwMSAyNi44MTggWiIgZmlsbD0iI0VFMkE3QiIgZmlsbC1ydWxlPSJub256ZXJvIj48L3BhdGg+Cjwvc3ZnPg==" alt=""><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MS42ODciIGhlaWdodD0iMTAuNDI0IiB2aWV3Qm94PSIwIDAgNTEuNjg3IDEwLjQyNCIgZmlsbD0iI0VFMkE3QiI+CiAgPHBhdGggZD0iTSAzMS45NiA4LjQ3NyBDIDMxLjgxMyA4LjQ4NSAzMS42NjUgOC40NiAzMS41MjkgOC40MDUgQyAzMS4zOTIgOC4zNSAzMS4yNjkgOC4yNjUgMzEuMTcgOC4xNTggQyAzMS4wNyA4LjA1IDMwLjk5NiA3LjkyMSAzMC45NTMgNy43ODIgQyAzMC45MSA3LjY0MiAzMC44OTkgNy40OTUgMzAuOTIgNy4zNTEgTCAzMC45MiAzLjkzNCBMIDMzLjE0NyAzLjkzNCBMIDMzLjE0NyAyLjI0NSBMIDMwLjkzNyAyLjI0NSBMIDMwLjkzNyAwIEwgMjguOTU1IDAuMjA4IEwgMjguOTU1IDIuMjQ2IEwgMjcuNDYgMi4yNDYgTCAyNy40NiAzLjkzNiBMIDI4Ljk1NiAzLjkzNiBMIDI4Ljk1NiA3LjM1MyBDIDI4Ljk1NiA5LjMyNyAzMC4wOTYgMTAuMzA3IDMxLjgzMyAxMC4yNDIgQyAzMi4zOTYgMTAuMjMzIDMyLjk1MyAxMC4xMTkgMzMuNDczIDkuOTA1IEwgMzIuOTIyIDguMjMyIEMgMzIuNjI0IDguMzg0IDMyLjI5NiA4LjQ2OCAzMS45NjEgOC40NzggTCAzMS45NiA4LjQ3NyBaIE0gMjIuMzIyIDIuMDcyIEMgMjEuNzcgMi4wNTMgMjEuMjIgMi4xNDcgMjAuNzA2IDIuMzQ4IEMgMjAuMTkzIDIuNTQ5IDE5LjcyNyAyLjg1MyAxOS4zMzggMy4yNCBDIDE4Ljk0OCAzLjYyOCAxOC42NDQgNC4wOSAxOC40NDUgNC41OTkgQyAxOC4yNDUgNS4xMDggMTguMTU0IDUuNjUyIDE4LjE3NyA2LjE5NyBDIDE4LjE3NyA3LjI4OSAxOC42MTYgOC4zMzYgMTkuMzk4IDkuMTA5IEMgMjAuMTggOS44ODEgMjEuMjQxIDEwLjMxNSAyMi4zNDYgMTAuMzE1IEMgMjMuNDUyIDEwLjMxNSAyNC41MTMgOS44ODEgMjUuMjk1IDkuMTA5IEMgMjYuMDc3IDguMzM2IDI2LjUxNiA3LjI4OSAyNi41MTYgNi4xOTcgQyAyNi41MzUgNS42NDkgMjYuNDM5IDUuMTAzIDI2LjIzNSA0LjU5MyBDIDI2LjAzMSA0LjA4MiAyNS43MjMgMy42MTkgMjUuMzI5IDMuMjMyIEMgMjQuOTM2IDIuODQ1IDI0LjQ2NSAyLjU0MyAyMy45NDggMi4zNDMgQyAyMy40MzEgMi4xNDMgMjIuODc3IDIuMDUxIDIyLjMyMiAyLjA3MiBaIE0gMjIuMzQgOC41MjUgQyAyMi4wMzcgOC41MjggMjEuNzM4IDguNDY4IDIxLjQ2MSA4LjM1IEMgMjEuMTgzIDguMjMxIDIwLjkzNCA4LjA1NyAyMC43MjkgNy44MzggQyAyMC41MjQgNy42MTkgMjAuMzY3IDcuMzU5IDIwLjI2OSA3LjA3NyBDIDIwLjE3MiA2Ljc5NSAyMC4xMzUgNi40OTUgMjAuMTYxIDYuMTk4IEMgMjAuMTM2IDUuOSAyMC4xNzQgNS42IDIwLjI3MiA1LjMxNyBDIDIwLjM3IDUuMDM1IDIwLjUyNiA0Ljc3NSAyMC43MzEgNC41NTUgQyAyMC45MzUgNC4zMzQgMjEuMTg0IDQuMTU4IDIxLjQ2MSA0LjAzOCBDIDIxLjczOCAzLjkxNyAyMi4wMzcgMy44NTQgMjIuMzQgMy44NTMgQyAyMi42MzkgMy44NjQgMjIuOTMzIDMuOTM0IDIzLjIwNSA0LjA1OCBDIDIzLjQ3NyA0LjE4MiAyMy43MjIgNC4zNTggMjMuOTI0IDQuNTc2IEMgMjQuMTI3IDQuNzk0IDI0LjI4NCA1LjA1IDI0LjM4NiA1LjMyOCBDIDI0LjQ4NyA1LjYwNyAyNC41MzIgNS45MDIgMjQuNTE4IDYuMTk4IEMgMjQuNTQyIDYuNDk1IDI0LjUwNCA2Ljc5MyAyNC40MDUgNy4wNzUgQyAyNC4zMDcgNy4zNTYgMjQuMTUgNy42MTQgMjMuOTQ2IDcuODMzIEMgMjMuNzQxIDguMDUyIDIzLjQ5MiA4LjIyNiAyMy4yMTYgOC4zNDUgQyAyMi45NCA4LjQ2NCAyMi42NDEgOC41MjYgMjIuMzQgOC41MjUgWiBNIDQ4LjI2NSA1LjI3OCBDIDQ3LjI0MSA1LjIxNCA0Ni43NjkgNC45MjQgNDYuNzY5IDQuNDExIEMgNDYuNzY5IDMuODk4IDQ3LjI5IDMuNjI1IDQ4LjIyMSAzLjYyNSBDIDQ4LjU4MyAzLjYwNyA0OC45NDYgMy42NjEgNDkuMjg3IDMuNzg0IEMgNDkuNjI4IDMuOTA3IDQ5Ljk0IDQuMDk3IDUwLjIwNSA0LjM0MiBMIDUxLjMyIDMuMDQ3IEMgNTAuODk1IDIuNjc4IDUwLjQwMSAyLjM5NiA0OS44NjUgMi4yMTcgQyA0OS4zMjkgMi4wMzcgNDguNzYzIDEuOTY0IDQ4LjE5OSAyLjAwMSBDIDQ2LjczMyAyLjAwMSA0NC44MTEgMi42NDQgNDQuODExIDQuNDcyIEMgNDQuODExIDYuMyA0Ni42MTQgNi44MTYgNDguMTI2IDYuOTI5IEMgNDkuMjY3IDYuOTkzIDQ5LjcxOSA3LjI5OSA0OS43MTkgNy44NDUgQyA0OS43MTkgOC4zOSA0OS4wMjIgOC43MjkgNDguMjY3IDguNzEyIEMgNDcuMjM2IDguNzEgNDYuMjQ1IDguMzEyIDQ1LjUwNCA3LjYwMyBMIDQ0LjUzNyA5LjAwMSBDIDQ1LjAxMyA5LjQ4OSA0NS41OTEgOS44NjggNDYuMjMxIDEwLjExMiBDIDQ2Ljg3MSAxMC4zNTYgNDcuNTU3IDEwLjQ1OSA0OC4yNDEgMTAuNDE0IEMgNTAuNTMzIDEwLjQxNCA1MS42ODcgOS4yMTkgNTEuNjg3IDcuODEyIEMgNTEuNjkzIDUuNzE0IDQ5Ljc3OCA1LjM3NyA0OC4yNjUgNS4yNzggWiBNIDE0LjU1MiA2LjI2OSBDIDE0LjU3MiA2LjU0OSAxNC41MzMgNi44MyAxNC40NCA3LjA5NSBDIDE0LjM0NyA3LjM2MSAxNC4yIDcuNjA1IDE0LjAwOSA3LjgxMyBDIDEzLjgxOCA4LjAyMSAxMy41ODYgOC4xODggMTMuMzI4IDguMzA2IEMgMTMuMDY5IDguNDIzIDEyLjc5IDguNDg4IDEyLjUwNSA4LjQ5NiBDIDEyLjIzMSA4LjUwMSAxMS45NTkgOC40NDggMTEuNzA4IDguMzQxIEMgMTEuNDU3IDguMjMzIDExLjIzMSA4LjA3MyAxMS4wNDggNy44NzIgQyAxMC44NjQgNy42NzEgMTAuNzI3IDcuNDM0IDEwLjY0NCA3LjE3NiBDIDEwLjU2MiA2LjkxOCAxMC41MzYgNi42NDUgMTAuNTcgNi4zNzYgTCAxMC41NyAyLjIzMiBMIDguNTg4IDIuMjMyIEwgOC41ODggNi4zOTYgQyA4LjU4OCA4Ljg1IDkuOTg0IDEwLjI3OSAxMS45MDMgMTAuMjc5IEMgMTIuNDE2IDEwLjI4NSAxMi45MjUgMTAuMTgxIDEzLjM5MyA5Ljk3NSBDIDEzLjg2MiA5Ljc2OSAxNC4yOCA5LjQ2NSAxNC42MTggOS4wODQgTCAxNC43NDkgMTAuMTQzIEwgMTYuNTE5IDEwLjE0MyBMIDE2LjUxOSAyLjIzMiBMIDE0LjU1MiAyLjIzMiBMIDE0LjU1MiA2LjI2OSBaIE0gNDEuMDYzIDMuMzI0IEMgNDAuNzg1IDIuOTEyIDQwLjQwNCAyLjU3NyAzOS45NTcgMi4zNTIgQyAzOS41MSAyLjEyNyAzOS4wMTIgMi4wMTggMzguNTEgMi4wMzcgQyAzNy45NSAxLjk5NiAzNy4zODcgMi4wNzUgMzYuODYgMi4yNjkgQyAzNi4zMzQgMi40NjMgMzUuODU2IDIuNzY3IDM1LjQ1OSAzLjE2MSBDIDM1LjA2MyAzLjU1NCAzNC43NTcgNC4wMjcgMzQuNTYzIDQuNTQ4IEMgMzQuMzY4IDUuMDY5IDM0LjI5IDUuNjI1IDM0LjMzNCA2LjE3OCBDIDM0LjMzNCA4Ljk1NiAzNi4wOTEgMTAuNDAxIDM4LjQ2MiAxMC4zODQgQyAzOC45OCAxMC4zODcgMzkuNDkgMTAuMjYgMzkuOTQ0IDEwLjAxNiBDIDQwLjM5OSA5Ljc3MiA0MC43ODQgOS40MTkgNDEuMDYzIDguOTg5IEwgNDEuMTYgMTAuMTQzIEwgNDMuMDIzIDEwLjE0MyBMIDQzLjAyMyAyLjIzMiBMIDQxLjEyMiAyLjIzMiBMIDQxLjA2MyAzLjMyNCBaIE0gMzguNjg2IDguNTgyIEMgMzguMzY2IDguNTk0IDM4LjA0NyA4LjUzOCAzNy43NSA4LjQyMSBDIDM3LjQ1MiA4LjMwMyAzNy4xODMgOC4xMjQgMzYuOTYgNy44OTggQyAzNi43MzYgNy42NzEgMzYuNTYzIDcuNCAzNi40NTIgNy4xMDMgQyAzNi4zNDEgNi44MDYgMzYuMjk1IDYuNDg5IDM2LjMxNSA2LjE3NCBDIDM2LjI5NSA1Ljg1OSAzNi4zNDMgNS41NDMgMzYuNDU0IDUuMjQ4IEMgMzYuNTY2IDQuOTUyIDM2LjczOSA0LjY4MyAzNi45NjIgNC40NTggQyAzNy4xODYgNC4yMzIgMzcuNDU1IDQuMDU2IDM3Ljc1MiAzLjk0IEMgMzguMDQ5IDMuODI0IDM4LjM2NyAzLjc3IDM4LjY4NiAzLjc4MyBDIDQxLjgxIDMuNzg4IDQxLjgxIDguNTg5IDM4LjY4NiA4LjU4OSBMIDM4LjY4NiA4LjU4MiBaIE0gNC4yNzcgOC41MDIgQyAzLjk2OSA4LjUxNiAzLjY2MSA4LjQ2NiAzLjM3MyA4LjM1NCBDIDMuMDg2IDguMjQyIDIuODI2IDguMDcxIDIuNjExIDcuODUzIEMgMi4zOTUgNy42MzQgMi4yMjkgNy4zNzMgMi4xMjMgNy4wODcgQyAyLjAxNyA2LjggMS45NzQgNi40OTUgMS45OTYgNi4xOTEgQyAxLjk3OSA1Ljg4MyAyLjAyNyA1LjU3NSAyLjEzNiA1LjI4NyBDIDIuMjQ2IDQuOTk5IDIuNDE1IDQuNzM2IDIuNjMyIDQuNTE2IEMgMi44NSA0LjI5NSAzLjExMSA0LjEyMiAzLjQwMSA0LjAwNiBDIDMuNjkgMy44OTEgNCAzLjgzNiA0LjMxMSAzLjg0NSBDIDQuOTA5IDMuODU3IDUuNDgxIDQuMDg0IDUuOTIgNC40ODMgTCA3LjE3MiAzLjE4NyBDIDYuODAxIDIuNzk4IDYuMzQ5IDIuNDkzIDUuODQ4IDIuMjkxIEMgNS4zNDggMi4wODkgNC44MDkgMS45OTUgNC4yNjggMi4wMTUgQyAzLjcgMS45NzQgMy4xMjkgMi4wNTMgMi41OTQgMi4yNDkgQyAyLjA1OSAyLjQ0NCAxLjU3NCAyLjc1MSAxLjE3IDMuMTQ5IEMgMC43NjYgMy41NDYgMC40NTMgNC4wMjQgMC4yNTMgNC41NTIgQyAwLjA1MyA1LjA3OSAtMC4wMyA1LjY0MyAwLjAxIDYuMjA0IEMgLTAuMDMgNi43NjYgMC4wNTMgNy4zMjkgMC4yNTMgNy44NTYgQyAwLjQ1NCA4LjM4NCAwLjc2NiA4Ljg2MiAxLjE3IDkuMjU5IEMgMS41NzQgOS42NTcgMi4wNiA5Ljk2MyAyLjU5NCAxMC4xNTkgQyAzLjEyOSAxMC4zNTUgMy43IDEwLjQzNSA0LjI2OCAxMC4zOTMgQyA0Ljg0MyAxMC40MDkgNS40MTUgMTAuMzA2IDUuOTQ3IDEwLjA5IEMgNi40NzkgOS44NzQgNi45NTkgOS41NSA3LjM1NiA5LjE0IEwgNi4wMjIgNy44NTMgQyA1Ljc5IDguMDcgNS41MTYgOC4yMzkgNS4yMTcgOC4zNTEgQyA0LjkxOCA4LjQ2MyA0LjU5OSA4LjUxNSA0LjI4IDguNTA1IEwgNC4yNzcgOC41MDIgWiIgZmlsbD0iI0VFMkE3QiIgZmlsbC1ydWxlPSJub256ZXJvIj48L3BhdGg+Cjwvc3ZnPg==" alt="gocuotas"></a>
+      <span class="brand-sub">Estado de resultados</span>
+    </div>
+    <div class="filtros" role="group" aria-label="Filtros">
+      <label class="ctl">
+        <span>Mes</span>
+        <select id="f-mes"></select>
+      </label>
+      <div class="ctl">
+        <span>Sociedad</span>
+        <div class="seg" id="f-soc" role="radiogroup">
+          <button data-v="CONS" role="radio">Consolidado</button>
+          <button data-v="GSD" role="radio">GSD</button>
+          <button data-v="FD" role="radio">FD</button>
+        </div>
+      </div>
+      <label class="ctl">
+        <span>Modelo</span>
+        <select id="f-modelo"></select>
+      </label>
+      <div class="ctl" id="ctl-aj">
+        <span>Ajustes</span>
+        <div class="chips" id="f-aj"></div>
+      </div>
+      <button class="btn-present" id="btn-present" title="Modo presentación (P)"><i class="bi bi-play-fill"></i>Presentar</button>
+    </div>
+  </header>
+
+  <nav class="secnav" id="secnav" aria-label="Secciones"></nav>
+
+  <main id="app">
+    <div id="aviso-aj"></div>
+    <section id="s-portada" data-nav="Inicio"></section>
+    <section id="s-resumen" data-nav="Resumen"></section>
+    <section id="s-pnl" data-nav="Estado de resultados"></section>
+    <section id="s-interanual" data-nav="Interanual"></section>
+    <section id="s-modelos" data-nav="Modelos"></section>
+    <section id="s-ppto" data-nav="Presupuesto"></section>
+    <section id="s-areas" data-nav="Áreas"></section>
+  </main>
+
+  <div class="present-hud" id="hud" aria-live="polite"></div>
+  <div class="tip" id="tip" role="tooltip"></div>
+<script>window.__PNL__ = {"generado":"2026-10-14T19:00","meses":["2026-07","2026-08","2026-09"],"cuentas":{"41001":"Ventas","41002":"Comisiones SAAS","41005":"Intereses punitorios","42001":"Fee Por Mora","42002":"Recargo Administrativo","42003":"Ingreso Reprogramacion Cuota","42004":"Ingresos Extraordinarios","42006":"Comisiones Intercompany (I)","43001":"Quebranto por Compra Venta de Titulo Publico - Ganancia","43002":"Resultado por Tenencia Titulos Publicos - Ganancia","43003":"Resultados por Tenencia - Ganancia","43006":"Intereses del activo","43007":"Resultado por cheques no cobrados","43008":"Resultado Fideicomiso Serie I","51001":"Comisiones Tarjetas","51002":"Mensajeria y Otros Medios de Comunicacion","51005":"Scoring","51006":"Herramientas Digitales","51008":"Costo de Mercadería Vendida (CMV)","52001":"Sueldos y Jornales","52002":"Asignacion No Remunerativa","52003":"Cargas Sociales","52005":"SAC","52006":"Beneficios al Personal","52007":"Capacitaciones","52009":"Asignación Remunerativa","52010":"ART","52011":"SVO","52012":"Contribuciones Seguridad Social","52013":"Contribuciones Obra Social","52014":"Horas extras","53002":"Alianzas","53003":"Cashback","53005":"Eventos","53008":"Publidad Redes Sociales FB / INST","53010":"Soporte Comercial","54001":"Alquileres","54004":"Comisones Bancarias","54005":"Costo Mantenimiento Titulos Cedidos","54006":"Donaciones Realizadas","54007":"Gasto de Correo","54008":"Gastos de Imprenta","54009":"Gastos de Internet","54012":"Gastos de Oficina","54013":"Gastos de Seguros","54014":"Gastos Leasing","54015":"Gastos Obsequios Colaboradores","54017":"Gastos Varios","54019":"Honorarios Profesionales","54022":"Soporte Adm y Finanzas","54023":"Soporte Legales","54024":"Soporte Operaciones","54025":"Soporte Programacion","54026":"Soporte RRHH","54027":"Viáticos","54028":"Aranceles Bursatiles","54029":"Gastos de representación Comercial","54030":"Gastos de representación CEO","54031":"Gastos de representación Administración y Finanzas","54033":"Gastos de representación Operaciones","54034":"Gastos de representación Programacion","54036":"Comisiones Intercompany (G)","55001":"Impuesto a las Ganancias","55002":"Impuesto a los Sellos","55003":"Impuesto Comercio e Industria","55004":"Impuesto Ingresos Brutos","55006":"Impuestos a los Débitos y Créditos","55007":"Impuestos Internos","55008":"Intereses Pérdidos","55012":"Multas e inspecciones","55013":"Tasas, sellados y otros","56002":"Intereses del Pasivo","56003":"Intereses Plan de Pago IVA","56004":"Intereses Plan de Pago Imp Ganancias","56005":"Intereses por descubierto","56007":"Comisiones Colocacion","56008":"Comision Organizacion FF Serie 1","57003":"Quebranto por Deudores Incobrables"},"sociedades":{"FD":{"2026-07":{"41001":2007291683.56,"41005":318347137.0,"42001":656592.82,"42003":3557.85,"43002":-705267.47,"43003":-244231.1,"43006":8248933.98,"51001":-145609429.96,"52001":-2500000.0,"52003":-581449.51,"52005":-261187.5,"52006":0.0,"53010":-11325905.68,"54001":-10794114.95,"54004":-10070096.99,"54009":-1053099.25,"54012":-85000.0,"54019":-6876600.0,"54022":-20143925.13,"54023":-8976269.51,"54024":-18534098.44,"54025":-4492131.13,"54026":-4131144.56,"54027":-940337.96,"54028":-7177273.77,"54031":0.0,"54036":-30057173.45,"55002":-104.7,"55003":-77347911.05,"55004":-198225800.4,"55006":-86208908.0,"55008":22443.64,"56002":-166858579.1,"56003":-51272292.22,"56004":-10800676.33,"56005":-3416.48,"57003":-991899988.47,"IG":-163587877.5089999},"2026-08":{"41001":2154958328.39,"41005":350541943.0,"42001":162637.51,"43002":511912.84,"43003":10760688.19,"43006":3147242.16,"51001":-145175278.89,"52001":-2500000.0,"52003":-581515.51,"52005":-261187.5,"52006":-2242000.0,"53010":-8176451.07,"54001":-11006232.71,"54004":-10648481.22,"54009":-532000.97,"54012":-217000.0,"54019":-2099400.0,"54022":-15873815.4,"54023":-1142980.0,"54024":-13946785.44,"54025":-4492131.13,"54026":-2058037.02,"54027":-403900.0,"54028":-9843167.64,"54029":-106700.0,"54031":-915669.0,"54036":-26845710.44,"55002":-10800081.12,"55003":-75664996.89,"55004":-185005847.64,"55006":-91954523.59,"56002":-192275095.29,"56003":-66765565.06,"56004":-7297666.7,"56005":-2512.44,"57003":-891793311.78,"IG":-258809147.67399985},"2026-09":{"41001":2002615523.05,"41005":323371566.0,"42001":301256.19,"42004":6880277.38,"43002":-223669.86,"43003":-17327402.43,"43006":13003697.77,"43008":1038884216.11,"51001":-169756037.68,"52001":-8158000.0,"52003":-949136.71,"52005":-426153.52,"52010":-31711.7,"52011":-424.62,"52012":-708971.39,"52013":-208029.0,"53010":-8176451.06,"54001":-11089271.73,"54004":-10046979.62,"54005":-249117.17,"54009":-537250.98,"54012":-85000.0,"54019":-3307368.4,"54022":-15943556.89,"54023":-1968500.0,"54024":-13946785.44,"54025":-6708324.97,"54026":-2058037.02,"54027":-720900.35,"54028":-11257141.54,"54029":-733949.6,"54036":-27187645.06,"55002":-416365.27,"55003":-67840736.39,"55004":-211446044.3,"55006":-97232987.36,"56002":-225786636.92,"56003":-69181476.67,"56004":-3698324.3,"56005":-389923.37,"56007":-2349951.62,"56008":-4808905.09,"57003":-725961031.05,"IG":-582448418.0970001}},"CONS":{"2026-07":{"41001":6801394008.44,"41002":17583403.54,"41005":318347137.0,"51001":-706042637.19,"51002":-50442909.89,"51005":-34849733.31,"51006":-119729794.6,"51008":-763086457.9,"52001":-141073810.87,"52002":30920566.57,"52003":-52885270.06,"52005":-23116202.27,"52006":-54012736.95,"52007":-9320000.0,"52009":-81565362.51,"53002":-35543673.02,"53003":-3351193.81,"53005":-11008394.01,"53008":-1729709.55,"53010":-32742477.3,"54001":-10794114.94,"54004":-15822986.42,"54006":-2486000.0,"54007":-21969173.01,"54008":-2502100.0,"54009":-1053099.25,"54012":-4989301.4,"54013":-1852413.28,"54014":-15763608.9,"54015":-3886822.36,"54017":-665570.69,"54019":-11085198.07,"54022":-39643925.13,"54023":-11444299.71,"54024":-64613232.48,"54025":-142410515.99,"54026":-4131144.56,"54027":-11312199.87,"54028":-8095871.91,"54029":-2503870.09,"54030":-30613775.02,"54031":-500200.0,"54034":-3335156.2,"54036":-30057173.45,"42001":862899453.14,"42002":65525095.0,"42003":182742097.66,"42004":137703709.67,"42006":30057173.45,"43001":0.0,"43002":-76132204.36,"43003":11666380.12,"43006":206922833.42,"43007":-478593.45,"55002":-7845636.91,"55003":-89649211.56,"55004":-621492933.35,"55006":-445097131.32,"55008":22443.62,"55012":-7129379.3,"55013":-575980.0,"56002":-166858579.1,"56003":-85664987.67,"56004":-49979214.25,"56005":-79873.86,"57003":-2881582250.44,"IG":-584915173.5314996},"2026-08":{"41001":6620771423.12,"41002":14468230.24,"41005":350541943.0,"51001":-684302607.73,"51002":-44539641.41,"51005":-32664270.42,"51006":-92522476.74,"51008":-663666311.3,"52001":-144609161.96,"52003":-34223284.17,"52005":-14873278.57,"52006":-34191119.43,"52007":-1640000.0,"52009":-31049651.86,"53002":-41242061.11,"53003":-25690108.01,"53005":-2265702.46,"53010":-28150230.86,"54001":-11006232.71,"54004":-18428298.84,"54006":-5000000.0,"54007":-53824712.64,"54008":-2323800.0,"54009":-1492825.96,"54012":-5052927.15,"54013":-61186.36,"54014":-6756789.09,"54015":-933884.3,"54017":-27734868.21,"54019":-53159768.75,"54022":-38073815.39,"54023":-2618306.01,"54024":-52047839.8,"54025":-113971835.26,"54026":-2058037.01,"54027":-3876535.08,"54028":-14141314.3,"54029":-2903503.86,"54030":-21449855.15,"54031":-2623124.0,"54033":-804969.75,"54034":-19599635.42,"54036":-26845710.44,"42001":843673712.98,"42002":51317088.0,"42003":205251411.14,"42004":109487043.1,"42006":26845710.44,"43001":-7982926.4,"43002":60675060.17,"43003":32575316.87,"43006":227702431.09,"43007":-1265646.48,"55002":-12045854.34,"55003":-87127324.49,"55004":-579405328.75,"55006":-447125251.29,"55012":-7325437.22,"55013":-21691.99,"56002":-204858228.84,"56003":-111898855.57,"56004":-33769334.11,"56005":-468335.12,"57003":-2710249827.57,"IG":-692070976.2644999},"2026-09":{"41001":6853765045.88,"41002":13797298.83,"41005":323371566.0,"51001":-747739222.01,"51002":-53955939.7,"51005":-48682960.95,"51006":-115693785.6,"51008":-1042559364.28,"52001":-148184573.29,"52003":-949136.71,"52005":-15093947.06,"52006":-42913772.39,"52007":-1500000.0,"52009":-31049651.86,"52010":-2050716.82,"52011":-19957.14,"52012":-24925496.66,"52013":-7300882.51,"52014":-848985.84,"53002":-36782367.15,"53003":-275476490.33,"53005":-8220000.0,"53008":-4192079.11,"53010":-28500230.85,"54001":-11089271.73,"54004":-14945456.74,"54005":-249117.17,"54006":-5000000.0,"54007":-64613935.51,"54009":-537250.98,"54012":-24187007.54,"54013":-2558336.67,"54014":-7250371.33,"54015":-11084124.5,"54017":-41388546.66,"54019":-77086974.55,"54022":-36829366.86,"54023":-10250150.36,"54024":-44048839.8,"54025":-117683737.24,"54026":-2058037.02,"54027":-4118453.44,"54028":-20205291.28,"54029":-1840244.3,"54030":-9841144.23,"54031":-1222830.88,"54033":-2328830.94,"54034":-6179115.04,"54036":-27187645.06,"42001":878359787.36,"42002":52435061.0,"42003":206879411.08,"42004":144583987.05,"42006":27187645.06,"43001":1665404.0,"43002":-40043245.89,"43003":-6840980.12,"43006":186303023.11,"43007":-13749414.16,"43008":1038884216.11,"55001":-1633853108.5,"55002":-1897562.82,"55003":-81707805.46,"55004":-640164043.78,"55006":-483194080.13,"55007":-3441716.11,"55008":-294281701.29,"55012":-7526886.75,"56002":-237881457.12,"56003":-109568007.18,"56004":-17113682.25,"56005":-561070.77,"56007":-2349951.62,"56008":-4808905.09,"57003":-2449396945.8,"IG":-181449884.19249973}},"GSD":{"2026-07":{"41001":4794102324.88,"41002":17583403.54,"42001":862242860.32,"42002":65525095.0,"42003":182738539.81,"42004":137703709.67,"42006":30057173.45,"43001":0.0,"43002":-75426936.89,"43003":11910611.22,"43006":198673899.44,"43007":-478593.45,"51001":-560433207.23,"51002":-50442909.89,"51005":-34849733.31,"51006":-119729794.6,"51008":-763086457.9,"52001":-138573810.87,"52002":30920566.57,"52003":-52303820.55,"52005":-22855014.77,"52006":-54012736.95,"52007":-9320000.0,"52009":-81565362.51,"53002":-35543673.02,"53003":-3351193.81,"53005":-11008394.01,"53008":-1729709.55,"53010":-21416571.62,"54001":0.01,"54004":-5752889.43,"54006":-2486000.0,"54007":-21969173.01,"54008":-2502100.0,"54012":-4904301.4,"54013":-1852413.28,"54014":-15763608.9,"54015":-3886822.36,"54017":-665570.69,"54019":-4208598.07,"54022":-19500000.0,"54023":-2468030.2,"54024":-46079134.04,"54025":-137918384.86,"54027":-10371861.91,"54028":-918598.14,"54029":-2503870.09,"54030":-30613775.02,"54031":-500200.0,"54034":-3335156.2,"55002":-7845532.21,"55003":-12301300.51,"55004":-423267132.95,"55006":-358888223.32,"55008":-0.02,"55012":-7129379.3,"55013":-575980.0,"56002":0.0,"56003":-34392695.45,"56004":-39178537.92,"56005":-76457.38,"57003":-1889682261.97,"IG":-421327296.0224999},"2026-08":{"41001":4465813094.73,"41002":14468230.24,"42001":843511075.47,"42002":51317088.0,"42003":205251411.14,"42004":109487043.1,"42006":26845710.44,"43001":-7982926.4,"43002":60163147.33,"43003":21814628.68,"43006":224555188.93,"43007":-1265646.48,"51001":-539127328.84,"51002":-44539641.41,"51005":-32664270.42,"51006":-92522476.74,"51008":-663666311.3,"52001":-142109161.96,"52003":-33641768.66,"52005":-14612091.07,"52006":-31949119.43,"52007":-1640000.0,"52009":-31049651.86,"53002":-41242061.11,"53003":-25690108.01,"53005":-2265702.46,"53010":-19973779.79,"54004":-7779817.62,"54006":-5000000.0,"54007":-53824712.64,"54008":-2323800.0,"54009":-960824.99,"54012":-4835927.15,"54013":-61186.36,"54014":-6756789.09,"54015":-933884.3,"54017":-27734868.21,"54019":-51060368.75,"54022":-22199999.99,"54023":-1475326.01,"54024":-38101054.36,"54025":-109479704.13,"54026":0.01,"54027":-3472635.08,"54028":-4298146.66,"54029":-2796803.86,"54030":-21449855.15,"54031":-1707455.0,"54033":-804969.75,"54034":-19599635.42,"55002":-1245773.22,"55003":-11462327.6,"55004":-394399481.11,"55006":-355170727.7,"55012":-7325437.22,"55013":-21691.99,"56002":-12583133.55,"56003":-45133290.51,"56004":-26471667.41,"56005":-465822.68,"57003":-1818456515.79,"IG":-433261828.59049976},"2026-09":{"41001":4851149522.83,"41002":13797298.83,"42001":878058531.17,"42002":52435061.0,"42003":206879411.08,"42004":137703709.67,"42006":27187645.06,"43001":1665404.0,"43002":-39819576.03,"43003":10486422.31,"43006":173299325.34,"43007":-13749414.16,"51001":-577983184.33,"51002":-53955939.7,"51005":-48682960.95,"51006":-115693785.6,"51008":-1042559364.28,"52001":-140026573.29,"52005":-14667793.54,"52006":-42913772.39,"52007":-1500000.0,"52009":-31049651.86,"52010":-2019005.12,"52011":-19532.52,"52012":-24216525.27,"52013":-7092853.51,"52014":-848985.84,"53002":-36782367.15,"53003":-275476490.33,"53005":-8220000.0,"53008":-4192079.11,"53010":-20323779.79,"54004":-4898477.12,"54006":-5000000.0,"54007":-64613935.51,"54012":-24102007.54,"54013":-2558336.67,"54014":-7250371.33,"54015":-11084124.5,"54017":-41388546.66,"54019":-73779606.15,"54022":-20885809.97,"54023":-8281650.36,"54024":-30102054.36,"54025":-110975412.27,"54027":-3397553.09,"54028":-8948149.74,"54029":-1106294.7,"54030":-9841144.23,"54031":-1222830.88,"54033":-2328830.94,"54034":-6179115.04,"55001":-1633853108.5,"55002":-1481197.55,"55003":-13867069.07,"55004":-428717999.48,"55006":-385961092.77,"55007":-3441716.11,"55008":-294281701.29,"55012":-7526886.75,"56002":-12094820.2,"56003":-40386530.51,"56004":-13415357.95,"56005":-171147.4,"57003":-1723435914.75,"IG":400998533.90449995}}},"modelos":{"2026-08":{"SIN MODELO":{"41001":0.0,"41002":0.0,"41005":0.0,"51001":0.0,"51002":0.0,"51005":0.0,"51006":0.0,"51008":0.0,"52001":0.0,"52003":0.0,"52005":0.0,"52006":0.0,"52007":0.0,"52009":0.0,"53002":0.0,"53003":0.0,"53005":0.0,"53010":0.0,"54001":0.0,"54004":0.0,"54006":0.0,"54007":0.0,"54008":0.0,"54009":0.0,"54012":0.0,"54013":0.0,"54014":0.0,"54015":0.0,"54017":0.0,"54019":0.0,"54022":0.0,"54023":0.0,"54024":0.0,"54025":0.0,"54026":0.0,"54027":0.0,"54028":0.0,"54029":0.0,"54030":0.0,"54031":0.0,"54033":0.0,"54034":0.0,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":0.0,"55003":0.0,"55004":0.0,"55006":0.0,"55012":0.0,"55013":0.0,"56002":0.0,"56003":0.0,"56004":0.0,"56005":0.0,"57003":0.0,"IG":-0.0},"GO ADELANTOS":{"41001":194822678.12,"41002":0.0,"41005":155883725.0,"51001":-25319873.78,"51002":-7259961.55,"51005":-5324276.08,"51006":-15081163.71,"51008":0.0,"52001":-16182341.35,"52003":-3827541.03,"52005":-1673474.53,"52006":-4157640.12,"52007":-199424.0,"52009":-3614918.01,"53002":-2528138.35,"53003":-1574803.62,"53005":-138887.56,"53010":-1753501.99,"54001":-1338357.9,"54004":-1129654.72,"54006":-608000.0,"54007":-1206628.52,"54008":-142448.94,"54009":-181527.64,"54012":-614435.94,"54013":-7440.26,"54014":-821625.55,"54015":-113560.33,"54017":-1694821.71,"54019":-861657.6,"54022":-4629775.95,"54023":-318386.01,"54024":-6329017.32,"54025":-13858975.17,"54026":-250257.3,"54027":-425467.34,"54028":-1771770.18,"54029":-353066.07,"54030":-2608302.39,"54031":-318971.88,"54033":-97884.32,"54034":-2383315.67,"54036":0.0,"42001":2723542.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":-2168253.78,"55003":-11386508.03,"55004":-27840754.06,"55006":-27408777.9,"55012":-449049.3,"55013":-1329.72,"56002":-34609517.15,"56003":-20029669.52,"56004":-2070060.18,"56005":-28708.94,"57003":-186986496.74,"IG":31587666.1065},"GO BIG":{"41001":0.0,"41002":14468230.24,"41005":0.0,"51001":0.0,"51002":-2071093.33,"51005":-1518888.57,"51006":-4302295.17,"51008":0.0,"52001":-11790752.01,"52003":-2788816.9,"52005":-1219324.37,"52006":-3029333.18,"52007":-145304.0,"52009":-2633895.85,"53002":0.0,"53003":0.0,"53005":0.0,"53010":-1277633.85,"54001":-975152.22,"54004":0.0,"54006":-443000.0,"54007":-344222.25,"54008":0.0,"54009":-132264.38,"54012":-447689.35,"54013":-5421.11,"54014":-598651.51,"54015":-82742.15,"54017":-1234878.32,"54019":-627819.6,"54022":-3373340.04,"54023":-231981.91,"54024":-4611438.61,"54025":-10097904.6,"54026":-182342.08,"54027":-310003.34,"54028":0.0,"54029":-257250.44,"54030":-1900457.17,"54031":-232408.79,"54033":-71320.32,"54034":-1736527.7,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":0.0,"55003":0.0,"55004":0.0,"55006":0.0,"55012":0.0,"55013":0.0,"56002":0.0,"56003":0.0,"56004":0.0,"56005":0.0,"57003":0.0,"IG":15472073.007999998},"GO CELULAR":{"41001":1133477206.57,"41002":0.0,"41005":0.0,"51001":-134781832.2,"51002":-40085.68,"51005":-29397.84,"51006":-83270.23,"51008":-663666311.3,"52001":-15855746.99,"52003":-3769781.34,"52005":-1558421.6,"52006":-1111211.38,"52007":-53300.0,"52009":-2287865.88,"53002":-235079.75,"53003":-146433.62,"53005":-12914.5,"53010":-14198642.28,"54001":-357702.56,"54004":-105041.3,"54006":-162500.0,"54007":-46428746.04,"54008":-13245.66,"54009":-48516.84,"54012":-164220.13,"54013":-1988.56,"54014":-219595.65,"54015":-30351.24,"54017":-14250164.19,"54019":-46304063.75,"54022":-1237399.0,"54023":-85094.95,"54024":-1691554.79,"54025":-3704084.65,"54026":-66886.2,"54027":-491340.59,"54028":0.0,"54029":-94363.88,"54030":-697120.29,"54031":-85251.53,"54033":-26161.52,"54034":-636988.15,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":0.0,"55003":-2865581.9,"55004":-98599870.28,"55006":-2548613.93,"55012":-41754.99,"55013":-123.64,"56002":-12583133.56,"56003":0.0,"56004":-192485.2,"56005":-2669.51,"57003":-2925351.72,"IG":-20644731.02299996},"GO CUOTAS":{"41001":3097999901.56,"41002":0.0,"41005":0.0,"51001":-374947169.49,"51002":-20764380.82,"51005":-15228082.88,"51006":-43133978.65,"51008":0.0,"52001":-58953760.03,"52003":-13944084.5,"52005":-6096621.84,"52006":-15146665.91,"52007":-726520.0,"52009":-13169479.27,"53002":-30444889.51,"53003":-18964437.73,"53005":-1672541.56,"53010":-6388169.24,"54001":-4875761.09,"54004":-13603770.21,"54006":-2215000.0,"54007":-3451105.62,"54008":-1715429.16,"54009":-661321.9,"54012":-2238446.73,"54013":-27105.56,"54014":-2993257.57,"54015":-413710.74,"54017":-6174391.61,"54019":-3139098.0,"54022":-16866700.22,"54023":-1159909.56,"54024":-23057193.03,"54025":-50489523.02,"54026":-911710.4,"54027":-1550016.7,"54028":-4298146.66,"54029":-1286252.21,"54030":-9502285.83,"54031":-1162043.93,"54033":-356601.6,"54034":-8682638.49,"54036":0.0,"42001":827168058.98,"42002":51317088.0,"42003":205251411.14,"42004":109487043.1,"42006":26845710.44,"43001":-7982926.4,"43002":60163147.33,"43003":21814628.68,"43006":224555188.93,"43007":-1265646.48,"55002":0.0,"55003":-8023629.32,"55004":-276079636.78,"55006":-330067860.5,"55012":-5407637.76,"55013":-16013.03,"56002":0.0,"56003":-45133290.51,"56004":-17630855.74,"56005":-345724.99,"57003":-1625301201.39,"IG":-534427443.8964999},"GO PREMIUM":{"41001":1662824914.27,"41002":0.0,"41005":194658218.0,"51001":-100836639.93,"51002":-9308785.05,"51005":-6826832.52,"51006":-19337197.64,"51008":0.0,"52001":-23687966.79,"52003":-5602814.99,"52005":-2449658.44,"52006":-6086019.26,"52007":-291920.0,"52009":-5291574.06,"53002":-5930608.39,"53003":-3694237.53,"53005":-325808.02,"53010":-2566803.89,"54001":-1959109.42,"54004":-2649989.37,"54006":-890000.0,"54007":-1547149.45,"54008":-334162.44,"54009":-265723.02,"54012":-899421.03,"54013":-10891.17,"54014":-1202708.46,"54015":-166231.41,"54017":-2480906.79,"54019":-1261308.0,"54022":-6777139.14,"54023":-466058.47,"54024":-9264515.48,"54025":-20286986.67,"54026":-366330.59,"54027":-622805.81,"54028":-4921583.82,"54029":-516823.69,"54030":-3818074.21,"54031":-466916.07,"54033":-143284.62,"54034":-3488735.1,"54036":-26845710.44,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":511912.84,"43003":10760688.19,"43006":3147242.16,"43007":0.0,"55002":-6022927.17,"55003":-59654404.33,"55004":-145858905.59,"55006":-64296611.14,"55012":-1053397.87,"55013":-3119.31,"56002":-96137547.64,"56003":-46735895.54,"56004":-12153696.95,"56005":-67346.59,"57003":-702009907.86,"IG":-158906924.50150007},"GO QR":{"41001":436081159.0,"41002":0.0,"41005":0.0,"51001":-35192585.04,"51002":-5055249.3,"51005":-3707394.69,"51006":-10501301.11,"51008":0.0,"52001":-14638631.16,"52003":-3462413.76,"52005":-1513833.87,"52006":-3761023.14,"52007":-180400.0,"52009":-3270073.86,"53002":-2074475.67,"53003":-1292212.43,"53005":-113964.83,"53010":-1586227.12,"54001":-1210685.6,"54004":-926943.43,"54006":-550000.0,"54007":-840198.39,"54008":-116887.14,"54009":-164210.86,"54012":-555821.99,"54013":-6730.5,"54014":-743246.8,"54015":-102727.27,"54017":-1533144.64,"54019":-779460.0,"54022":-4188119.69,"54023":-288013.66,"54024":-5725262.38,"54025":-12536901.88,"54026":-226384.07,"54027":-384879.99,"54028":-3149813.64,"54029":-319385.42,"54030":-2359484.07,"54031":-288543.64,"54033":-88546.67,"54034":-2155959.9,"54036":0.0,"42001":13782112.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":-3854673.39,"55003":-4967954.36,"55004":-23138172.42,"55006":-22490400.14,"55012":-368469.49,"55013":-1091.11,"56002":-61528030.49,"56003":0.0,"56004":-1698597.51,"56005":-23557.26,"57003":-193026869.86,"IG":-4611011.075999984},"GO TARJETAS":{"41001":95565563.6,"41002":0.0,"41005":0.0,"51001":-13224507.29,"51002":-40085.68,"51005":-29397.84,"51006":-83270.23,"51008":0.0,"52001":-3499963.63,"52003":-827831.65,"52005":-361943.92,"52006":-899226.44,"52007":-43132.0,"52009":-781844.93,"53002":-28869.44,"53003":-17983.08,"53005":-1585.99,"53010":-379252.49,"54001":-289463.92,"54004":-12899.81,"54006":-131500.0,"54007":-6662.37,"54008":-1626.66,"54009":-39261.32,"54012":-132891.98,"54013":-1609.2,"54014":-177703.55,"54015":-24561.16,"54017":-366560.95,"54019":-186361.8,"54022":-1001341.35,"54023":-68861.45,"54024":-1368858.19,"54025":-2997459.27,"54026":-54126.37,"54027":-92021.31,"54028":0.0,"54029":-76362.15,"54030":-564131.19,"54031":-68988.16,"54033":-21170.7,"54034":-515470.41,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"55002":0.0,"55003":-229246.55,"55004":-7887989.62,"55006":-312987.68,"55012":-5127.81,"55013":-15.18,"56002":0.0,"56003":0.0,"56004":-23638.53,"56005":-327.83,"57003":0.0,"IG":-20540604.881999996}},"2026-09":{"SIN MODELO":{"41001":0.0,"41002":0.0,"41005":0.0,"51001":0.0,"51002":0.0,"51005":0.0,"51006":0.0,"51008":0.0,"52001":0.0,"52003":0.0,"52005":0.0,"52006":0.0,"52007":0.0,"52009":0.0,"52010":0.0,"52011":0.0,"52012":0.0,"52013":0.0,"52014":0.0,"53002":0.0,"53003":0.0,"53005":0.0,"53008":0.0,"53010":0.0,"54001":0.0,"54004":0.0,"54005":0.0,"54006":0.0,"54007":0.0,"54009":0.0,"54012":0.0,"54013":0.0,"54014":0.0,"54015":0.0,"54017":0.0,"54019":0.0,"54022":0.0,"54023":0.0,"54024":0.0,"54025":0.0,"54026":0.0,"54027":0.0,"54028":0.0,"54029":0.0,"54030":0.0,"54031":0.0,"54033":0.0,"54034":0.0,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":0.0,"55003":0.0,"55004":0.0,"55006":0.0,"55007":0.0,"55008":0.0,"55012":0.0,"56002":0.0,"56003":0.0,"56004":0.0,"56005":0.0,"56007":0.0,"56008":0.0,"57003":0.0,"IG":-0.0},"GO ADELANTOS":{"41001":176528722.0,"41002":0.0,"41005":120111680.0,"51001":-37850779.28,"51002":-4219354.48,"51005":-3807588.87,"51006":-9047254.03,"51008":0.0,"52001":-18306060.32,"52003":0.0,"52005":-1917975.85,"52006":-6072298.79,"52007":-212250.0,"52009":-4206504.1,"52010":-264212.33,"52011":-2583.6,"52012":-3164036.75,"52013":-926746.08,"52014":-120131.5,"53002":-948985.07,"53003":-151190.82,"53005":-212076.0,"53008":-108155.64,"53010":-1767054.66,"54001":-1569131.95,"54004":-385592.78,"54005":0.0,"54006":-707500.0,"54007":-809736.6,"54009":-76021.01,"54012":-3422461.57,"54013":-362004.64,"54014":-1025927.54,"54015":-1568403.62,"54017":-5588563.15,"54019":-7438990.09,"54022":-5211355.41,"54023":-2145444.28,"54024":-6232910.83,"54025":-16652248.82,"54026":-291212.24,"54027":-558752.93,"54028":-2026285.48,"54029":-260394.57,"54030":-1392521.91,"54031":-173030.57,"54033":-329529.58,"54034":-874344.78,"54036":0.0,"42001":1870967.68,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":-48957.12,"55003":-7657571.01,"55004":-22728469.15,"55006":-12466407.27,"55007":0.0,"55008":0.0,"55012":-194193.68,"56002":-40641594.65,"56003":-20754443.0,"56004":-441533.0,"56005":-14475.63,"56007":0.0,"56008":0.0,"57003":-113627253.51,"IG":25364895.800999984},"GO BIG":{"41001":0.0,"41002":13797298.83,"41005":0.0,"51001":0.0,"51002":0.0,"51005":0.0,"51006":0.0,"51008":0.0,"52001":0.0,"52003":0.0,"52005":0.0,"52006":0.0,"52007":0.0,"52009":0.0,"52010":0.0,"52011":0.0,"52012":0.0,"52013":0.0,"52014":0.0,"53002":0.0,"53003":0.0,"53005":0.0,"53008":0.0,"53010":0.0,"54001":0.0,"54004":0.0,"54005":0.0,"54006":0.0,"54007":0.0,"54009":0.0,"54012":0.0,"54013":0.0,"54014":0.0,"54015":0.0,"54017":0.0,"54019":0.0,"54022":0.0,"54023":0.0,"54024":0.0,"54025":0.0,"54026":0.0,"54027":0.0,"54028":0.0,"54029":0.0,"54030":0.0,"54031":0.0,"54033":0.0,"54034":0.0,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":0.0,"55003":0.0,"55004":0.0,"55006":0.0,"55007":0.0,"55008":0.0,"55012":0.0,"56002":0.0,"56003":0.0,"56004":0.0,"56005":0.0,"56007":0.0,"56008":0.0,"57003":0.0,"IG":-4829054.5905},"GO CELULAR":{"41001":1616102266.26,"41002":0.0,"41005":0.0,"51001":-144495796.08,"51002":-372295.98,"51005":-335963.72,"51006":-798287.12,"51008":-1042559364.28,"52001":-23341123.07,"52003":-949136.71,"52005":-2013758.41,"52006":-1501982.03,"52007":-52500.0,"52009":-2362185.74,"52010":-248844.74,"52011":-2337.53,"52012":-3347436.84,"52013":-980670.72,"52014":-29714.5,"53002":-1703023.6,"53003":-271323.06,"53005":-380586.0,"53008":-194093.26,"53010":-16449292.68,"54001":-388124.51,"54004":-691974.65,"54005":0.0,"54006":-175000.0,"54007":-54330694.83,"54009":-18803.78,"54012":-846545.26,"54013":-89541.78,"54014":-253763.0,"54015":-387944.36,"54017":-3275730.81,"54019":-24260470.89,"54022":-1289027.84,"54023":-530675.26,"54024":-1541709.39,"54025":-4118930.8,"54026":-72031.3,"54027":-307876.89,"54028":0.0,"54029":-64408.55,"54030":-344440.05,"54031":-42799.08,"54033":-81509.08,"54034":-216269.03,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":-87857.16,"55003":-3466767.27,"55004":-107179499.87,"55006":-22371885.91,"55007":-3441716.11,"55008":0.0,"55012":-348494.86,"56002":-12094820.2,"56003":0.0,"56004":-792363.49,"56005":-25977.58,"56007":0.0,"56008":0.0,"57003":-7099605.89,"IG":-43216351.74849997},"GO CUOTAS":{"41001":3067795991.57,"41002":0.0,"41005":0.0,"51001":-400462773.36,"51002":-29880799.41,"51005":-26957306.81,"51006":-64071218.47,"51008":0.0,"52001":-58307712.97,"52003":0.0,"52005":-6109058.06,"52006":-19341237.22,"52007":-676050.0,"52009":-13398384.44,"52010":-841558.28,"52011":-8229.18,"52012":-10077960.17,"52013":-2951833.63,"52014":-382637.92,"53002":-27160099.9,"53003":-273943485.75,"53005":-6069648.0,"53008":-3095431.21,"53010":-5628350.09,"54001":-4997934.77,"54004":-11035725.26,"54005":-249117.17,"54006":-2253500.0,"54007":-5734426.23,"54009":-242139.02,"54012":-10901084.3,"54013":-1153042.34,"54014":-3267742.36,"54015":-4995614.91,"54017":-17800462.28,"54019":-23694366.33,"54022":-16598995.64,"54023":-1921581.17,"54024":-19852812.1,"54025":-53040060.37,"54026":-927557.28,"54027":-1779716.94,"54028":-20205291.28,"54029":-829398.11,"54030":-4435403.7,"54031":-551129.88,"54033":-1049604.1,"54034":-2784927.15,"54036":0.0,"42001":868595102.74,"42002":52435061.0,"42003":206879411.08,"42004":144583987.05,"42006":27187645.06,"43001":1665404.0,"43002":-40043245.89,"43003":-6840980.12,"43006":186303023.11,"43007":-13749414.16,"43008":0.0,"55001":-1633853108.5,"55002":-996776.83,"55003":-9706948.35,"55004":-300102599.64,"55006":-356790508.77,"55007":0.0,"55008":-294281701.29,"55012":-5557853.18,"56002":-62636327.02,"56003":-40386530.51,"56004":-12636742.97,"56005":-414294.66,"56007":0.0,"56008":0.0,"57003":-1527015326.15,"IG":318231248.9964997},"GO FF SERIE 1":{"41001":0.0,"41002":0.0,"41005":0.0,"51001":0.0,"51002":0.0,"51005":0.0,"51006":0.0,"51008":0.0,"52001":0.0,"52003":0.0,"52005":0.0,"52006":0.0,"52007":0.0,"52009":0.0,"52010":0.0,"52011":0.0,"52012":0.0,"52013":0.0,"52014":0.0,"53002":0.0,"53003":0.0,"53005":0.0,"53008":0.0,"53010":0.0,"54001":0.0,"54004":0.0,"54005":0.0,"54006":0.0,"54007":0.0,"54009":0.0,"54012":0.0,"54013":0.0,"54014":0.0,"54015":0.0,"54017":0.0,"54019":0.0,"54022":0.0,"54023":0.0,"54024":0.0,"54025":0.0,"54026":0.0,"54027":0.0,"54028":0.0,"54029":0.0,"54030":0.0,"54031":0.0,"54033":0.0,"54034":0.0,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":0.0,"55003":0.0,"55004":0.0,"55006":0.0,"55007":0.0,"55008":0.0,"55012":0.0,"56002":0.0,"56003":0.0,"56004":0.0,"56005":0.0,"56007":0.0,"56008":0.0,"57003":0.0,"IG":-0.0},"GO PREMIUM":{"41001":1347809751.05,"41002":0.0,"41005":203259886.0,"51001":-97795573.8,"51002":-11746208.07,"51005":-10599898.95,"51006":-25186537.13,"51008":0.0,"52001":-24308895.63,"52003":0.0,"52005":-2546909.27,"52006":-8063497.84,"52007":-281850.0,"52009":-5585880.7,"52010":-350851.58,"52011":-3430.8,"52012":-4201572.47,"52013":-1230640.21,"52014":-159524.44,"53002":-4719177.71,"53003":-751852.01,"53005":-1054626.0,"53008":-537843.75,"53010":-2346498.73,"54001":-2083674.15,"54004":-1917502.1,"54005":0.0,"54006":-939500.0,"54007":-2254215.59,"54009":-100949.47,"54012":-4544738.72,"54013":-480711.46,"54014":-1362344.77,"54015":-2082706.99,"54017":-7421137.93,"54019":-11972516.37,"54022":-6920238.03,"54023":-2848968.05,"54024":-8276777.0,"54025":-22112774.23,"54026":-386705.15,"54027":-741976.52,"54028":5628570.77,"54029":-345781.9,"54030":-1849151.0,"54031":-229769.92,"54033":-437587.34,"54034":-1161055.71,"54036":-27187645.06,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":1038884216.11,"55001":0.0,"55002":-647840.86,"55003":-50754863.01,"55004":-160733390.73,"55006":-61993800.48,"55007":0.0,"55008":0.0,"55012":-965699.56,"56002":-50256991.42,"56003":-48427033.67,"56004":-2195685.44,"56005":-71985.37,"56007":-2349951.62,"56008":-4808905.09,"57003":-610242519.01,"IG":-452551421.392},"GO QR":{"41001":502479672.0,"41002":0.0,"41005":0.0,"51001":-51449180.13,"51002":-7251678.3,"51005":-6543989.05,"51006":-15549244.78,"51008":0.0,"52001":-16805351.49,"52003":0.0,"52005":-1760742.49,"52006":-5574499.03,"52007":-194850.0,"52009":-3861659.95,"52010":-242552.52,"52011":-2371.8,"52012":-2904652.82,"52013":-850772.55,"52014":-110283.26,"53002":-2048777.85,"53003":-326408.09,"53005":-457854.0,"53008":-233498.81,"53010":-1622193.65,"54001":-1440496.4,"54004":-832461.94,"54005":0.0,"54006":-649500.0,"54007":-1391670.07,"54009":-69788.9,"54012":-3141892.28,"54013":-332327.93,"54014":-941823.24,"54015":-1439827.77,"54017":-5130419.46,"54019":-6829150.62,"54022":-4784134.76,"54023":-1969563.33,"54024":-5721944.29,"54025":-15287117.47,"54026":-267339.01,"54027":-512947.04,"54028":-3602285.29,"54029":-239047.73,"54030":-1278364.64,"54031":-158845.73,"54033":-302515.14,"54034":-802667.04,"54036":0.0,"42001":7893716.94,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":-105694.25,"55003":-9844314.44,"55004":-40845724.4,"55006":-26913910.26,"55007":0.0,"55008":0.0,"55012":-419247.59,"56002":-72251723.83,"56003":0.0,"56004":-953232.1,"56005":-31251.64,"56007":0.0,"56008":0.0,"57003":-179654494.53,"IG":-1552986.8375000209},"GO TARJETAS":{"41001":143048643.0,"41002":0.0,"41005":0.0,"51001":-15685119.36,"51002":-485603.46,"51005":-438213.55,"51006":-1041244.07,"51008":0.0,"52001":-7115429.81,"52003":0.0,"52005":-745502.98,"52006":-2360257.48,"52007":-82500.0,"52009":-1635036.93,"52010":-102697.37,"52011":-1004.23,"52012":-1229837.61,"52013":-360219.32,"52014":-46694.22,"53002":-202303.02,"53003":-32230.6,"53005":-45210.0,"53008":-23056.44,"53010":-686841.04,"54001":-609909.95,"54004":-82200.01,"54005":0.0,"54006":-275000.0,"54007":-93192.19,"54009":-29548.8,"54012":-1330285.41,"54013":-140708.52,"54014":-398770.42,"54015":-609626.85,"54017":-2172233.03,"54019":-2891480.25,"54022":-2025615.18,"54023":-833918.27,"54024":-2422686.19,"54025":-6472605.55,"54026":-113192.04,"54027":-217183.12,"54028":0.0,"54029":-101213.44,"54030":-541262.93,"54031":-67255.7,"54033":-128085.7,"54034":-339851.33,"54036":0.0,"42001":0.0,"42002":0.0,"42003":0.0,"42004":0.0,"42006":0.0,"43001":0.0,"43002":0.0,"43003":0.0,"43006":0.0,"43007":0.0,"43008":0.0,"55001":0.0,"55002":-10436.6,"55003":-277341.38,"55004":-8574359.99,"55006":-2657567.44,"55007":0.0,"55008":0.0,"55012":-41397.88,"56002":0.0,"56003":0.0,"56004":-94125.25,"56005":-3085.89,"56007":0.0,"56008":0.0,"57003":-11757746.71,"IG":-22896214.4215}}},"ajustes":{"2026-09":[{"id":"ddjj","nombre":"DDJJ Ganancias 2025","corto":"DDJJ Ganancias","detalle":"Área Cesión de Cartera","incluido":false,"motivo":"Rectificativa Ganancias 2025 imputada al área CESION DE CARTERA. Es de un período anterior: por defecto no se incluye en el resultado del mes.","fuente":"NetSuite, informe 'Detalle consumo por area' (cr=346), Areas = CESION DE CARTERA, todos los tipos de cuenta, sep 2026. Asientos 189243, 189252, 194781.","sociedades":{"GSD":{"55001":-1633853108.5,"55008":-293822225.28},"CONS":{"55001":-1633853108.5,"55008":-293822225.28}},"modelos":{"GO CUOTAS":{"55001":-1633853108.5,"55008":-293822225.28}}},{"id":"fideicomiso","nombre":"Fideicomiso Serie I","corto":"Fideicomiso","detalle":"Área GO FF SERIE 1","incluido":true,"motivo":"Resultado y gastos del Fideicomiso Serie I (área GO FF SERIE 1). Por defecto se incluye.","fuente":"NetSuite, informe 'Detalle consumo por area' (cr=346), Areas = GO FF SERIE 1, todos los tipos de cuenta, sep 2026, contexto Finanzas Digitales. Asientos 193803, 194658, 193967, 194604, 193870, 194570, A-0002-00044060, A-0002-00000926.","sociedades":{"FD":{"43008":1038884216.11,"56007":-2349951.62,"56008":-4808905.09,"54019":13935515.6},"CONS":{"43008":1038884216.11,"56007":-2349951.62,"56008":-4808905.09,"54019":13935515.6}},"modelos":{"GO PREMIUM":{"43008":1038884216.11,"56007":-2349951.62,"56008":-4808905.09,"54019":13935515.6}}}]}}; window.__CONTENIDO__ = {"2026-07":{"titulo":"PNL Julio 2026","_ayuda":"Julio se cargó solo como comparativo: no tiene textos ni presupuesto."},"2026-08":{"_ayuda":"Contenido editable del mes. Montos en MILLONES de $ARS. Copiá este archivo como AAAA-MM.json para el mes nuevo. Íconos: nombres de Bootstrap Icons (icons.getbootstrap.com). Tipos de comentario: sube, baja, alerta, ok, info.","titulo":"PNL Agosto 2026","equipo":"Equipo de Administración y Finanzas","novedades":[{"icono":"bi-qr-code","titulo":"Go QR | Traspaso a FD","texto":"En agosto se completó el traspaso del modelo Go QR a Finanzas Digitales (FD); es el primer mes completo bajo este esquema."},{"icono":"bi-bank","titulo":"Fideicomiso Financiero GO Premium","texto":"El 24/08 se realizó la cesión de cartera al fideicomiso. El impacto empezó a verse en el devengamiento de intereses de Go Premium de la cartera cedida. En proceso: facturación de la cartera cedida (con el estudio contable y Programación)."},{"icono":"bi-cash-coin","titulo":"Financiamiento","texto":"Empezaron a computarse los intereses de la primera cuota del préstamo BNA GSD (Go Celular). Se tomó un préstamo en Banco Santander para FD a 12 meses por $900.000.000."},{"icono":"bi-bar-chart-line","titulo":"Operaciones: Día del Niño","texto":"Las operaciones totales crecieron 5,86% vs. julio. El crecimiento vino de Go QR (+28,85%), Go Premium (+4,50%) y Go Cuotas (+4,26%)."}],"drivers":{"CONS":[{"tipo":"sube","texto":"Resultado antes de IG +$306M (+18%) vs julio, con una rentabilidad del 23% sobre ventas + otros ingresos (20% en julio)."},{"tipo":"info","texto":"Sin el impacto del impuesto al débito y crédito, la rentabilidad sería del 28%."}],"GSD":[{"tipo":"sube","texto":"EBITDA $1.238M, +$34M (+3%) vs julio. El resultado financiero y la baja de compras compensan la caída de ventas."},{"tipo":"sube","texto":"Resultados Fin. y por Tenencia +$162M (+120%): revierte la baja de precio de los títulos públicos de julio, más la suba del TC (1.460 a 1.480)."},{"tipo":"baja","texto":"Compras -$156M (-10%): el CMV de Go Celular baja de $763M a $664M."},{"tipo":"baja","texto":"Ventas -$332M (-7%): Go Celular baja 13% ($1.309M a $1.133M) y Go Cuotas sube 2%."}],"FD":[{"tipo":"sube","texto":"EBITDA +$272M (+58%) vs julio, por más ventas y menos incobrabilidad, que compensan el mayor costo de financiación."},{"tipo":"info","texto":"Gastos Grales. -$24M (-17%): bajan honorarios profesionales y los soportes de Legales, Operaciones y Adm. y Finanzas."},{"tipo":"sube","texto":"Ventas +$180M (+8%): primer mes completo de Go QR dentro de FD."},{"tipo":"alerta","texto":"Financiación +$37M (+16%): intereses del pasivo +$25M y plan de pago de IVA +$16M. El préstamo de Galicia empieza a devengar el 01/09."},{"tipo":"ok","texto":"Incobrabilidad -$100M (-10%): la mejora más grande del mes en FD."}]},"operaciones":{"_ayuda":"ops = cantidad de operaciones del mes; var = variación % vs mes anterior; ticket = ticket promedio en $","GO CUOTAS":{"ops":493966,"ops_var":4.31,"ticket":92204,"ticket_var":-1.23},"GO PREMIUM":{"ops":194466,"ops_var":4.5,"ticket":39050,"ticket_var":-0.51},"GO ADELANTOS":{"ops":69135,"ops_var":-5.06,"ticket":21945,"ticket_var":1.03},"GO CELULAR":{"ops":5483,"ops_var":-0.29,"ticket":null,"ticket_var":null},"GO QR":{"ops":123291,"ops_var":28.85,"ticket":22351,"ticket_var":0.62},"GO BIG":{"ops":9748,"ops_var":-24.28,"ticket":192052,"ticket_var":-3.23},"GO TARJETAS":{"ops":7604,"ops_var":48.72,"ticket":40500,"ticket_var":1.43}},"presupuesto":{"_ayuda":"Presupuesto del mes en millones, en positivo. Se compara contra el real 'comparable' (Consolidado sin Go Celular ni Go Tarjetas).","rubros":{"ventas":5402,"otros_ingresos":1870,"compras":930,"gastos_generales":197,"masa_salarial":482,"impuestos":1025,"financiacion":250,"incobrabilidad":2671,"ig":859},"tasa_ig_real":35,"tasa_ig_ppto":50,"modelos":{"ventas":{"GO CUOTAS":2339,"GO PREMIUM":1889,"GO ADELANTOS":415,"GO QR":486,"GO BIG":272},"otros_ingresos":{"GO CUOTAS":1860,"GO PREMIUM":9,"GO ADELANTOS":0,"GO QR":0},"incobrabilidad":{"GO CUOTAS":1499,"GO PREMIUM":481,"GO ADELANTOS":551,"GO QR":140}},"lectura":[{"tipo":"sube","texto":"EBITDA +8%. Incobrabilidad en línea (+1% vs +16% en julio) y Compras -24%. Resultado final +41% por menor tasa efectiva de Ganancias (35% vs 50%)."},{"tipo":"alerta","texto":"Financiación +35%: el desvío más grande del mes, y todavía faltan Galicia (desde 01/09) y el Santander a plazo completo."},{"tipo":"alerta","texto":"Otros Ingresos -17%: el presupuesto se armó con fee fijo y desde junio el fee es 25% con tope, así que la base de comparación quedó vieja."},{"tipo":"ok","texto":"Ventas +7%: Go Cuotas (+32%) sostiene todo el desvío positivo; Go Big (-95%) sigue muy por debajo del presupuesto."}]},"analisis_especial":[{"titulo":"Fee por Mora: el tope del 25% mejoró la recuperación","bajada":"% cobrado dentro del mismo mes de generación (cuenta 42001). Se estabilizó cerca del 24% desde junio, cuando se implementó el tope del 25% sobre la deuda.","serie":[{"mes":"Jun 2026","pct":18.7,"cobrado":831},{"mes":"Jul 2026","pct":24.7,"cobrado":1012},{"mes":"Ago 2026","pct":23.5,"cobrado":1004}],"notas":["A dos meses de generado, la tasa de conversión de julio fue 32,26% (22,43% en mayo).","Fee + Recargo + Reprogramación = 12,9% de los ingresos de agosto (19,6% en enero, base percibido)."],"fuente":"Hoja “Análisis Fee por mora” (Wiki Otros Ingresos). Cobrado = caja; Generado = devengado."}],"areas":[{"titulo":"Administración","items":["Auditoría externa: Deloitte (presupuesto), Price (a la espera de propuesta) y EY (reunión).","Capitalización de software.","Impuesto al débito y crédito: exención.","Presupuesto de consumo: ajuste."]},{"titulo":"Finanzas","items":["Consolidar la capacidad de deuda: una sola vista del uso de líneas por sociedad y su composición (propias, bancarias, fideicomiso).","Agilizar decisiones de financiamiento: ver en tiempo real la capacidad disponible por sociedad para negociar nuevas líneas o activar fondos."],"link":{"texto":"Tablero de líneas de crédito","url":"https://lineas-credito-gocuotas.netlify.app/"}},{"titulo":"Legales","items":[]},{"titulo":"Modeling","items":["GO Adelantos / GO Premium: análisis del UE con segmentación nueva (A1 a D1 + recurrencia); impacto del DNU 1293/2026 de La Rioja; scripts de carga de bases en un solo menú con rangos automáticos.","GO Cuotas: reestructuración de la estacionalidad (año fiscal GO, sensibilidades interanuales, boost en efemérides). En proceso: UE para GO VIP y GO Cuotas.","App Finanzas: en proceso, UE dentro de la app (estimado fin de septiembre)."]}]},"2026-09":{"titulo":"PNL Septiembre 2026","equipo":"Equipo de Administración y Finanzas","novedades":[{"icono":"bi-bank","titulo":"¡Salió el Fideicomiso Serie I!","texto":"Septiembre es el primer mes con la registración completa de las operaciones de Serie I y Revolving. Hicimos una jornada de asesoría con Elena para acompañar la implementación.","destacada":true,"bloques":[{"titulo":"Qué es","texto":"Cedimos al fideicomiso una parte de la cartera de Go Premium: cuotas que los clientes nos iban a pagar en los próximos meses. A cambio, el fideicomiso nos pagó hoy por esas cuotas."},{"titulo":"Por qué mejora el resultado del mes","texto":"Lo que nos pagó el fideicomiso se reconoce como venta toda junta en septiembre: +$1.046M. No es una ganancia extra ni un costo financiero: es un ingreso que adelantamos. Durante los 9 a 10 meses que dura el fideicomiso, esas cuotas ya no van a generar ventas para nosotros."},{"titulo":"Cómo ver el mes sin este efecto","texto":"Arriba, en Ajustes, el botón “Con Fideicomiso” permite sacarlo. Sin el fideicomiso, el resultado antes de IG de septiembre es $1.400M y la rentabilidad, 16% (25% con el fideicomiso)."}]},{"icono":"bi-graph-up-arrow","titulo":"Cierre del Q2 del año GO","texto":"Go Préstamos está alcanzando las expectativas del MCI a nivel empresa, impulsado por Go QR."},{"icono":"bi-bar-chart-line","titulo":"Buen nivel de actividad sin grandes estacionalidades","texto":"Septiembre no tiene eventos que impulsen fuerte la demanda. Aun así, el volumen de operaciones superó a julio y quedó prácticamente a la par de junio, que tuvo el impulso del Día del Padre."},{"icono":"bi-info-circle","titulo":"Rectificativa de Ganancias 2025 excluida","texto":"GSD registró en septiembre la rectificativa de Ganancias 2025: Impuesto a las Ganancias $1.633,9M e intereses $293,8M. Como corresponde a un período anterior, se excluye de este PNL."}],"drivers":{"CONS":[{"tipo":"sube","texto":"Resultado antes de IG: $2.446M, +$469M (+24%) vs agosto. Rentabilidad: 25% (23% en agosto). Sin la rectificativa de Ganancias 2025, que se excluye."},{"tipo":"info","texto":"Fideicomiso Serie I: +$1.046M (resultado $1.039M y gastos netos +$7M), primer mes con el fideicomiso registrado. Sin el fideicomiso, el resultado sería $1.400M, -$577M (-29%) vs agosto."},{"tipo":"sube","texto":"Ventas: suben 3% ($205M) vs agosto."},{"tipo":"alerta","texto":"Compras: suben 32% ($491M), por el mayor costo de los celulares vendidos en Go Celular."},{"tipo":"baja","texto":"Go Cuotas: el resultado baja $509M vs agosto ($1.018M). Incluye el cashback de la campaña de Go Cuotas: $276M vs $238M en agosto (valor de agosto reclasificado en NetSuite después del cierre)."},{"tipo":"ok","texto":"Incobrabilidad: -$2.449M, mejora de $261M vs agosto (FD $166M, GSD $95M)."}],"GSD":[{"tipo":"baja","texto":"Resultado antes de IG: $782M, -$456M (-37%) vs agosto. Rentabilidad: 12% (21% en agosto). Sin la rectificativa de Ganancias 2025 (-$1.928M), que se excluye."},{"tipo":"alerta","texto":"Costo de Go Celular: sube 57% ($379M)."},{"tipo":"alerta","texto":"Cashback: $276M vs $238M en agosto (+16%), por la campaña de Go Cuotas. El valor de agosto es el actual de NetSuite, reclasificado después del cierre (en la presentación de agosto figuraba $26M)."},{"tipo":"sube","texto":"Ventas: suben 9% ($385M) y el fee por mora 4%."},{"tipo":"ok","texto":"Incobrabilidad: -$1.723M, mejora de $95M (-5%) vs agosto."}],"FD":[{"tipo":"sube","texto":"Resultado antes de IG: $1.664M, +$925M (+125%) vs agosto. Rentabilidad: 49% (29% en agosto)."},{"tipo":"info","texto":"Fideicomiso Serie I: +$1.046M. Es el primer mes con registración completa de Serie I y Revolving. Sin el fideicomiso, FD habría ganado $618M (-16% vs agosto)."},{"tipo":"ok","texto":"Incobrabilidad: -$726M, mejora de $166M (-19%) vs agosto."},{"tipo":"baja","texto":"Ventas: bajan 7% ($180M) vs agosto."},{"tipo":"baja","texto":"Intereses del pasivo: suben 17% ($34M)."}]},"operaciones":{"_ayuda":"ops = cantidad de operaciones del mes; var = variación % vs mes anterior; ticket = ticket promedio en $. Fuente: Databricks (gold_dm.dm_customers_go_products_history). Go Celular = operaciones de GoCuotas en 9 cuotas; Go Cuotas = el resto.","GO CUOTAS":{"ops":476604,"ops_var":-3.43,"ticket":88297,"ticket_var":0.23},"GO PREMIUM":{"ops":187065,"ops_var":-3.79,"ticket":39043,"ticket_var":-0.02},"GO ADELANTOS":{"ops":61568,"ops_var":-10.89,"ticket":22049,"ticket_var":0.47},"GO CELULAR":{"ops":6781,"ops_var":23.83,"ticket":447481,"ticket_var":-2.41},"GO QR":{"ops":134009,"ops_var":8.71,"ticket":27887,"ticket_var":1.87},"GO BIG":{"ops":8148,"ops_var":-16.4,"ticket":118908,"ticket_var":1.1},"GO TARJETAS":{"ops":11378,"ops_var":49.87,"ticket":40061,"ticket_var":-0.91}},"areas":[{"titulo":"Finanzas","items":["Fideicomiso Financiero: el 11/09 se lanzó y liquidó la Serie I del FF GOcréditos, con sobresuscripción en la licitación. El Revolving diario ya está operando y se está migrando todo el proceso a la app de Finanzas.","Fondeo: los fondos del fideicomiso se destinaron a cancelar la deuda con S&C y parte de la de Consultatio. Estamos reiniciando la originación con la nueva estrategia de segmentación.","Fondeo: este Q alcanzamos el objetivo de fondeo del MCI.","Fondos del exterior: quedó en pausa el análisis de los dos fondos con term sheet. Se decidió destinar la cartera al FF, porque ese instrumento era más caro y complejo, y competía por la misma cartera.","Carga simple: implementamos una herramienta que lee las facturas automáticamente, las clasifica por estado (vencidas y por vencer) y arma los lotes de pago. Resolvió varios pasos manuales del pago a proveedores y de la rendición de gastos."]},{"titulo":"Legales","items":["BCRA – GOtarjeta: se analizó si corresponde informar el producto ante el BCRA.","BCRA – Tasas FD: se verificó que las tasas informadas al BCRA coincidan con las publicadas en el sitio de FD.","La Rioja: se definió la continuidad operativa en la provincia.","Nueva sociedad/LEC: se evalúa la viabilidad de inscribir una nueva sociedad (en análisis).","Impuesto a los débitos y créditos: opinión legal; en estudio con asesor externo.","Datos financieros en el chat: se revisó un caso de exposición en el canal de atención (pedido de Soporte).","Seguros GOcelular: se empezó a analizar la cobertura para el producto.","PLAFT: se cerró el cuestionario de detalle de todo lo exigible en la materia.","T&C GOtarjeta: se corrigieron las cláusulas.","T&C GOqr, GOpremium y GOadelantos: derecho de revocación actualizado a 10 días corridos.","Defensa del Consumidor: 76 casos nuevos, todos respondidos. Al día.","Incobrables impositivos: en proceso, con estudio externo.","Oficios BCRA (GSD): 24 en el mes, todos respondidos. Al día."]},{"titulo":"Modeling","items":[]}],"analisis_especial":[{"titulo":"Fee por mora: recuperación del mismo mes","bajada":"% del fee generado en el mes que se cobra dentro del mismo mes (cuenta 42001). En septiembre bajó a 21,5%, aunque el monto cobrado fue el más alto de la serie.","serie":[{"mes":"Jul 2026","pct":24.7,"cobrado":1012},{"mes":"Ago 2026","pct":23.5,"cobrado":1004},{"mes":"Sep 2026","pct":21.5,"cobrado":1051}],"notas":["Generado en septiembre: $3.298M, +11% vs agosto ($2.982M).","Conversión a dos meses: 31,39% para lo generado en agosto (32,26% para julio). Julio ya acumula 36,24% a tres meses.","Fee + Recargo + Reprogramación = 11,5% de los ingresos de septiembre (12,9% en agosto). Sin el resultado del Fideicomiso Serie I, sería 12,8%."],"fuente":"Hoja “Análisis Fee por mora” (Wiki Otros Ingresos). Cobrado = caja; Generado = devengado."},{"tipo":"cuenta","cuentas":["55006"],"formato":"monto","titulo":"Impuesto a los débitos y créditos","bajada":"Cuenta 55006, últimos tres meses, según la sociedad elegida arriba. En septiembre equivale al 4,9% de los ingresos y al 19% del EBITDA consolidado.","notas":["Septiembre: $483M consolidado (+8% vs agosto): GSD $386M y FD $97M.","Presupuesto: $368M. Contra el real comparable ($458M, sin Go Celular ni Go Tarjetas) queda +25% ($90M).","Sin este impuesto, el EBITDA consolidado de septiembre sería $3.041M en lugar de $2.557M.","En septiembre 2025 la cuenta no tenía movimientos."],"fuente":"NetSuite, cuenta 55006. Presupuesto FY2026-27, línea “Impuestos a los Débitos y Créditos”."}],"presupuesto":{"_ayuda":"Presupuesto del mes en millones, en positivo. Fuente: Presupuesto_FY2026-27_GoCuotas_ESC_1_Mejora_Incobrabilidad - 08-26, pestaña 3.Presupuesto. Se compara contra el real comparable (Consolidado sin Go Celular ni Go Tarjetas).","rubros":{"ventas":5584,"otros_ingresos":1854,"compras":945,"gastos_generales":181,"masa_salarial":501,"impuestos":1056,"financiacion":255,"incobrabilidad":2959,"ig":770},"tasa_ig_real":35,"tasa_ig_ppto":50,"modelos":{"ventas":{"GO CUOTAS":2317,"GO PREMIUM":2057,"GO ADELANTOS":408,"GO QR":548,"GO BIG":253},"otros_ingresos":{"GO CUOTAS":1843,"GO PREMIUM":10,"GO ADELANTOS":0,"GO QR":0,"GO BIG":0},"incobrabilidad":{"GO CUOTAS":1771,"GO PREMIUM":497,"GO ADELANTOS":523,"GO QR":167}},"lectura":[{"tipo":"sube","texto":"EBITDA comparable: $2.257M contra $1.541M presupuestados (+46%). El Fideicomiso Serie I (+$1.046M) no estaba en el presupuesto. Sin el fideicomiso, el EBITDA da $1.212M (-21% vs ppto)."},{"tipo":"ok","texto":"Incobrabilidad: $2.431M contra $2.959M presupuestados (-18%, $529M a favor). Es el principal desvío favorable sin contar el fideicomiso, y lo explican Go Adelantos (-78%) y Go Cuotas (-14%). Go Premium queda +23% por encima del presupuesto."},{"tipo":"alerta","texto":"Otros ingresos: sin el resultado del fideicomiso dan $1.437M contra $1.854M presupuestados (-22%). Go Cuotas queda -23%: el presupuesto se armó con fee fijo y desde junio el fee es 25% con tope."},{"tipo":"alerta","texto":"Gastos operativos (masa salarial + gastos generales): $988M contra $682M presupuestados (+45%). Lo explica el cashback de la campaña de Go Cuotas ($274M)."},{"tipo":"alerta","texto":"Financiación: $359M contra $255M presupuestados (+41%). Es el mayor desvío desfavorable en %, como en agosto."},{"tipo":"alerta","texto":"Ventas: -3% vs ppto. Go Cuotas (+32%) no alcanza a compensar a Go Premium (-25%), Go Adelantos (-27%), Go QR (-8%) y Go Big (-95%). Compras: $802M contra $945M (-15%)."}]},"interanual":{"mes_anterior":"2025-09","ipc":30.0,"filas":[{"clave":"ventas","nombre":"Ventas","ingreso":true,"total":false,"ant":2904.4,"ant_ipc":3775.7,"act":7190.9,"var_nominal":147.6,"var_real":90.5,"comp":5431.8,"ppto":5584,"var_ppto":-2.7},{"clave":"otros_ingresos","nombre":"Otros ingresos y res. financieros","ingreso":true,"total":false,"ant":1258.4,"ant_ipc":1635.9,"act":2475.7,"var_nominal":96.7,"var_real":51.3,"comp":2475.7,"ppto":1854,"var_ppto":33.5},{"clave":"compras","nombre":"Compras / servicios","ingreso":false,"total":false,"ant":-378.0,"ant_ipc":-491.4,"act":-2008.6,"var_nominal":431.4,"var_real":308.7,"comp":-802.4,"ppto":-945,"var_ppto":-15.1},{"clave":"gastos_op","nombre":"Gastos operativos (personal, marketing y estructura)","ingreso":false,"total":false,"ant":-618.8,"ant_ipc":-804.4,"act":-1171.8,"var_nominal":89.4,"var_real":45.7,"comp":-988.1,"ppto":-682,"var_ppto":44.9},{"clave":"impuestos","nombre":"Impuestos y tasas","ingreso":false,"total":false,"ant":-324.6,"ant_ipc":-422.0,"act":-1218.4,"var_nominal":275.3,"var_real":188.7,"comp":-1069.9,"ppto":-1056,"var_ppto":1.3},{"clave":"financiacion","nombre":"Financiación","ingreso":false,"total":false,"ant":-348.4,"ant_ipc":-453.0,"act":-372.3,"var_nominal":6.8,"var_real":-17.8,"comp":-359.3,"ppto":-255,"var_ppto":40.9},{"clave":"incobrabilidad","nombre":"Incobrabilidad","ingreso":false,"total":false,"ant":-955.0,"ant_ipc":-1241.5,"act":-2449.4,"var_nominal":156.5,"var_real":97.3,"comp":-2430.5,"ppto":-2959,"var_ppto":-17.9},{"clave":"ebitda","nombre":"Resultado antes de IG (EBITDA)","ingreso":true,"total":true,"ant":1537.8,"ant_ipc":1999.2,"act":2446.1,"var_nominal":59.1,"var_real":22.4,"comp":2257.2,"ppto":1541,"var_ppto":46.5},{"clave":"ig","nombre":"Impuesto a las ganancias","ingreso":false,"total":false,"ant":-538.2,"ant_ipc":-699.7,"act":-856.1,"var_nominal":59.1,"var_real":22.4,"comp":-790.0,"ppto":-770,"var_ppto":2.6},{"clave":"neto","nombre":"Resultado neto","ingreso":true,"total":true,"ant":999.6,"ant_ipc":1299.5,"act":1590.0,"var_nominal":59.1,"var_real":22.4,"comp":1467.2,"ppto":771,"var_ppto":90.3}],"rentabilidad":{"ant":36.9,"act":25.3,"comp":28.5,"ppto":20.7},"fuente":"NetSuite, Consolidado 2025-09 y 2026-09 (el mes actual, con las exclusiones del período). Ajuste por IPC: valores del año anterior × (1 + IPC interanual).","conclusiones":[{"tipo":"sube","texto":"EBITDA: $2.446M vs $1.538M en septiembre 2025 (+59% nominal, +22% real)."},{"tipo":"sube","texto":"Ventas: +148% nominal (+91% real)."},{"tipo":"alerta","texto":"Incobrabilidad: +157%, algo más que las ventas. Sin Go Celular, que es nuevo y casi no tiene incobrabilidad, pasa de 32,9% a 43,8% de las ventas."},{"tipo":"alerta","texto":"Suben más que la inflación los impuestos (+189% real: débitos y créditos e Ingresos Brutos), las compras (CMV de Go Celular) y el cashback de la campaña de Go Cuotas."}],"efemerides":[]},"consumo_areas":{"fuente":"Tableau “Consumos por área”, pestaña Consolidado (datos al 14/10/2026). Gasto real vs presupuesto por área, en millones de $.","mes":{"areas":[{"area":"Comercial","ppto":43.6,"real":46.8,"desvio":7.48},{"area":"Administración y Finanzas","ppto":29.8,"real":52.6,"desvio":76.44},{"area":"Operaciones","ppto":167.1,"real":164.1,"desvio":-1.85},{"area":"Programación","ppto":44.8,"real":43.1,"desvio":-3.85},{"area":"RRHH","ppto":81.5,"real":70.8,"desvio":-13.14}],"total":{"ppto":366.8,"real":377.3,"desvio":2.87}},"acumulado":{"titulo":"Acumulado abril a septiembre 2026","areas":[{"area":"Comercial","ppto":235.9,"real":241.3,"desvio":2.31},{"area":"Administración y Finanzas","ppto":112.6,"real":127.6,"desvio":13.38},{"area":"Operaciones","ppto":983.4,"real":884.4,"desvio":-10.06},{"area":"Programación","ppto":232.4,"real":305.1,"desvio":31.28},{"area":"RRHH","ppto":421.7,"real":401.1,"desvio":-4.89}],"total":{"ppto":1985.9,"real":1959.5,"desvio":-1.33}},"nota":"En el acumulado del año fiscal, el consumo total queda 1,33% por debajo del presupuesto."}}};</script>
+<script>
+/* PNL mensual — tablero dinámico.
+   Datos: data/pnl.json (generado por scripts/actualizar.py desde NetSuite)
+          data/contenido/AAAA-MM.json (textos, presupuesto, operaciones — se edita a mano) */
+(() => {
+  "use strict";
+
+  // ---------- configuración ----------
+  const SOCIEDADES = { CONS: "Consolidado GSD + FD", GSD: "GSD — Go Servicios Digitales", FD: "FD — Finanzas Digitales" };
+  const MODELOS = ["GO CUOTAS", "GO PREMIUM", "GO ADELANTOS", "GO CELULAR", "GO QR", "GO BIG", "GO TARJETAS"];
+  const COLOR_MODELO = { "GO CUOTAS": "--m-cuotas", "GO PREMIUM": "--m-premium", "GO ADELANTOS": "--m-adelantos", "GO CELULAR": "--m-celular", "GO QR": "--m-qr", "GO BIG": "--m-big", "GO TARJETAS": "--m-tarjetas" };
+  // Íconos Bootstrap para los comentarios (la marca no usa emojis)
+  const ICONO_TIPO = { sube: "bi-graph-up-arrow", baja: "bi-graph-down-arrow", alerta: "bi-exclamation-triangle", ok: "bi-check-circle", info: "bi-info-circle" };
+  const GRUPOS = {
+    "G:PRESTAMOS": { nombre: "Go Préstamos", modelos: ["GO QR", "GO BIG", "GO PREMIUM", "GO TARJETAS"], nota: "QR + Big + Premium + Tarjeta" },
+    "G:ADELANTOS": { nombre: "Go Adelantos", modelos: ["GO ADELANTOS"] },
+    "G:CUOTAS":    { nombre: "Go Cuotas + Go Celular", modelos: ["GO CUOTAS", "GO CELULAR"] },
+  };
+  // Modelos que quedan fuera del "real comparable" contra presupuesto
+  const FUERA_PPTO = ["GO CELULAR", "GO TARJETAS", "SIN MODELO"];
+
+  const RUBROS = {
+    ventas:     { n: "Ventas", p: ["41"] },
+    oi:         { n: "Otros ingresos", p: ["42"] },
+    fin:        { n: "Resultados fin. y por tenencia", p: ["43"] },
+    compras:    { n: "Compras / servicios", p: ["51"] },
+    personal:   { n: "Personal", p: ["52"] },
+    marketing:  { n: "Marketing y comercialización", p: ["53"] },
+    operativos: { n: "Otros egresos operativos", p: ["54"] },
+    impuestos:  { n: "Impuestos y tasas", p: ["55"] },
+    financ:     { n: "Financiación", p: ["56"] },
+    incob:      { n: "Incobrabilidad", p: ["57"] },
+  };
+  const SOPORTES = ["53010", "54022", "54023", "54024", "54025", "54026"];
+
+  // ---------- estado ----------
+  const S = { pnl: null, base: null, aj: {}, contenido: {}, mes: null, soc: "CONS", modelo: "TODOS", vistaModelos: "modelo" };
+  const $ = (s, el = document) => el.querySelector(s);
+
+  // ---------- formato ----------
+  const nf0 = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+  const nf1 = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const nf2 = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const M1 = (v) => (v == null ? "—" : `$${nf1.format(v)}M`); // millones con un decimal
+  const M = (v) => (v == null || isNaN(v) ? "—" : `${v < -0.5e6 ? "-" : ""}$${nf0.format(Math.abs(v) / 1e6)}M`);
+  const Mm = (v) => (v == null ? "—" : `${v < -0.5 ? "-" : ""}$${nf0.format(Math.abs(v))}M`); // ya en millones
+  const P = (x, d = 0) => (x == null || !isFinite(x) ? "—" : `${d ? nf1.format(x) : nf0.format(x)}%`);
+  const N = (x) => (x == null ? "—" : nf0.format(x));
+  const sgn = (x) => (x > 0 ? "+" : "");
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const MESES_N = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const mesNombre = (m, cap = true) => { const [y, mm] = m.split("-"); const t = `${MESES_N[+mm - 1]} ${y}`; return cap ? t[0].toUpperCase() + t.slice(1) : t; };
+  const mesAnterior = (m) => { let [y, mm] = m.split("-").map(Number); mm--; if (!mm) { mm = 12; y--; } return `${y}-${String(mm).padStart(2, "0")}`; };
+
+  /** delta con color según efecto en el resultado. cur/prev con signo (ingreso +, gasto -). */
+  function delta(cur, prev, { pct = true } = {}) {
+    if (prev == null || cur == null) return `<span class="delta neu">sin comparativo</span>`;
+    const d = cur - prev;
+    const base = Math.abs(prev);
+    const vp = base > 0 ? ((Math.abs(cur) - base) / base) * 100 : null;
+    const cls = Math.abs(d) < 0.5e6 ? "neu" : d > 0 ? "good" : "bad";
+    const arrow = cls === "neu" ? "bi-dash" : Math.abs(cur) >= Math.abs(prev) ? "bi-arrow-up-short" : "bi-arrow-down-short";
+    return `<span class="delta ${cls}"><i class="bi ${arrow}"></i>${pct && vp != null ? `${sgn(vp)}${nf0.format(vp)}%` : ""}</span>`;
+  }
+
+  // ---------- acceso a datos ----------
+  function datosScope(mes, soc = S.soc, modelo = S.modelo) {
+    const p = S.pnl;
+    if (modelo === "TODOS") return p.sociedades[soc]?.[mes] || null;
+    const mm = p.modelos[mes];
+    if (!mm || soc !== "CONS") return null;
+    const lista = GRUPOS[modelo] ? GRUPOS[modelo].modelos : [modelo];
+    return sumar(lista.map((m) => mm[m]).filter(Boolean));
+  }
+  function sumar(arr) {
+    const o = {};
+    arr.forEach((d) => Object.entries(d).forEach(([k, v]) => (o[k] = (o[k] || 0) + v)));
+    return o;
+  }
+  const suma = (d, prefijos) => (d ? Object.entries(d).reduce((a, [k, v]) => (prefijos.some((p) => k.startsWith(p)) ? a + v : a), 0) : null);
+  function calc(d) {
+    if (!d) return null;
+    const r = {};
+    for (const [k, def] of Object.entries(RUBROS)) r[k] = suma(d, def.p);
+    r.ingresos = r.ventas + r.oi + r.fin;
+    r.otrosIng = r.oi + r.fin;
+    r.grales = r.personal + r.marketing + r.operativos;
+    r.impFin = r.impuestos + r.financ;
+    r.ebitda = Object.entries(d).reduce((a, [k, v]) => (k === "IG" ? a : a + v), 0);
+    r.ig = d.IG || 0;
+    r.neto = r.ebitda + r.ig;
+    r.rent = r.ingresos ? (r.ebitda / r.ingresos) * 100 : null;
+    r.egresos = r.compras + r.grales + r.impFin + r.incob;
+    return r;
+  }
+  const nombreScope = () => {
+    if (S.modelo === "TODOS") return SOCIEDADES[S.soc];
+    return GRUPOS[S.modelo] ? GRUPOS[S.modelo].nombre : titulo(S.modelo);
+  };
+  const titulo = (m) => m.replace(/^GO /, "Go ").replace(/\b([A-ZÁÉÍÓÚ])([A-ZÁÉÍÓÚ]+)/g, (_, a, b) => a + b.toLowerCase()).replace("Qr", "QR");
+
+  // ---------- tooltip ----------
+  const tip = $("#tip");
+  document.addEventListener("mousemove", (e) => {
+    const t = e.target.closest?.("[data-tip]");
+    if (!t) return tip.classList.remove("on");
+    tip.innerHTML = t.getAttribute("data-tip");
+    tip.classList.add("on");
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - w - 8) + "px";
+    tip.style.top = (e.clientY + 16 + h > innerHeight ? e.clientY - h - 10 : e.clientY + 16) + "px";
+  });
+
+  // ---------- gráficos SVG ----------
+  /** Ancho real disponible dentro de una card, para que el SVG se dibuje 1:1 y el texto no se achique. */
+  function ancho(frac) {
+    const main = $("main"), cs = getComputedStyle(main);
+    const content = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const f = innerWidth <= 900 ? 1 : frac;
+    return Math.max(280, Math.round((f === 1 ? content : (content - 16) * f) - 42));
+  }
+  /** Waterfall: pasos [{label, v, total?}] con v con signo; los totales se dibujan desde 0. */
+  function waterfall(pasos, { h = 280, fmt = M, W = ancho(1) } = {}) {
+    W = Math.max(W, 600);
+    const padL = 8, padR = 8, top = 24, bot = 46;
+    let acc = 0; const barras = [];
+    for (const s of pasos) {
+      if (s.total) { barras.push({ ...s, y0: 0, y1: s.v }); acc = s.v; }
+      else { barras.push({ ...s, y0: acc, y1: acc + s.v }); acc += s.v; }
+    }
+    const vals = barras.flatMap((b) => [b.y0, b.y1]);
+    const max = Math.max(0, ...vals), min = Math.min(0, ...vals);
+    const y = (v) => top + ((max - v) / (max - min || 1)) * (h - top - bot);
+    const bw = (W - padL - padR) / barras.length;
+    const g = barras.map((b, i) => {
+      const x = padL + i * bw + bw * 0.16, w = bw * 0.68;
+      const yt = y(Math.max(b.y0, b.y1)), yb = y(Math.min(b.y0, b.y1));
+      const col = b.total ? "var(--total)" : b.v >= 0 ? "var(--pos)" : "var(--neg)";
+      const conn = i < barras.length - 1 ? `<line class="conn" x1="${x + w}" x2="${x + bw}" y1="${y(b.y1)}" y2="${y(b.y1)}"/>` : "";
+      const lab = b.total ? fmt(b.v) : `${b.v >= 0 ? "+" : "-"}${fmt(Math.abs(b.v))}`;
+      const ly = b.v >= 0 || b.total ? yt - 6 : yb + 13;
+      return `<rect x="${x}" y="${yt}" width="${w}" height="${Math.max(1, yb - yt)}" rx="3" fill="${col}" data-tip="<b>${esc(b.label)}</b><br>${lab}"/>
+        ${conn}<text x="${x + w / 2}" y="${ly}" text-anchor="middle" class="${b.total ? "lbl-strong" : ""}">${lab}</text>
+        ${wrapLabel(b.label, x + w / 2, h - bot + 16, bw)}`;
+    }).join("");
+    return `<div class="scroll-x"><svg class="chart" viewBox="0 0 ${W} ${h}" style="min-width:${W}px" role="img" aria-label="Gráfico de cascada">
+      <line class="axis-l" x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}"/>${g}</svg></div>`;
+  }
+  function wrapLabel(t, x, y, bw) {
+    const max = Math.max(6, Math.floor(bw / 6.2));
+    const words = String(t).split(" "); const lines = [""];
+    words.forEach((w) => { if ((lines.at(-1) + " " + w).trim().length > max && lines.at(-1)) lines.push(w); else lines[lines.length - 1] = (lines.at(-1) + " " + w).trim(); });
+    return `<text x="${x}" y="${y}" text-anchor="middle">${lines.slice(0, 2).map((l, i) => `<tspan x="${x}" dy="${i ? 13 : 0}">${esc(l)}</tspan>`).join("")}</text>`;
+  }
+  /** Barras horizontales con eje en cero (admite negativos). */
+  function barrasCero(items, { fmt = M, extra, W = ancho(1) } = {}) {
+    const angosto = W < 560, rowH = 34, labW = angosto ? 96 : 150, valW = angosto ? 76 : 190, top = 6;
+    if (angosto) extra = null;
+    const h = top + items.length * rowH + 6;
+    const max = Math.max(0, ...items.map((i) => i.v)), min = Math.min(0, ...items.map((i) => i.v));
+    const x = (v) => labW + ((v - min) / (max - min || 1)) * (W - labW - valW);
+    const g = items.map((it, i) => {
+      const yy = top + i * rowH + 8, bh = rowH - 16;
+      const x0 = x(Math.min(0, it.v)), x1 = x(Math.max(0, it.v));
+      return `<text x="0" y="${yy + bh / 2 + 4}" class="lbl-strong">${esc(it.label)}</text>
+        <rect x="${x0}" y="${yy}" width="${Math.max(1.5, x1 - x0)}" height="${bh}" rx="3" fill="${it.v >= 0 ? "var(--pos)" : "var(--neg)"}" data-tip="<b>${esc(it.label)}</b><br>${fmt(it.v)}${it.tip ? "<br>" + it.tip : ""}"/>
+        <text x="${W - valW + 10}" y="${yy + bh / 2 + 4}" class="lbl-strong">${fmt(it.v)}</text>
+        ${extra ? `<text x="${W - valW + 80}" y="${yy + bh / 2 + 4}">${extra(it)}</text>` : ""}`;
+    }).join("");
+    return `<svg class="chart" viewBox="0 0 ${W} ${h}" role="img"><line class="axis-l" x1="${x(0)}" x2="${x(0)}" y1="0" y2="${h}"/>${g}</svg>`;
+  }
+  function columnas(items, { fmt = (v) => P(v, 1), h = 200, W = ancho(1) } = {}) {
+    const top = 24, bot = 30;
+    const max = Math.max(...items.map((i) => i.v)) * 1.1;
+    const bw = W / items.length;
+    return `<svg class="chart" viewBox="0 0 ${W} ${h}" role="img">${items.map((it, i) => {
+      const bh = ((h - top - bot) * it.v) / max, x = i * bw + bw * 0.22, w = bw * 0.56, yy = h - bot - bh;
+      return `<rect x="${x}" y="${yy}" width="${w}" height="${bh}" rx="4" fill="${i === items.length - 1 ? "var(--accent)" : "var(--line-strong)"}" data-tip="<b>${esc(it.label)}</b><br>${fmt(it.v)}${it.tip ? "<br>" + it.tip : ""}"/>
+        <text x="${x + w / 2}" y="${yy - 7}" text-anchor="middle" class="lbl-strong">${fmt(it.v)}</text>
+        <text x="${x + w / 2}" y="${h - bot + 17}" text-anchor="middle">${esc(it.label)}</text>`;
+    }).join("")}<line class="axis-l" x1="0" x2="${W}" y1="${h - bot}" y2="${h - bot}"/></svg>`;
+  }
+
+  // ---------- secciones ----------
+  /** Comentario con ícono: acepta {tipo, texto} o un string (se le quita un emoji inicial si lo tiene). */
+  function comentario(c) {
+    const o = typeof c === "string" ? { texto: c.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, "") } : c;
+    return `<li><i class="bi ${ICONO_TIPO[o.tipo] || "bi-dot"}"></i><span>${esc(o.texto)}</span></li>`;
+  }
+  const aviso = (html) => `<div class="aviso"><i class="bi bi-info-circle"></i><i class="bi bi-info-circle"></i><span>${html}</span></div>`;
+  function head(eyebrow, h2, sub, extra = "") {
+    return `<div class="sec-head"><div><div class="eyebrow">${eyebrow}</div><h2>${h2}</h2>${sub ? `<div class="sub">${sub}</div>` : ""}</div>${extra}</div>`;
+  }
+  const subScope = () => `${nombreScope()} · ${mesNombre(S.mes)} · en millones de $ARS`;
+
+  function rPortada(c, r) {
+    const icono = (n) => esc(/^bi-/.test(n.icono || "") ? n.icono : "bi-megaphone");
+    const novs = c.novedades || [];
+    // una novedad "destacada" ocupa todo el ancho y puede tener bloques explicativos; el resto va debajo
+    const nov = novs.map((n) => n.destacada
+      ? `<div class="nov nov-dest"><h4><i class="bi ${icono(n)}"></i>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p>
+          ${(n.bloques || []).length ? `<div class="nov-bloques">${n.bloques.map((b) => `<div><h5>${esc(b.titulo)}</h5><p>${esc(b.texto)}</p></div>`).join("")}</div>` : ""}</div>`
+      : `<div class="nov"><h4><i class="bi ${icono(n)}"></i>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p></div>`).join("");
+    const conDest = novs.some((n) => n.destacada);
+    $("#s-portada").innerHTML = `<div class="hero">
+      <div class="hero-title">
+        <div class="eyebrow">¿Cómo nos fue en ${mesNombre(S.mes, false).split(" ")[0]}?</div>
+        <h1>${esc(c.titulo || "PNL " + mesNombre(S.mes))}</h1>
+        <p>${esc(c.equipo || "Equipo de Administración y Finanzas")} · ${esc(nombreScope())}</p>
+        <div class="hero-big">
+          <div><div class="v num">${M(r?.ebitda)}</div><div class="l">Resultado antes de IG</div></div>
+          <div><div class="v num">${P(r?.rent)}</div><div class="l">Rentabilidad s/ ventas + OI</div></div>
+          <div><div class="v num">${M(r?.neto)}</div><div class="l">Resultado neto</div></div>
+        </div>
+      </div>
+      <div><div class="eyebrow" style="margin-bottom:12px">Novedades del mes</div>
+        ${nov ? `<div class="novedades${conDest ? " n3" : ""}">${nov}</div>` : aviso(`Todavía no hay novedades cargadas para ${mesNombre(S.mes, false)} (data/contenido/${S.mes}.json).`)}
+      </div></div>`;
+  }
+
+  function rResumen(c, r, rp) {
+    if (!r) { $("#s-resumen").innerHTML = head("Resumen", "Resultado del mes", "") + sinDatos(); return; }
+    const kpi = (l, cur, prev, x = "", hl = false) => `<div class="kpi ${hl ? "hl" : ""}"><div class="l">${l}</div><div class="v num">${M(cur)}</div>
+      <div class="d">${rp ? `vs ${M(prev)} ${mesNombre(mesAnterior(S.mes), false).split(" ")[0]} · ` : ""}${delta(cur, prev)}</div>${x ? `<div class="x">${x}</div>` : ""}</div>`;
+    const drivers = (c.drivers?.[S.modelo === "TODOS" ? S.soc : "_"] || []).map(comentario).join("");
+    const pasos = [
+      { label: "Ventas", v: r.ventas }, { label: "Otros ingresos", v: r.oi }, { label: "Res. financieros", v: r.fin },
+      { label: "Compras", v: r.compras }, { label: "Gastos grales.", v: r.grales }, { label: "Impuestos", v: r.impuestos },
+      { label: "Financ.", v: r.financ }, { label: "Incobrab.", v: r.incob }, { label: "Res. antes IG", v: r.ebitda, total: true },
+    ];
+    $("#s-resumen").innerHTML = head("¿Cómo cerró el mes?", `PNL ${esc(nombreScope())}`, subScope()) + `
+      <div class="kpis k5">
+        ${kpi("Ventas", r.ventas, rp?.ventas)}
+        ${kpi("Otros ingresos", r.otrosIng, rp?.otrosIng, `incl. res. financieros ${M(r.fin)}`)}
+        ${kpi("Gastos grales. + Compras", r.grales + r.compras, rp && rp.grales + rp.compras, `Grales ${M(-r.grales)} · Compras ${M(-r.compras)}`)}
+        ${kpi("Impuestos + Financiación", r.impFin, rp?.impFin, `Imp. ${M(-r.impuestos)} · Financ. ${M(-r.financ)}`)}
+        ${kpi("Incobrabilidad", r.incob, rp?.incob)}
+      </div>
+      <div class="kpis" style="margin-top:16px">
+        ${kpi("Resultado antes de IG", r.ebitda, rp?.ebitda, "", true)}
+        <div class="kpi hl"><div class="l">Rentabilidad s/ ventas + OI</div><div class="v num">${P(r.rent)}</div>
+          <div class="d">${rp ? `vs ${P(rp.rent)} mes anterior` : ""}</div></div>
+        ${(() => { // rentabilidad sin el impuesto a los débitos y créditos (cuenta 55006)
+          const deb = -(suma(datosScope(S.mes), ["55006"]) || 0);
+          if (!deb || !r.ingresos) return "";
+          const rs = ((r.ebitda + deb) / r.ingresos) * 100;
+          return `<div class="kpi"><div class="l">Rentabilidad sin imp. a los débitos y créditos</div><div class="v num">${P(rs)}</div>
+            <div class="d"><span class="delta good">+${nf0.format(Math.round(rs) - Math.round(r.rent))} p.p.</span> vs ${P(r.rent)} con el impuesto</div>
+            <div class="x">Impuesto del mes: ${M(-deb)}</div></div>`;
+        })()}
+        ${kpi("Resultado neto (post IG)", r.neto, rp?.neto, `Imp. a las ganancias ${M(r.ig)}`)}
+      </div>
+      <div class="grid g-7-5" style="margin-top:16px">
+        <div class="card"><h3>Cómo se llega al resultado</h3><div class="card-sub">Aporte de cada rubro al resultado antes de impuesto a las ganancias</div>${waterfall(pasos, { W: ancho(7 / 12) })}</div>
+        <div class="card"><h3>Principales drivers</h3>${drivers ? `<ul class="drivers">${drivers}</ul>` : `<div class="vacio">Sin comentarios cargados para esta vista.</div>`}</div>
+      </div>`;
+  }
+
+  function rPnl(d, dp, r, rp) {
+    if (!d) { $("#s-pnl").innerHTML = head("Detalle", "Estado de resultados", "") + sinDatos(); return; }
+    const cuentas = S.pnl.cuentas;
+    const ing = r.ingresos, ingP = rp?.ingresos;
+    const fila = (cls, label, cur, prev, extra = "") => {
+      const dv = prev != null ? cur - prev : null;
+      return `<tr class="${cls}" ${extra}><td>${label}</td><td class="num">${M(cur)}</td>
+        ${dp ? `<td class="num">${M(prev)}</td><td class="num">${dv == null ? "—" : (Math.abs(dv) < 0.5e6 ? "$0M" : (dv > 0 ? "+" : "") + M(dv))}</td><td>${delta(cur, prev)}</td>` : ""}
+        <td class="num">${ing ? P((cur / ing) * 100, 1) : "—"}</td></tr>`;
+    };
+    const bloque = (key) => {
+      const def = RUBROS[key];
+      const cods = [...new Set([...Object.keys(d), ...Object.keys(dp || {})])].filter((k) => def.p.some((p) => k.startsWith(p))).sort();
+      const filas = cods.filter((k) => Math.abs(d[k] || 0) >= 1 || Math.abs(dp?.[k] || 0) >= 1)
+        .map((k) => fila(`cuenta hide`, `${k} · ${esc(cuentas[k] || "")}`, d[k] || 0, dp ? dp[k] || 0 : null, `data-g="${key}"`)).join("");
+      return fila("rubro", def.n, r[key], rp?.[key], `data-k="${key}"`) + filas;
+    };
+    const html = `
+      ${bloque("ventas")}${bloque("oi")}${bloque("fin")}
+      ${fila("sub fijo", "Total ingresos", r.ingresos, rp?.ingresos)}
+      ${bloque("compras")}
+      ${fila("sub fijo", "Gastos generales", r.grales, rp?.grales)}
+      ${bloque("personal")}${bloque("marketing")}${bloque("operativos")}
+      ${bloque("impuestos")}${bloque("financ")}${bloque("incob")}
+      ${fila("total", "Resultado antes de IG (EBITDA)", r.ebitda, rp?.ebitda)}
+      <tr class="pct"><td>Rentabilidad s/ ventas + OI</td><td class="num">${P(r.rent)}</td>${dp ? `<td class="num">${P(rp.rent)}</td><td class="num">${sgn(Math.round(r.rent) - Math.round(rp.rent))}${nf0.format(Math.round(r.rent) - Math.round(rp.rent))} p.p.</td><td></td>` : ""}<td></td></tr>
+      ${fila("rubro fijo", "Impuesto a las ganancias", r.ig, rp?.ig)}
+      ${fila("total", "Resultado neto", r.neto, rp?.neto)}`;
+    const prevN = mesNombre(mesAnterior(S.mes)).split(" ")[0];
+    $("#s-pnl").innerHTML = head("¿De dónde sale el número?", "Estado de resultados", subScope() + " · clic en un rubro para abrir las cuentas",
+      `<div class="tabs" id="pnl-exp"><button data-a="open">Abrir todo</button><button data-a="close">Cerrar todo</button></div>`) + `
+      <div class="card tabla-wrap"><table>
+        <thead><tr><th>Cuenta</th><th>${mesNombre(S.mes).split(" ")[0]}</th>${dp ? `<th>${prevN}</th><th>Var $</th><th>Var %</th>` : ""}<th>% s/ ingresos</th></tr></thead>
+        <tbody>${html}</tbody></table>
+        ${!dp ? `<div class="tabla-nota">No hay datos de ${mesNombre(mesAnterior(S.mes), false)} para esta vista${S.modelo !== "TODOS" ? " (falta el export por modelo de ese mes)" : ""}, por eso no se muestra la comparación.</div>` : ""}
+        <div class="tabla-nota">Signos: ingresos en positivo, egresos en negativo. El color de la variación indica si mejora (verde) o empeora (rojo) el resultado.</div>
+      </div>`;
+    $("#s-pnl tbody").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr.rubro:not(.fijo)"); if (!tr) return;
+      tr.classList.toggle("open");
+      $("#s-pnl").querySelectorAll(`tr[data-g="${tr.dataset.k}"]`).forEach((x) => x.classList.toggle("hide", !tr.classList.contains("open")));
+    });
+    $("#pnl-exp").addEventListener("click", (e) => {
+      const a = e.target.dataset.a; if (!a) return;
+      $("#s-pnl").querySelectorAll("tr.rubro:not(.fijo)").forEach((x) => x.classList.toggle("open", a === "open"));
+      $("#s-pnl").querySelectorAll("tr.cuenta").forEach((x) => x.classList.toggle("hide", a !== "open"));
+    });
+  }
+
+  function hbarList(items, total, color = () => "var(--accent)") {
+    const max = Math.max(...items.map((i) => Math.abs(i.v)));
+    return `<div class="hbar">${items.map((it) => `
+      <div class="n">${it.dot ? `<span class="dot" style="background:${it.dot}"></span>` : ""}${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</div>
+      <div class="track" data-tip="<b>${esc(it.label)}</b><br>${M(Math.abs(it.v))} · ${P((Math.abs(it.v) / total) * 100, 1)} del total"><div class="fill" style="width:${(Math.abs(it.v) / max) * 100}%;background:${color(it)}"></div></div>
+      <div class="v num">${M(Math.abs(it.v))}<small>${P((Math.abs(it.v) / total) * 100)}</small></div>
+      ${it.det ? `<div class="det">${it.det}</div>` : ""}`).join("")}</div>`;
+  }
+
+  function rIngresos(c, d, r) {
+    if (!d) { $("#s-ingresos").innerHTML = head("Ingresos", "Mix de ingresos", "") + sinDatos(); return; }
+    const g = (cods) => cods.reduce((a, k) => a + (d[k] || 0), 0);
+    const cuentas = S.pnl.cuentas;
+    const det = (cods) => cods.filter((k) => Math.abs(d[k] || 0) > 0.5e6).map((k) => `${esc(cuentas[k])} ${M(d[k])}`).join(" · ");
+    const items = [
+      { label: "Ventas operativas", v: r.ventas, det: det(Object.keys(d).filter((k) => k.startsWith("41"))) },
+      { label: "Fee mora / reprogramación", v: g(["42001", "42002", "42003"]), det: det(["42001", "42002", "42003"]) },
+      { label: "Ganancias financieras", v: r.fin, det: det(Object.keys(d).filter((k) => k.startsWith("43"))) },
+      { label: "Ingresos extraordinarios", v: g(["42004"]) },
+      { label: "Comisiones intercompany", v: g(["42006"]), sub: "se compensa con 54036 en el consolidado" },
+    ].filter((i) => Math.abs(i.v) > 0.5e6);
+    const esp = (c.analisis_especial || []).map((a) => `
+      <div class="card"><div class="eyebrow">Análisis especial</div><h3>${esc(a.titulo)}</h3><div class="card-sub">${esc(a.bajada || "")}</div>
+        ${a.serie ? columnas(a.serie.map((s) => ({ label: s.mes, v: s.pct, tip: s.cobrado != null ? `Total cobrado en el mes: ${Mm(s.cobrado)}` : "" })), { W: ancho(5 / 12) }) : ""}
+        ${(a.notas || []).length ? `<ul class="area-list" style="margin-top:8px">${a.notas.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+        ${a.fuente ? `<div class="tabla-nota">Fuente: ${esc(a.fuente)}</div>` : ""}
+      </div>`).join("");
+    $("#s-ingresos").innerHTML = head("¿De dónde vienen los ingresos?", "Mix de ingresos", subScope()) + `
+      <div class="grid ${esp ? "g-7-5" : ""}">
+        <div class="card"><h3>Composición · total ${M(r.ingresos)}</h3>${hbarList(items, r.ingresos)}</div>
+        ${esp}
+      </div>`;
+  }
+
+  function rGastos(d, r) {
+    if (!d) { $("#s-gastos").innerHTML = head("Gastos", "Composición de gastos", "") + sinDatos(); return; }
+    const cuentas = S.pnl.cuentas;
+    const top = (pref, n = 3) => {
+      const tot = Math.abs(suma(d, pref));
+      return Object.entries(d).filter(([k]) => pref.some((p) => k.startsWith(p))).sort((a, b) => a[1] - b[1]).slice(0, n)
+        .filter(([, v]) => Math.abs(v) > 0.5e6).map(([k, v]) => `${esc(cuentas[k])} ${M(Math.abs(v))} (${P((Math.abs(v) / tot) * 100)})`).join(" · ");
+    };
+    let incobDet = top(["57"]);
+    const mm = S.pnl.modelos[S.mes];
+    if (S.soc === "CONS" && S.modelo === "TODOS" && mm) {
+      const tot = Math.abs(r.incob);
+      incobDet = Object.entries(mm).map(([m, x]) => [m, suma(x, ["57"])]).sort((a, b) => a[1] - b[1]).filter(([, v]) => Math.abs(v) > 0.5e6).slice(0, 4)
+        .map(([m, v]) => `${titulo(m)} ${M(Math.abs(v))} (${P((Math.abs(v) / tot) * 100)})`).join(" · ");
+    }
+    const items = [
+      { label: "Incobrabilidad", v: r.incob, det: incobDet },
+      { label: "Compras / servicios", v: r.compras, det: top(["51"]) },
+      { label: "Impuestos y tasas", v: r.impuestos, det: top(["55"]) },
+      { label: "Operativos", v: r.marketing + r.operativos, sub: "estructura, operación y soportes", det: top(["53", "54"]) },
+      { label: "Financiación", v: r.financ, det: top(["56"]) },
+      { label: "Personal", v: r.personal, sub: "sueldos y cargas sociales", det: top(["52"]) },
+    ].filter((i) => Math.abs(i.v) > 0.5e6).sort((a, b) => a.v - b.v);
+    const tot = Math.abs(r.egresos);
+    $("#s-gastos").innerHTML = head("¿En qué se van los fondos?", "Composición de gastos", `${subScope()} · total egresos (sin IG) ${M(tot)}`) + `
+      <div class="card"><h3>Principales gastos por categoría</h3><div class="card-sub">Debajo de cada barra, los ítems que más pesan dentro de la categoría</div>${hbarList(items, tot)}</div>`;
+  }
+
+  function rModelos(c) {
+    const el = $("#s-modelos");
+    const mm = S.pnl.modelos[S.mes];
+    const cab = head("¿Qué modelo aporta más?", S.vistaModelos === "modelo" ? "PNL por modelo de negocio" : "PNL agrupado por categoría",
+      `Consolidado GSD + FD · ${mesNombre(S.mes)} · en millones de $ARS · clic en una fila para filtrar todo el tablero`,
+      `<div class="tabs" id="mod-tabs"><button data-v="modelo" class="${S.vistaModelos === "modelo" ? "on" : ""}">Por modelo</button><button data-v="grupo" class="${S.vistaModelos === "grupo" ? "on" : ""}">Agrupado</button></div>`);
+    if (!mm) { el.innerHTML = cab + `<div class="aviso"><i class="bi bi-info-circle"></i>No hay export por modelo para ${mesNombre(S.mes, false)}.</div>`; bindTabs(); return; }
+    if (S.soc !== "CONS") { el.innerHTML = cab + `<div class="aviso"><i class="bi bi-info-circle"></i>El export por modelo de NetSuite es consolidado. <button class="btn" data-go-cons>Ver Consolidado</button></div>`; bindTabs(); return; }
+    const ops = c.operaciones || {};
+    const filas = S.vistaModelos === "modelo"
+      ? MODELOS.filter((m) => mm[m]).map((m) => ({ key: m, nombre: titulo(m), dot: `var(${COLOR_MODELO[m]})`, r: calc(mm[m]), ops: ops[m] }))
+      : Object.entries(GRUPOS).map(([k, g]) => {
+          const o = g.modelos.map((m) => ops[m]).filter(Boolean);
+          const opsSum = o.reduce((a, x) => a + (x.ops || 0), 0);
+          const tk = o.filter((x) => x.ticket).reduce((a, x) => a + x.ticket * x.ops, 0) / (o.filter((x) => x.ticket).reduce((a, x) => a + x.ops, 0) || 1);
+          const prev = o.reduce((a, x) => a + (x.ops_var != null ? x.ops / (1 + x.ops_var / 100) : 0), 0);
+          return { key: k, nombre: g.nombre, sub: g.nota, r: calc(sumar(g.modelos.map((m) => mm[m]).filter(Boolean))), ops: o.length ? { ops: opsSum, ops_var: prev ? (opsSum / prev - 1) * 100 : null, ticket: tk || null } : null };
+        });
+    const tot = calc(sumar(Object.values(mm)));
+    // Aporte de cada modelo a la rentabilidad total: EBITDA del modelo / (ventas + otros ingresos + res. financieros) del total.
+    // Equivale a la rentabilidad del modelo × su participación en esos ingresos, y la suma da la rentabilidad del total.
+    filas.forEach((f) => { f.aporte = tot.ingresos ? (f.r.ebitda / tot.ingresos) * 100 : null; });
+    const opsTot = Object.values(ops).reduce((a, x) => a + (x.ops || 0), 0);
+    const vr = (x) => (x == null ? "" : ` <span class="delta ${x >= 0 ? "good" : "bad"}">${sgn(x)}${nf1.format(x)}%</span>`);
+    const tr = (f, total = false) => `<tr class="${total ? "total" : "clic"}" ${total ? "" : `data-m="${f.key}"`}>
+      <td>${f.dot ? `<span class="dot" style="background:${f.dot}"></span>` : ""}${esc(f.nombre)}${f.sub ? `<div class="tabla-nota" style="margin:0">${esc(f.sub)}</div>` : ""}</td>
+      <td class="num">${M(f.r.ventas)}</td><td class="num">${M(f.r.otrosIng)}</td><td class="num">${M(f.r.compras)}</td><td class="num">${M(f.r.grales)}</td>
+      <td class="num">${M(f.r.impFin)}</td><td class="num">${M(f.r.incob)}</td><td class="num"><b>${M(f.r.ebitda)}</b></td>
+      <td class="num">${P(f.r.rent)}</td><td class="num">${total ? `<b>${P(f.r.rent)}</b>` : `${Math.round(f.aporte) || 0}%`}</td><td class="num">${P((f.r.ebitda / tot.ebitda) * 100, 1)}</td>
+      <td class="num">${f.ops ? N(f.ops.ops) + vr(f.ops.ops_var) : "—"}</td><td class="num">${f.ops?.ticket ? "$" + N(f.ops.ticket) + vr(f.ops.ticket_var) : "—"}</td></tr>`;
+    const incob = MODELOS.filter((m) => mm[m]).map((m) => ({ m, v: Math.abs(suma(mm[m], ["57"])) })).filter((x) => x.v > 0.5e6 * 20).sort((a, b) => b.v - a.v);
+    const incobTot = Math.abs(tot.incob);
+    el.innerHTML = cab + `
+      <div class="card tabla-wrap"><table class="compacta">
+        <thead><tr><th>${S.vistaModelos === "modelo" ? "Modelo" : "Categoría"}</th><th>Ventas</th><th>Otros ing.</th><th>Compras</th><th>Gastos grales.</th><th>Imp + Fin</th><th>Incobr.</th><th>EBITDA</th><th>Rent.</th><th title="Cuántos puntos de la rentabilidad total aporta cada modelo">EBITDA ponderado</th><th>% del EBITDA</th><th>Operaciones</th><th>Ticket prom.</th></tr></thead>
+        <tbody>${filas.map((f) => tr(f)).join("")}${tr({ nombre: "Total", r: tot, ops: opsTot ? { ops: opsTot } : null }, true)}</tbody></table>
+        <div class="tabla-nota">EBITDA = resultado antes de impuesto a las ganancias. EBITDA ponderado = cuántos puntos de la rentabilidad total (${P(tot.rent)}) explica cada ${S.vistaModelos === "modelo" ? "modelo" : "categoría"}: su EBITDA sobre los ingresos totales (ventas + otros ingresos + res. financieros). Operaciones y ticket: variación vs mes anterior.</div>
+      </div>
+      <div class="grid g-7-5" style="margin-top:16px">
+        <div class="card"><h3>EBITDA por ${S.vistaModelos === "modelo" ? "modelo" : "categoría"}</h3><div class="card-sub">Participación sobre el consolidado de ${M(tot.ebitda)} · rentabilidad del consolidado ${P(tot.rent)}</div>
+          ${barrasCero(filas.map((f) => ({ label: f.nombre, v: f.r.ebitda, tip: `Rentabilidad ${P(f.r.rent)}` })).sort((a, b) => b.v - a.v), { W: ancho(7 / 12), extra: (it) => `${P((it.v / tot.ebitda) * 100, 1)} del total` })}
+        </div>
+        <div class="card"><h3>Incobrabilidad por modelo</h3><div class="card-sub">Participación sobre ${M(incobTot)} consolidado</div>
+          <div class="stack">${incob.map((x) => `<div style="width:${(x.v / incobTot) * 100}%;background:var(${COLOR_MODELO[x.m]})" data-tip="<b>${titulo(x.m)}</b><br>${M(x.v)} · ${P((x.v / incobTot) * 100, 1)}"></div>`).join("")}</div>
+          <div class="legend">${incob.map((x) => `<span><span class="dot" style="background:var(${COLOR_MODELO[x.m]})"></span>${titulo(x.m)} <b>${M(x.v)}</b> · ${P((x.v / incobTot) * 100, 1)}</span>`).join("")}</div>
+        </div>
+      </div>`;
+    bindTabs();
+    el.querySelector("tbody").addEventListener("click", (e) => {
+      const t = e.target.closest("tr[data-m]"); if (!t) return;
+      S.modelo = t.dataset.m; syncFiltros(); render(); location.hash = "#s-resumen";
+    });
+  }
+  function bindTabs() {
+    $("#mod-tabs")?.addEventListener("click", (e) => { const v = e.target.dataset.v; if (v) { S.vistaModelos = v; rModelos(S.contenido[S.mes] || {}); } });
+    $("[data-go-cons]")?.addEventListener("click", () => { S.soc = "CONS"; syncFiltros(); render(); });
+  }
+
+  function rPpto(c) {
+    const el = $("#s-ppto");
+    const pp = c.presupuesto;
+    const mm = S.pnl.modelos[S.mes];
+    const cab = head("¿Cómo venimos contra el presupuesto?", "Real vs presupuesto", `Real comparable: Consolidado sin Go Celular ni Go Tarjetas · ${mesNombre(S.mes)} · en millones de $ARS`);
+    if (!pp) { el.innerHTML = cab + `<div class="aviso"><i class="bi bi-info-circle"></i>No hay presupuesto cargado para ${mesNombre(S.mes, false)} (sección "presupuesto" en data/contenido/${S.mes}.json).</div>`; return; }
+    if (!mm) { el.innerHTML = cab + `<div class="aviso"><i class="bi bi-info-circle"></i>Hace falta el export por modelo para armar el real comparable.</div>`; return; }
+    const comp = sumar(Object.entries(mm).filter(([m]) => !FUERA_PPTO.includes(m)).map(([, d]) => d));
+    const s = (pref, filtro = () => true) => Object.entries(comp).reduce((a, [k, v]) => (pref.some((p) => k.startsWith(p)) && filtro(k) ? a + v : a), 0) / 1e6;
+    const real = {
+      ventas: s(["41"]), otros_ingresos: s(["42", "43"]), compras: -s(["51"]),
+      gastos_generales: -s(["53", "54"], (k) => !SOPORTES.includes(k)), masa_salarial: -(s(["52"]) + s(SOPORTES)),
+      impuestos: -s(["55"]), financiacion: -s(["56"]), incobrabilidad: -s(["57"]), ig: -(comp.IG || 0) / 1e6,
+    };
+    const R = pp.rubros;
+    const ingreso = { ventas: 1, otros_ingresos: 1 };
+    const nombres = { ventas: "Ventas", otros_ingresos: "Otros ingresos", compras: "Compras", gastos_generales: "Gastos generales", masa_salarial: "Masa salarial", impuestos: "Impuestos y tasas", financiacion: "Financiación", incobrabilidad: "Incobrabilidad" };
+    const eb = (o) => o.ventas + o.otros_ingresos - o.compras - o.gastos_generales - o.masa_salarial - o.impuestos - o.financiacion - o.incobrabilidad;
+    const ebR = eb(real), ebP = eb(R);
+    const dv = (rv, pv, esIng, conMonto = true) => {
+      const d = rv - pv, pc = pv ? (d / Math.abs(pv)) * 100 : null;
+      const good = esIng ? d >= 0 : d <= 0;
+      return `${conMonto ? `<td class="num">${sgn(d)}${Mm(d)}</td>` : ""}<td><span class="delta ${Math.abs(d) < 0.5 ? "neu" : good ? "good" : "bad"}">${pc == null ? "n/p" : sgn(pc) + nf0.format(pc) + "%"}</span></td>`;
+    };
+    const filas = Object.keys(nombres).map((k) => `<tr><td>${nombres[k]}</td><td class="num">${ingreso[k] ? "" : "-"}${Mm(real[k])}</td><td class="num">${ingreso[k] ? "" : "-"}${Mm(R[k])}</td>${dv(real[k], R[k], !!ingreso[k])}</tr>`).join("");
+    const netoR = ebR - real.ig, netoP = ebP - R.ig;
+    const ingR = real.ventas + real.otros_ingresos, ingP = R.ventas + R.otros_ingresos;
+    const bridge = [{ label: "EBITDA ppto", v: ebP, total: true },
+      ...Object.keys(nombres).map((k) => ({ label: nombres[k], v: ingreso[k] ? real[k] - R[k] : R[k] - real[k] })),
+      { label: "EBITDA real", v: ebR, total: true }];
+    // por modelo
+    const pm = pp.modelos || {};
+    const realModelo = (m, pref) => Math.abs(suma(mm[m] || {}, pref)) / 1e6;
+    const tablaModelo = (tit, key, pref, esIng) => {
+      const ms = Object.keys(pm[key] || {});
+      if (!ms.length) return "";
+      let tr = 0, tp = 0;
+      const rows = ms.map((m) => { const rv = realModelo(m, pref), pv = pm[key][m]; tr += rv; tp += pv;
+        return `<tr><td><span class="dot" style="background:var(${COLOR_MODELO[m]})"></span>${titulo(m)}</td><td class="num">${Mm(rv)}</td><td class="num">${Mm(pv)}</td>${dv(rv, pv, esIng, false)}</tr>`; }).join("");
+      return `<div class="card tabla-wrap"><h3>${tit}</h3><table><thead><tr><th>Modelo</th><th>Real</th><th>Ppto</th><th>Desv %</th></tr></thead>
+        <tbody>${rows}<tr class="sub fijo"><td>Total</td><td class="num">${Mm(tr)}</td><td class="num">${Mm(tp)}</td>${dv(tr, tp, esIng, false)}</tr></tbody></table></div>`;
+    };
+    const vm = Object.keys(pm.ventas || {});
+    const bridgeV = vm.length ? [{ label: "Ventas ppto", v: vm.reduce((a, m) => a + pm.ventas[m], 0), total: true },
+      ...vm.map((m) => ({ label: titulo(m), v: realModelo(m, ["41"]) - pm.ventas[m] })),
+      { label: "Ventas real", v: vm.reduce((a, m) => a + realModelo(m, ["41"]), 0), total: true }] : null;
+    const lect = (pp.lectura || []).map(comentario).join("");
+    el.innerHTML = cab + `
+      ${S.soc !== "CONS" || S.modelo !== "TODOS" ? `<div class="aviso" style="margin-bottom:12px"><i class="bi bi-info-circle"></i>El presupuesto se compara siempre a nivel consolidado; los filtros de sociedad y modelo no aplican a esta sección.</div>` : ""}
+      <div class="card"><h3>Bridge de desvío presupuestario</h3><div class="card-sub">Azul = desvío favorable al resultado · rojo = desfavorable</div>${waterfall(bridge, { fmt: Mm })}</div>
+      <div class="grid g3" style="margin-top:16px">
+        ${tablaModelo("Ventas", "ventas", ["41"], true)}${tablaModelo("Otros ingresos", "otros_ingresos", ["42", "43"], true)}${tablaModelo("Incobrabilidad", "incobrabilidad", ["57"], false)}
+      </div>
+      `;
+  }
+
+  function rEspeciales(c) {
+    const lista = c.analisis_especial || [];
+    const tarjeta = (a) => {
+      let serie = "";
+      if (a.tipo === "cuenta") {
+        // se calcula con los datos del tablero: sociedad/modelo elegidos y ajustes aplicados
+        const meses = S.pnl.meses.filter((m) => m <= S.mes).slice(-3);
+        serie = columnas(meses.map((m) => {
+          const d = datosScope(m), v = -(suma(d, a.cuentas) || 0) / 1e6, r = d ? calc(d) : null;
+          return { label: mesNombre(m, false).replace(/^./, (x) => x.toUpperCase()).slice(0, 3) + " " + m.slice(0, 4), v, tip: r && r.ingresos ? `${P((v * 1e6 / r.ingresos) * 100, 1)} de los ingresos` : "" };
+        }), { W: ancho(1 / 2), fmt: Mm });
+      } else if (a.serie) {
+        serie = columnas(a.serie.map((x) => ({ label: x.mes, v: x.pct, tip: x.cobrado != null ? `Total cobrado en el mes: ${Mm(x.cobrado)}` : "" })), { W: ancho(1 / 2) });
+      }
+      return `<div class="card"><div class="eyebrow">Análisis especial</div><h3>${esc(a.titulo)}</h3><div class="card-sub">${esc(a.bajada || "")}</div>
+        ${serie}
+        ${(a.notas || []).length ? `<ul class="area-list" style="margin-top:8px">${a.notas.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+        ${a.fuente ? `<div class="tabla-nota">Fuente: ${esc(a.fuente)}</div>` : ""}
+      </div>`;
+    };
+    $("#s-especiales").innerHTML = head("¿Qué miramos en detalle?", "Análisis especiales", mesNombre(S.mes)) +
+      (lista.length ? `<div class="grid g2">${lista.map(tarjeta).join("")}</div>` : `<div class="aviso"><i class="bi bi-info-circle"></i>Sin análisis especiales para este mes.</div>`);
+  }
+
+  function rInteranual(c) {
+    const el = $("#s-interanual");
+    const ia = c.interanual;
+    const mA = ia ? mesNombre(ia.mes_anterior) : "";
+    const cab = head("¿Cómo venimos contra el año pasado?", "Interanual", ia ? `Consolidado · ${mesNombre(S.mes)} vs ${mA} (ajustado por IPC ${nf0.format(ia.ipc)}%) · en millones de $ARS` : mesNombre(S.mes));
+    if (!ia) { el.innerHTML = cab + `<div class="aviso"><i class="bi bi-info-circle"></i>No hay comparativo interanual cargado para ${mesNombre(S.mes, false)} (scripts/interanual.py).</div>`; return; }
+    const delta = (pc, ing) => {
+      if (pc == null) return `<td></td>`;
+      const good = ing ? pc >= 0 : pc <= 0;
+      return `<td><span class="delta ${Math.abs(pc) < 0.5 ? "neu" : good ? "good" : "bad"}">${sgn(pc)}${nf1.format(pc)}%</span></td>`;
+    };
+    const hayP = false; // el presupuesto se ve en su propia sección
+    // columna del mes actual: se recalcula con los ajustes elegidos (el año anterior viene fijo)
+    const act = S.pnl.sociedades.CONS?.[S.mes] || {};
+    const pre = { ventas: ["41"], otros_ingresos: ["42", "43"], compras: ["51"], gastos_op: ["52", "53", "54"], impuestos: ["55"], financiacion: ["56"], incobrabilidad: ["57"] };
+    const v = {};
+    for (const [k, p] of Object.entries(pre)) v[k] = suma(act, p) / 1e6;
+    v.ebitda = Object.entries(act).reduce((a, [k, x]) => (k === "IG" ? a : a + x), 0) / 1e6;
+    v.ig = (act.IG || 0) / 1e6; v.neto = v.ebitda + v.ig;
+    const varAbs = (x, b) => (b ? ((Math.abs(x) - Math.abs(b)) / Math.abs(b)) * 100 : null);
+    ia.filas.forEach((f) => { if (f.clave in v) { f.act = v[f.clave]; f.var_nominal = varAbs(f.act, f.ant); f.var_real = varAbs(f.act, f.ant_ipc); } });
+    ia.rentabilidad.act = (v.ebitda / (v.ventas + v.otros_ingresos)) * 100;
+    const filas = ia.filas.map((f) => `<tr class="${f.total ? "total" : ""}"><td>${esc(f.nombre)}</td>
+      <td class="num">${Mm(f.ant)}</td><td class="num">${Mm(f.ant_ipc)}</td><td class="num">${Mm(f.act)}</td>${delta(f.var_nominal, f.ingreso)}${delta(f.var_real, f.ingreso)}
+      ${hayP ? `<td class="num sep">${Mm(f.comp)}</td><td class="num">${Mm(f.ppto)}</td>${delta(f.var_ppto, f.ingreso)}` : ""}</tr>`).join("");
+    const R = ia.rentabilidad;
+    const conc = (ia.conclusiones || []).map(comentario).join("");
+    const op = ia.operaciones;
+    const n0 = (v) => (v == null ? "—" : nf0.format(v));
+    const corto = (m) => mesNombre(m).slice(0, 3) + " " + m.slice(0, 4);
+    const opsIA = op ? `<div class="card tabla-wrap"><h3>Operaciones por modelo</h3><table>
+      <thead><tr><th>Modelo</th><th>${corto(ia.mes_anterior)}</th><th>${corto(S.mes)}</th><th>Var.</th></tr></thead>
+      <tbody>${op.filas.map((f) => { const tot = f.modelo === "TOTAL";
+        return `<tr class="${tot ? "total" : ""}"><td>${tot ? "Total" : titulo(f.modelo)}</td><td class="num">${n0(f.ant)}</td><td class="num">${n0(f.act)}</td>
+        <td>${f.var == null ? `<span class="delta neu">nuevo</span>` : `<span class="delta ${f.var >= 0 ? "good" : "bad"}">${sgn(f.var)}${nf1.format(f.var)}%</span>`}</td></tr>`; }).join("")}</tbody></table>
+      <div class="tabla-nota">Go Celular = operaciones de Go Cuotas en 9 cuotas.</div></div>` : "";
+    const efe = (ia.efemerides || []).map((e) => `<li><span class="efe-fecha">${esc(e.fecha)}</span><span class="efe-mod">${titulo(e.modelo)}</span>${esc(e.texto)}</li>`).join("");
+    el.innerHTML = cab + `
+      <div class="card tabla-wrap"><h3>Estado de resultados comparado</h3><table>
+        <thead><tr><th rowspan="2">Rubro</th><th colspan="5" class="grupo">${mesNombre(S.mes)} vs ${mA}</th>${hayP ? `<th colspan="3" class="grupo sep">vs presupuesto (real comparable)</th>` : ""}</tr>
+          <tr><th>${mA}</th><th>${mA} + IPC</th><th>${mesNombre(S.mes)}</th><th>Var. nominal</th><th>Var. real</th>${hayP ? `<th class="sep">Real comp.</th><th>Ppto</th><th>Desvío</th>` : ""}</tr></thead>
+        <tbody>${filas}
+          <tr class="pct"><td>Rentabilidad s/ ventas + OI</td><td class="num">${P(R.ant)}</td><td></td><td class="num">${P(R.act)}</td><td></td><td></td>${hayP ? `<td class="num sep">${P(R.comp)}</td><td class="num">${P(R.ppto)}</td><td></td>` : ""}</tr>
+        </tbody></table>
+        <div class="tabla-nota">Var. nominal = vs ${mA}. Var. real = vs ${mA} ajustado por IPC ${nf0.format(ia.ipc)}%. En egresos, una variación positiva indica más gasto. ${esc(ia.fuente)}</div></div>
+      <div class="grid ${efe || opsIA ? "g-7-5" : ""}" style="margin-top:16px">
+        <div class="card"><h3>Conclusiones</h3>${conc ? `<ul class="drivers">${conc}</ul>` : `<div class="vacio">Sin conclusiones cargadas.</div>`}</div>
+        ${opsIA}
+        ${efe ? `<div class="card"><h3>Efemérides entre ${mA} y ${mesNombre(S.mes)}</h3><ul class="efemerides">${efe}</ul><div class="tabla-nota">Fuente: GO | Efemérides.</div></div>` : ""}
+      </div>`;
+  }
+
+  function rAreas(c) {
+    const a = c.areas || [];
+    const ca = c.consumo_areas;
+    const tablaCons = (bl, tit) => `<div class="card tabla-wrap"><h3>${esc(tit)}</h3><table>
+      <thead><tr><th>Área</th><th>Presupuesto</th><th>Gasto real</th><th>Desvío</th></tr></thead>
+      <tbody>${bl.areas.map((x) => `<tr><td>${esc(x.area)}</td><td class="num">${M1(x.ppto)}</td><td class="num">${M1(x.real)}</td><td><span class="delta ${Math.abs(x.desvio) < 0.5 ? "neu" : x.desvio <= 0 ? "good" : "bad"}">${sgn(x.desvio)}${nf2.format(x.desvio)}%</span></td></tr>`).join("")}
+        <tr class="total"><td>Total</td><td class="num">${M1(bl.total.ppto)}</td><td class="num">${M1(bl.total.real)}</td><td><span class="delta ${bl.total.desvio <= 0 ? "good" : "bad"}">${sgn(bl.total.desvio)}${nf2.format(bl.total.desvio)}%</span></td></tr>
+      </tbody></table></div>`;
+    const consumo = ca ? `<div class="grid g2" style="margin-bottom:16px">${tablaCons(ca.mes, "Consumo por área vs presupuesto · " + mesNombre(S.mes))}${tablaCons(ca.acumulado, ca.acumulado.titulo)}</div>
+      ${ca.nota ? `<div class="aviso" style="margin-bottom:16px"><i class="bi bi-info-circle"></i>${esc(ca.nota)} <span class="tabla-nota">${esc(ca.fuente)}</span></div>` : ""}` : "";
+    $("#s-areas").innerHTML = head("¿Qué pasó en cada área?", "Áreas: consumo y novedades", mesNombre(S.mes)) + consumo + (a.length ? `<div class="grid g2">${a.map((x) => `
+      <div class="card"><h3>${esc(x.titulo)}</h3>
+        ${x.items?.length ? `<ul class="area-list">${x.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : `<div class="vacio">Sin novedades cargadas.</div>`}
+        ${x.link ? `<p style="margin:12px 0 0"><a href="${esc(x.link.url)}" target="_blank" rel="noopener">${esc(x.link.texto)} <i class="bi bi-box-arrow-up-right"></i></a></p>` : ""}
+      </div>`).join("")}</div>` : `<div class="aviso"><i class="bi bi-info-circle"></i>Sin novedades por área para este mes.</div>`);
+  }
+
+  const sinDatos = () => `<div class="aviso"><i class="bi bi-info-circle"></i>No hay datos para esta combinación (${esc(nombreScope())}, ${mesNombre(S.mes, false)}).${S.modelo !== "TODOS" ? " Probá con Modelo = Todos." : ""}</div>`;
+
+
+  // ---------- ajustes (DDJJ Ganancias, Fideicomiso) ----------
+  // S.base = datos tal como vienen de NetSuite; S.pnl = datos con los ajustes elegidos.
+  // El IG de NetSuite es la tasa (35%) sobre el resultado antes de IG: se recalcula con la misma tasa.
+  const ajustesMes = (mes) => (S.base.ajustes || {})[mes] || [];
+  const incluido = (aj) => (aj.id in S.aj ? S.aj[aj.id] : aj.incluido);
+  function aplicarAjustes() {
+    const p = JSON.parse(JSON.stringify(S.base));
+    const res = (d) => Object.entries(d).reduce((a, [k, v]) => (k === "IG" ? a : a + v), 0);
+    for (const [mes, lista] of Object.entries(p.ajustes || {})) {
+      for (const aj of lista) {
+        if (incluido(aj)) continue;
+        const destinos = [...Object.entries(aj.sociedades).map(([s, c]) => [p.sociedades[s]?.[mes], c]),
+          ...Object.entries(aj.modelos || {}).map(([m, c]) => [p.modelos[mes]?.[m], c])];
+        for (const [d, cuentas] of destinos) {
+          if (!d) continue;
+          const antes = res(d);
+          for (const [cod, imp] of Object.entries(cuentas)) d[cod] = (d[cod] || 0) - imp;
+          if ("IG" in d && antes) d.IG = (d.IG * res(d)) / antes;
+        }
+      }
+    }
+    S.pnl = p;
+  }
+  function syncAjustes() {
+    const lista = ajustesMes(S.mes);
+    $("#ctl-aj").hidden = !lista.length;
+    $("#f-aj").innerHTML = lista.map((aj) => `<button class="chip" data-id="${esc(aj.id)}" role="switch" aria-checked="${incluido(aj)}" title="${esc(aj.nombre)} (${esc(aj.detalle)}) · ${incluido(aj) ? "incluido: clic para sacarlo" : "excluido: clic para sumarlo"}">${incluido(aj) ? "Con" : "Sin"} ${esc(aj.corto || aj.nombre)}</button>`).join("");
+    const distintos = lista.filter((aj) => incluido(aj) !== aj.incluido);
+    $("#aviso-aj").innerHTML = distintos.length ? `<div class="aviso aviso-aj"><i class="bi bi-exclamation-triangle"></i><div>Estás viendo una vista distinta a la estándar: ${distintos.map((aj) => `${incluido(aj) ? "con" : "sin"} ${esc(aj.nombre)}`).join(" y ")}. Los números se recalculan, pero los comentarios (drivers, lectura del presupuesto y conclusiones) están escritos para la vista estándar. <button class="link" id="aj-reset">Volver a la vista estándar</button></div></div>` : "";
+    const r = $("#aj-reset");
+    if (r) r.onclick = () => { S.aj = {}; aplicarAjustes(); syncAjustes(); render(); };
+  }
+
+  // ---------- render ----------
+  function render() {
+    const c = S.contenido[S.mes] || {};
+    const d = datosScope(S.mes), dp = datosScope(mesAnterior(S.mes));
+    const r = calc(d), rp = calc(dp);
+    rPortada(c, r); rResumen(c, r, rp); rPnl(d, dp, r, rp); rInteranual(c); rModelos(c); rPpto(c); rAreas(c);
+    document.title = `${c.titulo || "PNL " + mesNombre(S.mes)} · Go Cuotas`;
+    const q = { mes: S.mes, soc: S.soc, modelo: S.modelo };
+    for (const [id, v] of Object.entries(S.aj)) q["aj_" + id] = v ? "1" : "0";
+    try { history.replaceState(null, "", `?${new URLSearchParams(q)}${location.hash}`); } catch { /* visor sin URL propia */ }
+  }
+
+  function syncFiltros() {
+    $("#f-mes").value = S.mes;
+    document.querySelectorAll("#f-soc button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === S.soc));
+    const sel = $("#f-modelo");
+    const mm = S.pnl.modelos[S.mes];
+    const hay = S.soc === "CONS" && !!mm;
+    sel.innerHTML = `<option value="TODOS">Todos</option>` + (hay ? `<optgroup label="Modelos">${MODELOS.filter((m) => mm[m]).map((m) => `<option value="${m}">${titulo(m)}</option>`).join("")}</optgroup>
+      <optgroup label="Agrupados">${Object.entries(GRUPOS).map(([k, g]) => `<option value="${k}">${g.nombre}</option>`).join("")}</optgroup>` : "");
+    if (!hay) S.modelo = "TODOS";
+    sel.value = S.modelo; sel.disabled = !hay;
+    sel.title = hay ? "" : S.soc !== "CONS" ? "El export por modelo es consolidado" : "No hay export por modelo para este mes";
+  }
+
+  async function cargarContenido(mes) {
+    if (S.contenido[mes] !== undefined) return;
+    if (window.__CONTENIDO__) { S.contenido[mes] = window.__CONTENIDO__[mes] || {}; return; }
+    try { const r = await fetch(`data/contenido/${mes}.json`, { cache: "no-cache" }); S.contenido[mes] = r.ok ? await r.json() : {}; }
+    catch { S.contenido[mes] = {}; }
+  }
+
+  // ---------- navegación y modo presentación ----------
+  function armarNav() {
+    const secs = [...document.querySelectorAll("main > section")];
+    $("#secnav").innerHTML = secs.map((s) => `<a href="#${s.id}">${s.dataset.nav}</a>`).join("");
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (e.isIntersecting) {
+        document.querySelectorAll("#secnav a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
+        const i = secs.indexOf(e.target);
+        $("#hud").textContent = `${i + 1} / ${secs.length} · ${e.target.dataset.nav} · ← → para navegar · Esc para salir`;
+      }
+    }), { rootMargin: "-45% 0px -50% 0px" });
+    secs.forEach((s) => io.observe(s));
+    const actual = () => { const y = innerHeight * 0.4; return Math.max(0, secs.findIndex((s) => s.getBoundingClientRect().bottom > y)); };
+    let cur = 0;
+    const ir = (i) => { cur = Math.max(0, Math.min(secs.length - 1, i)); secs[cur].scrollIntoView({ behavior: "smooth" }); };
+    const toggle = (on = !document.body.classList.contains("present")) => {
+      document.body.classList.toggle("present", on);
+      $("#btn-present").innerHTML = on ? `<i class="bi bi-x-lg"></i>Salir` : `<i class="bi bi-play-fill"></i>Presentar`;
+      render();
+      if (on) { document.documentElement.requestFullscreen?.().catch(() => {}); ir(actual()); }
+      else if (document.fullscreenElement) document.exitFullscreen?.();
+    };
+    $("#btn-present").addEventListener("click", () => toggle());
+    document.addEventListener("keydown", (e) => {
+      if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === "p" || e.key === "P") toggle();
+      if (!document.body.classList.contains("present")) return;
+      if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); ir(cur + 1); }
+      if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); ir(cur - 1); }
+      if (e.key === "Escape") toggle(false);
+    });
+    document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("present")) toggle(false); });
+  }
+
+  async function init() {
+    try {
+      S.base = window.__PNL__ || (await (await fetch("data/pnl.json", { cache: "no-cache" })).json());
+    } catch (e) {
+      $("#app").innerHTML = `<div class="aviso"><i class="bi bi-info-circle"></i>No se pudo cargar data/pnl.json. Si estás abriendo el archivo directo desde la carpeta, levantalo con un servidor (ver LEEME.md).</div>`;
+      return;
+    }
+    const q = new URLSearchParams(location.search);
+    for (const [k, v] of q) if (k.startsWith("aj_")) S.aj[k.slice(3)] = v === "1";
+    aplicarAjustes();
+    const meses = S.pnl.meses;
+    S.mes = meses.includes(q.get("mes")) ? q.get("mes") : [...meses].reverse().find((m) => S.pnl.modelos[m]) || meses.at(-1);
+    S.soc = SOCIEDADES[q.get("soc")] ? q.get("soc") : "CONS";
+    S.modelo = q.get("modelo") || "TODOS";
+    $("#f-mes").innerHTML = [...meses].reverse().map((m) => `<option value="${m}">${mesNombre(m)}</option>`).join("");
+    await Promise.all(meses.map(cargarContenido));
+    syncFiltros(); syncAjustes();
+    $("#f-mes").addEventListener("change", (e) => { S.mes = e.target.value; syncFiltros(); syncAjustes(); render(); });
+    $("#f-aj").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-id]");
+      if (!b) return;
+      const aj = ajustesMes(S.mes).find((x) => x.id === b.dataset.id);
+      S.aj[aj.id] = !incluido(aj);
+      if (S.aj[aj.id] === aj.incluido) delete S.aj[aj.id];
+      aplicarAjustes(); syncFiltros(); syncAjustes(); render();
+    });
+    $("#f-soc").addEventListener("click", (e) => { const v = e.target.dataset.v; if (v) { S.soc = v; syncFiltros(); render(); } });
+    $("#f-modelo").addEventListener("change", (e) => { S.modelo = e.target.value; render(); });
+    armarNav();
+    const altoBarra = () => document.documentElement.style.setProperty("--topbar-h", $(".topbar").offsetHeight + "px");
+    altoBarra();
+    let t; addEventListener("resize", () => { altoBarra(); clearTimeout(t); t = setTimeout(render, 150); });
+    render();
+  }
+  init();
+})();
+
+</script>
+
+</body></html>
