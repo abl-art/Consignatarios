@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Siniestro } from '@/lib/gocelular'
-import { cargarSiniestro, setNotaCredito } from '@/lib/actions/siniestros'
+import { separarResueltos } from '@/lib/siniestros'
+import { cargarSiniestro, setNotaCredito, setSiniestroResuelto } from '@/lib/actions/siniestros'
 
 function fecha(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
@@ -124,73 +125,166 @@ function NotaCreditoCheck({ tracking, emitida }: { tracking: string | null; emit
   )
 }
 
-export default function SiniestrosTable({ siniestros }: { siniestros: Siniestro[] }) {
+// Resolver con confirmación en dos pasos (patrón de Demoras); en la lista de
+// resueltos el mismo botón reabre sin confirmación (acción inocua).
+function AccionResuelto({ tracking, resueltoAt }: { tracking: string | null; resueltoAt: string | null }) {
+  const router = useRouter()
+  const [confirmando, setConfirmando] = useState(false)
+  const [enviando, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  if (!tracking) return <span className="text-gray-400" title="Sin tracking no se puede guardar el estado">—</span>
+
+  const ejecutar = (resuelto: boolean) => {
+    startTransition(async () => {
+      const res = await setSiniestroResuelto(tracking, resuelto)
+      if (res.error) {
+        setError(res.error)
+        setConfirmando(false)
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
+  if (resueltoAt) {
+    return (
+      <button
+        disabled={enviando}
+        onClick={() => ejecutar(false)}
+        className="px-2 py-0.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-100 whitespace-nowrap disabled:opacity-40"
+        title={`Resuelto el ${fecha(resueltoAt)} — volver a pendientes`}
+      >
+        {enviando ? '…' : '↩ Reabrir'}
+      </button>
+    )
+  }
+
   return (
-    <div>
-      <p className="text-xs text-gray-500 mb-3">
+    <div className="flex items-center gap-1">
+      {confirmando ? (
+        <>
+          <button
+            disabled={enviando}
+            onClick={() => ejecutar(true)}
+            className="px-2 py-0.5 rounded text-xs font-bold text-white whitespace-nowrap bg-green-600 hover:bg-green-700 disabled:opacity-50"
+            title="Confirmar: el caso está gestionado, pasa a la lista de resueltos"
+          >
+            {enviando ? '…' : '¿Resolver?'}
+          </button>
+          {!enviando && (
+            <button onClick={() => setConfirmando(false)} className="text-xs text-gray-400 hover:text-gray-600 px-0.5" title="Cancelar">
+              ✕
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => { setConfirmando(true); setError(null) }}
+          className="px-2 py-0.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-100 whitespace-nowrap"
+          title="Marcar como resuelto: el caso está gestionado y pasa a la lista colapsable de abajo"
+        >
+          ✓ Resolver
+        </button>
+      )}
+      {error && <span className="text-[10px] text-red-600 max-w-[140px]">{error}</span>}
+    </div>
+  )
+}
+
+function Tabla({ siniestros }: { siniestros: Siniestro[] }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del equipo en Trustonic: un equipo perdido debería estar locked">Trustonic</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Siniestrado</th>
+            <th className="text-center px-4 py-3 font-medium text-gray-600" title="Andreani declaró el siniestro en el tracking del envío">Informado por Andreani</th>
+            <th className="text-center px-4 py-3 font-medium text-gray-600" title="Tildar cuando Andreani emitió la nota de crédito">Nota de crédito</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600">Caso</th>
+            <th className="text-right px-4 py-3 font-medium text-gray-600" title="Días desde el siniestro (o desde la carga manual)">Días</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Marcar como resuelto cuando el caso está gestionado">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {siniestros.map((s) => (
+            <tr key={s.tracking ?? s.orderNumber} className="hover:bg-gray-50">
+              <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">{s.orderNumber}</td>
+              <td className="px-4 py-3 text-gray-900">
+                {s.cliente || '—'}
+                <div className="text-xs text-gray-500">
+                  {[s.dni && `DNI ${s.dni}`, s.telefono].filter(Boolean).join(' · ')}
+                </div>
+              </td>
+              <td className="px-4 py-3 text-gray-600 max-w-[200px]">
+                <div className="truncate" title={s.producto ?? undefined}>{s.producto ?? '—'}</div>
+                {s.imei && <div className="font-mono text-xs text-gray-400">IMEI {s.imei}</div>}
+              </td>
+              <td className="px-4 py-3 text-gray-600">{s.destino || '—'}</td>
+              <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.tracking ?? '—'}</td>
+              <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.gocuotasOrderId ?? '—'}</td>
+              <td className="px-4 py-3"><OrdenGocuotasChip activa={s.ordenActiva} status={s.gocuotasStatus} /></td>
+              <td className="px-4 py-3"><TrustonicChip status={s.trustonicStatus} /></td>
+              <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                {fecha(s.siniestroAt)}
+                {s.entregadoAntes && <div className="text-xs text-amber-600">⚠️ entregado antes</div>}
+              </td>
+              <td className="px-4 py-3 text-center text-base">{s.informadoAndreani ? '✅' : <span className="text-gray-400 text-sm">—</span>}</td>
+              <td className="px-4 py-3 text-center"><NotaCreditoCheck tracking={s.tracking} emitida={s.notaCredito} /></td>
+              <td className="px-4 py-3"><CasoChip cerradoAt={s.cerradoAt} informado={s.informadoAndreani} /></td>
+              <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{s.dias}</td>
+              <td className="px-4 py-3"><AccionResuelto tracking={s.tracking} resueltoAt={s.resueltoAt} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export default function SiniestrosTable({ siniestros }: { siniestros: Siniestro[] }) {
+  const { pendientes, resueltos } = separarResueltos(siniestros)
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
         Envíos perdidos por el correo: los declara Andreani en el tracking (columna «Informado por Andreani»)
-        o los cargás a mano por número de envío. Tildá «Nota de crédito» cuando Andreani la emita, y verificá
-        el bloqueo Trustonic del equipo.
+        o los cargás a mano por número de envío. Tildá «Nota de crédito» cuando Andreani la emita, verificá
+        el bloqueo Trustonic del equipo y marcá «Resolver» cuando el caso quedó gestionado: pasa a la lista
+        colapsable de abajo y arriba quedan solo los pendientes.
       </p>
 
       <CargarSiniestro />
 
-      {siniestros.length === 0 ? (
+      {pendientes.length === 0 ? (
         <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-          <p className="text-sm text-green-700 font-medium">✅ Sin siniestros: Andreani no declaró ningún envío extraviado ni hay cargas manuales.</p>
+          <p className="text-sm text-green-700 font-medium">
+            {siniestros.length === 0
+              ? '✅ Sin siniestros: Andreani no declaró ningún envío extraviado ni hay cargas manuales.'
+              : '✅ Sin siniestros pendientes: todos los casos están resueltos.'}
+          </p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Producto</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del equipo en Trustonic: un equipo perdido debería estar locked">Trustonic</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Siniestrado</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600" title="Andreani declaró el siniestro en el tracking del envío">Informado por Andreani</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600" title="Tildar cuando Andreani emitió la nota de crédito">Nota de crédito</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Caso</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600" title="Días desde el siniestro (o desde la carga manual)">Días</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {siniestros.map((s) => (
-                <tr key={s.tracking ?? s.orderNumber} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-gray-900">{s.orderNumber}</td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {s.cliente || '—'}
-                    <div className="text-xs text-gray-500">
-                      {[s.dni && `DNI ${s.dni}`, s.telefono].filter(Boolean).join(' · ')}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[200px]">
-                    <div className="truncate" title={s.producto ?? undefined}>{s.producto ?? '—'}</div>
-                    {s.imei && <div className="font-mono text-xs text-gray-400">IMEI {s.imei}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{s.destino || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.tracking ?? '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.gocuotasOrderId ?? '—'}</td>
-                  <td className="px-4 py-3"><OrdenGocuotasChip activa={s.ordenActiva} status={s.gocuotasStatus} /></td>
-                  <td className="px-4 py-3"><TrustonicChip status={s.trustonicStatus} /></td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                    {fecha(s.siniestroAt)}
-                    {s.entregadoAntes && <div className="text-xs text-amber-600">⚠️ entregado antes</div>}
-                  </td>
-                  <td className="px-4 py-3 text-center text-base">{s.informadoAndreani ? '✅' : <span className="text-gray-400 text-sm">—</span>}</td>
-                  <td className="px-4 py-3 text-center"><NotaCreditoCheck tracking={s.tracking} emitida={s.notaCredito} /></td>
-                  <td className="px-4 py-3"><CasoChip cerradoAt={s.cerradoAt} informado={s.informadoAndreani} /></td>
-                  <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{s.dias}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Tabla siniestros={pendientes} />
+      )}
+
+      {resueltos.length > 0 && (
+        <details className="border border-gray-200 rounded-lg">
+          <summary className="cursor-pointer px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 select-none">
+            ✓ Resueltos ({resueltos.length})
+          </summary>
+          <div className="px-3 pb-3">
+            <Tabla siniestros={resueltos} />
+          </div>
+        </details>
       )}
     </div>
   )

@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS siniestros_seguimiento (
   nota_credito_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Marcado como resuelto (16/10/2026): los resueltos van a la lista colapsable
+-- del pie de la pestaña Siniestros Distribución. NULL = pendiente de gestión.
+ALTER TABLE siniestros_seguimiento ADD COLUMN IF NOT EXISTS resuelto_at timestamptz;
 ALTER TABLE siniestros_seguimiento ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS admin_all ON siniestros_seguimiento;
 CREATE POLICY admin_all ON siniestros_seguimiento

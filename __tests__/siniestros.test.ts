@@ -3,6 +3,7 @@ import {
   armarSiniestros,
   armarSiniestrosManuales,
   ordenarSiniestros,
+  separarResueltos,
   type SeguimientoSiniestro,
   type SiniestroRaw,
 } from '@/lib/siniestros'
@@ -36,7 +37,7 @@ function raw(orderNumber: string, traces: TraceEvento[], extra: Partial<Siniestr
 }
 
 function seg(tracking: string, extra: Partial<SeguimientoSiniestro> = {}): SeguimientoSiniestro {
-  return { tracking, notaCredito: false, createdAt: '2026-09-01T10:00:00-03:00', ...extra }
+  return { tracking, notaCredito: false, resueltoAt: null, createdAt: '2026-09-01T10:00:00-03:00', ...extra }
 }
 
 describe('armarSiniestros', () => {
@@ -158,5 +159,41 @@ describe('ordenarSiniestros', () => {
       [seg('360002000000001'), seg('360003000000001')],
     )
     expect(ordenarSiniestros(manuales).map(s => s.orderNumber)).toEqual(['SO-B', 'SO-A'])
+  })
+})
+
+describe('resuelto', () => {
+  it('aplica resueltoAt del seguimiento por tracking (autos y manuales)', () => {
+    const [auto] = armarSiniestros(
+      [raw('SO-AUTO', [ev('Siniestro', '2026-08-28T09:00:00-03:00', 'Siniestrado / Extravío')])],
+      AHORA,
+      [seg('360003067196850', { resueltoAt: '2026-09-01T15:00:00-03:00' })],
+    )
+    expect(auto.resueltoAt).toBe('2026-09-01T15:00:00-03:00')
+
+    const [manual] = armarSiniestrosManuales([raw('SO-MAN', [])], AHORA, [seg('360003067196850')])
+    expect(manual.resueltoAt).toBeNull()
+  })
+
+  it('separarResueltos divide la lista manteniendo el orden de cada grupo', () => {
+    const lista = armarSiniestrosManuales(
+      [
+        raw('SO-P1', [], { tracking: 'T1', envioAt: '2026-08-30T09:00:00-03:00' }),
+        raw('SO-R1', [], { tracking: 'T2', envioAt: '2026-08-20T09:00:00-03:00' }),
+        raw('SO-P2', [], { tracking: 'T3', envioAt: '2026-08-10T09:00:00-03:00' }),
+      ],
+      AHORA,
+      [seg('T1'), seg('T2', { resueltoAt: '2026-09-01T15:00:00-03:00' }), seg('T3')],
+    )
+    const { pendientes, resueltos } = separarResueltos(lista)
+    expect(pendientes.map(s => s.orderNumber)).toEqual(['SO-P1', 'SO-P2'])
+    expect(resueltos.map(s => s.orderNumber)).toEqual(['SO-R1'])
+  })
+
+  it('separarResueltos sin resueltos devuelve todo en pendientes', () => {
+    const lista = armarSiniestrosManuales([raw('SO-P1', [])], AHORA, [seg('360003067196850')])
+    const { pendientes, resueltos } = separarResueltos(lista)
+    expect(pendientes).toHaveLength(1)
+    expect(resueltos).toHaveLength(0)
   })
 })

@@ -14,10 +14,11 @@ async function getSeguimientos(): Promise<SeguimientoSiniestro[]> {
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('siniestros_seguimiento')
-    .select('tracking, nota_credito, created_at')
+    .select('tracking, nota_credito, resuelto_at, created_at')
   return (data ?? []).map(r => ({
     tracking: r.tracking,
     notaCredito: r.nota_credito,
+    resueltoAt: r.resuelto_at,
     createdAt: r.created_at,
   }))
 }
@@ -50,6 +51,24 @@ export async function cargarSiniestro(tracking: string): Promise<{ ok?: true; er
   const { error } = await supabase
     .from('siniestros_seguimiento')
     .upsert({ tracking: t }, { onConflict: 'tracking', ignoreDuplicates: true })
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/envios')
+  return { ok: true }
+}
+
+/**
+ * Marca/desmarca un siniestro como resuelto. Los resueltos van a la lista
+ * colapsable del pie de la pestaña; arriba quedan solo los pendientes.
+ */
+export async function setSiniestroResuelto(tracking: string, resuelto: boolean): Promise<{ ok?: true; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('siniestros_seguimiento')
+    .upsert(
+      { tracking, resuelto_at: resuelto ? new Date().toISOString() : null },
+      { onConflict: 'tracking' }
+    )
   if (error) return { error: error.message }
 
   revalidatePath('/compras/envios')

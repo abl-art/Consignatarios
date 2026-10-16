@@ -83,6 +83,7 @@ export default async function EnviosPage({
   ).length
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const siniestrosWhAbiertos = siniestrosStock.filter(s => s.estado === 'abierto').length
+  const siniestrosPendientes = siniestros.filter(s => !s.resueltoAt).length
   const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
   const modelosConDif = cortesControlStock[0]
     ? netoPorModelo(cortesControlStock[0].filas, cortesControlStock[0].enCola).filter(m => m.dif !== 0).length
@@ -252,7 +253,7 @@ export default async function EnviosPage({
         },
         {
           id: 'siniestros',
-          label: siniestros.length > 0 ? `Siniestros Distribución (${siniestros.length})` : 'Siniestros Distribución',
+          label: siniestrosPendientes > 0 ? `Siniestros Distribución (${siniestrosPendientes})` : 'Siniestros Distribución',
           content: <SiniestrosTable siniestros={siniestros} />,
         },
         {

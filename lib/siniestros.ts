@@ -32,6 +32,8 @@ export interface SiniestroRaw {
 export interface SeguimientoSiniestro {
   tracking: string
   notaCredito: boolean
+  /** Marcado como resuelto por el usuario (va a la lista colapsable) */
+  resueltoAt: string | null
   createdAt: string
 }
 
@@ -57,6 +59,8 @@ export interface Siniestro {
   informadoAndreani: boolean
   /** Tilde manual del usuario: la nota de crédito fue emitida */
   notaCredito: boolean
+  /** Marcado como resuelto por el usuario */
+  resueltoAt: string | null
   /** Fecha de carga manual (fila de seguimiento), si existe */
   cargadoAt: string | null
   /** Fecha de creación del envío en GOcelular */
@@ -97,6 +101,7 @@ function armarSiniestro(r: SiniestroRaw, seg: SeguimientoSiniestro | undefined, 
     entregadoAntes: siniestro ? eventos.some(e => e.evento === 'EnvioEntregado' && e.fecha < siniestro.fecha) : false,
     informadoAndreani: siniestro !== undefined,
     notaCredito: seg?.notaCredito ?? false,
+    resueltoAt: seg?.resueltoAt ?? null,
     cargadoAt: seg?.createdAt ?? null,
     envioAt: r.envioAt,
     dias: base ? Math.max(0, Math.floor((ahora.getTime() - new Date(base).getTime()) / DIA_MS)) : 0,
@@ -148,4 +153,15 @@ export function ordenarSiniestros(siniestros: Siniestro[]): Siniestro[] {
   const ref = (s: Siniestro) => s.siniestroAt ?? s.envioAt ?? s.cargadoAt ?? ''
   return [...siniestros].sort((a, b) =>
     ref(b).localeCompare(ref(a)) || (b.tracking ?? '').localeCompare(a.tracking ?? ''))
+}
+
+/**
+ * Divide la lista en pendientes de gestión y resueltos (marcados por el
+ * usuario): los resueltos van a la lista colapsable del pie de la pestaña.
+ */
+export function separarResueltos(siniestros: Siniestro[]): { pendientes: Siniestro[]; resueltos: Siniestro[] } {
+  return {
+    pendientes: siniestros.filter(s => !s.resueltoAt),
+    resueltos: siniestros.filter(s => s.resueltoAt),
+  }
 }
