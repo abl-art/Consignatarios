@@ -1,3 +1,7 @@
+import { request as httpsRequest } from 'node:https'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -8,6 +12,39 @@ import { descargarDeDrive, driveConfigurado } from '@/lib/google-drive'
 export const maxDuration = 300
 
 const AAI = 'https://api.assemblyai.com/v2'
+
+// Upload con node:https + pipeline y NO con fetch: undici no aplica backpressure
+// al cuerpo del request — bufferea en RAM todo lo que Drive entrega y AssemblyAI
+// aún no aceptó, y con videos >1GB la función muere por memoria (verificado en
+// logs: "instance was killed because it ran out of available memory", RSS 1:1
+// con lo descargado). Con pipeline, el socket lleno pausa la descarga de Drive.
+async function subirAAssemblyAI(stream: ReadableStream<Uint8Array>, apiKey: string): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const req = httpsRequest(
+      `${AAI}/upload`,
+      {
+        method: 'POST',
+        headers: { authorization: apiKey, 'content-type': 'application/octet-stream' },
+      },
+      (res) => {
+        let body = ''
+        res.on('data', (c) => (body += c))
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            return reject(new Error(`AssemblyAI upload falló (${res.statusCode}): ${body.slice(0, 300)}`))
+          }
+          try {
+            resolve((JSON.parse(body) as { upload_url: string }).upload_url)
+          } catch {
+            reject(new Error(`AssemblyAI upload devolvió una respuesta no-JSON: ${body.slice(0, 300)}`))
+          }
+        })
+      }
+    )
+    req.on('error', reject)
+    pipeline(Readable.fromWeb(stream as unknown as NodeWebReadableStream<Uint8Array>), req).catch(reject)
+  })
+}
 
 // Registra la entrevista (link de Drive privado) y arranca la transcripción:
 // descarga el video del Drive de Emiliano vía service account (nunca se hace
@@ -84,17 +121,10 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.ASSEMBLYAI_API_KEY
     if (!apiKey) throw new Error('Falta ASSEMBLYAI_API_KEY en el entorno')
 
-    // 1. Drive → AssemblyAI upload (streaming, el video nunca toca disco ni memoria completa)
+    // 1. Drive → AssemblyAI upload (streaming con backpressure, el video nunca
+    // toca disco ni se materializa completo en memoria)
     const archivo = await descargarDeDrive(fileId)
-    const upload = await fetch(`${AAI}/upload`, {
-      method: 'POST',
-      headers: { authorization: apiKey },
-      body: archivo.stream,
-      // @ts-expect-error duplex es necesario para streaming en Node fetch y no está tipado
-      duplex: 'half',
-    })
-    if (!upload.ok) throw new Error(`AssemblyAI upload falló (${upload.status}): ${await upload.text()}`)
-    const { upload_url } = (await upload.json()) as { upload_url: string }
+    const upload_url = await subirAAssemblyAI(archivo.stream, apiKey)
 
     // 2. Crear el job de transcripción en español
     const job = await fetch(`${AAI}/transcript`, {
