@@ -24,6 +24,7 @@ async function crearConsignatario(formData: FormData) {
     password,
     email_confirm: true,
     user_metadata: { rol: 'consignatario' },
+    app_metadata: { rol: 'consignatario' },
   })
   if (authError || !authData.user) return
 

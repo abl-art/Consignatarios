@@ -59,8 +59,42 @@ export async function middleware(request: NextRequest) {
 
   const rol = user.app_metadata?.rol
 
-  // Rutas admin: admins pasan siempre; restringidos van por rutaPermitida
-  // (leyendo su fila de usuarios_permisos); cualquier otro rol rebota.
+  // Restringido: default deny TOTAL — rutaPermitida se chequea contra
+  // CUALQUIER pathname que haya pasado los allowlists de arriba (no solo
+  // la lista legacy de prefijos admin), leyendo su propia fila de
+  // usuarios_permisos (RLS permite leer la fila propia con el client SSR).
+  if (rol === 'restringido') {
+    let permisos: Permisos = {}
+    try {
+      const { data, error } = await supabase
+        .from('usuarios_permisos')
+        .select('permisos, activo')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (error) {
+        console.error('[permisos] error leyendo usuarios_permisos en middleware:', error.message)
+        // fail-closed: permisos queda en {}
+      } else if (data && data.activo !== false) {
+        permisos = (data.permisos as Permisos) ?? {}
+      }
+      // sin fila (data null) o activo === false ⇒ permisos queda en {}
+    } catch (e) {
+      console.error('[permisos] excepción leyendo usuarios_permisos en middleware:', e)
+      // fail-closed: permisos queda en {}
+    }
+
+    if (!rutaPermitida(permisos, pathname)) {
+      const destino = primeraRutaPermitida(permisos) ?? '/sin-acceso'
+      if (destino !== pathname) {
+        return NextResponse.redirect(new URL(destino, request.url))
+      }
+      // destino === pathname: ya estamos donde nos mandaría el redirect; dejar pasar para no entrar en loop
+    }
+    return supabaseResponse
+  }
+
+  // Rutas admin: solo admins (gate legacy por prefijos, igual que antes de
+  // sumar `restringido` — ese rol ya fue resuelto arriba y nunca llega aquí).
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/inventario') ||
       pathname.startsWith('/modelos') || pathname.startsWith('/consignatarios') ||
       pathname.startsWith('/asignar') || pathname.startsWith('/auditorias') ||
@@ -70,36 +104,7 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/finanzas') ||
       pathname.startsWith('/compras') ||
       pathname.startsWith('/celia')) {
-    if (rol === 'admin') {
-      // pasa
-    } else if (rol === 'restringido') {
-      let permisos: Permisos = {}
-      try {
-        const { data, error } = await supabase
-          .from('usuarios_permisos')
-          .select('permisos, activo')
-          .eq('user_id', user.id)
-          .maybeSingle()
-        if (error) {
-          console.error('[permisos] error leyendo usuarios_permisos en middleware:', error.message)
-          // fail-closed: permisos queda en {}
-        } else if (data && data.activo !== false) {
-          permisos = (data.permisos as Permisos) ?? {}
-        }
-        // sin fila (data null) o activo === false ⇒ permisos queda en {}
-      } catch (e) {
-        console.error('[permisos] excepción leyendo usuarios_permisos en middleware:', e)
-        // fail-closed: permisos queda en {}
-      }
-
-      if (!rutaPermitida(permisos, pathname)) {
-        const destino = primeraRutaPermitida(permisos) ?? '/sin-acceso'
-        if (destino !== pathname) {
-          return NextResponse.redirect(new URL(destino, request.url))
-        }
-        // destino === pathname: ya estamos donde nos mandaría el redirect; dejar pasar para no entrar en loop
-      }
-    } else {
+    if (rol !== 'admin') {
       return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }
   }
