@@ -7,6 +7,6 @@ export default async function RootPage() {
 
   if (!user) redirect('/login')
 
-  const rol = user.user_metadata?.rol
-  redirect(rol === 'admin' || rol === 'visor' ? '/dashboard' : '/stock')
+  const rol = user.app_metadata?.rol
+  redirect(rol === 'admin' || rol === 'restringido' ? '/dashboard' : '/stock')
 }

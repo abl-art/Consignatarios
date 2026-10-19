@@ -16,7 +16,7 @@ export default async function ConsignatarioLayout({ children }: { children: Reac
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user || user.user_metadata?.rol !== 'consignatario') redirect('/login')
+  if (!user || user.app_metadata?.rol !== 'consignatario') redirect('/login')
 
   return (
     <div className="flex min-h-screen bg-gray-50">

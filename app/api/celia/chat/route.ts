@@ -93,7 +93,7 @@ export async function POST(request: Request) {
   // Auth: solo admin
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.user_metadata?.rol !== 'admin') {
+  if (!user || user.app_metadata?.rol !== 'admin') {
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 })
   }
 

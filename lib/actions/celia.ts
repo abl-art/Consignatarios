@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 async function exigirAdmin() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.user_metadata?.rol !== 'admin') throw new Error('No autorizado')
+  if (!user || user.app_metadata?.rol !== 'admin') throw new Error('No autorizado')
 }
 
 export async function listarConversaciones() {

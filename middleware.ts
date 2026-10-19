@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rutaPermitida, primeraRutaPermitida } from '@/lib/permisos'
+import type { Permisos } from '@/lib/permisos-catalogo'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -34,8 +36,8 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === '/login') {
     if (user) {
-      const rol = user.user_metadata?.rol
-      return NextResponse.redirect(new URL(rol === 'admin' || rol === 'visor' ? '/dashboard' : '/mi-dashboard', request.url))
+      const rol = user.app_metadata?.rol
+      return NextResponse.redirect(new URL(rol === 'admin' || rol === 'restringido' ? '/dashboard' : '/mi-dashboard', request.url))
     }
     return supabaseResponse
   }
@@ -45,19 +47,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  const rol = user.user_metadata?.rol
-
-  // Rol visor: solo Dashboard, Alertas y Fraudes y Venta a Terceros; todo lo demás rebota
-  if (rol === 'visor') {
-    const permitidas = ['/dashboard', '/alertas-fraudes', '/terceros']
-    const permitida = permitidas.some(r => pathname === r || pathname.startsWith(r + '/'))
-    if (!permitida) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
+  // Allowlist: páginas que cualquier usuario logueado puede ver, sin pasar
+  // por el chequeo de permisos (evita loops de redirect y rutas de auth).
+  if (
+    pathname === '/sin-acceso' ||
+    pathname === '/establecer-password' ||
+    pathname === '/auth/confirm' || pathname.startsWith('/auth/confirm/')
+  ) {
     return supabaseResponse
   }
 
-  // Rutas admin: solo admins
+  const rol = user.app_metadata?.rol
+
+  // Rutas admin: admins pasan siempre; restringidos van por rutaPermitida
+  // (leyendo su fila de usuarios_permisos); cualquier otro rol rebota.
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/inventario') ||
       pathname.startsWith('/modelos') || pathname.startsWith('/consignatarios') ||
       pathname.startsWith('/asignar') || pathname.startsWith('/auditorias') ||
@@ -67,7 +70,36 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/finanzas') ||
       pathname.startsWith('/compras') ||
       pathname.startsWith('/celia')) {
-    if (rol !== 'admin') {
+    if (rol === 'admin') {
+      // pasa
+    } else if (rol === 'restringido') {
+      let permisos: Permisos = {}
+      try {
+        const { data, error } = await supabase
+          .from('usuarios_permisos')
+          .select('permisos, activo')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (error) {
+          console.error('[permisos] error leyendo usuarios_permisos en middleware:', error.message)
+          // fail-closed: permisos queda en {}
+        } else if (data && data.activo !== false) {
+          permisos = (data.permisos as Permisos) ?? {}
+        }
+        // sin fila (data null) o activo === false ⇒ permisos queda en {}
+      } catch (e) {
+        console.error('[permisos] excepción leyendo usuarios_permisos en middleware:', e)
+        // fail-closed: permisos queda en {}
+      }
+
+      if (!rutaPermitida(permisos, pathname)) {
+        const destino = primeraRutaPermitida(permisos) ?? '/sin-acceso'
+        if (destino !== pathname) {
+          return NextResponse.redirect(new URL(destino, request.url))
+        }
+        // destino === pathname: ya estamos donde nos mandaría el redirect; dejar pasar para no entrar en loop
+      }
+    } else {
       return NextResponse.redirect(new URL('/mi-dashboard', request.url))
     }
   }
