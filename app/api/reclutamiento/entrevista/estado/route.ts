@@ -87,9 +87,11 @@ export async function GET(request: NextRequest) {
       .single()
     const criterios = ((busqueda?.criterios as Criterio[]) || [])
 
+    // opus-5 antepone bloques thinking que consumen max_tokens: con 3000 el JSON
+    // salía truncado ("Unterminated string") y la entrevista quedaba clavada en analizando
     const response = await anthropic.messages.create({
       model: 'claude-opus-5',
-      max_tokens: 3000,
+      max_tokens: 12000,
       messages: [
         {
           role: 'user',
@@ -97,6 +99,9 @@ export async function GET(request: NextRequest) {
         },
       ],
     })
+    if (response.stop_reason === 'max_tokens') {
+      throw new Error('El análisis de Claude se cortó por max_tokens — reintentar o subir el límite')
+    }
     const texto = textoDeClaude(response.content)
     const analisis = parseJsonDeClaude<AnalisisEntrevista & { scores_sugeridos?: Record<string, number> }>(texto)
 
