@@ -84,11 +84,13 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!rutaPermitida(permisos, pathname)) {
-      const destino = primeraRutaPermitida(permisos) ?? '/sin-acceso'
-      if (destino !== pathname) {
-        return NextResponse.redirect(new URL(destino, request.url))
-      }
-      // destino === pathname: ya estamos donde nos mandaría el redirect; dejar pasar para no entrar en loop
+      // Nunca pass-through de una ruta denegada. Si la "primera permitida"
+      // calculada coincide con el pathname actual (o no hay ninguna),
+      // redirigir a /sin-acceso en vez de dejar pasar — evita depender del
+      // invariante no-verificado "ninguna ruta duplicada en CATALOGO".
+      const candidato = primeraRutaPermitida(permisos)
+      const destino = candidato && candidato !== pathname ? candidato : '/sin-acceso'
+      return NextResponse.redirect(new URL(destino, request.url))
     }
     return supabaseResponse
   }

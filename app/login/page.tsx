@@ -27,7 +27,7 @@ export default function LoginPage() {
     }
 
     const rol = data.user?.app_metadata?.rol
-    router.push(rol === 'admin' || rol === 'restringido' ? '/dashboard' : '/stock')
+    router.push(rol === 'admin' || rol === 'restringido' ? '/dashboard' : '/mi-dashboard')
   }
 
   return (
