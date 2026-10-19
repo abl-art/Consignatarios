@@ -28,11 +28,13 @@ export async function getUsuarioActual(): Promise<UsuarioActual | null> {
 
   if (rol === 'admin') {
     const admin = createAdminClient()
-    const { data } = await admin
+    const { data, error } = await admin
       .from('usuarios_permisos')
       .select('super_admin')
       .eq('user_id', userId)
       .maybeSingle()
+
+    if (error) console.error('[permisos] error leyendo usuarios_permisos', error)
 
     return {
       userId,
@@ -46,11 +48,13 @@ export async function getUsuarioActual(): Promise<UsuarioActual | null> {
 
   if (rol === 'restringido') {
     const admin = createAdminClient()
-    const { data } = await admin
+    const { data, error } = await admin
       .from('usuarios_permisos')
       .select('super_admin, activo, permisos')
       .eq('user_id', userId)
       .maybeSingle()
+
+    if (error) console.error('[permisos] error leyendo usuarios_permisos', error)
 
     if (!data) {
       return { userId, email, rol, superAdmin: false, activo: true, permisos: {} }
