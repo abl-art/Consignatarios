@@ -95,15 +95,20 @@ export default function WarehouseAndreani() {
   const [customHasta, setCustomHasta] = useState('')
   const [report, setReport] = useState<WarehouseReport | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [granularidad, setGranularidad] = useState<'dia' | 'mes'>('dia')
 
   const cargar = useCallback(async (r: Rango, desde?: string, hasta?: string) => {
     const fechas = calcularRango(r, desde, hasta)
     if (!fechas) return
     setLoading(true)
+    setError(null)
     try {
       const data = await getWarehouseReport(fechas.desde.toISOString(), fechas.hasta.toISOString())
       setReport(data)
+    } catch (e) {
+      // Sin esto el rechazo quedaba sin manejar y la pestaña parecía "no cargar"
+      setError(e instanceof Error ? e.message : 'Error cargando el reporte')
     } finally {
       setLoading(false)
     }
@@ -139,6 +144,11 @@ export default function WarehouseAndreani() {
     <div>
       {loading && !report && (
         <div className="text-sm text-gray-400 py-12 text-center">Cargando datos del warehouse...</div>
+      )}
+      {error && !loading && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6">
+          No se pudieron cargar los datos del warehouse: {error}
+        </div>
       )}
 
       {report && (

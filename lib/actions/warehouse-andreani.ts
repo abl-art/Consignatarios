@@ -110,7 +110,20 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
         packed_at: Date | null
         expedido_at: Date | null
       }>(
-        `SELECT
+        // OJO performance (19/10/2026): packed_at se precalcula con UNA pasada por
+        // los eventos (GROUP BY ordenWh) y hash join. La versión anterior con
+        // LEFT JOIN LATERAL escaneaba los ~126k eventos POR CADA pedido (~10,7k)
+        // porque no hay índice por payload->>'ordenWh' (solo por ordenCliente) y
+        // el usuario de la réplica no puede crear índices → statement timeout 120s
+        // y la pestaña quedaba sin datos. Medido: 120s+ → 0,5s.
+        `WITH packed AS (
+           SELECT we.payload->>'ordenWh' AS orden_wh,
+                  MIN(COALESCE((we.payload->>'fechaHoraGeneracion')::timestamptz, we.processed_at)) AS packed_at
+           FROM andreani_wh_webhook_events we
+           WHERE we.tipo = 'pedido'
+           GROUP BY 1
+         )
+         SELECT
            p.estado::text,
            p.created_at,
            p.sent_at,
@@ -119,11 +132,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
            w.packed_at,
            CASE WHEN p.estado = 'expedido' THEN p.updated_at END AS expedido_at
          FROM andreani_wh_pedidos p
-         LEFT JOIN LATERAL (
-           SELECT MIN(COALESCE((we.payload->>'fechaHoraGeneracion')::timestamptz, we.processed_at)) AS packed_at
-           FROM andreani_wh_webhook_events we
-           WHERE we.tipo = 'pedido' AND we.payload->>'ordenWh' = p.orden_wh
-         ) w ON true
+         LEFT JOIN packed w ON w.orden_wh = p.orden_wh
          WHERE (p.created_at >= $1 AND p.created_at < $2)
             OR (p.sent_at >= $1 AND p.sent_at < $2)
             OR (w.packed_at >= $1 AND w.packed_at < $2)
