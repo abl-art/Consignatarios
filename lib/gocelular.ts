@@ -1688,10 +1688,14 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
         ORDER BY COALESCE(dm.name, ii.model_code)`
       ),
       client.query<{ sku: string; nombre: string; stock: string; marca: string | null }>(
+        // Inventario ≠ catálogo: un accesorio recién ingresado nace en 'draft'
+        // hasta que se publica en la tienda, pero su stock es real y tiene que
+        // verse acá (caso JBL Go 5, oct 2026). Solo 'archived' queda afuera.
         `SELECT COALESCE(sku, '—') AS sku, display_name AS nombre, COALESCE(stock, 0)::text AS stock, brand AS marca
          FROM store_products
          WHERE is_addon = true
-           AND (status = 'active' OR sku ILIKE 'KS-%')
+           AND status <> 'archived'
+           AND (status = 'active' OR sku ILIKE 'KS-%' OR COALESCE(stock, 0) > 0)
            AND display_name NOT ILIKE '%E2E%'
          ORDER BY display_name`
       ),
