@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import AdminSidebar, { type AdminNavItem } from '@/components/AdminSidebar'
 import MobileMenu from '@/components/MobileMenu'
 import { contarNovedadesNoLeidas } from '@/lib/actions/novedades'
+import { getUsuarioActual } from '@/lib/permisos-server'
+import { filtrarNavItems } from '@/lib/permisos'
 
 const navItems: AdminNavItem[] = [
   { href: '/novedades', label: 'Novedades', icon: 'novedades', badge: true },
@@ -25,24 +26,27 @@ const navItems: AdminNavItem[] = [
   { href: '/grupo-go', label: 'Grupo GO', icon: 'dashboard' },
 ]
 
-// Rol visor: acceso de solo consulta a estas tres secciones (el middleware bloquea el resto)
-const navItemsVisor: AdminNavItem[] = [
-  { href: '/dashboard', label: 'Dashboard360', icon: 'dashboard' },
-  { href: '/alertas-fraudes', label: 'Alertas y Fraudes', icon: 'diferencias' },
-  { href: '/terceros', label: 'Venta a Terceros', icon: 'ventas' },
-]
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const usuario = await getUsuarioActual()
 
-  const rol = user?.user_metadata?.rol
-  if (!user || (rol !== 'admin' && rol !== 'visor')) redirect('/login')
+  if (!usuario || (usuario.rol !== 'admin' && usuario.rol !== 'restringido')) redirect('/login')
 
-  const items = rol === 'visor' ? navItemsVisor : navItems
+  let items: AdminNavItem[]
+  if (usuario.rol === 'admin') {
+    items = usuario.superAdmin
+      ? [...navItems, { href: '/usuarios', label: 'Usuarios y Permisos', icon: 'consignatarios' }]
+      : navItems
+  } else {
+    items = filtrarNavItems(usuario.permisos).map((seccion) => ({
+      href: seccion.href,
+      label: seccion.label,
+      icon: seccion.icon as AdminNavItem['icon'],
+      external: seccion.external,
+    }))
+  }
 
   let novedadesNoLeidas = 0
-  if (rol === 'admin') {
+  if (usuario.rol === 'admin') {
     try { novedadesNoLeidas = await contarNovedadesNoLeidas() } catch { /* skip */ }
   }
 
