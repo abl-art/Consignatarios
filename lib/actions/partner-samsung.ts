@@ -260,6 +260,34 @@ export async function getSkusSamsungRango(desde: string, hasta: string): Promise
   }
 }
 
+// Ventas por marca en un rango de fechas ART, por canal — filtro
+// "Personalizado" de la torta del acuerdo (lo sirve app/partner/samsung/marcas).
+// La serie diaria del cliente solo cubre 30 días; rangos más viejos vienen de acá.
+export async function getMarcasRango(
+  desde: string,
+  hasta: string,
+  canal: CanalPartner
+): Promise<VentaMarca[] | null> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null
+  const pool = getPool()
+  if (!pool) return null
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ marca: string | null; ventas: string }>(
+      `SELECT ${MARCA_VENTA} AS marca, count(*)::text AS ventas
+       ${FROM_VENTAS}
+       WHERE o.order_discarded_at IS NULL AND o.order_delivered_at IS NOT NULL ${condCanal(canal)}
+         AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date >= $1::date
+         AND (o.order_created_at AT TIME ZONE '${TZ_AR}')::date <= $2::date
+       GROUP BY 1`,
+      [desde, hasta]
+    )
+    return agruparMarcas(res.rows.map(r => ({ marca: r.marca, ventas: Number(r.ventas) })))
+  } finally {
+    client.release()
+  }
+}
+
 // Los tres canales en paralelo para las píldoras del link (misma UX que
 // /canales/proyeccion). El acuerdo aplica a venta propia; total y terceros
 // son contexto.

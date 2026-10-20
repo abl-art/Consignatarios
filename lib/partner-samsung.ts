@@ -69,6 +69,34 @@ export function agruparMarcas(rows: { marca: string | null; ventas: number }[]):
     .sort((a, b) => b.ventas - a.ventas)
 }
 
+// Stock del link partner: celulares Samsung con el "Disponible real" de
+// /inventario/stock (depósitos − pendientes de asignar), sin desglose por
+// depósito (pedido de Emiliano, 20/10).
+export interface StockPartnerRow {
+  sku: string
+  nombre: string
+  disponible: number
+  enTransito: number
+  pedido: number
+  proximaDisponibilidad: number
+}
+
+export function filtrarStockSamsung(
+  rows: import('./disponibilidad').StockDisponibilidadRow[]
+): StockPartnerRow[] {
+  return rows
+    .filter(r => r.tipo === 'celular' && normalizarMarca(r.marca) === 'Samsung')
+    .map(r => ({
+      sku: r.sku,
+      nombre: r.nombre,
+      disponible: r.disponibleReal,
+      enTransito: r.enTransito,
+      pedido: r.pedido,
+      proximaDisponibilidad: r.proximaDisponibilidad,
+    }))
+    .sort((a, b) => b.disponible - a.disponible || a.nombre.localeCompare(b.nombre))
+}
+
 export function shareSamsung(marcas: VentaMarca[]): number {
   const total = marcas.reduce((a, m) => a + m.ventas, 0)
   const samsung = marcas.find(m => m.marca === 'Samsung')?.ventas ?? 0

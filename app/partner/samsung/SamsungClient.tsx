@@ -15,18 +15,19 @@ import {
 import { useState } from 'react'
 import CanalPills, { type Canal } from '@/app/(admin)/finanzas/CanalPills'
 import type { CanalPartner, DatosPartnerSamsung, SkuVendido } from '@/lib/actions/partner-samsung'
-import { agruparMarcas } from '@/lib/partner-samsung'
+import { agruparMarcas, type StockPartnerRow, type VentaMarca } from '@/lib/partner-samsung'
 import PieMarcas from './PieMarcas'
 
 // Períodos de la torta del acuerdo (pedido de Emiliano: solo la torta
-// derecha filtra; la base jul-sep queda fija)
+// derecha filtra; la base jul-sep queda fija). 'custom' va por endpoint
+// porque la serie diaria del cliente solo cubre 30 días.
 const PERIODOS_TORTA = [
   { key: 'acuerdo', label: 'Desde el 1/10' },
   { key: 'ayer', label: 'Ayer' },
   { key: 'd7', label: '7 días' },
   { key: 'd30', label: '30 días' },
 ] as const
-type PeriodoTorta = (typeof PERIODOS_TORTA)[number]['key']
+type PeriodoTorta = (typeof PERIODOS_TORTA)[number]['key'] | 'custom'
 
 function fechaLocal(diasAtras: number): string {
   const d = new Date()
@@ -70,15 +71,30 @@ const NOMBRE_CANAL: Record<CanalPartner, string> = {
   terceros: 'venta de terceros',
 }
 
-export default function SamsungClient({ datos: todos }: { datos: Record<CanalPartner, DatosPartnerSamsung | null> }) {
+export default function SamsungClient({
+  datos: todos,
+  stockSamsung,
+}: {
+  datos: Record<CanalPartner, DatosPartnerSamsung | null>
+  stockSamsung: StockPartnerRow[]
+}) {
   // El acuerdo aplica a la venta propia: es el canal por defecto
-  const [canal, setCanal] = useState<Canal>('propia')
+  const [canal, setCanalInterno] = useState<Canal>('propia')
   const [periodoSku, setPeriodoSku] = useState<PeriodoSku>('hoy')
   const [periodoTorta, setPeriodoTorta] = useState<PeriodoTorta>('acuerdo')
   const [rangoFechas, setRangoFechas] = useState({ desde: '', hasta: '' })
   const [filasRango, setFilasRango] = useState<{ sku: string; unidades: number }[] | null>(null)
   const [cargandoRango, setCargandoRango] = useState(false)
+  const [rangoTorta, setRangoTorta] = useState({ desde: '', hasta: '' })
+  const [tortaRango, setTortaRango] = useState<VentaMarca[] | null>(null)
+  const [cargandoTorta, setCargandoTorta] = useState(false)
   const datos = todos[canal]
+
+  // El rango aplicado es por canal: al cambiarlo se vuelve a pedir
+  function setCanal(c: Canal) {
+    setCanalInterno(c)
+    setTortaRango(null)
+  }
   // Los SKUs vendidos son de la tienda propia (alcance del acuerdo)
   const skus: SkuVendido[] = todos.propia?.skusSamsung ?? []
 
@@ -98,6 +114,23 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
       setCargandoRango(false)
     }
   }
+
+  async function aplicarRangoTorta() {
+    if (!rangoTorta.desde || !rangoTorta.hasta) return
+    setCargandoTorta(true)
+    try {
+      const token = new URLSearchParams(window.location.search).get('token') ?? ''
+      const res = await fetch(
+        `/partner/samsung/marcas?token=${encodeURIComponent(token)}&desde=${rangoTorta.desde}&hasta=${rangoTorta.hasta}&canal=${canal}`
+      )
+      const json = await res.json()
+      setTortaRango(Array.isArray(json.marcas) ? json.marcas : [])
+    } catch {
+      setTortaRango([])
+    } finally {
+      setCargandoTorta(false)
+    }
+  }
   if (!datos) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
@@ -112,11 +145,13 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
   const tortaActual =
     periodoTorta === 'acuerdo'
       ? marcasActual
-      : agruparMarcas(
-          marcasDiarias.filter(d =>
-            periodoTorta === 'ayer' ? d.fecha === fechaLocal(1) : d.fecha >= fechaLocal(periodoTorta === 'd7' ? 7 : 30)
+      : periodoTorta === 'custom'
+        ? (tortaRango ?? [])
+        : agruparMarcas(
+            marcasDiarias.filter(d =>
+              periodoTorta === 'ayer' ? d.fecha === fechaLocal(1) : d.fecha >= fechaLocal(periodoTorta === 'd7' ? 7 : 30)
+            )
           )
-        )
   const subtituloTorta =
     periodoTorta === 'acuerdo'
       ? 'acumulado del acuerdo, en vivo'
@@ -124,7 +159,11 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
         ? 'ventas de ayer'
         : periodoTorta === 'd7'
           ? 'últimos 7 días'
-          : 'últimos 30 días'
+          : periodoTorta === 'd30'
+            ? 'últimos 30 días'
+            : tortaRango !== null && rangoTorta.desde && rangoTorta.hasta
+              ? `del ${rangoTorta.desde} al ${rangoTorta.hasta}`
+              : 'elegí el rango y tocá Aplicar'
 
   // Gráfico: real Samsung (jun → hoy; la barra del mes en curso se va
   // completando con el acumulado) + proyección en dos escenarios (promedio de
@@ -208,9 +247,32 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
                     {p.label}
                   </button>
                 ))}
+                <button
+                  onClick={() => setPeriodoTorta('custom')}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
+                    periodoTorta === 'custom' ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Personalizado
+                </button>
               </div>
+              {periodoTorta === 'custom' && (
+                <div className="flex flex-wrap items-center justify-center gap-1 mb-2">
+                  <input type="date" value={rangoTorta.desde} max={rangoTorta.hasta || undefined}
+                    onChange={e => setRangoTorta(r => ({ ...r, desde: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] text-gray-700" />
+                  <span className="text-[11px] text-gray-400">→</span>
+                  <input type="date" value={rangoTorta.hasta} min={rangoTorta.desde || undefined}
+                    onChange={e => setRangoTorta(r => ({ ...r, hasta: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] text-gray-700" />
+                  <button onClick={aplicarRangoTorta} disabled={!rangoTorta.desde || !rangoTorta.hasta || cargandoTorta}
+                    className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-[#1428a0] text-white disabled:opacity-40">
+                    {cargandoTorta ? '...' : 'Aplicar'}
+                  </button>
+                </div>
+              )}
               <PieMarcas
-                titulo={PERIODOS_TORTA.find(p => p.key === periodoTorta)!.label}
+                titulo={PERIODOS_TORTA.find(p => p.key === periodoTorta)?.label ?? 'Personalizado'}
                 subtitulo={subtituloTorta}
                 data={tortaActual}
               />
@@ -356,6 +418,69 @@ export default function SamsungClient({ datos: todos }: { datos: Record<CanalPar
               </table>
             )
           })()}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mt-6">
+          <div className="px-4 pt-4">
+            <h2 className="font-semibold text-gray-900 text-sm">Stock Samsung disponible</h2>
+            <p className="text-xs text-gray-400 mb-3">
+              Disponible = stock en depósitos menos unidades pendientes de asignar · actualizado en cada visita.
+            </p>
+          </div>
+          {stockSamsung.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Stock no disponible en este momento</p>
+          ) : (
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wide text-gray-600">
+                <tr>
+                  <th className="text-left px-4 py-3">Modelo</th>
+                  <th className="text-right px-4 py-3" title="Stock en depósitos menos pendientes de asignar">Disponible</th>
+                  <th className="text-right px-4 py-3" title="Unidades compradas en camino al depósito">En tránsito</th>
+                  <th className="text-right px-4 py-3" title="Unidades pedidas al proveedor, aún no despachadas">Pedido</th>
+                  <th className="text-right px-4 py-3" title="Disponible + en tránsito + pedido">Próxima disponib.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {stockSamsung.map(r => (
+                  <tr key={`${r.sku}-${r.nombre}`}>
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium text-gray-900">{r.nombre}</span>
+                      <span className="ml-2 font-mono text-[11px] text-gray-400">{r.sku}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[#1428a0]">
+                      {r.disponible.toLocaleString('es-AR')}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                      {r.enTransito ? r.enTransito.toLocaleString('es-AR') : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                      {r.pedido ? r.pedido.toLocaleString('es-AR') : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-900">
+                      {r.proximaDisponibilidad.toLocaleString('es-AR')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t border-gray-200 bg-gray-50">
+                <tr>
+                  <td className="px-4 py-2.5 font-semibold">Total</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-[#1428a0]">
+                    {stockSamsung.reduce((s, r) => s + r.disponible, 0).toLocaleString('es-AR')}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-600">
+                    {stockSamsung.reduce((s, r) => s + r.enTransito, 0).toLocaleString('es-AR')}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-600">
+                    {stockSamsung.reduce((s, r) => s + r.pedido, 0).toLocaleString('es-AR')}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-900">
+                    {stockSamsung.reduce((s, r) => s + r.proximaDisponibilidad, 0).toLocaleString('es-AR')}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
 
         <p className="text-xs text-gray-400 mt-4">

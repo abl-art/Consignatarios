@@ -3,6 +3,7 @@ import {
   agruparMarcas,
   armarEscenarios,
   calcularShare,
+  filtrarStockSamsung,
   normalizarMarca,
   shareSamsung,
 } from '@/lib/partner-samsung'
@@ -54,5 +55,43 @@ describe('escenarios', () => {
   it('share con división protegida', () => {
     expect(calcularShare(19, 100)).toBeCloseTo(0.19)
     expect(calcularShare(5, 0)).toBe(0)
+  })
+})
+
+describe('filtrarStockSamsung — stock del link partner', () => {
+  const fila = (over: Partial<import('@/lib/disponibilidad').StockDisponibilidadRow>) => ({
+    sku: 'SKU1', nombre: 'Samsung A06 4/64', whAndreani: 0, whGocuotas: 0,
+    enTransito: 0, enTransitoDesde: null, total: 0, tipo: 'celular' as const,
+    marca: 'Samsung', pendGocuotas: 0, pendAndreani: 0, disponibleReal: 0,
+    pedido: 0, proximaDisponibilidad: 0, ...over,
+  })
+
+  it('deja solo celulares Samsung (variantes de marca incluidas) y descarta el resto', () => {
+    const out = filtrarStockSamsung([
+      fila({ sku: 'A', marca: 'Samsung', disponibleReal: 5 }),
+      fila({ sku: 'B', marca: 'Samsung Korea', disponibleReal: 3 }),
+      fila({ sku: 'C', marca: 'Motorola', disponibleReal: 9 }),
+      fila({ sku: 'D', marca: 'Samsung', tipo: 'accesorio', disponibleReal: 9 }),
+      fila({ sku: 'E', marca: null, disponibleReal: 9 }),
+    ])
+    expect(out.map((r: { sku: string }) => r.sku)).toEqual(['A', 'B'])
+  })
+
+  it('mapea disponibleReal a disponible y conserva transito, pedido y proxima', () => {
+    const out = filtrarStockSamsung([
+      fila({ sku: 'A', nombre: 'Samsung S24', disponibleReal: 7, enTransito: 2, pedido: 10, proximaDisponibilidad: 19 }),
+    ])
+    expect(out).toEqual([
+      { sku: 'A', nombre: 'Samsung S24', disponible: 7, enTransito: 2, pedido: 10, proximaDisponibilidad: 19 },
+    ])
+  })
+
+  it('ordena por disponible descendente y desempata por nombre', () => {
+    const out = filtrarStockSamsung([
+      fila({ sku: 'A', nombre: 'Samsung Z Flip', disponibleReal: 1 }),
+      fila({ sku: 'B', nombre: 'Samsung A16', disponibleReal: 8 }),
+      fila({ sku: 'C', nombre: 'Samsung A06', disponibleReal: 1 }),
+    ])
+    expect(out.map((r: { sku: string }) => r.sku)).toEqual(['B', 'C', 'A'])
   })
 })
