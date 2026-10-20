@@ -34,11 +34,18 @@ function claves(nombre: string): string[] {
   // GOcelular antepone la categoría en algunos productos ("Celular Samsung...",
   // "Auriculares Redmi Buds..."); el gestor no
   const base = nombre.toLowerCase().replace(/^(celular(es)?|auricular(es)?|parlantes?|smart\s?watch(es)?)\s+/, '')
-  const sinRam = base.replace(/\b\d+\s*\/\s*(?=\d)/g, '')
+  const sinRam = base.replace(/\b\d+\s*[/+]\s*(?=\d)/g, '')
+  // GOcelular suele nombrar el modelo SIN capacidad ("Xiaomi Redmi A5") y el
+  // gestor CON ella ("Xiaomi Redmi A5 4+128GB"): la clave sin capacidad va
+  // última, como fallback, para no fusionar variantes reales de almacenamiento
+  const sinCapacidad = base.replace(/\b\d+\s*[/+]\s*\d+\s*gb?\b/g, '').replace(/\b\d+\s*gb\b/g, '')
   const limpiar = (s: string) => s.replace(/[^a-z0-9]/g, '')
-  const c1 = limpiar(base)
-  const c2 = limpiar(sinRam)
-  return c1 === c2 ? [c1] : [c1, c2]
+  const vistas = new Set<string>()
+  return [limpiar(base), limpiar(sinRam), limpiar(sinCapacidad)].filter((c) => {
+    if (!c || vistas.has(c)) return false
+    vistas.add(c)
+    return true
+  })
 }
 
 function activo(p: PedidoGestor): boolean {

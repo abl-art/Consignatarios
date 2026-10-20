@@ -167,3 +167,36 @@ describe('pedidos informados cuentan como En tránsito con datos del gestor', ()
     expect(rows[0].enTransito).toBe(0)
   })
 })
+
+describe('variantes de capacidad con "+" (caso real Redmi A5, oct 2026)', () => {
+  // GOcelular llama al modelo "Xiaomi Redmi A5" a secas; el gestor lo cargó
+  // como "Xiaomi Redmi A5 4+128GB " — el pedido debe sumarse a la fila del
+  // warehouse, no crear una fila duplicada.
+  it('pedido "4+128GB" matchea la fila del warehouse sin capacidad', () => {
+    const rows = aplicarPedidos(
+      [fila({ sku: 'MZB0NI5AR', nombre: 'Xiaomi Redmi A5' })],
+      [pedido({ items: [{ productoNombre: 'Xiaomi Redmi A5 4+128GB ', cantidad: 30 }] })],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].pedido).toBe(30)
+  })
+
+  it('la forma con barra "4/128 GB" sigue matcheando igual que antes', () => {
+    const rows = aplicarPedidos(
+      [fila({ nombre: 'Xiaomi Redmi 14C' })],
+      [pedido({ items: [{ productoNombre: 'Xiaomi Redmi 14C 4/256 GB', cantidad: 10 }] })],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].pedido).toBe(10)
+  })
+
+  it('dos modelos distintos no se fusionan por el fallback sin capacidad', () => {
+    const rows = aplicarPedidos(
+      [fila({ sku: 'A', nombre: 'Xiaomi Redmi A5 128GB' }), fila({ sku: 'B', nombre: 'Xiaomi Redmi A5 Pro' })],
+      [pedido({ items: [{ productoNombre: 'Xiaomi Redmi A5 Pro', cantidad: 5 }] })],
+    )
+    expect(rows).toHaveLength(2)
+    expect(rows.find(r => r.sku === 'B')?.pedido).toBe(5)
+    expect(rows.find(r => r.sku === 'A')?.pedido).toBe(0)
+  })
+})
