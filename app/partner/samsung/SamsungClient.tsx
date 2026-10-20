@@ -231,33 +231,32 @@ export default function SamsungClient({
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
-          <h2 className="font-semibold text-gray-900 text-sm mb-3">Share de ventas por marca</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <PieMarcas titulo="Hasta el 30/9" subtitulo="jul – sep 2026, base del acuerdo" data={marcasFijo} />
-            <div>
-              <div className="flex flex-wrap justify-center gap-1 mb-2">
-                {PERIODOS_TORTA.map(p => (
-                  <button
-                    key={p.key}
-                    onClick={() => setPeriodoTorta(p.key)}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
-                      periodoTorta === p.key ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+          {/* Las píldoras viven en el encabezado (no arriba de la torta derecha)
+              para que los dos gráficos queden alineados a la misma altura */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-semibold text-gray-900 text-sm">Share de ventas por marca</h2>
+            <div className="flex flex-wrap items-center gap-1">
+              {PERIODOS_TORTA.map(p => (
                 <button
-                  onClick={() => setPeriodoTorta('custom')}
+                  key={p.key}
+                  onClick={() => setPeriodoTorta(p.key)}
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
-                    periodoTorta === 'custom' ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    periodoTorta === p.key ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  Personalizado
+                  {p.label}
                 </button>
-              </div>
+              ))}
+              <button
+                onClick={() => setPeriodoTorta('custom')}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
+                  periodoTorta === 'custom' ? 'bg-[#1428a0] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Personalizado
+              </button>
               {periodoTorta === 'custom' && (
-                <div className="flex flex-wrap items-center justify-center gap-1 mb-2">
+                <span className="flex items-center gap-1 ml-1">
                   <input type="date" value={rangoTorta.desde} max={rangoTorta.hasta || undefined}
                     onChange={e => setRangoTorta(r => ({ ...r, desde: e.target.value }))}
                     className="border border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] text-gray-700" />
@@ -269,14 +268,17 @@ export default function SamsungClient({
                     className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-[#1428a0] text-white disabled:opacity-40">
                     {cargandoTorta ? '...' : 'Aplicar'}
                   </button>
-                </div>
+                </span>
               )}
-              <PieMarcas
-                titulo={PERIODOS_TORTA.find(p => p.key === periodoTorta)?.label ?? 'Personalizado'}
-                subtitulo={subtituloTorta}
-                data={tortaActual}
-              />
             </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <PieMarcas titulo="Hasta el 30/9" subtitulo="jul – sep 2026, base del acuerdo" data={marcasFijo} />
+            <PieMarcas
+              titulo={PERIODOS_TORTA.find(p => p.key === periodoTorta)?.label ?? 'Personalizado'}
+              subtitulo={subtituloTorta}
+              data={tortaActual}
+            />
           </div>
         </div>
 
