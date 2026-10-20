@@ -74,3 +74,18 @@ export function filtrarNavItems(permisos: Permisos): SeccionCatalogo[] {
 export function tabsPermitidas(permisos: Permisos, seccion: string, tabIds: string[]): string[] {
   return tabIds.filter((id) => puedeVer(permisos, seccion, id))
 }
+
+// Resumen legible de accesos para el panel /usuarios (p.ej. "Finanzas (7) ·
+// Compras (2)"). Pura: solo mira `permisos`, en el orden de CATALOGO; el caso
+// super admin ("Todo") lo decide la UI con el flag `superAdmin`, no esta
+// función.
+export function resumenAccesos(permisos: Permisos): string {
+  const partes = CATALOGO
+    .map((seccion) => {
+      const cantidad = seccion.subitems.filter((subitem) => puedeVer(permisos, seccion.id, subitem.id)).length
+      return cantidad > 0 ? `${seccion.label} (${cantidad})` : null
+    })
+    .filter((parte): parte is string => parte !== null)
+
+  return partes.length > 0 ? partes.join(' · ') : 'Sin accesos'
+}
