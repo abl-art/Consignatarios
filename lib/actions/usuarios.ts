@@ -8,7 +8,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireSuperAdmin } from '@/lib/permisos-server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { emailPermitido, resumenAccesos } from '@/lib/permisos'
+import { emailPermitido, resumenAccesos, validarPermisos } from '@/lib/permisos'
 import type { Permisos } from '@/lib/permisos-catalogo'
 
 const REDIRECT_ESTABLECER_PASSWORD = 'https://goabl.app/establecer-password'
@@ -224,4 +224,56 @@ export async function setActivo(userId: string, activo: boolean): Promise<void> 
   if (error) throw new Error(error.message)
 
   revalidatePath('/usuarios')
+}
+
+export type UsuarioFicha = {
+  email: string
+  superAdmin: boolean
+  activo: boolean
+  permisos: Permisos
+}
+
+/**
+ * Datos para la ficha de permisos (Task 9) de un usuario puntual.
+ */
+export async function getUsuario(userId: string): Promise<UsuarioFicha> {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+
+  const { data: fila, error } = await admin
+    .from('usuarios_permisos')
+    .select('email, super_admin, activo, permisos')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!fila) throw new Error('Usuario no encontrado')
+
+  return {
+    email: fila.email,
+    superAdmin: fila.super_admin ?? false,
+    activo: fila.activo ?? true,
+    permisos: (fila.permisos as Permisos) ?? {},
+  }
+}
+
+/**
+ * Guarda el objeto Permisos completo de un usuario. Siempre revalida contra
+ * CATALOGO server-side (validarPermisos) antes de tocar la base — nunca
+ * confiar solo en que el editor cliente no deje armar un estado inválido.
+ */
+export async function guardarPermisos(userId: string, permisos: Permisos): Promise<void> {
+  await requireSuperAdmin()
+
+  const error = validarPermisos(permisos)
+  if (error) throw new Error(error)
+
+  const admin = createAdminClient()
+  const { error: updateError } = await admin
+    .from('usuarios_permisos')
+    .update({ permisos })
+    .eq('user_id', userId)
+  if (updateError) throw new Error(updateError.message)
+
+  revalidatePath('/usuarios')
+  revalidatePath(`/usuarios/${userId}`)
 }

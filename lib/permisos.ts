@@ -3,7 +3,7 @@
 // permisos. "Operar" implica "Ver"; toda ruta no catalogada se niega por
 // default (default deny).
 
-import { CATALOGO, SUBITEM_ROOT, type Permisos, type SeccionCatalogo } from './permisos-catalogo'
+import { CATALOGO, SUBITEM_ROOT, type NivelPermiso, type Permisos, type SeccionCatalogo } from './permisos-catalogo'
 
 export const DOMINIOS_PERMITIDOS = ['gocuotas.com']
 
@@ -88,4 +88,82 @@ export function resumenAccesos(permisos: Permisos): string {
     .filter((parte): parte is string => parte !== null)
 
   return partes.length > 0 ? partes.join(' · ') : 'Sin accesos'
+}
+
+// Clon profundo a un nivel (seccion -> subitems): aplicarToggle/validarPermisos
+// nunca mutan el objeto que reciben — lo usa el editor de permisos (Task 9)
+// para comparar "cambios sin guardar" contra el estado original con ===.
+function clonarPermisos(permisos: Permisos): Permisos {
+  const copia: Permisos = {}
+  for (const [seccionId, subitems] of Object.entries(permisos)) {
+    copia[seccionId] = { ...subitems }
+  }
+  return copia
+}
+
+/**
+ * Aplica un toggle de checkbox (Ver u Operar) sobre un subitem, de forma
+ * inmutable (devuelve una copia nueva). Semántica (ver pins de Task 9):
+ * - Tildar Operar ⇒ nivel 'operar' (Ver queda implícito).
+ * - Destildar Operar (nivel era 'operar') ⇒ baja a 'ver'.
+ * - Tildar Ver (sin nivel previo) ⇒ nivel 'ver'.
+ * - Destildar Ver (nivel era 'ver' u 'operar') ⇒ borra el subitem; si la
+ *   sección queda sin subitems, también se borra la sección entera.
+ */
+export function aplicarToggle(
+  permisos: Permisos,
+  seccion: string,
+  subitem: string,
+  campo: 'ver' | 'operar'
+): Permisos {
+  const copia = clonarPermisos(permisos)
+  const nivelActual = copia[seccion]?.[subitem]
+
+  if (campo === 'operar') {
+    const nuevoNivel: NivelPermiso = nivelActual === 'operar' ? 'ver' : 'operar'
+    copia[seccion] = { ...(copia[seccion] ?? {}), [subitem]: nuevoNivel }
+    return copia
+  }
+
+  // campo === 'ver'
+  if (nivelActual === 'ver' || nivelActual === 'operar') {
+    const resto = { ...copia[seccion] }
+    delete resto[subitem]
+    if (Object.keys(resto).length === 0) {
+      delete copia[seccion]
+    } else {
+      copia[seccion] = resto
+    }
+    return copia
+  }
+
+  copia[seccion] = { ...(copia[seccion] ?? {}), [subitem]: 'ver' }
+  return copia
+}
+
+/**
+ * Valida un objeto Permisos contra CATALOGO. null = válido. Usada por
+ * guardarPermisos (lib/actions/usuarios.ts) como guard server-side — nunca
+ * confiar solo en que la UI no deje armar un estado inválido.
+ */
+export function validarPermisos(permisos: Permisos): string | null {
+  for (const [seccionId, subitems] of Object.entries(permisos)) {
+    const seccionCatalogo = CATALOGO.find((s) => s.id === seccionId)
+    if (!seccionCatalogo) return `Sección desconocida: "${seccionId}"`
+
+    for (const [subitemId, nivel] of Object.entries(subitems)) {
+      const subitemCatalogo = seccionCatalogo.subitems.find((s) => s.id === subitemId)
+      if (!subitemCatalogo) return `Subitem desconocido: "${seccionId}.${subitemId}"`
+
+      if (nivel !== 'ver' && nivel !== 'operar') {
+        return `Nivel de permiso inválido en "${seccionId}.${subitemId}"`
+      }
+
+      if (nivel === 'operar' && !subitemCatalogo.operar) {
+        return `"${seccionCatalogo.label} > ${subitemCatalogo.label}" no admite nivel Operar`
+      }
+    }
+  }
+
+  return null
 }
