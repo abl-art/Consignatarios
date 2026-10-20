@@ -8,7 +8,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireSuperAdmin } from '@/lib/permisos-server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { emailPermitido, resumenAccesos, validarPermisos } from '@/lib/permisos'
+import { emailPermitido, resumenAccesos, sanearPermisos, validarPermisos } from '@/lib/permisos'
 import type { Permisos } from '@/lib/permisos-catalogo'
 
 const REDIRECT_ESTABLECER_PASSWORD = 'https://goabl.app/establecer-password'
@@ -235,6 +235,13 @@ export type UsuarioFicha = {
 
 /**
  * Datos para la ficha de permisos (Task 9) de un usuario puntual.
+ *
+ * `permisos` se devuelve saneado (sanearPermisos) contra CATALOGO: si el
+ * catálogo cambió después de que esta fila quedó guardada (sección o
+ * subitem renombrado/dado de baja), la ficha arranca ya limpia en vez de
+ * heredar basura que después haría fallar CUALQUIER guardado en
+ * guardarPermisos (que valida estricto) aunque el super admin no haya
+ * tocado esa parte.
  */
 export async function getUsuario(userId: string): Promise<UsuarioFicha> {
   await requireSuperAdmin()
@@ -252,7 +259,7 @@ export async function getUsuario(userId: string): Promise<UsuarioFicha> {
     email: fila.email,
     superAdmin: fila.super_admin ?? false,
     activo: fila.activo ?? true,
-    permisos: (fila.permisos as Permisos) ?? {},
+    permisos: sanearPermisos((fila.permisos as Permisos) ?? {}),
   }
 }
 

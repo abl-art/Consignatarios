@@ -167,3 +167,41 @@ export function validarPermisos(permisos: Permisos): string | null {
 
   return null
 }
+
+/**
+ * Limpia un objeto Permisos leído de la DB contra CATALOGO: elimina
+ * secciones y subitems que ya no existen (rename/baja de un ítem del
+ * catálogo) y niveles inválidos, y baja a 'ver' un 'operar' guardado sobre
+ * un subitem que ahora es `operar: false`. Pura e inmutable (no toca el
+ * objeto recibido).
+ *
+ * La usa getUsuario (lib/actions/usuarios.ts) sobre lo leído de la DB antes
+ * de devolverlo al editor: así la ficha arranca siempre en un estado que
+ * valida limpio, y el próximo guardado persiste la versión saneada — sin
+ * esto, un super admin que abre la ficha de alguien con basura vieja en
+ * `permisos` quedaría trabado: guardarPermisos exige validarPermisos
+ * estricto y rechazaría CUALQUIER guardado, incluso de algo que no tocó.
+ */
+export function sanearPermisos(permisos: Permisos): Permisos {
+  const resultado: Permisos = {}
+
+  for (const [seccionId, subitems] of Object.entries(permisos)) {
+    const seccionCatalogo = CATALOGO.find((s) => s.id === seccionId)
+    if (!seccionCatalogo) continue
+
+    const subitemsValidos: Record<string, NivelPermiso> = {}
+    for (const [subitemId, nivel] of Object.entries(subitems)) {
+      const subitemCatalogo = seccionCatalogo.subitems.find((s) => s.id === subitemId)
+      if (!subitemCatalogo) continue
+      if (nivel !== 'ver' && nivel !== 'operar') continue
+
+      subitemsValidos[subitemId] = nivel === 'operar' && !subitemCatalogo.operar ? 'ver' : nivel
+    }
+
+    if (Object.keys(subitemsValidos).length > 0) {
+      resultado[seccionId] = subitemsValidos
+    }
+  }
+
+  return resultado
+}

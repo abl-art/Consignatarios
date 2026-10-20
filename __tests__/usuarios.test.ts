@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { resumenAccesos, aplicarToggle, validarPermisos } from '@/lib/permisos'
+import { resumenAccesos, aplicarToggle, validarPermisos, sanearPermisos } from '@/lib/permisos'
 import type { Permisos } from '@/lib/permisos-catalogo'
 
 test('resumenAccesos: sin permisos cargados', () => {
@@ -98,4 +98,56 @@ test('validarPermisos: rechaza subitem desconocido', () => {
 test('validarPermisos: rechaza operar en subitem con operar:false', () => {
   const permisos: Permisos = { finanzas: { indicadores: 'operar' } }
   expect(validarPermisos(permisos)).not.toBeNull()
+})
+
+// --- sanearPermisos -----------------------------------------------------
+// Limpia lo leído de la DB (fila `permisos`) antes de que el editor lo
+// cargue: si el catálogo cambió (rename/baja de sección o subitem) después
+// de que un usuario quedó con ese tilde guardado, el editor no debe
+// arrancar con basura que después haga fallar validarPermisos en
+// guardarPermisos sin que el super admin haya tocado nada.
+
+test('sanearPermisos: elimina una sección desconocida para el catálogo', () => {
+  const permisos = {
+    'seccion-inexistente': { root: 'ver' },
+    finanzas: { root: 'ver' },
+  } as unknown as Permisos
+  expect(sanearPermisos(permisos)).toEqual({ finanzas: { root: 'ver' } })
+})
+
+test('sanearPermisos: elimina un subitem desconocido, conserva los válidos de la misma sección', () => {
+  const permisos = {
+    finanzas: { root: 'ver', 'subitem-inexistente': 'ver', flujo: 'operar' },
+  } as unknown as Permisos
+  expect(sanearPermisos(permisos)).toEqual({ finanzas: { root: 'ver', flujo: 'operar' } })
+})
+
+test('sanearPermisos: baja a ver un operar sobre subitem con operar:false', () => {
+  const permisos: Permisos = { finanzas: { indicadores: 'operar' } }
+  expect(sanearPermisos(permisos)).toEqual({ finanzas: { indicadores: 'ver' } })
+})
+
+test('sanearPermisos: permisos ya válidos pasan intactos', () => {
+  const permisos: Permisos = { finanzas: { root: 'ver', flujo: 'operar' }, compras: { root: 'ver' } }
+  expect(sanearPermisos(permisos)).toEqual(permisos)
+})
+
+test('sanearPermisos: permisos vacíos quedan vacíos', () => {
+  expect(sanearPermisos({})).toEqual({})
+})
+
+test('sanearPermisos: una sección que queda sin subitems válidos se elimina entera', () => {
+  const permisos = {
+    finanzas: { 'subitem-inexistente': 'ver' },
+    compras: { root: 'ver' },
+  } as unknown as Permisos
+  expect(sanearPermisos(permisos)).toEqual({ compras: { root: 'ver' } })
+})
+
+test('sanearPermisos: el resultado de sanearPermisos siempre pasa validarPermisos', () => {
+  const permisos = {
+    'seccion-inexistente': { root: 'ver' },
+    finanzas: { root: 'ver', 'subitem-inexistente': 'operar', indicadores: 'operar' },
+  } as unknown as Permisos
+  expect(validarPermisos(sanearPermisos(permisos))).toBeNull()
 })
