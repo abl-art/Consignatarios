@@ -1,6 +1,6 @@
 # Usuarios y Permisos — diseño
 
-**Fecha:** 2026-10-19 · **Decisor:** Emiliano Canova · **Estado:** borrador para aprobación
+**Fecha:** 2026-10-19 · **Decisor:** Emiliano Canova · **Estado:** implementado y deployado (20/10/2026)
 
 ## Intención y porqué
 
