@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { DeudaPrestamo, DeudaMovimiento, DeudaConfig } from '@/lib/types'
+import { requierePermiso } from '@/lib/permisos-server'
 
 // ---------------------------------------------------------------------------
 // Config
@@ -34,6 +35,7 @@ export async function getDeudaConfig(): Promise<DeudaConfig> {
 }
 
 export async function setDeudaConfig(config: DeudaConfig) {
+  await requierePermiso('finanzas', 'deuda', 'operar')
   const sb = createAdminClient()
   const now = new Date().toISOString()
   const entries = [
@@ -76,6 +78,7 @@ export async function crearPrestamo(input: {
   fecha_toma: string
   plazo_dias?: number
 }) {
+  await requierePermiso('finanzas', 'deuda', 'operar')
   const sb = createAdminClient()
   const fecha_vencimiento = input.plazo_dias
     ? (() => {
@@ -115,6 +118,7 @@ export async function crearPrestamo(input: {
 }
 
 export async function cancelarPrestamo(prestamoId: string) {
+  await requierePermiso('finanzas', 'deuda', 'operar')
   const sb = createAdminClient()
   const { error } = await sb
     .from('deuda_prestamos')
@@ -126,6 +130,7 @@ export async function cancelarPrestamo(prestamoId: string) {
 }
 
 export async function devolverCapital(prestamoId: string, monto: number, fecha: string) {
+  await requierePermiso('finanzas', 'deuda', 'operar')
   const sb = createAdminClient()
 
   // Obtener préstamo actual
@@ -158,6 +163,7 @@ export async function devolverCapital(prestamoId: string, monto: number, fecha: 
 }
 
 export async function registrarInteres(prestamoId: string, monto: number, fecha: string) {
+  await requierePermiso('finanzas', 'deuda', 'operar')
   const sb = createAdminClient()
   const { error } = await sb.from('deuda_movimientos').insert({
     prestamo_id: prestamoId,

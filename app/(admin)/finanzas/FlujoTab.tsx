@@ -22,6 +22,10 @@ interface Props {
   proyeccionDiaria: number
   mesSeleccionado: string
   meses: string[]
+  /** Permiso de escritura sobre flujo (asistencias, proyección diaria). */
+  operar: boolean
+  /** Permiso de escritura sobre egresos (carga de egresos). */
+  operarEgresos: boolean
 }
 
 const NOTA_CANAL: Record<Canal, string | null> = {
@@ -44,7 +48,7 @@ function fmtCompact(v: number) {
   return sign + Math.round(abs).toString()
 }
 
-export default function FlujoTab({ canales, prestamos, limiteDeuda, proyeccionDiaria, mesSeleccionado, meses }: Props) {
+export default function FlujoTab({ canales, prestamos, limiteDeuda, proyeccionDiaria, mesSeleccionado, meses, operar, operarEgresos }: Props) {
   const [canal, setCanal] = useState<Canal>('total')
   const { flujo, stats: cuotasStats } = canales[canal]
   const nota = NOTA_CANAL[canal]
@@ -110,9 +114,9 @@ export default function FlujoTab({ canales, prestamos, limiteDeuda, proyeccionDi
 
       {/* Action buttons and filter */}
       <div className="flex flex-wrap gap-3 items-end mb-6">
-        <CargarAsistenciaButton />
-        <CargarEgresoButton />
-        <ProyeccionButton valorActual={proyeccionDiaria} />
+        {operar && <CargarAsistenciaButton />}
+        {operarEgresos && <CargarEgresoButton />}
+        {operar && <ProyeccionButton valorActual={proyeccionDiaria} />}
         <form method="GET" className="flex items-end gap-3 ml-auto">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">Mes</label>

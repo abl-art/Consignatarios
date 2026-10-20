@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { requierePermiso } from '@/lib/permisos-server'
 
 export interface ProductoFinanciero {
   id: string
@@ -23,6 +24,7 @@ export async function fetchProductos(): Promise<ProductoFinanciero[]> {
 }
 
 export async function guardarProducto(nombre: string, parametros: Record<string, unknown>, indicadores: Record<string, unknown>) {
+  await requierePermiso('finanzas', 'precios', 'operar')
   const sb = createAdminClient()
   const { error } = await sb.from('productos_financieros').insert({
     nombre,
@@ -36,6 +38,7 @@ export async function guardarProducto(nombre: string, parametros: Record<string,
 }
 
 export async function eliminarProducto(id: string) {
+  await requierePermiso('finanzas', 'precios', 'operar')
   const sb = createAdminClient()
   const { error } = await sb.from('productos_financieros').delete().eq('id', id)
   if (error) return { error: error.message }

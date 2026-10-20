@@ -11,6 +11,7 @@ import { sqlFiltrosIndicadores, BLOQUEOS, type Bloqueo, type FiltrosIndicadoresS
 import { fetchSegmentoUserIds } from '@/lib/segmentos'
 import { nombreMerchant, type StoreNombreRow } from '@/lib/merchant-nombre'
 import { DIAS_INCOBRABLE } from '@/lib/incobrabilidad'
+import { requierePermiso } from '@/lib/permisos-server'
 
 export type { FlujoDiario, FlujoPorCanal, CuotasStats }
 
@@ -19,6 +20,7 @@ export type { FlujoDiario, FlujoPorCanal, CuotasStats }
 // ---------------------------------------------------------------------------
 
 export async function agregarAsistencia(input: { fecha: string; monto: number }) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_asistencias').insert({
     fecha: input.fecha,
@@ -30,6 +32,7 @@ export async function agregarAsistencia(input: { fecha: string; monto: number })
 }
 
 export async function editarAsistencia(id: string, input: { fecha: string; monto: number }) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_asistencias').update({ fecha: input.fecha, monto: input.monto }).eq('id', id)
   if (error) return { error: error.message }
@@ -38,6 +41,7 @@ export async function editarAsistencia(id: string, input: { fecha: string; monto
 }
 
 export async function eliminarAsistencia(id: string) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_asistencias').delete().eq('id', id)
   if (error) return { error: error.message }
@@ -56,6 +60,7 @@ export async function agregarEgreso(input: {
   cuotas: number
   monto: number
 }) {
+  await requierePermiso('finanzas', 'egresos', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_egresos').insert({
     flujo_dia: input.flujo_dia,
@@ -70,6 +75,7 @@ export async function agregarEgreso(input: {
 }
 
 export async function editarEgreso(id: string, input: { flujo_dia: string; concepto: string; medio_de_pago: string; cuotas: number; monto: number }) {
+  await requierePermiso('finanzas', 'egresos', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_egresos').update({
     flujo_dia: input.flujo_dia, concepto: input.concepto, medio_de_pago: input.medio_de_pago, cuotas: input.cuotas, monto: input.monto,
@@ -80,6 +86,7 @@ export async function editarEgreso(id: string, input: { flujo_dia: string; conce
 }
 
 export async function eliminarEgreso(id: string) {
+  await requierePermiso('finanzas', 'egresos', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_egresos').delete().eq('id', id)
   if (error) return { error: error.message }
@@ -371,6 +378,7 @@ export async function getProyeccionDiaria(): Promise<number> {
 }
 
 export async function setProyeccionDiaria(monto: number) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_config').upsert({ key: 'proyeccion_diaria', value: String(monto), updated_at: new Date().toISOString() })
   if (error) return { error: error.message }
@@ -385,6 +393,7 @@ export async function getForecastEvents(): Promise<Record<string, number>> {
 }
 
 export async function setForecastEvents(events: Record<string, number>) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_config').upsert({ key: 'forecast_events', value: JSON.stringify(events), updated_at: new Date().toISOString() })
   if (error) return { error: error.message }
@@ -400,6 +409,7 @@ export async function getComprasDias(): Promise<number> {
 }
 
 export async function setComprasDias(dias: number) {
+  await requierePermiso('finanzas', 'flujo', 'operar')
   const supabase = createAdminClient()
   const { error } = await supabase.from('flujo_config').upsert({ key: 'compras_dias', value: String(dias), updated_at: new Date().toISOString() })
   if (error) return { error: error.message }

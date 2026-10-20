@@ -3,6 +3,7 @@
 import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { requierePermiso } from '@/lib/permisos-server'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,7 @@ export async function fetchConfig(): Promise<ConfigResultado> {
 }
 
 export async function updateConfig(clave: string, valor: number) {
+  await requierePermiso('finanzas', 'resultado', 'operar')
   const sb = createAdminClient()
   await sb.from('config_resultado').update({ valor, updated_at: new Date().toISOString() }).eq('clave', clave)
   revalidatePath('/finanzas')

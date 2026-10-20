@@ -22,9 +22,13 @@ interface Egreso {
 interface FinanzasManualProps {
   asistencias: Asistencia[]
   egresos: Egreso[]
+  /** Permiso de escritura sobre flujo (editar/eliminar asistencias). */
+  operar: boolean
+  /** Permiso de escritura sobre egresos (editar/eliminar egresos). */
+  operarEgresos: boolean
 }
 
-export default function FinanzasManual({ asistencias, egresos }: FinanzasManualProps) {
+export default function FinanzasManual({ asistencias, egresos, operar, operarEgresos }: FinanzasManualProps) {
   const [showAsistencias, setShowAsistencias] = useState(false)
   const [showEgresos, setShowEgresos] = useState(false)
 
@@ -80,8 +84,8 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
                       <td className="px-4 py-2 text-gray-700">{formatFecha(a.fecha)}</td>
                       <td className="px-4 py-2 text-right text-gray-700">{formatearMoneda(a.monto)}</td>
                       <td className="px-4 py-2 text-right flex gap-1 justify-end">
-                        <EditarAsistenciaButton id={a.id} fecha={a.fecha} monto={a.monto} />
-                        <EliminarButton type="asistencia" id={a.id} />
+                        {operar && <EditarAsistenciaButton id={a.id} fecha={a.fecha} monto={a.monto} />}
+                        {operar && <EliminarButton type="asistencia" id={a.id} />}
                       </td>
                     </tr>
                   ))}
@@ -149,8 +153,8 @@ export default function FinanzasManual({ asistencias, egresos }: FinanzasManualP
                       <td className="px-4 py-2 text-right text-gray-700">{eg.cuotas}</td>
                       <td className="px-4 py-2 text-right text-gray-700">{formatearMoneda(eg.monto)}</td>
                       <td className="px-4 py-2 text-right flex gap-1 justify-end">
-                        <EditarEgresoButton id={eg.id} flujo_dia={eg.flujo_dia} concepto={eg.concepto} medio_de_pago={eg.medio_de_pago} cuotas={eg.cuotas} monto={eg.monto} />
-                        <EliminarButton type="egreso" id={eg.id} />
+                        {operarEgresos && <EditarEgresoButton id={eg.id} flujo_dia={eg.flujo_dia} concepto={eg.concepto} medio_de_pago={eg.medio_de_pago} cuotas={eg.cuotas} monto={eg.monto} />}
+                        {operarEgresos && <EliminarButton type="egreso" id={eg.id} />}
                       </td>
                     </tr>
                   ))}

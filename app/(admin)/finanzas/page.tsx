@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchFlujoDeFondosPorCanal, fetchAsistencias, fetchEgresos, fetchCuotasStats, fetchEgresosStats, getProyeccionDiaria, fetchPDIndicadores, fetchDPDIndicadores, fetchVintageAnalysis, getFiltrosTerceros, type FlujoDiario, type CuotasStats } from '@/lib/actions/finanzas'
 import { simularDeuda } from '@/lib/simular-deuda'
@@ -19,6 +20,8 @@ import ProductosTab from './ProductosTab'
 import { fetchProductos } from '@/lib/actions/productos'
 import { getDatosSimulador } from '@/lib/actions/simulador-datos'
 import { CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
+import { getUsuarioActual } from '@/lib/permisos-server'
+import { tabsPermitidas, puedeOperar } from '@/lib/permisos'
 
 export const maxDuration = 60
 
@@ -33,6 +36,17 @@ export default async function FinanzasPage({
 
   const resultadoHasta = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const resultadoDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+
+  // Permisos: admin ve/opera todo. Restringido queda limitado a las tabs y
+  // acciones que el catálogo le habilita (ver Task 2/4).
+  const usuario = await getUsuarioActual()
+  const TODAS_LAS_TABS = ['flujo', 'egresos', 'deuda', 'indicadores', 'dpd', 'vintage', 'simulador', 'precios', 'resultado']
+  const tabIdsPermitidos = usuario?.rol === 'restringido'
+    ? tabsPermitidas(usuario.permisos, 'finanzas', TODAS_LAS_TABS)
+    : TODAS_LAS_TABS
+  const puedeVerTab = (id: string) => tabIdsPermitidos.includes(id)
+  const operarSubitem = (subitem: string) =>
+    usuario?.rol === 'admin' || puedeOperar(usuario?.permisos ?? {}, 'finanzas', subitem)
 
   const [flujoPorCanal, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
     fetchFlujoDeFondosPorCanal(),
@@ -78,29 +92,39 @@ export default async function FinanzasPage({
   // corre sus queries propias después. Si falla, arranca sin precargas.
   const SIN_DATOS_CANAL = { incobrabilidad_pct: null, fpd_pct: null, mora_dias: null, ticket_promedio: null }
   let datosSimulador: Awaited<ReturnType<typeof getDatosSimulador>>
-  try {
-    datosSimulador = await getDatosSimulador({
-      vinPropia: vintagePropia,
-      vinTerceros: vintageTerceros,
-      pdPropia,
-      pdTerceros,
-    })
-  } catch {
+  if (!puedeVerTab('simulador')) {
     datosSimulador = { propia: { ...SIN_DATOS_CANAL }, terceros: { ...SIN_DATOS_CANAL }, modelos: [] }
+  } else {
+    try {
+      datosSimulador = await getDatosSimulador({
+        vinPropia: vintagePropia,
+        vinTerceros: vintageTerceros,
+        pdPropia,
+        pdTerceros,
+      })
+    } catch {
+      datosSimulador = { propia: { ...SIN_DATOS_CANAL }, terceros: { ...SIN_DATOS_CANAL }, modelos: [] }
+    }
   }
 
   // Resultado runs after to avoid exhausting the connection pool
+  const RESULTADO_VACIO = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, unidades_main: 0, unidades_addon: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 } }
   let resultadoData: Awaited<ReturnType<typeof fetchResultadoTienda>>
   let resultadoTerceros: Awaited<ReturnType<typeof fetchResultadoTerceros>>
+  if (!puedeVerTab('resultado')) {
+    resultadoData = RESULTADO_VACIO
+    resultadoTerceros = { merchants: [], config: { ...RESULTADO_VACIO.config, comision_terceros: 23, liquidacion_1_pct: 50, liquidacion_1_dias: 60, liquidacion_2_pct: 50, liquidacion_2_dias: 90 }, totals: { unidades: 0, order_amount_total: 0, revenue_gocuotas: 0, licencias_bloqueo: 0, sueldos: 0, adquirencia: 0, incobrables: 0, intereses: 0, impuestos: 0, contribucion_neta: 0, ganancia: 0, ganancia_usd: 0 } }
+  } else {
   try {
     resultadoData = await fetchResultadoTienda(resultadoDesde, resultadoHasta)
   } catch {
-    resultadoData = { productos: [], config: { kit_seguridad: 7000, envio_fulfillment: 15000, licencias_bloqueo: 7500, sueldos: 1250, otros: 1000, adquirencia: 0.8, incobrables: 6.5, iibb: 4, com_e_ind: 1, tna: 27, plazo_pago_proveedor: 60, tipo_cambio: 1500 }, totals: { unidades: 0, unidades_main: 0, unidades_addon: 0, ganancia: 0, ganancia_usd: 0, revenue_neto: 0, costo_total: 0, kit: 0, envio: 0, licencias_bloqueo: 0, contribucion_bruta: 0, adquirencia: 0, incobrables: 0, sueldos: 0, otros_costo: 0, intereses: 0, impuestos: 0, contribucion_neta: 0 } }
+    resultadoData = RESULTADO_VACIO
   }
   try {
     resultadoTerceros = await fetchResultadoTerceros(resultadoDesde, resultadoHasta)
   } catch {
     resultadoTerceros = { merchants: [], config: { ...resultadoData.config, comision_terceros: 23, liquidacion_1_pct: 50, liquidacion_1_dias: 60, liquidacion_2_pct: 50, liquidacion_2_dias: 90 }, totals: { unidades: 0, order_amount_total: 0, revenue_gocuotas: 0, licencias_bloqueo: 0, sueldos: 0, adquirencia: 0, incobrables: 0, intereses: 0, impuestos: 0, contribucion_neta: 0, ganancia: 0, ganancia_usd: 0 } }
+  }
   }
 
   // Simular deuda sobre el flujo base. La deuda es del negocio propio: se
@@ -125,8 +149,14 @@ export default async function FinanzasPage({
     meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  // Flujo tab content
-  const flujoTab = (
+  // Operar: admin siempre; restringido según su permiso por subitem.
+  const operarFlujo = operarSubitem('flujo')
+  const operarEgresos = operarSubitem('egresos')
+  const operarDeuda = operarSubitem('deuda')
+
+  // Flujo tab content — no se construye si la tab está excluida (sus datos
+  // no deben entrar al payload de un usuario restringido sin permiso).
+  const flujoTab = puedeVerTab('flujo') ? (
     <div>
       <FlujoTab
         canales={{
@@ -139,15 +169,17 @@ export default async function FinanzasPage({
         proyeccionDiaria={proyeccionDiaria}
         mesSeleccionado={mesSeleccionado}
         meses={meses}
+        operar={operarFlujo}
+        operarEgresos={operarEgresos}
       />
 
       {/* Manual entries */}
-      <FinanzasManual asistencias={asistencias} egresos={egresosRaw} />
+      <FinanzasManual asistencias={asistencias} egresos={egresosRaw} operar={operarFlujo} operarEgresos={operarEgresos} />
     </div>
-  )
+  ) : null
 
   // Egresos tab content
-  const egresosTab = (
+  const egresosTab = puedeVerTab('egresos') ? (
     <div>
       {/* Breakdown by concepto */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
@@ -172,7 +204,22 @@ export default async function FinanzasPage({
         <EgresosChart data={egresosStats.mensual} />
       </div>
     </div>
-  )
+  ) : null
+
+  // Construir solo las tabs permitidas — para un restringido, las excluidas
+  // ni siquiera instancian su JSX (quedan fuera del RSC payload).
+  const todasLasTabs: { id: string; label: string; content: ReactNode }[] = [
+    { id: 'flujo', label: diasEstres.length > 0 ? `Flujo de fondos (${diasEstres.length} estrés)` : 'Flujo de fondos', content: flujoTab },
+    { id: 'egresos', label: 'Egresos', content: egresosTab },
+    { id: 'deuda', label: 'Deuda', content: puedeVerTab('deuda') ? <DeudaTab prestamos={prestamos} movimientos={todosMovimientos} config={deudaConfig} interesesMes={interesesMes} operar={operarDeuda} /> : null },
+    { id: 'indicadores', label: 'Payment Defaults', content: puedeVerTab('indicadores') ? <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} merchants={merchantsTerceros} /> : null },
+    { id: 'dpd', label: 'Days Past Due', content: puedeVerTab('dpd') ? <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} merchants={merchantsTerceros} /> : null },
+    { id: 'vintage', label: 'Vintage', content: puedeVerTab('vintage') ? <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} merchants={merchantsTerceros} /> : null },
+    { id: 'simulador', label: 'Simulación', content: puedeVerTab('simulador') ? <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> : null },
+    { id: 'precios', label: 'Productos', content: puedeVerTab('precios') ? <ProductosTab productos={productosFinancieros} /> : null },
+    { id: 'resultado', label: 'Resultado', content: puedeVerTab('resultado') ? <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> : null },
+  ]
+  const tabs = todasLasTabs.filter((t) => puedeVerTab(t.id))
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
@@ -181,19 +228,7 @@ export default async function FinanzasPage({
 
       <DeudaAlerts alertas={deudaAlertas} />
 
-      <FinanzasTabs
-        tabs={[
-          { id: 'flujo', label: diasEstres.length > 0 ? `Flujo de fondos (${diasEstres.length} estrés)` : 'Flujo de fondos', content: flujoTab },
-          { id: 'egresos', label: 'Egresos', content: egresosTab },
-          { id: 'deuda', label: 'Deuda', content: <DeudaTab prestamos={prestamos} movimientos={todosMovimientos} config={deudaConfig} interesesMes={interesesMes} /> },
-          { id: 'indicadores', label: 'Payment Defaults', content: <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} merchants={merchantsTerceros} /> },
-          { id: 'dpd', label: 'Days Past Due', content: <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} merchants={merchantsTerceros} /> },
-          { id: 'vintage', label: 'Vintage', content: <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} merchants={merchantsTerceros} /> },
-          { id: 'simulador', label: 'Simulación', content: <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> },
-          { id: 'precios', label: 'Productos', content: <ProductosTab productos={productosFinancieros} /> },
-          { id: 'resultado', label: 'Resultado', content: <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> },
-        ]}
-      />
+      <FinanzasTabs tabs={tabs} />
     </div>
   )
 }

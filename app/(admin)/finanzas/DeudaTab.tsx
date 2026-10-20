@@ -11,9 +11,11 @@ interface DeudaTabProps {
   movimientos: DeudaMovimiento[]
   config: DeudaConfig
   interesesMes: { mesActual: number; acumulado: number }
+  /** Permiso de escritura sobre deuda (config, préstamos). */
+  operar: boolean
 }
 
-export default function DeudaTab({ prestamos, movimientos, config, interesesMes }: DeudaTabProps) {
+export default function DeudaTab({ prestamos, movimientos, config, interesesMes, operar }: DeudaTabProps) {
   const router = useRouter()
   const [showConfig, setShowConfig] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -125,12 +127,14 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">Préstamos</h3>
-          <button
-            onClick={() => { setNuevoTasa(String(config.tasa_bullet * 100)); setShowNuevo(true) }}
-            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            + Cargar préstamo
-          </button>
+          {operar && (
+            <button
+              onClick={() => { setNuevoTasa(String(config.tasa_bullet * 100)); setShowNuevo(true) }}
+              className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              + Cargar préstamo
+            </button>
+          )}
         </div>
         {prestamos.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">No hay préstamos registrados</div>
@@ -285,21 +289,23 @@ export default function DeudaTab({ prestamos, movimientos, config, interesesMes 
                 />
               </div>
             </div>
-            <div className="mt-4 text-right">
-              <button
-                onClick={handleSaveConfig}
-                disabled={saving}
-                className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Guardando...' : 'Guardar configuración'}
-              </button>
-            </div>
+            {operar && (
+              <div className="mt-4 text-right">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={saving}
+                  className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Guardando...' : 'Guardar configuración'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Modal cargar préstamo */}
-      {showNuevo && (
+      {operar && showNuevo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <form onSubmit={handleCrearPrestamo} className="bg-white rounded-lg shadow-xl border border-gray-200 p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Nuevo préstamo Bullet</h3>
