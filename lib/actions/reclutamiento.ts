@@ -109,6 +109,7 @@ export async function getBusqueda(id: string): Promise<BusquedaCompleta | null> 
       preguntas: (c.preguntas as string) || null,
       assessment: (c.assessment as Assessment) || 'pendiente',
       assessment_nota: (c.assessment_nota as string) || null,
+      remuneracion: (c.remuneracion as string) || null,
       entrevistas: ((c.rec_entrevistas as EntrevistaRow[]) || []).sort((a, b) =>
         a.created_at.localeCompare(b.created_at)
       ),
@@ -153,6 +154,7 @@ export async function getCandidato(id: string): Promise<CandidatoCompleto | null
     preguntas: data.preguntas,
     assessment: (data.assessment as Assessment) || 'pendiente',
     assessment_nota: data.assessment_nota,
+    remuneracion: data.remuneracion ?? null,
     entrevistas: ((data.rec_entrevistas as EntrevistaRow[]) || []).sort((a, b2) =>
       a.created_at.localeCompare(b2.created_at)
     ),
