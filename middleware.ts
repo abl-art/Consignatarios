@@ -34,6 +34,19 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Flujo de invitación/recupero de contraseña: un invitado nuevo llega acá
+  // SIN cookie de sesión — verifyOtp (en el route handler) es justamente lo
+  // que se la crea. Por eso van públicos, ANTES del chequeo `!user` de abajo
+  // (si quedaran después, nunca se podría aceptar una invitación).
+  // /sin-acceso NO va acá: requiere sesión (es el destino del default-deny
+  // de restringidos autenticados).
+  if (
+    pathname === '/auth/confirm' || pathname.startsWith('/auth/confirm/') ||
+    pathname === '/establecer-password'
+  ) {
+    return supabaseResponse
+  }
+
   if (pathname === '/login') {
     if (user) {
       const rol = user.app_metadata?.rol
@@ -48,12 +61,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Allowlist: páginas que cualquier usuario logueado puede ver, sin pasar
-  // por el chequeo de permisos (evita loops de redirect y rutas de auth).
-  if (
-    pathname === '/sin-acceso' ||
-    pathname === '/establecer-password' ||
-    pathname === '/auth/confirm' || pathname.startsWith('/auth/confirm/')
-  ) {
+  // por el chequeo de permisos (evita loops de redirect).
+  if (pathname === '/sin-acceso') {
     return supabaseResponse
   }
 

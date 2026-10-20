@@ -1,12 +1,15 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// Tipo de OTP que acepta verifyOtp vía token_hash (igual a EmailOtpType de
-// @supabase/auth-js) — se define acá en vez de importarlo para no depender
-// de que el paquete lo reexporte desde su entrypoint público.
-type TipoOtpEmail = 'signup' | 'invite' | 'magiclink' | 'recovery' | 'email_change' | 'email'
+// Tipo de OTP que acepta verifyOtp vía token_hash (subconjunto de
+// EmailOtpType de @supabase/auth-js) — se define acá en vez de importarlo
+// para no depender de que el paquete lo reexporte desde su entrypoint
+// público. Acotado a los dos flujos que esta ruta sirve en este repo:
+// invitación (alta por Task 8) y recupero de contraseña. No hay signup,
+// magiclink ni email_change en la app — no hace falta aceptarlos acá.
+type TipoOtpEmail = 'invite' | 'recovery'
 
-const TIPOS_VALIDOS: readonly string[] = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email']
+const TIPOS_VALIDOS: readonly string[] = ['invite', 'recovery']
 
 // Destino del link de invitación/recupero de contraseña (invite/recovery de
 // Supabase Auth): verifica el token_hash con el client SSR (setea cookies de
