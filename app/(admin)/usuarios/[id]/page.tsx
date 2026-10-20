@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { requireSuperAdmin } from '@/lib/permisos-server'
 import { getUsuario } from '@/lib/actions/usuarios'
 import EditorPermisos from './EditorPermisos'
+import SuperAdminToggle from './SuperAdminToggle'
 
 // Ficha de permisos de un usuario (Task 9). Protegida igual que /usuarios:
 // el sidebar ya esconde este ítem para no-super-admins, pero la página se
@@ -45,6 +46,8 @@ export default async function FichaUsuarioPage({ params }: { params: { id: strin
           ? 'Super admin: tiene acceso a todo el panel sin importar los tildes de abajo. Los permisos quedan guardados igual, por si en algún momento deja de ser super admin.'
           : 'Marcá Ver y Operar por cada pestaña. Operar implica Ver. Sin tilde de Ver, el usuario no ve esa pestaña.'}
       </p>
+
+      <SuperAdminToggle userId={params.id} superAdmin={usuario.superAdmin} />
 
       <EditorPermisos userId={params.id} permisosIniciales={usuario.permisos} />
     </div>

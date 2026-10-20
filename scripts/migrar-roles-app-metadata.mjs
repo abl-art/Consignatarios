@@ -104,6 +104,7 @@ async function main() {
 
   let estampados = 0
   let saltados = 0
+  const saltadosSinRol = []
 
   for (const user of usuarios) {
     const email = (user.email ?? '').toLowerCase()
@@ -135,6 +136,7 @@ async function main() {
     if (!rolDeUserMetadata) {
       console.log(`  saltado: ${user.email} no tiene rol en user_metadata`)
       saltados += 1
+      saltadosSinRol.push(user.email)
       continue
     }
 
@@ -161,6 +163,20 @@ async function main() {
 
   const resumen = { usuarios: usuarios.length, estampados, saltados }
   console.log('Resumen:', JSON.stringify(resumen))
+
+  // Un usuario sin rol en user_metadata ni en app_metadata queda sin
+  // app_metadata.rol después de esta migración: el middleware no lo
+  // reconoce como 'admin' ni 'restringido' y, tras el deploy que depende de
+  // app_metadata.rol, quedaría en loop de redirect en vez de poder loguear.
+  // Esto es solo logging — no cambia qué usuarios se saltan ni por qué.
+  if (saltadosSinRol.length > 0) {
+    console.log(
+      `AVISO: ${saltadosSinRol.length} usuarios sin rol — quedarían en loop de redirect tras el deploy:`
+    )
+    for (const email of saltadosSinRol) {
+      console.log(`  - ${email}`)
+    }
+  }
 }
 
 main().catch((err) => {

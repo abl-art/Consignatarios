@@ -226,6 +226,45 @@ export async function setActivo(userId: string, activo: boolean): Promise<void> 
   revalidatePath('/usuarios')
 }
 
+/**
+ * Prende/apaga el flag de super admin de un usuario (sumar un super admin a
+ * futuro se hace desde el panel, tildando este flag — no por SQL a mano).
+ *
+ * Guard server-side: nadie puede quitarse su propio super admin desde acá
+ * (evita que el único super admin activo se auto-bloquee sin querer). No hay
+ * guard equivalente para "no puedo activar a otro" — cualquier super admin
+ * puede sumar a otro.
+ *
+ * Al activar: fila `super_admin: true` + `app_metadata.rol: 'admin'` — las
+ * dos cosas que exige requireSuperAdmin (ver permisos-server.ts). Al
+ * desactivar: fila `super_admin: false` + `app_metadata.rol: 'restringido'`,
+ * para que el usuario no quede como admin pleno sin fila de permisos
+ * (quedaría con acceso total igual, vía getUsuarioActual rol==='admin').
+ */
+export async function setSuperAdmin(userId: string, superAdmin: boolean): Promise<void> {
+  const caller = await requireSuperAdmin()
+
+  if (userId === caller.userId && !superAdmin) {
+    throw new Error('No podés quitarte tu propio super admin')
+  }
+
+  const admin = createAdminClient()
+
+  const { error: filaError } = await admin
+    .from('usuarios_permisos')
+    .update({ super_admin: superAdmin })
+    .eq('user_id', userId)
+  if (filaError) throw new Error(filaError.message)
+
+  const { error: metaError } = await admin.auth.admin.updateUserById(userId, {
+    app_metadata: { rol: superAdmin ? 'admin' : 'restringido' },
+  })
+  if (metaError) throw new Error(metaError.message)
+
+  revalidatePath('/usuarios')
+  revalidatePath(`/usuarios/${userId}`)
+}
+
 export type UsuarioFicha = {
   email: string
   superAdmin: boolean

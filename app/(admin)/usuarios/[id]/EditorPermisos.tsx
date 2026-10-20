@@ -9,7 +9,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CATALOGO, type NivelPermiso, type Permisos, type SeccionCatalogo } from '@/lib/permisos-catalogo'
-import { aplicarToggle } from '@/lib/permisos'
+import { aplicarToggle, conRootImplicito } from '@/lib/permisos'
 import { guardarPermisos } from '@/lib/actions/usuarios'
 
 type EstadoGuardado = 'idle' | 'guardado' | 'error'
@@ -62,7 +62,15 @@ export default function EditorPermisos({
   )
 
   function toggle(seccionId: string, subitemId: string, campo: 'ver' | 'operar') {
-    setPermisos((actual) => aplicarToggle(actual, seccionId, subitemId, campo))
+    setPermisos((actual) => {
+      const siguiente = aplicarToggle(actual, seccionId, subitemId, campo)
+      const nivelResultante = siguiente[seccionId]?.[subitemId]
+      const quedoTildado = nivelResultante === 'ver' || nivelResultante === 'operar'
+      // Solo auto-tildamos el ROOT cuando el toggle activó algo — si lo que
+      // se destildó fue el ROOT mismo, eso es decisión explícita del super
+      // admin y no lo revivimos.
+      return quedoTildado ? conRootImplicito(siguiente, seccionId) : siguiente
+    })
     setEstado('idle')
     setError(null)
   }

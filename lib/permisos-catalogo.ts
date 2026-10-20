@@ -136,6 +136,7 @@ export const CATALOGO: SeccionCatalogo[] = [
       { id: 'envios', label: 'Envíos', ruta: '/compras/envios', operar: true },
       { id: 'cta-cte-ns', label: 'Cta Cte Prov NS', ruta: '/compras/cta-cte-ns', operar: true },
       { id: 'forecast', label: 'Forecast de Compras', ruta: '/compras/forecast', operar: true },
+      { id: 'manual', label: 'Manual operativo', ruta: '/compras/manual', operar: false },
     ],
   },
   {

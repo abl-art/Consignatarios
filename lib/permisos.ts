@@ -169,6 +169,35 @@ export function validarPermisos(permisos: Permisos): string | null {
 }
 
 /**
+ * Auto-tilda el ROOT ('root') de una sección en 'ver' cuando algún otro
+ * subitem quedó tildado pero el ROOT no lo está. Pura e inmutable.
+ *
+ * Por qué: secciones tipo tab (p.ej. Finanzas) usan el nivel del ROOT para
+ * decidir si la sección es navegable (filtrarNavItems, primeraRutaPermitida)
+ * — si un super admin tilda solo una pestaña (p.ej. "Flujo de fondos") sin
+ * tocar el ROOT, el sidebar muestra la sección pero al usuario que no tiene
+ * el ROOT le queda inaccesible. EditorPermisos llama a esto después de
+ * aplicarToggle, solo cuando el toggle resultó en tildar algo — si el super
+ * admin destilda el ROOT a mano, es su decisión y esta función no lo revive.
+ */
+export function conRootImplicito(permisos: Permisos, seccion: string): Permisos {
+  const seccionCatalogo = CATALOGO.find((s) => s.id === seccion)
+  if (!seccionCatalogo) return permisos
+  if (!seccionCatalogo.subitems.some((s) => s.id === SUBITEM_ROOT)) return permisos
+
+  const subitems = permisos[seccion]
+  if (!subitems) return permisos
+
+  const nivelRoot = subitems[SUBITEM_ROOT]
+  if (nivelRoot === 'ver' || nivelRoot === 'operar') return permisos
+
+  return {
+    ...permisos,
+    [seccion]: { ...subitems, [SUBITEM_ROOT]: 'ver' },
+  }
+}
+
+/**
  * Limpia un objeto Permisos leído de la DB contra CATALOGO: elimina
  * secciones y subitems que ya no existen (rename/baja de un ítem del
  * catálogo) y niveles inválidos, y baja a 'ver' un 'operar' guardado sobre
