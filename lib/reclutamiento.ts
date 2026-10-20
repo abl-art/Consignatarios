@@ -6,6 +6,20 @@ export interface Criterio {
   clave: string
   nombre: string
   prioritario: boolean
+  // Rúbrica de evaluación (opcional): descriptores de los niveles 1/3/5 para
+  // anclar el puntaje en conductas observables en vez del criterio del modelo
+  rubrica?: { bajo: string; esperado: string; excelente: string }
+}
+
+// Lista de criterios para los prompts: con rúbrica se anclan los 3 niveles
+function listaCriterios(criterios: Criterio[]): string {
+  return criterios
+    .map((c) => {
+      const base = `- "${c.clave}": ${c.nombre}${c.prioritario ? ' (PRIORITARIO)' : ''}`
+      if (!c.rubrica) return base
+      return `${base}\n    1 = ${c.rubrica.bajo} · 3 = ${c.rubrica.esperado} · 5 = ${c.rubrica.excelente}`
+    })
+    .join('\n')
 }
 
 export const CRITERIOS_DEFAULT: Criterio[] = [
@@ -69,13 +83,11 @@ export function parseJsonDeClaude<T>(texto: string): T {
 }
 
 export function promptFichaCV(criterios: Criterio[], mandato: string | null): string {
-  const lista = criterios
-    .map((c) => `- "${c.clave}": ${c.nombre}${c.prioritario ? ' (PRIORITARIO)' : ''}`)
-    .join('\n')
+  const lista = listaCriterios(criterios)
   return `Sos un reclutador experto senior. Analizá este CV (PDF de LinkedIn) para la búsqueda con este mandato:
 ${mandato || 'No especificado'}
 
-Puntuá al candidato de 1 a 5 en cada criterio, siendo exigente y basándote SOLO en evidencia del CV (logros concretos y verificables valen más que títulos o autodescripciones):
+Puntuá al candidato de 1 a 5 en cada criterio, siendo exigente y basándote SOLO en evidencia del CV (logros concretos y verificables valen más que títulos o autodescripciones). Donde el criterio trae rúbrica (1/3/5), anclá el puntaje en esos descriptores:
 ${lista}
 
 Respondé ÚNICAMENTE con un JSON válido, sin markdown:
@@ -111,7 +123,10 @@ ${mandato || 'No especificado'}
 
 Candidato: ${ficha.nombre}. Contexto del CV: ${ficha.resumen || 's/d'}. Puntajes actuales (1-5): ${JSON.stringify(ficha.scores)}.
 ${bloqueCaso}
-La transcripción es automática y tiene errores fonéticos — juzgá el hilo argumental, no la literalidad. Evaluá: ¿decide o solo diagnostica? ¿cuantifica impactos? ¿integra restricciones (caja, stock, riesgo)? ¿pide datos? ¿qué evidencia da en los criterios prioritarios (${criterios.filter((c) => c.prioritario).map((c) => c.nombre).join(', ')})?
+La transcripción es automática y tiene errores fonéticos — juzgá el hilo argumental, no la literalidad. Evaluá: ¿decide o solo diagnostica? ¿cuantifica impactos? ¿integra restricciones (caja, stock, riesgo)? ¿pide datos?
+
+Criterios de evaluación (donde traen rúbrica, anclá el puntaje en los descriptores 1/3/5):
+${listaCriterios(criterios)}
 
 TRANSCRIPCIÓN:
 ${transcript}
