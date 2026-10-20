@@ -6,6 +6,7 @@ import { getBusqueda } from '@/lib/actions/reclutamiento'
 import SectionTabs from '@/components/SectionTabs'
 import CuadroComparativo from '@/components/reclutamiento/CuadroComparativo'
 import AgregarCandidato from '@/components/reclutamiento/AgregarCandidato'
+import RubricaCompetencias from '@/components/reclutamiento/RubricaCompetencias'
 
 // Pipeline de la búsqueda: pestaña Entrevista (candidatos en evaluación) y
 // pestaña Assessment (los tildados como "pasa"). El checkbox del cuadro mueve
@@ -42,6 +43,11 @@ export default async function BusquedaPage({ params }: { params: { id: string } 
       ) : (
         <SectionTabs
           tabs={[
+            {
+              id: 'competencias',
+              label: 'Competencias',
+              content: <RubricaCompetencias criterios={busqueda.criterios} />,
+            },
             {
               id: 'entrevista',
               label: `Entrevista (${enEntrevista.length})`,
