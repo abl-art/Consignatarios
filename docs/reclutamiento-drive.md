@@ -31,6 +31,16 @@ lectura a una carpeta compartida por Emiliano.
 ## Límites conocidos
 
 - El streaming Drive→AssemblyAI corre dentro de una función de Vercel con tope de
-  300s: videos de hasta ~2-3 GB andan bien; si un video muy pesado da timeout,
-  comprimirlo o subir una versión solo-audio a Drive.
+  300s: videos de ~2 GB andan bien (medido: 1,9 GB en ~70s). Si un video mucho más
+  pesado da timeout, comprimirlo o subir una versión solo-audio a Drive.
+- Subir **de a un video a la vez**: varios uploads pesados simultáneos compiten por
+  la memoria/red de la misma instancia. Si una fila queda en "Pendiente" sin error
+  (la función murió sin llegar al catch), usar el botón **Reintentar transcripción**
+  de la card.
+- La subida usa `node:https` + `pipeline`, NO `fetch`: undici no aplica backpressure
+  al body y bufferea en RAM la diferencia de velocidad Drive→AssemblyAI — con videos
+  >1 GB la función moría por memoria (incidente 19/10/2026, logs: "instance was
+  killed because it ran out of available memory"). No volver a fetch para esto.
+- El análisis con claude-opus-5 necesita `max_tokens` alto (12000): el thinking
+  consume presupuesto antes del JSON y con 3000 salía truncado.
 - Costo AssemblyAI: ~US$0,15-0,50 por entrevista de 20-30 min.

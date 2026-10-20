@@ -77,6 +77,8 @@ export default function NuevaEntrevista({ candidatoId }: { candidatoId: string }
       {enviando && (
         <p className="text-xs text-gray-400 mt-2">
           Enviando el video a transcripción (puede tardar unos minutos si es pesado) — no cierres esta página
+          ni subas otro video hasta que este pase a &quot;Transcribiendo&quot;: varios videos pesados a la vez
+          tumban el proceso
         </p>
       )}
     </div>

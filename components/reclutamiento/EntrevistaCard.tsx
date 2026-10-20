@@ -16,8 +16,32 @@ const ESTADO_UI: Record<string, { texto: string; clase: string }> = {
 export default function EntrevistaCard({ entrevista }: { entrevista: EntrevistaRow }) {
   const router = useRouter()
   const [verTranscript, setVerTranscript] = useState(false)
+  const [reintentando, setReintentando] = useState(false)
+  const [errorReintento, setErrorReintento] = useState<string | null>(null)
   const enProceso = entrevista.estado === 'transcribiendo' || entrevista.estado === 'analizando'
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Una fila en pendiente/error quedó así porque el procesamiento murió
+  // (p.ej. varios videos pesados a la vez): se puede relanzar sobre la misma fila
+  async function reintentar() {
+    setReintentando(true)
+    setErrorReintento(null)
+    try {
+      const res = await fetch('/api/reclutamiento/entrevista', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entrevista_id: entrevista.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      router.refresh()
+    } catch (e) {
+      setErrorReintento(e instanceof Error ? e.message : 'Error')
+      router.refresh()
+    } finally {
+      setReintentando(false)
+    }
+  }
 
   // Mientras se procesa, consultar el estado cada 15s (el endpoint además
   // encadena el análisis con Claude cuando la transcripción termina)
@@ -59,6 +83,23 @@ export default function EntrevistaCard({ entrevista }: { entrevista: EntrevistaR
 
       {entrevista.estado === 'error' && (
         <p className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3 mb-3">{entrevista.error}</p>
+      )}
+      {(entrevista.estado === 'pendiente' || entrevista.estado === 'error') && (
+        <div className="mb-3">
+          <button
+            onClick={reintentar}
+            disabled={reintentando}
+            className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50"
+          >
+            {reintentando ? 'Reintentando… (puede tardar unos minutos)' : 'Reintentar transcripción'}
+          </button>
+          {entrevista.estado === 'pendiente' && !reintentando && (
+            <p className="text-xs text-gray-400 mt-1">
+              La transcripción no llegó a arrancar — reintentá de a un video a la vez.
+            </p>
+          )}
+          {errorReintento && <p className="text-xs text-red-600 mt-1">{errorReintento}</p>}
+        </div>
       )}
       {enProceso && (
         <p className="text-sm text-blue-700 bg-blue-50 rounded-lg px-4 py-3 mb-3">
