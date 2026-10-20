@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS rec_candidatos (
   -- pendiente | pasa | no_pasa  (columna cliqueable "Pasa a Assessment")
   assessment text NOT NULL DEFAULT 'pendiente',
   assessment_nota text,
+  -- Remuneración actual o pretendida (texto libre, se edita en el cuadro)
+  remuneracion text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rec_candidatos_busqueda_idx ON rec_candidatos (busqueda_id);

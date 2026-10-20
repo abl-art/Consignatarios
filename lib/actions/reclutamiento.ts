@@ -72,6 +72,8 @@ export interface CandidatoRow {
   preguntas: string | null
   assessment: Assessment
   assessment_nota: string | null
+  // Remuneración actual o pretendida (texto libre, editable en el cuadro)
+  remuneracion: string | null
   entrevistas: EntrevistaRow[]
 }
 
@@ -163,6 +165,16 @@ export async function setAssessment(candidatoId: string, assessment: Assessment)
   const { error } = await supabase
     .from('rec_candidatos')
     .update({ assessment })
+    .eq('id', candidatoId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/reclutamiento')
+}
+
+export async function setRemuneracion(candidatoId: string, remuneracion: string): Promise<void> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('rec_candidatos')
+    .update({ remuneracion: remuneracion.trim() || null })
     .eq('id', candidatoId)
   if (error) throw new Error(error.message)
   revalidatePath('/reclutamiento')

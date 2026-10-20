@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { setAssessment, type BusquedaCompleta, type CandidatoRow } from '@/lib/actions/reclutamiento'
+import { setAssessment, setRemuneracion, type BusquedaCompleta, type CandidatoRow } from '@/lib/actions/reclutamiento'
 import type { AnalisisEntrevista } from '@/lib/reclutamiento'
 
 // Preguntas y respuestas resumidas de la última entrevista analizada del candidato
@@ -54,6 +54,16 @@ export default function CuadroComparativo({
   // Clic en la fila: muestra abajo las preguntas del ejercicio y sus respuestas
   const [verRespuestasDe, setVerRespuestasDe] = useState<string | null>(null)
   const seleccionado = candidatos.find((c) => c.id === verRespuestasDe) ?? null
+  // Celda Remuneración editable inline (clic → input, Enter/blur guarda)
+  const [editandoRemu, setEditandoRemu] = useState<string | null>(null)
+  const [remuValor, setRemuValor] = useState('')
+
+  async function guardarRemu(c: CandidatoRow) {
+    setEditandoRemu(null)
+    if (remuValor === (c.remuneracion ?? '')) return
+    await setRemuneracion(c.id, remuValor)
+    router.refresh()
+  }
 
   // 'pasa' y 'no_pasa' son excluyentes: tildar uno destilda el otro
   async function toggle(c: CandidatoRow, objetivo: 'pasa' | 'no_pasa') {
@@ -93,6 +103,7 @@ export default function CuadroComparativo({
             <th className="px-2 py-3">Total /{maxTotal}</th>
             <th className="px-2 py-3">Entrevista</th>
             <th className="px-2 py-3">Arquetipo</th>
+            <th className="px-2 py-3" title="Remuneración actual o pretendida — clic en la celda para cargarla">Remuneración</th>
             <th className="px-2 py-3">Pasa a Assessment</th>
             <th className="px-2 py-3">No sigue</th>
           </tr>
@@ -130,6 +141,35 @@ export default function CuadroComparativo({
                   </span>
                 </td>
                 <td className="px-2 py-2.5 text-gray-600">{c.arquetipo || '—'}</td>
+                <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  {editandoRemu === c.id ? (
+                    <input
+                      autoFocus
+                      value={remuValor}
+                      onChange={(e) => setRemuValor(e.target.value)}
+                      onBlur={() => guardarRemu(c)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') guardarRemu(c)
+                        if (e.key === 'Escape') setEditandoRemu(null)
+                      }}
+                      placeholder="ej: $4.5M actual / pide $6M"
+                      className="border border-indigo-300 rounded-lg px-2 py-1 text-xs w-36"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setRemuValor(c.remuneracion ?? '')
+                        setEditandoRemu(c.id)
+                      }}
+                      className={`text-xs rounded-lg px-2 py-1 hover:bg-indigo-50 ${
+                        c.remuneracion ? 'text-gray-700 font-medium' : 'text-gray-300'
+                      }`}
+                      title="Clic para editar"
+                    >
+                      {c.remuneracion || '+ cargar'}
+                    </button>
+                  )}
+                </td>
                 <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
