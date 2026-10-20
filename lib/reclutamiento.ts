@@ -50,6 +50,9 @@ export interface AnalisisEntrevista {
   bien: string[]
   mal: string[]
   lectura: string
+  // Preguntas del ejercicio y respuesta resumida del candidato — alimenta el
+  // cuadro comparativo de respuestas del tablero de la búsqueda
+  qa?: { pregunta: string; respuesta: string }[]
 }
 
 export type EstadoEntrevista = 'pendiente' | 'transcribiendo' | 'analizando' | 'listo' | 'error'
@@ -138,6 +141,7 @@ Respondé ÚNICAMENTE con un JSON válido, sin markdown:
   "bien": ["<4-7 puntos: qué mostró bien, con citas o momentos concretos>"],
   "mal": ["<3-5 puntos: qué quedó flojo, con evidencia>"],
   "lectura": "<3-5 oraciones: tu lectura de reclutador — cómo cambia (o confirma) lo que decía el CV, y qué define su avance>",
+  "qa": [{ "pregunta": "<enunciado corto de cada pregunta/consigna del ejercicio, en orden>", "respuesta": "<resumen fiel en 2-3 oraciones de lo que respondió el candidato, con su decisión concreta y una cita breve si ayuda>" }],
   "scores_sugeridos": { "<clave_criterio>": <1-5 SOLO para los criterios donde la entrevista justifica cambiar el puntaje actual> }
 }`
 }

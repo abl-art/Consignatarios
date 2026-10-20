@@ -4,6 +4,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { setAssessment, type BusquedaCompleta, type CandidatoRow } from '@/lib/actions/reclutamiento'
+import type { AnalisisEntrevista } from '@/lib/reclutamiento'
+
+// Preguntas y respuestas resumidas de la última entrevista analizada del candidato
+function qaDe(c: CandidatoRow): { pregunta: string; respuesta: string }[] {
+  for (let i = c.entrevistas.length - 1; i >= 0; i--) {
+    const qa = (c.entrevistas[i].analisis as AnalisisEntrevista | null)?.qa
+    if (qa && qa.length > 0) return qa
+  }
+  return []
+}
 
 const COLOR_SCORE: Record<number, string> = {
   5: 'bg-green-800',
@@ -41,6 +51,9 @@ export default function CuadroComparativo({
 }) {
   const router = useRouter()
   const [cambiando, setCambiando] = useState<string | null>(null)
+  // Clic en la fila: muestra abajo las preguntas del ejercicio y sus respuestas
+  const [verRespuestasDe, setVerRespuestasDe] = useState<string | null>(null)
+  const seleccionado = candidatos.find((c) => c.id === verRespuestasDe) ?? null
 
   // 'pasa' y 'no_pasa' son excluyentes: tildar uno destilda el otro
   async function toggle(c: CandidatoRow, objetivo: 'pasa' | 'no_pasa') {
@@ -88,9 +101,20 @@ export default function CuadroComparativo({
           {candidatos.map((c) => {
             const ent = badgeEntrevista(c)
             return (
-              <tr key={c.id} className="border-t border-gray-100 text-center">
+              <tr
+                key={c.id}
+                onClick={() => setVerRespuestasDe(verRespuestasDe === c.id ? null : c.id)}
+                className={`border-t border-gray-100 text-center cursor-pointer ${
+                  verRespuestasDe === c.id ? 'bg-indigo-50' : 'hover:bg-gray-50'
+                }`}
+                title="Clic para ver sus respuestas al ejercicio abajo del cuadro"
+              >
                 <td className="text-left px-4 py-2.5 font-semibold">
-                  <Link href={`/reclutamiento/${busqueda.id}/${c.id}`} className="text-indigo-700 hover:underline">
+                  <Link
+                    href={`/reclutamiento/${busqueda.id}/${c.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-indigo-700 hover:underline"
+                  >
                     {c.nombre}
                   </Link>
                 </td>
@@ -106,7 +130,7 @@ export default function CuadroComparativo({
                   </span>
                 </td>
                 <td className="px-2 py-2.5 text-gray-600">{c.arquetipo || '—'}</td>
-                <td className="px-2 py-2.5">
+                <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={c.assessment === 'pasa'}
@@ -120,7 +144,7 @@ export default function CuadroComparativo({
                     }
                   />
                 </td>
-                <td className="px-2 py-2.5">
+                <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={c.assessment === 'no_pasa'}
@@ -141,9 +165,48 @@ export default function CuadroComparativo({
       </table>
       <p className="text-xs text-gray-400 px-4 py-2 border-t border-gray-100">
         * criterios prioritarios · puntajes 1-5 combinando CV + entrevista (la entrevista ajusta los
-        puntajes sola al analizarse; también podés retocarlos en la página del candidato) · tildá
-        &quot;Pasa a Assessment&quot; o &quot;No sigue&quot; para mover al candidato de etapa (son excluyentes)
+        puntajes sola al analizarse; también podés retocarlos en la página del candidato) · clic en
+        una fila para ver sus respuestas al ejercicio · tildá &quot;Pasa a Assessment&quot; o
+        &quot;No sigue&quot; para mover al candidato de etapa (son excluyentes)
       </p>
+
+      {seleccionado && (
+        <div className="border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 pt-3">
+            <h3 className="font-semibold text-gray-900 text-sm">
+              Ejercicio de {seleccionado.nombre} — preguntas y respuestas
+            </h3>
+            <button
+              onClick={() => setVerRespuestasDe(null)}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2"
+            >
+              ✕ cerrar
+            </button>
+          </div>
+          {qaDe(seleccionado).length === 0 ? (
+            <p className="text-sm text-gray-400 px-4 py-4">
+              Sin entrevista analizada todavía — las respuestas aparecen cuando se procesa el video.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wide text-gray-500">
+                  <th className="text-left px-4 py-2 w-1/3">Pregunta</th>
+                  <th className="text-left px-4 py-2">Respuesta (resumen de la transcripción)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {qaDe(seleccionado).map((qa, i) => (
+                  <tr key={i} className="border-t border-gray-100 align-top">
+                    <td className="px-4 py-2.5 font-medium text-gray-800">{qa.pregunta}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{qa.respuesta}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   )
 }

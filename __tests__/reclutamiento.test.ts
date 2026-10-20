@@ -37,4 +37,16 @@ describe('prompts de reclutamiento con rúbrica', () => {
     expect(p).toContain('Integra crecimiento, stock, economics, caja, riesgo y operación.')
     expect(p).toContain('Analiza una dimensión aislada.')
   })
+
+  it('promptAnalisisEntrevista pide el cuadro qa de preguntas y respuestas resumidas', () => {
+    const p = promptAnalisisEntrevista(
+      CON_RUBRICA,
+      'mandato X',
+      { nombre: 'Ana', resumen: null, scores: {} },
+      'transcript...'
+    )
+    expect(p).toContain('"qa"')
+    expect(p).toContain('pregunta')
+    expect(p).toContain('respuesta')
+  })
 })

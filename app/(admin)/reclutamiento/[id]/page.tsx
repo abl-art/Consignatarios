@@ -6,7 +6,6 @@ import { getBusqueda } from '@/lib/actions/reclutamiento'
 import SectionTabs from '@/components/SectionTabs'
 import CuadroComparativo from '@/components/reclutamiento/CuadroComparativo'
 import AgregarCandidato from '@/components/reclutamiento/AgregarCandidato'
-import Recomendacion from '@/components/reclutamiento/Recomendacion'
 
 // Pipeline de la búsqueda: pestaña Entrevista (candidatos en evaluación) y
 // pestaña Assessment (los tildados como "pasa"). El checkbox del cuadro mueve
@@ -46,16 +45,7 @@ export default async function BusquedaPage({ params }: { params: { id: string } 
             {
               id: 'entrevista',
               label: `Entrevista (${enEntrevista.length})`,
-              content: (
-                <>
-                  <CuadroComparativo busqueda={busqueda} candidatos={enEntrevista} />
-                  <Recomendacion
-                    busquedaId={busqueda.id}
-                    recomendacion={busqueda.recomendacion}
-                    recomendacionAt={busqueda.recomendacion_at}
-                  />
-                </>
-              ),
+              content: <CuadroComparativo busqueda={busqueda} candidatos={enEntrevista} />,
             },
             {
               id: 'assessment',
