@@ -6,6 +6,7 @@ import { fetchStockPorWarehouse, fetchPendientesPicking } from '@/lib/gocelular'
 import { completarDisponibilidad } from '@/lib/disponibilidad'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
 import { getPedidos } from '@/lib/actions/compras'
+import { sincronizarIngresosGocelular } from '@/lib/actions/sync-ingresos'
 import { filtrarStockSamsung } from '@/lib/partner-samsung'
 import SamsungClient from './SamsungClient'
 
@@ -22,6 +23,9 @@ export default async function PartnerSamsungPage({
 
   // Stock Samsung con la misma lógica que /inventario/stock (Disponible real =
   // depósitos − pendientes de asignar); si el stock falla, el link igual carga.
+  // El sync de ingresos corre primero para no mostrar tránsito fantasma de
+  // pedidos cuyas unidades ya llegaron (best-effort, no rompe la página).
+  await sincronizarIngresosGocelular()
   const [datos, baseRows, pendientes, pedidos] = await Promise.all([
     getDatosPartnerSamsungTodos(),
     fetchStockPorWarehouse().catch(() => []),

@@ -5,10 +5,15 @@ import { fetchStockPorWarehouse, fetchPendientesPicking } from '@/lib/gocelular'
 import { completarDisponibilidad } from '@/lib/disponibilidad'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
 import { getPedidos } from '@/lib/actions/compras'
+import { sincronizarIngresosGocelular } from '@/lib/actions/sync-ingresos'
 import StockTable from './StockTable'
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 
 export default async function StockPage() {
+  // Detectar ingresos ANTES de leer los pedidos: el cron corre 1 vez al día y
+  // un pedido informado cuyas unidades ya llegaron queda hasta 24h como
+  // "en tránsito" fantasma (doble conteo con el stock — caso A27/A37 19/10)
+  await sincronizarIngresosGocelular()
   const [baseRows, pendientes, pedidos] = await Promise.all([
     fetchStockPorWarehouse(),
     fetchPendientesPicking().catch(() => ({ gocuotas: {}, andreani: {} })),
