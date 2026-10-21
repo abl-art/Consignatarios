@@ -4,6 +4,7 @@ import {
   negocioDe,
   filtrarStockPorNegocio,
   filtrarIndicadoresPorNegocio,
+  partirPedidosPorPlataforma,
 } from '@/lib/negocio'
 
 // Casos reales (oct 2026): compras_productos con plataforma 'gomarket'
@@ -96,5 +97,18 @@ describe('filtrarIndicadoresPorNegocio', () => {
     const res = filtrarIndicadoresPorNegocio(filas, 'gocelular', mapa)
     expect(res.map(f => f.key)).toEqual(['parlantes', 'celulares'])
     expect(res[0].modelos.map(m => m.modelo)).toEqual(['JBL Go Essential'])
+  })
+})
+
+describe('partirPedidosPorPlataforma', () => {
+  it('separa gomarket y manda a gocelular los sin plataforma (default histórico)', () => {
+    const pedidos = [
+      { id: '1', plataforma: 'gomarket' },
+      { id: '2', plataforma: 'gocelular' },
+      { id: '3' },
+    ]
+    const { gocelular, gomarket } = partirPedidosPorPlataforma(pedidos)
+    expect(gomarket.map(p => p.id)).toEqual(['1'])
+    expect(gocelular.map(p => p.id)).toEqual(['2', '3'])
   })
 })

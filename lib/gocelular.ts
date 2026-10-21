@@ -3190,3 +3190,54 @@ export async function fetchRescateYaSolicitado(tracking: string): Promise<boolea
     client.release()
   }
 }
+
+/**
+ * Stock de GOmarket: inventario del sistema commerce de GOcelular (las compras
+ * gomarket van por el webhook Commerce v1 y NUNCA tocan inventory_items ni
+ * store_products). sellable = disponible por depósito; in_transit = informado
+ * y todavía no recibido por Andreani.
+ */
+export async function fetchStockGomarket(): Promise<StockWarehouseRow[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const { rows } = await pool.query<{
+    sku: string
+    nombre: string
+    wh_andreani: string
+    wh_gocuotas: string
+    en_transito: string
+    en_transito_desde: Date | null
+  }>(
+    `SELECT
+      s.sku,
+      p.name AS nombre,
+      COALESCE(SUM(b.ledger_on_hand) FILTER (WHERE l.kind = 'andreani_wh' AND b.disposition = 'sellable'), 0)::text AS wh_andreani,
+      COALESCE(SUM(b.ledger_on_hand) FILTER (WHERE l.kind = 'local' AND b.disposition = 'sellable'), 0)::text AS wh_gocuotas,
+      COALESCE(SUM(b.ledger_on_hand) FILTER (WHERE b.disposition = 'in_transit'), 0)::text AS en_transito,
+      MIN(b.created_at) FILTER (WHERE b.disposition = 'in_transit' AND b.ledger_on_hand > 0) AS en_transito_desde
+    FROM commerce_skus s
+    JOIN commerce_products p ON p.id = s.product_id
+    LEFT JOIN commerce_inventory_balances b ON b.sku_id = s.id
+    LEFT JOIN commerce_inventory_locations l ON l.id = b.location_id
+    WHERE s.is_active
+    GROUP BY s.sku, p.name
+    ORDER BY p.name`,
+  )
+
+  return rows.map((r) => {
+    const whAndreani = Number(r.wh_andreani)
+    const whGocuotas = Number(r.wh_gocuotas)
+    return {
+      sku: r.sku,
+      nombre: r.nombre,
+      whAndreani,
+      whGocuotas,
+      enTransito: Number(r.en_transito),
+      enTransitoDesde: r.en_transito_desde ? r.en_transito_desde.toISOString() : null,
+      total: whAndreani + whGocuotas,
+      tipo: 'accesorio' as const,
+      marca: null,
+    }
+  })
+}

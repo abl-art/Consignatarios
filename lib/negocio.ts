@@ -94,3 +94,20 @@ export function filtrarIndicadoresPorNegocio<T extends FilaConModelos>(
   }
   return resultado
 }
+
+/**
+ * Separa pedidos del gestor por plataforma: los gomarket se cruzan contra el
+ * inventario commerce y los demás contra el de GOcelular (sin plataforma =
+ * gocelular, default histórico de pedidos viejos).
+ */
+export function partirPedidosPorPlataforma<T extends { plataforma?: string | null }>(
+  pedidos: T[],
+): { gocelular: T[]; gomarket: T[] } {
+  const gocelular: T[] = []
+  const gomarket: T[] = []
+  for (const p of pedidos) {
+    if (p.plataforma === 'gomarket') gomarket.push(p)
+    else gocelular.push(p)
+  }
+  return { gocelular, gomarket }
+}
