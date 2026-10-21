@@ -95,3 +95,48 @@ export function decidirAccionMail(args: {
   if (args.rescateYaSolicitado) return { tipo: 'ya_solicitado' }
   return { tipo: 'nueva' }
 }
+
+export interface EstadisticaDemoraArrepentimiento {
+  casos: number
+  medianaHoras: number | null
+  menos24h: number
+  de24a72h: number
+  de72a240h: number
+  mas240h: number
+}
+
+/**
+ * Cuánto tardó el cliente en arrepentirse desde la confirmación de la orden
+ * (order_delivered_at = confirmación de compra, no entrega física), solo para
+ * solicitudes cuyo pedido ya estaba EXPEDIDO: son las que llegan tarde para
+ * frenar el picking. confirmadaPor: order_number → fecha de confirmación ISO.
+ */
+export function estadisticaDemoraArrepentimiento(
+  solicitudes: { emailFecha: string; orderNumber: string | null; fulfillment: string | null }[],
+  confirmadaPor: Record<string, string>,
+): EstadisticaDemoraArrepentimiento {
+  const horas: number[] = []
+  for (const s of solicitudes) {
+    if (s.fulfillment !== 'expedido' || !s.orderNumber) continue
+    const confirmada = confirmadaPor[s.orderNumber]
+    if (!confirmada) continue
+    const h = (new Date(s.emailFecha).getTime() - new Date(confirmada).getTime()) / 36e5
+    if (!Number.isFinite(h)) continue
+    horas.push(h)
+  }
+  horas.sort((a, b) => a - b)
+  const mediana =
+    horas.length === 0
+      ? null
+      : horas.length % 2 === 1
+        ? horas[(horas.length - 1) / 2]
+        : (horas[horas.length / 2 - 1] + horas[horas.length / 2]) / 2
+  return {
+    casos: horas.length,
+    medianaHoras: mediana,
+    menos24h: horas.filter((h) => h < 24).length,
+    de24a72h: horas.filter((h) => h >= 24 && h < 72).length,
+    de72a240h: horas.filter((h) => h >= 72 && h < 240).length,
+    mas240h: horas.filter((h) => h >= 240).length,
+  }
+}

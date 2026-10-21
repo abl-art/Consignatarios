@@ -11,7 +11,7 @@ import {
   descartarArrepentimiento,
   type SolicitudArrepentimiento,
 } from '@/lib/actions/arrepentimientos'
-import { MOTIVOS_DESCARTE_ARREPENTIMIENTO } from '@/lib/arrepentimientos'
+import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, type EstadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
 
 function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -59,7 +59,15 @@ function EstadoOrdenChip({ status }: { status: string | null }) {
   )
 }
 
-export default function ArrepentimientosTable({ solicitudes }: { solicitudes: SolicitudArrepentimiento[] }) {
+const fmtDias = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
+
+export default function ArrepentimientosTable({
+  solicitudes,
+  demoraExpedidos,
+}: {
+  solicitudes: SolicitudArrepentimiento[]
+  demoraExpedidos?: EstadisticaDemoraArrepentimiento
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [armada, setArmada] = useState<{ id: string; accion: 'confirmar' | 'descartar' } | null>(null)
@@ -94,7 +102,7 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 gap-3 ${demoraExpedidos && demoraExpedidos.casos > 0 ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Total arrepentimientos</p>
           <p className="text-2xl font-bold text-gray-900">{solicitudes.length}</p>
@@ -117,6 +125,17 @@ export default function ArrepentimientosTable({ solicitudes }: { solicitudes: So
           <p className="text-2xl font-bold text-amber-600">{pendSinDespacho}</p>
           <p className="text-xs text-gray-400">anular la orden y descartar</p>
         </div>
+        {demoraExpedidos && demoraExpedidos.casos > 0 && demoraExpedidos.medianaHoras !== null && (
+          <div className="bg-white border border-violet-200 rounded-xl p-4" title="Horas entre la confirmación de la orden (order_delivered_at) y el mail del botón, solo en solicitudes cuyo pedido ya estaba expedido — las que llegan tarde para frenar el picking">
+            <p className="text-xs text-gray-500 mb-1">Confirmación → arrepentimiento</p>
+            <p className="text-2xl font-bold text-violet-700">
+              {fmtDias.format(demoraExpedidos.medianaHoras / 24)} días
+            </p>
+            <p className="text-xs text-gray-400">
+              mediana en {demoraExpedidos.casos} expedidos · {demoraExpedidos.menos24h} en &lt;24h · {demoraExpedidos.mas240h} fuera de ventana
+            </p>
+          </div>
+        )}
       </div>
       {error && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">

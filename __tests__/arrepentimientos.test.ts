@@ -5,6 +5,7 @@ import {
   esMailDelBoton,
   etiquetaFulfillment,
   parsearAsuntoArrepentimiento,
+  estadisticaDemoraArrepentimiento,
 } from '@/lib/arrepentimientos'
 
 describe('etiquetaFulfillment', () => {
@@ -112,5 +113,37 @@ describe('evaluarVentanaArrepentimiento', () => {
   it('cuenta contra la fecha del mail, no contra ahora', () => {
     // Entregada hace mucho pero el mail fue al día 3: vigente
     expect(evaluarVentanaArrepentimiento('2026-06-01T09:00:00Z', '2026-06-04T10:00:00Z')).toBe('vigente')
+  })
+})
+
+describe('estadisticaDemoraArrepentimiento', () => {
+  const sol = (emailFecha: string, orderNumber: string | null, fulfillment: string | null) => ({ emailFecha, orderNumber, fulfillment })
+
+  it('solo cuenta expedidos con confirmación conocida y calcula mediana en horas', () => {
+    const solicitudes = [
+      sol('2026-10-10T12:00:00Z', 'SO-A', 'expedido'), // 24h
+      sol('2026-10-13T12:00:00Z', 'SO-B', 'expedido'), // 96h
+      sol('2026-10-20T12:00:00Z', 'SO-C', 'expedido'), // 264h (>10 días)
+      sol('2026-10-10T12:00:00Z', 'SO-D', 'en cola'), // no expedido: afuera
+      sol('2026-10-10T12:00:00Z', 'SO-E', 'expedido'), // sin confirmación: afuera
+      sol('2026-10-10T12:00:00Z', null, 'expedido'), // sin orden: afuera
+    ]
+    const confirmadas = {
+      'SO-A': '2026-10-09T12:00:00Z',
+      'SO-B': '2026-10-09T12:00:00Z',
+      'SO-C': '2026-10-09T12:00:00Z',
+      'SO-D': '2026-10-09T12:00:00Z',
+    }
+    const e = estadisticaDemoraArrepentimiento(solicitudes, confirmadas)
+    expect(e.casos).toBe(3)
+    expect(e.medianaHoras).toBe(96)
+    expect(e.menos24h).toBe(0)
+    expect(e.de24a72h).toBe(1) // 24h entra acá (límite inferior inclusivo)
+    expect(e.de72a240h).toBe(1)
+    expect(e.mas240h).toBe(1)
+  })
+
+  it('sin casos devuelve mediana null', () => {
+    expect(estadisticaDemoraArrepentimiento([], {}).medianaHoras).toBeNull()
   })
 })

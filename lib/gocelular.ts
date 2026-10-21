@@ -3241,3 +3241,21 @@ export async function fetchStockGomarket(): Promise<StockWarehouseRow[]> {
     }
   })
 }
+
+/**
+ * Fecha de confirmación de compra (gocuotas_orders.order_delivered_at — es la
+ * confirmación, no la entrega física) por order_number de la tienda. Solo
+ * órdenes con confirmación conocida.
+ */
+export async function fetchConfirmacionOrdenes(orderNumbers: string[]): Promise<Record<string, string>> {
+  const pool = getPool()
+  if (!pool || orderNumbers.length === 0) return {}
+  const { rows } = await pool.query<{ order_number: string; confirmada: Date }>(
+    `SELECT so.order_number::text AS order_number, go.order_delivered_at AS confirmada
+     FROM store_orders so
+     JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+     WHERE so.order_number::text = ANY($1) AND go.order_delivered_at IS NOT NULL`,
+    [orderNumbers],
+  )
+  return Object.fromEntries(rows.map((r) => [r.order_number, r.confirmada.toISOString()]))
+}

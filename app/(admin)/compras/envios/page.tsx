@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, fetchDemorasEntrega, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, fetchDemorasEntrega, fetchConfirmacionOrdenes, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import { estadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
 import type { DemoraEntrega } from '@/lib/demoras'
 import { getSiniestrosStock } from '@/lib/actions/siniestros-stock'
 import type { SiniestroStock } from '@/lib/siniestros-stock'
@@ -73,6 +74,11 @@ export default async function EnviosPage({
   // Cola del Botón de Arrepentimiento (Supabase — no depende de GOcelular)
   const arrepentimientos: SolicitudArrepentimiento[] = await getArrepentimientos().catch(() => [])
   const arrepPendientes = arrepentimientos.filter(a => a.estado === 'pendiente').length
+  // Confirmación → arrepentimiento en expedidos: cuánto tardó el cliente en escribir
+  const confirmadasArrep = await fetchConfirmacionOrdenes(
+    arrepentimientos.filter(a => a.fulfillment === 'expedido' && a.orderNumber).map(a => a.orderNumber as string),
+  ).catch(() => ({}))
+  const demoraArrep = estadisticaDemoraArrepentimiento(arrepentimientos, confirmadasArrep)
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   // Devoluciones: estado en vivo de los dos seguimientos de Andreani (entrega + devolución)
@@ -239,7 +245,7 @@ export default async function EnviosPage({
         {
           id: 'arrepentimientos',
           label: arrepPendientes > 0 ? `Arrepentimientos (${arrepPendientes})` : 'Arrepentimientos',
-          content: <ArrepentimientosTable solicitudes={arrepentimientos} />,
+          content: <ArrepentimientosTable solicitudes={arrepentimientos} demoraExpedidos={demoraArrep} />,
         },
         {
           id: 'rescates',
