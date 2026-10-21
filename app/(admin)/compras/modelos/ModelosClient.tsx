@@ -453,6 +453,16 @@ export default function ModelosClient({
             </tr>
           </thead>
           <tbody>
+            {filtroCategoria && proveedoresFiltrados.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-3 text-center text-sm text-amber-700 bg-amber-50">
+                  Ningún proveedor tiene la categoría &quot;{filtroCategoria}&quot; entre sus tipos de
+                  producto — asignásela en{' '}
+                  <Link href="/compras/proveedores" className="underline font-medium">Proveedores</Link>{' '}
+                  para poder cargar precios acá.
+                </td>
+              </tr>
+            )}
             {filtrados.length === 0 ? (
               <tr>
                 <td colSpan={3 + proveedoresFiltrados.length + 1} className="px-4 py-8 text-center text-gray-400">
