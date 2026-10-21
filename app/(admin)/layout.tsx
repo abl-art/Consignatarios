@@ -18,7 +18,7 @@ const navItems: AdminNavItem[] = [
   { href: '/inventario', label: 'Inventario', icon: 'inventario' },
   // /modelos page kept for admin access but hidden from nav - managed via Compras now
   { href: '/finanzas', label: 'Finanzas', icon: 'finanzas' },
-  { href: '/sync', label: 'Sincronización', icon: 'sync' },
+  // /sync kept for direct access but hidden from nav (20/10/2026, no se usa)
   { href: '/documentacion', label: 'Documentación', icon: 'documento' },
   { href: '/notas', label: 'Notas y Pendientes', icon: 'reloj' },
   { href: '/reclutamiento', label: 'Reclutamiento', icon: 'consignatarios' },
