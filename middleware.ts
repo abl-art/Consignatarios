@@ -42,6 +42,7 @@ export async function middleware(request: NextRequest) {
   // de restringidos autenticados).
   if (
     pathname === '/auth/confirm' || pathname.startsWith('/auth/confirm/') ||
+    pathname === '/auth/callback' ||
     pathname === '/establecer-password'
   ) {
     return supabaseResponse

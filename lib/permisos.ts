@@ -12,6 +12,17 @@ export function emailPermitido(email: string, dominios: string[] = DOMINIOS_PERM
   return dominios.some((d) => d.toLowerCase() === dominio)
 }
 
+// Login con Google (regla de Emiliano, 21/10): solo cuentas del Workspace
+// (@gocuotas.com) que YA fueron invitadas — tener rol asignado ES la marca de
+// invitación. Los consignatarios externos siguen entrando con contraseña.
+export type AccesoGoogle = 'ok' | 'dominio' | 'no-invitado'
+
+export function accesoGoogle(email: string, rol: string | undefined | null): AccesoGoogle {
+  if (!emailPermitido(email)) return 'dominio'
+  if (!rol) return 'no-invitado'
+  return 'ok'
+}
+
 export function puedeVer(permisos: Permisos, seccion: string, subitem: string = SUBITEM_ROOT): boolean {
   const nivel = permisos[seccion]?.[subitem]
   return nivel === 'ver' || nivel === 'operar'

@@ -91,3 +91,19 @@ test('tabsPermitidas filtra y conserva orden', () => {
 test('tabsPermitidas sin permisos devuelve vacío', () => {
   expect(tabsPermitidas({}, 'finanzas', ['flujo', 'egresos'])).toEqual([])
 })
+
+// Login con Google (20/10): solo cuentas @gocuotas.com YA invitadas (con rol).
+// Los no invitados se rechazan — las invitaciones las manda el admin.
+import { accesoGoogle } from "@/lib/permisos";
+test("accesoGoogle acepta gocuotas con rol asignado", () => {
+  expect(accesoGoogle("daniela.asan@gocuotas.com", "restringido")).toBe("ok");
+  expect(accesoGoogle("emiliano.canova@gocuotas.com", "admin")).toBe("ok");
+});
+test("accesoGoogle rechaza dominios ajenos aunque tengan rol", () => {
+  expect(accesoGoogle("nicolasjuncos@hotmail.es", "consignatario")).toBe("dominio");
+  expect(accesoGoogle("alguien@gmail.com", undefined)).toBe("dominio");
+});
+test("accesoGoogle rechaza gocuotas sin rol (no invitado)", () => {
+  expect(accesoGoogle("nuevo@gocuotas.com", undefined)).toBe("no-invitado");
+  expect(accesoGoogle("nuevo@gocuotas.com", "")).toBe("no-invitado");
+});
