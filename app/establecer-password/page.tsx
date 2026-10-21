@@ -30,7 +30,15 @@ export default function EstablecerPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
-      setError('No se pudo guardar la contraseña. Pedí un nuevo link de invitación.')
+      // Mostrar la causa real: el genérico escondía casos resolubles (p.ej.
+      // "misma contraseña" significa que YA está guardada y puede entrar)
+      if (error.message.includes('different from the old')) {
+        setError('Esa ya es tu contraseña actual — podés iniciar sesión con ella directamente.')
+      } else if (error.message.toLowerCase().includes('session')) {
+        setError('El link venció o ya se usó. Pedí un nuevo link de invitación.')
+      } else {
+        setError(`No se pudo guardar la contraseña: ${error.message}`)
+      }
       setLoading(false)
       return
     }
