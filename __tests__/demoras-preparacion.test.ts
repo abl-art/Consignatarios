@@ -94,3 +94,21 @@ describe('passthrough de campos extra', () => {
     expect(filas[0].trustonicStatus).toBe('ready_for_use')
   })
 })
+
+describe('exclusiones de órdenes ya gestionadas (caso real 20466792)', () => {
+  const base = {
+    orderNumber: 'SO-SNMKH7', cliente: 'Natacha', dni: '1', producto: 'Samsung A07',
+    confirmadaAt: '2026-10-11T18:34:00-03:00', tracking: null as string | null,
+    whPedido: null as { estado: string | null; error: string | null } | null,
+    stockDisponible: 5 as number | null, arrepPendiente: false,
+  }
+  const AHORA = '2026-10-21T12:00:00-03:00'
+
+  it('un pedido WH que llegó a expedido no es demora de preparación aunque el envío se haya cancelado después', () => {
+    const filas = armarDemorasPreparacion(
+      [{ ...base, whPedido: { estado: 'expedido', error: null } }],
+      AHORA,
+    )
+    expect(filas).toHaveLength(0)
+  })
+})

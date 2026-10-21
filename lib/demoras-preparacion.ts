@@ -70,8 +70,11 @@ export function armarDemorasPreparacion<T extends OrdenPreparacion>(ordenes: T[]
   for (const o of ordenes) {
     if (o.tracking) continue
     if (o.arrepPendiente) continue
-    // cancelled y cancel_requested ya están gestionados (anulación en curso)
-    if (o.whPedido?.estado === 'cancelled' || o.whPedido?.estado === 'cancel_requested') continue
+    // cancelled y cancel_requested ya están gestionados (anulación en curso).
+    // expedido = la preparación TERMINÓ alguna vez: si hoy no tiene tracking es
+    // porque el envío se canceló después (rescate/arrepentimiento), no una demora
+    // de preparación (caso real: orden 20466792, rescate por arrepentimiento)
+    if (o.whPedido?.estado === 'cancelled' || o.whPedido?.estado === 'cancel_requested' || o.whPedido?.estado === 'expedido') continue
     const horasHabiles = horasHabilesEntre(o.confirmadaAt, ahoraISO)
     if (horasHabiles < HORAS_DEMORA_PREPARACION) continue
     filas.push({ ...o, horasHabiles, razon: razonDe(o) })

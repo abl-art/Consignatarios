@@ -83,8 +83,9 @@ export default async function EnviosPage({
   ).catch(() => ({}))
   const demoraArrep = estadisticaDemoraArrepentimiento(arrepentimientos, confirmadasArrep)
   // Demoras de PREPARACIÓN: confirmadas hace +48h hábiles sin tracking
-  const arrepPendientesPorOrden = new Set(
-    arrepentimientos.filter(a => a.estado === 'pendiente' && a.orderNumber).map(a => String(a.orderNumber)),
+  // pendiente = retenida a propósito; confirmada = rescate en curso (caso 20466792)
+  const arrepGestionadosPorOrden = new Set(
+    arrepentimientos.filter(a => (a.estado === 'pendiente' || a.estado === 'confirmada') && a.orderNumber).map(a => String(a.orderNumber)),
   )
   const prep = await fetchOrdenesPreparacion().catch(() => ({ ordenes: [], disponiblesPorNombre: [] }))
   const disponiblePorClave = new Map(prep.disponiblesPorNombre.map(d => [normalizarModelo(d.nombre), d.disponibles]))
@@ -98,7 +99,8 @@ export default async function EnviosPage({
       tracking: o.tracking,
       whPedido: o.whEstado ? { estado: o.whEstado, error: o.whEstado === 'requires_attention' ? o.whRazon : null } : null,
       stockDisponible: disponiblePorClave.get(normalizarModelo(o.producto)) ?? null,
-      arrepPendiente: arrepPendientesPorOrden.has(o.orderNumber),
+      arrepPendiente: arrepGestionadosPorOrden.has(o.orderNumber),
+      imeiAsignado: o.imeiAsignado,
       gocuotasOrderId: o.gocuotasOrderId,
       gocuotasStatus: o.gocuotasStatus,
       trustonicStatus: o.trustonicStatus,

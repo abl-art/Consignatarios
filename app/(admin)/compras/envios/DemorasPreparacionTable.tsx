@@ -10,6 +10,7 @@ import { HORAS_DEMORA_PREPARACION } from '@/lib/demoras-preparacion'
 
 export type FilaDemoraPreparacion = DemoraPreparacion<
   OrdenPreparacion & {
+    imeiAsignado: string | null
     gocuotasOrderId: string | null
     gocuotasStatus: string | null
     trustonicStatus: string | null
@@ -140,6 +141,7 @@ export default function DemorasPreparacionTable({ demoras }: { demoras: FilaDemo
                 <th className="py-1.5 px-4 font-medium">Orden</th>
                 <th className="py-1.5 px-2 font-medium">Cliente</th>
                 <th className="py-1.5 px-2 font-medium">Producto</th>
+                <th className="py-1.5 px-2 font-medium">IMEI asignado</th>
                 <th className="py-1.5 px-2 font-medium">GOcuotas · Trustonic</th>
                 <th className="py-1.5 px-2 font-medium text-right">Demora hábil</th>
                 <th className="py-1.5 px-2 font-medium">Razón aparente</th>
@@ -154,6 +156,7 @@ export default function DemorasPreparacionTable({ demoras }: { demoras: FilaDemo
                     <span className="text-[10px] text-gray-400 ml-1.5">{d.dni}</span>
                   </td>
                   <td className="py-1.5 px-2 text-gray-700 max-w-[240px] truncate" title={d.producto}>{d.producto}</td>
+                  <td className="py-1.5 px-2 font-mono text-[11px] text-gray-600">{d.imeiAsignado ?? '—'}</td>
                   <td className="py-1.5 px-2">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="font-mono text-[11px] text-gray-600">{d.gocuotasOrderId ?? '—'}</span>

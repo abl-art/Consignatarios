@@ -3270,6 +3270,7 @@ export interface OrdenPreparacionCruda {
   whEstado: string | null
   whRazon: string | null
   stockDisponible: number | null
+  imeiAsignado: string | null
   gocuotasOrderId: string | null
   gocuotasStatus: string | null
   trustonicStatus: string | null
@@ -3297,6 +3298,7 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
         tracking: string | null
         wh_estado: string | null
         wh_razon: string | null
+        imei_asignado: string | null
         gocuotas_order_id: string | null
         gocuotas_status: string | null
         trustonic_status: string | null
@@ -3318,6 +3320,7 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
           (SELECT p.razon FROM andreani_wh_pedidos p
             WHERE p.store_order_id = so.id
             ORDER BY p.created_at DESC LIMIT 1) AS wh_razon,
+          asig.imei AS imei_asignado,
           go.order_id::text AS gocuotas_order_id,
           go.order_status AS gocuotas_status,
           d.trustonic_status::text AS trustonic_status,
@@ -3354,6 +3357,7 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
         whEstado: r.wh_estado,
         whRazon: r.wh_razon,
         stockDisponible: null,
+        imeiAsignado: r.imei_asignado,
         gocuotasOrderId: r.gocuotas_order_id,
         gocuotasStatus: r.gocuotas_status,
         trustonicStatus: r.trustonic_status,
