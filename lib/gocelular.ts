@@ -3270,6 +3270,10 @@ export interface OrdenPreparacionCruda {
   whEstado: string | null
   whRazon: string | null
   stockDisponible: number | null
+  gocuotasOrderId: string | null
+  gocuotasStatus: string | null
+  trustonicStatus: string | null
+  trustonicUpdatedAt: string | null
 }
 
 /**
@@ -3293,6 +3297,10 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
         tracking: string | null
         wh_estado: string | null
         wh_razon: string | null
+        gocuotas_order_id: string | null
+        gocuotas_status: string | null
+        trustonic_status: string | null
+        trustonic_updated_at: string | null
       }>(
         `SELECT
           so.order_number::text AS order_number,
@@ -3309,9 +3317,19 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
             ORDER BY p.created_at DESC LIMIT 1) AS wh_estado,
           (SELECT p.razon FROM andreani_wh_pedidos p
             WHERE p.store_order_id = so.id
-            ORDER BY p.created_at DESC LIMIT 1) AS wh_razon
+            ORDER BY p.created_at DESC LIMIT 1) AS wh_razon,
+          go.order_id::text AS gocuotas_order_id,
+          go.order_status AS gocuotas_status,
+          d.trustonic_status::text AS trustonic_status,
+          d.updated_at::text AS trustonic_updated_at
         FROM store_orders so
         JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+        LEFT JOIN LATERAL (
+          SELECT ii.imei FROM inventory_items ii
+          WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text
+          LIMIT 1
+        ) asig ON true
+        LEFT JOIN devices d ON d.imei = asig.imei
         WHERE go.order_delivered_at IS NOT NULL
           AND go.order_delivered_at > now() - interval '45 days'
           AND go.order_status <> 'discarded'
@@ -3336,6 +3354,10 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
         whEstado: r.wh_estado,
         whRazon: r.wh_razon,
         stockDisponible: null,
+        gocuotasOrderId: r.gocuotas_order_id,
+        gocuotasStatus: r.gocuotas_status,
+        trustonicStatus: r.trustonic_status,
+        trustonicUpdatedAt: r.trustonic_updated_at,
       })),
       disponiblesPorNombre: stockRes.rows.map((r) => ({ nombre: r.nombre, disponibles: Number(r.disponibles) })),
     }

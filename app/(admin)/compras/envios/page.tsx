@@ -99,6 +99,10 @@ export default async function EnviosPage({
       whPedido: o.whEstado ? { estado: o.whEstado, error: o.whEstado === 'requires_attention' ? o.whRazon : null } : null,
       stockDisponible: disponiblePorClave.get(normalizarModelo(o.producto)) ?? null,
       arrepPendiente: arrepPendientesPorOrden.has(o.orderNumber),
+      gocuotasOrderId: o.gocuotasOrderId,
+      gocuotasStatus: o.gocuotasStatus,
+      trustonicStatus: o.trustonicStatus,
+      trustonicUpdatedAt: o.trustonicUpdatedAt,
     })),
     new Date().toISOString(),
   )

@@ -78,3 +78,19 @@ describe('armarDemorasPreparacion', () => {
     expect(filas.map(f => f.orderNumber)).toEqual(['MAS', 'MENOS'])
   })
 })
+
+describe('passthrough de campos extra', () => {
+  it('conserva campos adicionales de la orden (GOcuotas, Trustonic) en la salida', () => {
+    const filas = armarDemorasPreparacion(
+      [{
+        orderNumber: 'SO-1', cliente: 'C', dni: '1', producto: 'P',
+        confirmadaAt: '2026-10-13T10:00:00-03:00', tracking: null,
+        whPedido: null, stockDisponible: 1, arrepPendiente: false,
+        gocuotasOrderId: '19108832', gocuotasStatus: 'approved', trustonicStatus: 'ready_for_use',
+      }],
+      '2026-10-21T12:00:00-03:00',
+    )
+    expect(filas[0].gocuotasOrderId).toBe('19108832')
+    expect(filas[0].trustonicStatus).toBe('ready_for_use')
+  })
+})

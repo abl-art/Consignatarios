@@ -46,7 +46,7 @@ export interface OrdenPreparacion {
   arrepPendiente: boolean
 }
 
-export interface DemoraPreparacion extends OrdenPreparacion {
+export type DemoraPreparacion<T extends OrdenPreparacion = OrdenPreparacion> = T & {
   horasHabiles: number
   razon: RazonDemoraPreparacion
 }
@@ -65,8 +65,8 @@ function razonDe(o: OrdenPreparacion): RazonDemoraPreparacion {
  * menos de 48h hábiles, arrepentimiento pendiente (retenida a propósito) y
  * pedido warehouse cancelado (ya gestionado). Orden: mayor demora primero.
  */
-export function armarDemorasPreparacion(ordenes: OrdenPreparacion[], ahoraISO: string): DemoraPreparacion[] {
-  const filas: DemoraPreparacion[] = []
+export function armarDemorasPreparacion<T extends OrdenPreparacion>(ordenes: T[], ahoraISO: string): DemoraPreparacion<T>[] {
+  const filas: DemoraPreparacion<T>[] = []
   for (const o of ordenes) {
     if (o.tracking) continue
     if (o.arrepPendiente) continue
