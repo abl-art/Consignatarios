@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
 import { fetchInventarioResumen } from '@/lib/actions/inventario-resumen'
+import { getProductos as getProductosCompras } from '@/lib/actions/compras'
+import { armarNegocioMap, filtrarIndicadoresPorNegocio } from '@/lib/negocio'
 import {
   velocidadVenta,
   diasCobertura,
@@ -37,6 +39,10 @@ export default async function InventarioPage() {
       modelos: p.modelos,
     }
   })
+  // Unidad de negocio (flag plataforma de compras_productos): variantes precalculadas para las píldoras
+  const mapaNegocio = armarNegocioMap(await getProductosCompras().catch(() => []))
+  const indicadoresGocelular = filtrarIndicadoresPorNegocio(indicadores, 'gocelular', mapaNegocio)
+  const indicadoresGomarket = filtrarIndicadoresPorNegocio(indicadores, 'gomarket', mapaNegocio)
   const meses = mesesDeStock(
     productos.map(p => ({ valorVenta: p.valorVenta ?? p.costoReposicion ?? 0, montoVentas30d: p.montoVentas30d })),
   )
@@ -201,7 +207,7 @@ export default async function InventarioPage() {
           </div>
 
           {/* Indicadores de gestión */}
-          <IndicadoresProducto meses={meses} filas={indicadores} />
+          <IndicadoresProducto meses={meses} filas={indicadores} filasGocelular={indicadoresGocelular} filasGomarket={indicadoresGomarket} />
 
           {/* Stock sin movimiento */}
           {sinMovimiento.length > 0 && (

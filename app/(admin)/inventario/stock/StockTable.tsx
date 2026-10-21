@@ -2,16 +2,31 @@
 
 import { useState } from 'react'
 import type { StockDisponibilidadRow } from '@/lib/disponibilidad'
+import type { Negocio, FiltroNegocio } from '@/lib/negocio'
 
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 import { categoriaAccesorio, type CategoriaAccesorio } from '@/lib/categoria-accesorio'
 
 type TipoFiltro = 'todos' | 'celular' | 'accesorio' | CategoriaAccesorio
 
-export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] }) {
+// negocio es opcional: /share/stock (vista pública) no lo anota y no muestra píldoras
+type RowConNegocio = StockDisponibilidadRow & { negocio?: Negocio }
+
+const NEGOCIOS: { key: FiltroNegocio; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'gocelular', label: 'GOcelular' },
+  { key: 'gomarket', label: 'GOmarket' },
+]
+
+export default function StockTable({ rows: todasLasFilas }: { rows: RowConNegocio[] }) {
   const [filtro, setFiltro] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>('todos')
   const [marcaFiltro, setMarcaFiltro] = useState('todas')
+  const [negocioFiltro, setNegocioFiltro] = useState<FiltroNegocio>('todos')
+
+  // El filtro de negocio es la base: tarjetas, totales y tabla se recalculan con él
+  const conNegocio = todasLasFilas.some(r => r.negocio !== undefined)
+  const rows = negocioFiltro === 'todos' ? todasLasFilas : todasLasFilas.filter(r => (r.negocio ?? 'gocelular') === negocioFiltro)
 
   const marcas = Array.from(new Set(rows.map(r => r.marca).filter((m): m is string => !!m))).sort()
 
@@ -78,6 +93,24 @@ export default function StockTable({ rows }: { rows: StockDisponibilidadRow[] })
           <p className="text-[10px] text-gray-400 mt-0.5">sin informar</p>
         </div>
       </div>
+
+      {/* Unidad de negocio: flag plataforma elegido al cargar el pedido en Compras */}
+      {conNegocio && <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-gray-500">Negocio:</span>
+        {NEGOCIOS.map(n => (
+          <button
+            key={n.key}
+            onClick={() => setNegocioFiltro(n.key)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              negocioFiltro === n.key
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            {n.label}
+          </button>
+        ))}
+      </div>}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input

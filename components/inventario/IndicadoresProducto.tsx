@@ -6,8 +6,8 @@ import { DIAS_RIESGO, DIAS_CRITICO, type CoberturaModelo } from '@/lib/inventari
 export interface FilaIndicador {
   key: string
   label: string
-  vel7: number
-  vel30: number
+  vel7: number | null
+  vel30: number | null
   cobertura: number | null
   rotacion: number | null
   modelos: CoberturaModelo[]
@@ -16,7 +16,17 @@ export interface FilaIndicador {
 interface Props {
   meses: number | null
   filas: FilaIndicador[]
+  /** Variantes precalculadas por unidad de negocio (server-side); sin ellas no se muestran las píldoras */
+  filasGocelular?: FilaIndicador[]
+  filasGomarket?: FilaIndicador[]
 }
+
+const NEGOCIOS = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'gocelular', label: 'GOcelular' },
+  { key: 'gomarket', label: 'GOmarket' },
+] as const
+type FiltroNegocio = (typeof NEGOCIOS)[number]['key']
 
 const fmt1 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 const fmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
@@ -36,8 +46,12 @@ function pctClase(pct: number | null, cobertura: number | null): string {
   return `${coberturaClase(cobertura)} font-semibold`
 }
 
-export default function IndicadoresProducto({ meses, filas }: Props) {
+export default function IndicadoresProducto({ meses, filas, filasGocelular, filasGomarket }: Props) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
+  const [negocio, setNegocio] = useState<FiltroNegocio>('todos')
+
+  const conPildoras = filasGocelular !== undefined && filasGomarket !== undefined
+  const filasVisibles = negocio === 'gocelular' ? (filasGocelular ?? filas) : negocio === 'gomarket' ? (filasGomarket ?? filas) : filas
 
   const toggle = (key: string) => {
     setAbiertos(prev => {
@@ -51,7 +65,26 @@ export default function IndicadoresProducto({ meses, filas }: Props) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <h2 className="text-sm font-semibold text-gray-800">Indicadores por producto</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-gray-800">Indicadores por producto</h2>
+          {conPildoras && (
+            <div className="flex items-center gap-1.5">
+              {NEGOCIOS.map(n => (
+                <button
+                  key={n.key}
+                  onClick={() => setNegocio(n.key)}
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
+                    negocio === n.key
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {n.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="flex items-baseline gap-2">
           <span className="text-xs text-gray-500">Meses de Stock</span>
           <span className="text-2xl font-bold text-gray-900">{meses !== null ? fmt1.format(meses) : '—'}</span>
@@ -71,12 +104,15 @@ export default function IndicadoresProducto({ meses, filas }: Props) {
             </tr>
           </thead>
           <tbody>
-            {filas.map(f => {
+            {filasVisibles.map(f => {
               const abierto = abiertos.has(f.key)
               return (
                 <FilaProducto key={f.key} fila={f} abierto={abierto} onToggle={() => toggle(f.key)} />
               )
             })}
+            {filasVisibles.length === 0 && (
+              <tr><td colSpan={5} className="py-4 text-center text-xs text-gray-400">Sin productos de este negocio</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -99,8 +135,8 @@ function FilaProducto({ fila, abierto, onToggle }: { fila: FilaIndicador; abiert
           {fila.label}
           <span className="text-[10px] text-gray-400 ml-1.5">{fila.modelos.length} modelos</span>
         </td>
-        <td className="py-1.5 px-2 text-right">{fmt1.format(fila.vel7)}</td>
-        <td className="py-1.5 px-2 text-right">{fmt1.format(fila.vel30)}</td>
+        <td className="py-1.5 px-2 text-right">{fila.vel7 !== null ? fmt1.format(fila.vel7) : '—'}</td>
+        <td className="py-1.5 px-2 text-right">{fila.vel30 !== null ? fmt1.format(fila.vel30) : '—'}</td>
         <td className={`py-1.5 px-2 text-right font-medium ${coberturaClase(fila.cobertura, 'text-gray-900')}`}>
           {fila.cobertura !== null ? `${fmt1.format(fila.cobertura)} días` : '—'}
         </td>

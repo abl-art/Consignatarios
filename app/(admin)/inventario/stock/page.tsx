@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { fetchStockPorWarehouse, fetchPendientesPicking } from '@/lib/gocelular'
 import { completarDisponibilidad } from '@/lib/disponibilidad'
 import { aplicarPedidos } from '@/lib/pedidos-pendientes'
-import { getPedidos } from '@/lib/actions/compras'
+import { getPedidos, getProductos } from '@/lib/actions/compras'
+import { armarNegocioMap, negocioDe } from '@/lib/negocio'
 import { sincronizarIngresosGocelular } from '@/lib/actions/sync-ingresos'
 import StockTable from './StockTable'
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
@@ -14,12 +15,18 @@ export default async function StockPage() {
   // un pedido informado cuyas unidades ya llegaron queda hasta 24h como
   // "en tránsito" fantasma (doble conteo con el stock — caso A27/A37 19/10)
   await sincronizarIngresosGocelular()
-  const [baseRows, pendientes, pedidos] = await Promise.all([
+  const [baseRows, pendientes, pedidos, productosCompras] = await Promise.all([
     fetchStockPorWarehouse(),
     fetchPendientesPicking().catch(() => ({ gocuotas: {}, andreani: {} })),
     getPedidos().catch(() => []),
+    getProductos().catch(() => []),
   ])
-  const rows = completarDisponibilidad(aplicarPedidos(baseRows, pedidos), pendientes)
+  // Unidad de negocio por fila: flag plataforma de compras_productos (default gocelular)
+  const mapaNegocio = armarNegocioMap(productosCompras)
+  const rows = completarDisponibilidad(aplicarPedidos(baseRows, pedidos), pendientes).map((r) => ({
+    ...r,
+    negocio: negocioDe(r.sku, r.nombre, mapaNegocio),
+  }))
 
   const totalTransito = rows.reduce((s, r) => s + r.enTransito, 0)
   const totalGeneral = rows.reduce((s, r) => s + r.total, 0)
