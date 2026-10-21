@@ -292,3 +292,41 @@ describe('verificarAliasVsPedido (dry run contra la tabla de alias, lineamiento 
     expect(r.errores[0]).toContain('Moto G06')
   })
 })
+
+describe('alias sin capacidad vs pedido con capacidad (caso Solnik Redmi A5, 21/10)', () => {
+  it('matchea cuando la base coincide y es única de ambos lados', () => {
+    const alias = new Map([['MZB0NI5AR', 'Xiaomi Redmi A5']])
+    const r = verificarAliasVsPedido(
+      [{ sku: 'MZB0NI5AR', unidades: 20 }],
+      alias,
+      [{ productoNombre: 'Xiaomi Redmi A5 4+128GB ', cantidad: 20 }],
+    )
+    expect(r.errores).toEqual([])
+    expect(r.warnings).toEqual([])
+  })
+
+  it('con dos variantes de capacidad en el pedido NO adivina y sigue bloqueando', () => {
+    const alias = new Map([['MZB0NI5AR', 'Xiaomi Redmi A5']])
+    const r = verificarAliasVsPedido(
+      [{ sku: 'MZB0NI5AR', unidades: 20 }],
+      alias,
+      [
+        { productoNombre: 'Xiaomi Redmi A5 4/64GB', cantidad: 10 },
+        { productoNombre: 'Xiaomi Redmi A5 4/128GB', cantidad: 10 },
+      ],
+    )
+    expect(r.errores.length).toBeGreaterThan(0)
+  })
+
+  it('la diferencia de cantidades se sigue detectando a través del match por base', () => {
+    const alias = new Map([['MZB0NI5AR', 'Xiaomi Redmi A5']])
+    const r = verificarAliasVsPedido(
+      [{ sku: 'MZB0NI5AR', unidades: 20 }],
+      alias,
+      [{ productoNombre: 'Xiaomi Redmi A5 4+128GB', cantidad: 30 }],
+    )
+    expect(r.errores).toHaveLength(1)
+    expect(r.errores[0]).toContain('20')
+    expect(r.errores[0]).toContain('30')
+  })
+})

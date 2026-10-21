@@ -109,6 +109,8 @@ describe('normalizarModelo', () => {
     // guion suelto de la tienda (bug real 31/8: "G86 5G - 256GB/8GB" no mapeaba
     // contra el catálogo de precios por el token "-")
     expect(normalizarModelo('Motorola Moto G86 5G - 256GB/8GB')).toBe(normalizarModelo('Motorola Moto G86 5G 256GB/8GB'))
+    // capacidad escrita con "+" (gestor: "Redmi A5 4+128GB" vs tienda "4/128GB")
+    expect(normalizarModelo('Xiaomi Redmi A5 4+128GB')).toBe(normalizarModelo('Xiaomi Redmi A5 4/128GB'))
   })
 
   it('no confunde modelos distintos', () => {

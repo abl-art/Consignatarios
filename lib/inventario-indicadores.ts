@@ -77,6 +77,10 @@ export function mesesDeStock(
  */
 export function normalizarModelo(nombre: string): string {
   let n = nombre.toLowerCase()
+  // Capacidad escrita con "+" ("4+128GB", gestor de pedidos) equivale a la
+  // forma con barra ("4/128GB"): resolver ANTES del recorte genérico de "+"
+  // (que es para sufijos de bundle) para no dejar la RAM huérfana
+  n = n.replace(/(\d+)\s*(?:gb)?\s*\+\s*(\d+)\s*gb/g, (_, a, b) => `${Math.max(Number(a), Number(b))}gb`)
   n = n.replace(/\s*\+\s*.*/, '')
   n = n.replace(/\bcelular\b/g, '')
   // la tienda a veces omite "Moto" en los Motorola ("Motorola Edge 60 Fusion"

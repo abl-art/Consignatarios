@@ -178,6 +178,38 @@ export function verificarAliasVsPedido(
     porPedido.set(clave, e)
   }
 
+  // Fallback de capacidad (caso Solnik 21/10: alias "Xiaomi Redmi A5" vs
+  // pedido "Xiaomi Redmi A5 4+128GB"): un alias sin match exacto se empareja
+  // con el item del pedido cuya clave difiere SOLO en los tokens de capacidad
+  // ("###gb") — pero únicamente cuando UNO de los dos lados no especifica
+  // capacidad (64GB vs 128GB es un conflicto real y sigue bloqueando) y la
+  // base es única de ambos lados (con dos variantes reales no se adivina).
+  const base = (clave: string) => clave.split(' ').filter(t => !/^\d+gb$/.test(t)).join(' ')
+  const tieneCapacidad = (clave: string) => clave.split(' ').some(t => /^\d+gb$/.test(t))
+  const basesPedido = new Map<string, string[]>()
+  for (const clave of porPedido.keys()) {
+    const b = base(clave)
+    basesPedido.set(b, [...(basesPedido.get(b) ?? []), clave])
+  }
+  const basesAlias = new Map<string, string[]>()
+  for (const clave of porAlias.keys()) {
+    const b = base(clave)
+    basesAlias.set(b, [...(basesAlias.get(b) ?? []), clave])
+  }
+  for (const claveAlias of [...porAlias.keys()]) {
+    if (porPedido.has(claveAlias)) continue
+    const b = base(claveAlias)
+    const candidatasPedido = (basesPedido.get(b) ?? [])
+      .filter(c => !porAlias.has(c))
+      .filter(c => tieneCapacidad(c) !== tieneCapacidad(claveAlias))
+    const aliasMismaBase = (basesAlias.get(b) ?? []).filter(c => !porPedido.has(c))
+    if (candidatasPedido.length === 1 && aliasMismaBase.length === 1) {
+      const entry = porPedido.get(candidatasPedido[0])!
+      porPedido.delete(candidatasPedido[0])
+      porPedido.set(claveAlias, entry)
+    }
+  }
+
   // Un faltante (el pedido declara MÁS que lo aliasado) puede explicarse por
   // SKUs sin alias del mismo modelo (color nuevo, caso A16 28/9): si las
   // unidades sin alias alcanzan a cubrir TODOS los faltantes, se avisa en vez
