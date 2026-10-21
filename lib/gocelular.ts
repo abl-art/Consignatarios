@@ -3259,3 +3259,87 @@ export async function fetchConfirmacionOrdenes(orderNumbers: string[]): Promise<
   )
   return Object.fromEntries(rows.map((r) => [r.order_number, r.confirmada.toISOString()]))
 }
+
+export interface OrdenPreparacionCruda {
+  orderNumber: string
+  cliente: string
+  dni: string
+  producto: string
+  confirmadaAt: string
+  tracking: string | null
+  whEstado: string | null
+  whRazon: string | null
+  stockDisponible: number | null
+}
+
+/**
+ * Universo para Demoras de PREPARACIÓN: órdenes propias confirmadas en GOcuotas
+ * (order_delivered_at, últimos 45 días) y NO anuladas, con su tracking
+ * outbound (si existe), el último pedido de warehouse y el stock disponible
+ * del modelo (match por nombre normalizado, se resuelve en el caller).
+ */
+export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPreparacionCruda[]; disponiblesPorNombre: { nombre: string; disponibles: number }[] }> {
+  const pool = getPool()
+  if (!pool) return { ordenes: [], disponiblesPorNombre: [] }
+  const client = await pool.connect()
+  try {
+    const [ordenesRes, stockRes] = await Promise.all([
+      client.query<{
+        order_number: string
+        cliente: string | null
+        dni: string | null
+        producto: string | null
+        confirmada: Date
+        tracking: string | null
+        wh_estado: string | null
+        wh_razon: string | null
+      }>(
+        `SELECT
+          so.order_number::text AS order_number,
+          so.customer_name AS cliente,
+          so.customer_dni AS dni,
+          so.product_name AS producto,
+          go.order_delivered_at AS confirmada,
+          (SELECT s.tracking_number FROM shipments s
+            WHERE s.store_order_id = so.id AND s.type = 'outbound'
+              AND s.status <> 'cancelled' AND s.tracking_number IS NOT NULL
+            ORDER BY s.created_at DESC LIMIT 1) AS tracking,
+          (SELECT p.estado FROM andreani_wh_pedidos p
+            WHERE p.store_order_id = so.id
+            ORDER BY p.created_at DESC LIMIT 1) AS wh_estado,
+          (SELECT p.razon FROM andreani_wh_pedidos p
+            WHERE p.store_order_id = so.id
+            ORDER BY p.created_at DESC LIMIT 1) AS wh_razon
+        FROM store_orders so
+        JOIN gocuotas_orders go ON go.order_id::text = so.gocuotas_order_id::text
+        WHERE go.order_delivered_at IS NOT NULL
+          AND go.order_delivered_at > now() - interval '45 days'
+          AND go.order_status <> 'discarded'
+          AND so.status <> 'cancelled'`,
+      ),
+      client.query<{ nombre: string; disponibles: string }>(
+        `SELECT COALESCE(dm.name, ii.model_code) AS nombre, COUNT(*)::text AS disponibles
+         FROM inventory_items ii
+         LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+         WHERE ii.status = 'available' AND ii.physical_location IS DISTINCT FROM 'in_transit_andreani'
+         GROUP BY 1`,
+      ),
+    ])
+    return {
+      ordenes: ordenesRes.rows.map((r) => ({
+        orderNumber: r.order_number,
+        cliente: r.cliente ?? '—',
+        dni: r.dni ?? '—',
+        producto: r.producto ?? '—',
+        confirmadaAt: r.confirmada.toISOString(),
+        tracking: r.tracking,
+        whEstado: r.wh_estado,
+        whRazon: r.wh_razon,
+        stockDisponible: null,
+      })),
+      disponiblesPorNombre: stockRes.rows.map((r) => ({ nombre: r.nombre, disponibles: Number(r.disponibles) })),
+    }
+  } finally {
+    client.release()
+  }
+}

@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import { getFacturasEnvios } from '@/lib/actions/envios'
 import { getFacturasWarehouse } from '@/lib/actions/warehouse-factura'
-import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, fetchDemorasEntrega, fetchConfirmacionOrdenes, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
+import { fetchAsns, fetchAlertasEnvios, fetchProductosStock, fetchDemorasEntrega, fetchConfirmacionOrdenes, fetchOrdenesPreparacion, type AsnResumen, type AlertaEnvio, type Rescate, type Siniestro, type ProductoStock } from '@/lib/gocelular'
 import { estadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
+import { armarDemorasPreparacion } from '@/lib/demoras-preparacion'
+import { normalizarModelo } from '@/lib/inventario-indicadores'
+import DemorasPreparacionTable from './DemorasPreparacionTable'
 import type { DemoraEntrega } from '@/lib/demoras'
 import { getSiniestrosStock } from '@/lib/actions/siniestros-stock'
 import type { SiniestroStock } from '@/lib/siniestros-stock'
@@ -79,6 +82,26 @@ export default async function EnviosPage({
     arrepentimientos.filter(a => a.fulfillment === 'expedido' && a.orderNumber).map(a => a.orderNumber as string),
   ).catch(() => ({}))
   const demoraArrep = estadisticaDemoraArrepentimiento(arrepentimientos, confirmadasArrep)
+  // Demoras de PREPARACIÓN: confirmadas hace +48h hábiles sin tracking
+  const arrepPendientesPorOrden = new Set(
+    arrepentimientos.filter(a => a.estado === 'pendiente' && a.orderNumber).map(a => String(a.orderNumber)),
+  )
+  const prep = await fetchOrdenesPreparacion().catch(() => ({ ordenes: [], disponiblesPorNombre: [] }))
+  const disponiblePorClave = new Map(prep.disponiblesPorNombre.map(d => [normalizarModelo(d.nombre), d.disponibles]))
+  const demorasPreparacion = armarDemorasPreparacion(
+    prep.ordenes.map(o => ({
+      orderNumber: o.orderNumber,
+      cliente: o.cliente,
+      dni: o.dni,
+      producto: o.producto,
+      confirmadaAt: o.confirmadaAt,
+      tracking: o.tracking,
+      whPedido: o.whEstado ? { estado: o.whEstado, error: o.whEstado === 'requires_attention' ? o.whRazon : null } : null,
+      stockDisponible: disponiblePorClave.get(normalizarModelo(o.producto)) ?? null,
+      arrepPendiente: arrepPendientesPorOrden.has(o.orderNumber),
+    })),
+    new Date().toISOString(),
+  )
   // Cortes del control de stock (Supabase — no depende de GOcelular)
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   // Devoluciones: estado en vivo de los dos seguimientos de Andreani (entrega + devolución)
@@ -241,6 +264,11 @@ export default async function EnviosPage({
           id: 'demoras',
           label: demoras.length > 0 ? `Demoras de entrega (${demoras.length})` : 'Demoras de entrega',
           content: <DemorasTable demoras={demoras} />,
+        },
+        {
+          id: 'demoras-preparacion',
+          label: demorasPreparacion.length > 0 ? `Demoras preparación (${demorasPreparacion.length})` : 'Demoras preparación',
+          content: <DemorasPreparacionTable demoras={demorasPreparacion} />,
         },
         {
           id: 'arrepentimientos',
