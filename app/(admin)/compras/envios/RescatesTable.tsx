@@ -10,9 +10,10 @@ import {
   filtrarRescatesPorFecha,
   metaEstado,
   pipelineRescates,
+  separarResueltos,
   type EstadoRescate,
 } from '@/lib/rescates'
-import { cargarRescate, setMotivoRescate } from '@/lib/actions/rescates'
+import { cargarRescate, setMotivoRescate, setRescateResuelto } from '@/lib/actions/rescates'
 
 const CHIP_POR_ESTADO: Record<EstadoRescate, string> = {
   pendiente: 'bg-violet-50 text-violet-700 border-violet-200',
@@ -192,6 +193,75 @@ function SelectMotivo({ rescate }: { rescate: Rescate }) {
   )
 }
 
+// Resolver con confirmación en dos pasos (patrón de Siniestros Distribución).
+// Ningún rescate se archiva solo — ni siquiera un rendido, porque a veces el
+// equipo no aparece en el depósito aunque Andreani lo dé por rendido. En la
+// lista de resueltos el mismo botón reabre sin confirmación (acción inocua).
+function AccionResuelto({ tracking, resueltoAt }: { tracking: string | null; resueltoAt: string | null }) {
+  const router = useRouter()
+  const [confirmando, setConfirmando] = useState(false)
+  const [enviando, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  if (!tracking) return <span className="text-gray-400" title="Sin tracking no se puede guardar el estado">—</span>
+
+  const ejecutar = (resuelto: boolean) => {
+    startTransition(async () => {
+      const res = await setRescateResuelto(tracking, resuelto)
+      if (res.error) {
+        setError(res.error)
+        setConfirmando(false)
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
+  if (resueltoAt) {
+    return (
+      <button
+        disabled={enviando}
+        onClick={() => ejecutar(false)}
+        className="px-2 py-0.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-100 whitespace-nowrap disabled:opacity-40"
+        title={`Resuelto el ${fecha(resueltoAt)} — volver a gestión`}
+      >
+        {enviando ? '…' : '↩ Reabrir'}
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {confirmando ? (
+        <>
+          <button
+            disabled={enviando}
+            onClick={() => ejecutar(true)}
+            className="px-2 py-0.5 rounded text-xs font-bold text-white whitespace-nowrap bg-green-600 hover:bg-green-700 disabled:opacity-50"
+            title="Confirmar: el equipo apareció en el depósito (o el caso quedó gestionado) — pasa a la lista de resueltos"
+          >
+            {enviando ? '…' : '¿Resolver?'}
+          </button>
+          {!enviando && (
+            <button onClick={() => setConfirmando(false)} className="text-xs text-gray-400 hover:text-gray-600 px-0.5" title="Cancelar">
+              ✕
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => { setConfirmando(true); setError(null) }}
+          className="px-2 py-0.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-100 whitespace-nowrap"
+          title="Marcar como resuelto: el equipo apareció en el depósito (o el caso quedó gestionado por otra vía)"
+        >
+          ✓ Resolver
+        </button>
+      )}
+      {error && <span className="text-[10px] text-red-600 max-w-[140px]">{error}</span>}
+    </div>
+  )
+}
+
 function TablaRescates({ rescates }: { rescates: Rescate[] }) {
   return (
     <div className="overflow-x-auto">
@@ -209,6 +279,7 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
             <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
             <th className="text-right px-4 py-3 font-medium text-gray-600" title="Terminados: días de solicitud a resolución. Activos: días corriendo.">Días</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Marcar como resuelto cuando el equipo apareció en el depósito o el caso quedó gestionado">Acciones</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -250,6 +321,7 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
               </td>
               <td className="px-4 py-3 text-right text-gray-900 tabular-nums">{r.dias}</td>
               <td className="px-4 py-3"><EstadoChip estado={r.estado} /></td>
+              <td className="px-4 py-3"><AccionResuelto tracking={r.tracking} resueltoAt={r.resueltoAt} /></td>
             </tr>
           ))}
         </tbody>
@@ -267,12 +339,12 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
   const porFecha = useMemo(() => filtrarRescatesPorFecha(rescates, desde, hasta), [rescates, desde, hasta])
   const resumen = useMemo(() => contarPorEstado(porFecha), [porFecha])
   const visibles = estadoFiltro ? porFecha.filter(r => r.estado === estadoFiltro) : porFecha
-  // Resueltos (rendido/entregado: no hay nada que gestionar) separados de los
-  // que necesitan gestión, como en Arrepentimientos; colapsados por defecto.
-  const activos = visibles.filter(r => !metaEstado(r.estado).terminal)
-  const resueltos = visibles.filter(r => metaEstado(r.estado).terminal)
-  // Al filtrar por una tarjeta de estado terminal, los resueltos se abren solos
-  const resueltosAbiertos = verResueltos || (estadoFiltro !== null && metaEstado(estadoFiltro).terminal)
+  // Ningún rescate se archiva solo: un rendido/entregado sigue en gestión
+  // hasta que se lo marque resuelto con el botón (a veces el equipo no aparece
+  // en el depósito aunque Andreani lo dé por rendido).
+  const { pendientes: activos, resueltos } = separarResueltos(visibles)
+  // Si el filtro deja la gestión vacía pero hay resueltos, se abren solos
+  const resueltosAbiertos = verResueltos || (estadoFiltro !== null && activos.length === 0 && resueltos.length > 0)
 
   if (rescates.length === 0) {
     return (
@@ -292,7 +364,8 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
           Envíos sin entregar cuyo rescate se pidió a Andreani para que el equipo vuelva al depósito.
           Las tarjetas filtran la tabla al hacer click; el rango de fechas es sobre el día de la solicitud del rescate.
           Un rescate cargado a mano queda 🕓 Pendiente de aceptación hasta que la solicitud aparezca en el tracking;
-          de ahí en más el estado avanza solo.
+          de ahí en más el estado avanza solo. Ningún rescate se archiva solo: aunque figure ✅ Rendido,
+          marcá «✓ Resolver» recién cuando el equipo apareció en el depósito (o el caso quedó gestionado).
         </p>
         <CargarRescate />
       </div>
@@ -352,9 +425,9 @@ export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
           <button
             onClick={() => setVerResueltos(v => !v)}
             className="w-full text-left px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            title="Rendidos y entregados igual: ya no hay nada que gestionar"
+            title="Resueltos a mano con el botón Resolver: el equipo apareció en el depósito o el caso quedó gestionado"
           >
-            {resueltosAbiertos ? '▾' : '▸'} Resueltos ({resueltos.length})
+            {resueltosAbiertos ? '▾' : '▸'} ✓ Resueltos ({resueltos.length})
           </button>
           {resueltosAbiertos && <TablaRescates rescates={resueltos} />}
         </div>

@@ -41,6 +41,8 @@ export interface SeguimientoRescate {
   tracking: string
   motivo: string | null
   createdAt: string
+  /** Resuelto a mano por el usuario (ningún rescate se archiva solo) */
+  resueltoAt: string | null
 }
 
 export interface Rescate {
@@ -56,6 +58,8 @@ export interface Rescate {
   /** true = activa (delivered), false = anulada (discarded), null = sin orden GOcuotas vinculada */
   ordenActiva: boolean | null
   motivo: string | null
+  /** Marcado como resuelto por el usuario (va a la lista colapsable) */
+  resueltoAt: string | null
   estado: EstadoRescate
   solicitadoAt: string
   rescatadoAt: string | null
@@ -131,6 +135,7 @@ function base(r: RescateRaw, seguimiento: SeguimientoRescate | undefined) {
     gocuotasStatus: r.gocuotasStatus,
     ordenActiva: esOrdenActiva(r),
     motivo: seguimiento?.motivo ?? null,
+    resueltoAt: seguimiento?.resueltoAt ?? null,
   }
 }
 
@@ -218,6 +223,19 @@ export function armarRescatesManuales(
     })
   }
   return ordenar(rescates)
+}
+
+/**
+ * Divide la lista en pendientes de gestión y resueltos (marcados a mano con el
+ * botón Resolver). Un estado terminal de Andreani (rendido/entregado) NO
+ * resuelve solo: a veces el equipo no aparece en el depósito aunque figure
+ * rendido, así que todos los cierra el usuario.
+ */
+export function separarResueltos(rescates: Rescate[]): { pendientes: Rescate[]; resueltos: Rescate[] } {
+  return {
+    pendientes: rescates.filter(r => !r.resueltoAt),
+    resueltos: rescates.filter(r => r.resueltoAt),
+  }
 }
 
 /**

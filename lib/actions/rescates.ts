@@ -18,8 +18,8 @@ import {
 
 async function getSeguimientos(): Promise<SeguimientoRescate[]> {
   const supabase = createAdminClient()
-  const { data } = await supabase.from('rescates_seguimiento').select('tracking, motivo, created_at')
-  return (data ?? []).map(r => ({ tracking: r.tracking, motivo: r.motivo, createdAt: r.created_at }))
+  const { data } = await supabase.from('rescates_seguimiento').select('tracking, motivo, created_at, resuelto_at')
+  return (data ?? []).map(r => ({ tracking: r.tracking, motivo: r.motivo, createdAt: r.created_at, resueltoAt: r.resuelto_at }))
 }
 
 /**
@@ -53,6 +53,26 @@ export async function cargarRescate(tracking: string, motivo: string): Promise<{
   const { error } = await supabase
     .from('rescates_seguimiento')
     .upsert({ tracking: t, motivo, updated_at: new Date().toISOString() }, { onConflict: 'tracking' })
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/envios')
+  return { ok: true }
+}
+
+/**
+ * Marca (o desmarca) un rescate como resuelto, por tracking. Ningún rescate se
+ * resuelve solo — ni siquiera rendido —: Yami confirma que el equipo apareció
+ * en el depósito (o que el caso quedó gestionado) con el botón Resolver. El
+ * upsert crea la fila de seguimiento si el rescate era solo automático.
+ */
+export async function setRescateResuelto(tracking: string, resuelto: boolean): Promise<{ ok?: true; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('rescates_seguimiento')
+    .upsert(
+      { tracking, resuelto_at: resuelto ? new Date().toISOString() : null, updated_at: new Date().toISOString() },
+      { onConflict: 'tracking' }
+    )
   if (error) return { error: error.message }
 
   revalidatePath('/compras/envios')

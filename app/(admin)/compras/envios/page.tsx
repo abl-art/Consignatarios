@@ -17,7 +17,6 @@ import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/action
 import { getDevoluciones, type FilaDevolucion } from '@/lib/actions/devoluciones'
 import { esDevolucionFinalizada } from '@/lib/devoluciones'
 import { getDemorasDescartadas } from '@/lib/actions/demoras'
-import { metaEstado } from '@/lib/rescates'
 import { formatearMoneda } from '@/lib/utils'
 import type { FuentesBusqueda } from '@/lib/buscador-envios'
 import EnviosClient from './EnviosClient'
@@ -119,7 +118,8 @@ export default async function EnviosPage({
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const siniestrosWhAbiertos = siniestrosStock.filter(s => s.estado === 'abierto').length
   const siniestrosPendientes = siniestros.filter(s => !s.resueltoAt).length
-  const rescatesActivos = rescates.filter(r => !metaEstado(r.estado).terminal).length
+  // Ningún rescate se archiva solo: el badge cuenta los sin resolver a mano
+  const rescatesActivos = rescates.filter(r => !r.resueltoAt).length
   const modelosConDif = cortesControlStock[0]
     ? netoPorModelo(cortesControlStock[0].filas, cortesControlStock[0].enCola).filter(m => m.dif !== 0).length
     : 0

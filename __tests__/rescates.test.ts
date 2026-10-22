@@ -3,6 +3,7 @@ import {
   armarRescates,
   armarRescatesManuales,
   filtrarRescatesPorFecha,
+  separarResueltos,
   contarPorEstado,
   pipelineRescates,
   type RescateRaw,
@@ -154,6 +155,7 @@ describe('rescates cargados a mano (pendientes de aceptación)', () => {
     tracking,
     motivo: 'Fraude',
     createdAt: '2026-09-01T10:00:00-03:00',
+    resueltoAt: null,
     ...extra,
   })
 
@@ -345,5 +347,59 @@ describe('contarPorEstado', () => {
 
   it('con lista vacía todos los porcentajes son 0', () => {
     expect(contarPorEstado([]).every(r => r.cantidad === 0 && r.pct === 0)).toBe(true)
+  })
+})
+
+// Botón «✓ Resolver» (regla de Emiliano 22/10/2026): ningún rescate se
+// archiva solo — ni siquiera un rendido, porque a veces el equipo no aparece
+// en el depósito aunque Andreani lo dé por rendido. Resuelve Yami a mano y
+// eso se persiste en rescates_seguimiento.resuelto_at.
+describe('separarResueltos', () => {
+  const seg = (tracking: string, extra: Partial<SeguimientoRescate> = {}): SeguimientoRescate => ({
+    tracking,
+    motivo: 'Fraude',
+    createdAt: '2026-09-01T10:00:00-03:00',
+    resueltoAt: null,
+    ...extra,
+  })
+
+  const rendido = (orderNumber: string) => raw(orderNumber, [
+    ev('SolicitudDeRescate', '2026-08-14T09:00:00-03:00'),
+    ev('EnvioRendido', '2026-08-27T09:00:00-03:00'),
+  ])
+
+  it('armarRescates propaga resueltoAt del seguimiento; sin seguimiento queda null', () => {
+    const [conSeg] = armarRescates([rendido('SO-RES')], AHORA, [
+      seg('360003081525590', { resueltoAt: '2026-08-28T10:00:00-03:00' }),
+    ])
+    expect(conSeg.resueltoAt).toBe('2026-08-28T10:00:00-03:00')
+    const [sinSeg] = armarRescates([rendido('SO-SIN')], AHORA)
+    expect(sinSeg.resueltoAt).toBeNull()
+  })
+
+  it('armarRescatesManuales propaga resueltoAt del seguimiento', () => {
+    const [r] = armarRescatesManuales(
+      [rendido('SO-MAN')],
+      [seg('360003081525590', { resueltoAt: '2026-08-30T10:00:00-03:00' })],
+      AHORA,
+    )
+    expect(r.resueltoAt).toBe('2026-08-30T10:00:00-03:00')
+  })
+
+  it('un rendido SIN resolver queda pendiente de gestión (nada se archiva solo)', () => {
+    const rescates = armarRescates([rendido('SO-REND')], AHORA)
+    const { pendientes, resueltos } = separarResueltos(rescates)
+    expect(pendientes).toHaveLength(1)
+    expect(resueltos).toHaveLength(0)
+  })
+
+  it('un rescate resuelto a mano va a resueltos cualquiera sea su estado Andreani', () => {
+    const rescates = armarRescates([
+      rendido('SO-OK'),
+      raw('SO-VIAJA', [ev('SolicitudDeRescate', '2026-08-30T09:00:00-03:00')], { tracking: '360009999999999' }),
+    ], AHORA, [seg('360003081525590', { resueltoAt: '2026-09-01T12:00:00-03:00' })])
+    const { pendientes, resueltos } = separarResueltos(rescates)
+    expect(resueltos.map(r => r.orderNumber)).toEqual(['SO-OK'])
+    expect(pendientes.map(r => r.orderNumber)).toEqual(['SO-VIAJA'])
   })
 })
