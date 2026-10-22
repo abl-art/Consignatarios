@@ -153,13 +153,16 @@
   <ol class="pasos">
     <li>La mayoría de los rescates <b>entran solos</b> (desde Arrepentimientos o desde Demoras). Para cargar uno a mano: botón <b>“+ Cargar rescate”</b> → pegás el <b>número de seguimiento</b> de Andreani y elegís el <b>motivo</b> (Fraude, Arrepentimiento, Devolución, Falla, No Entregado).</li>
     <li>De ahí en más <b>el estado avanza solo</b> leyendo el tracking de Andreani. El flujo normal: 🕓 <b>Pendiente de aceptación</b> (cargado, Andreani aún no lo registró) → 🕐 <b>Solicitado</b> → ⏸️ <b>En sucursal</b> → 🚚 <b>En viaje de vuelta</b> → ✅ <b>Rendido</b> (equipo de vuelta en el depósito).</li>
-    <li>El final malo es ❌ <b>Entregado igual</b>: el rescate llegó tarde y Andreani se lo dio al cliente. Ese caso vuelve a gestión (contactar al cliente).</li>
+    <li><b>El estado avanza solo, pero el caso NO se cierra solo.</b> Cuando un rescate llega a ✅ <b>Rendido</b>, buscá el equipo físicamente en el depósito. Si apareció, tocá <b>✓ Resolver</b> en la columna Acciones (te pide confirmar) y la fila pasa a la lista colapsable <b>✓ Resueltos</b> del pie. ¿Por qué a mano? Porque a veces Andreani lo da por rendido y <b>el equipo no aparece</b> — ese caso tiene que quedar a la vista hasta resolverse de verdad.</li>
+    <li>El final malo es ❌ <b>Entregado igual</b>: el rescate llegó tarde y Andreani se lo dio al cliente. Ese caso también queda en gestión (contactar al cliente) y recién se marca <b>✓ Resolver</b> cuando quedó encaminado.</li>
+    <li>¿Resolviste uno por error? En la lista <b>✓ Resueltos</b> cada fila tiene <b>↩ Reabrir</b>: vuelve a gestión al toque, sin confirmación.</li>
     <li>Usá las tarjetas de estado como filtro (tocás una y la tabla muestra solo esos) y la columna <b>Días</b> para detectar rescates clavados.</li>
     <li>La columna <b>Orden · Order ID</b> trae el ID de GOcuotas al lado del pedido — es el dato para anular la orden sin buscar en otro lado.</li>
   </ol>
+  <div class="callout oro"><b>⭐ Regla nueva (oct 2026)</b>Ningún rescate se archiva solo — ni siquiera rendido. El contador de la pestaña cuenta los <b>sin resolver</b>: la meta es dejarlo en cero resolviendo cada caso cuando el equipo aparece en el depósito.</div>
   <figure>
     <div class="frame"><img src="img/doc-rescates.png" alt="Pestaña Rescates: pipeline de estados con tiempos promedio, carga manual y tabla de seguimiento"></div>
-    <figcaption>📸 Pestaña <b>Rescates</b> — el pipeline con tiempos promedio entre estados, la carga manual y el seguimiento.</figcaption>
+    <figcaption>📸 Pestaña <b>Rescates</b> — el pipeline con tiempos promedio, la carga manual y la columna <b>Acciones</b> con el botón ✓ Resolver por fila.</figcaption>
   </figure>
 
   <h2 id="sin-dist">📦 Siniestros Distribución</h2>
@@ -200,7 +203,7 @@
     <tr><td>1️⃣</td><td><b>¿Dónde está el equipo?</b> No salió → anular orden. Viaja → rescate. Se perdió viajando → Siniestro Distribución. Se perdió en el depósito → Siniestro Warehouse.</td></tr>
     <tr><td>2️⃣</td><td>Arrepentimiento <b>con tracking → Confirmar</b> (rescate). <b>Sin despacho → anular en GOcuotas + Descartar</b>. El Order ID está en la fila.</td></tr>
     <tr><td>3️⃣</td><td>En Arrepentimientos, el chip <b>Fulfillment</b> manda: <span class="pill ambar">⚠ enviado a Andreani</span> = pedir que no lo pickeen; <span class="pill rojo">⚠ pickeado</span> = frenar la expedición ya.</td></tr>
-    <tr><td>4️⃣</td><td>Los estados de Rescates <b>avanzan solos</b> con el tracking — no hace falta actualizarlos. Lo que sí se mira: ❌ "Entregado igual" (gestionar con el cliente) y rescates con muchos <b>días</b> clavados.</td></tr>
+    <tr><td>4️⃣</td><td>Los estados de Rescates <b>avanzan solos</b> con el tracking, pero <b>ningún rescate se cierra solo</b>: ✅ Rendido se marca <b>✓ Resolver</b> recién cuando el equipo apareció en el depósito. Lo que sí se mira: ❌ "Entregado igual" (gestionar con el cliente) y rescates con muchos <b>días</b> clavados.</td></tr>
     <tr><td>5️⃣</td><td>Equipo siniestrado = equipo <b>bloqueado</b>. Trustonic en <span class="pill rojo">active</span> en un siniestro es una alarma, no un dato.</td></tr>
     <tr><td>6️⃣</td><td>Todo siniestro termina en una <b>nota de crédito tildada</b>. Checkbox sin tildar = plata sin cobrar.</td></tr>
     <tr><td>7️⃣</td><td>En Warehouse, <span class="pill ambar">⚠ sigue disponible</span> = el sistema puede vender un equipo que no existe → pedir el ajuste de stock.</td></tr>
