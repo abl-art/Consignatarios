@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import JSZip from 'jszip'
 import { getImagenesModelo, borrarImagenTienda, type ImagenTienda } from '@/lib/actions/imagenes-tienda'
 import { slugModelo } from '@/lib/imagenes-tienda'
 
@@ -32,7 +31,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
   const [subiendo, setSubiendo] = useState<string | null>(null)
   const [errores, setErrores] = useState<string[]>([])
   const [confirmarBorrar, setConfirmarBorrar] = useState<string | null>(null)
-  const [zipeando, setZipeando] = useState(false)
+  const [descargando, setDescargando] = useState(false)
   const [cargando, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
   const generados = useState(() => new Set(conImagenes))[0]
@@ -81,22 +80,17 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
     setImagenes(await getImagenesModelo(productoId))
   }
 
+  // Baja los PNG sueltos (no un ZIP): la tienda solo acepta imágenes individuales,
+  // así quedan en Descargas listas para seleccionar y subir
   async function descargarTodas() {
-    setZipeando(true)
+    setDescargando(true)
     try {
-      const zip = new JSZip()
       for (let i = 0; i < imagenes.length; i++) {
-        const res = await fetch(imagenes[i].url)
-        zip.file(`${slug}-${i + 1}.png`, await res.blob())
+        await descargarBlob(imagenes[i].url, `${slug}-${i + 1}.png`)
+        await new Promise(r => setTimeout(r, 300))
       }
-      const blob = await zip.generateAsync({ type: 'blob' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `${slug}-tienda.zip`
-      a.click()
-      URL.revokeObjectURL(a.href)
     } finally {
-      setZipeando(false)
+      setDescargando(false)
     }
   }
 
@@ -144,10 +138,10 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
             {imagenes.length > 0 && (
               <button
                 onClick={descargarTodas}
-                disabled={zipeando}
+                disabled={descargando}
                 className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
-                {zipeando ? 'Armando ZIP…' : `⬇ Descargar todas (${imagenes.length})`}
+                {descargando ? 'Descargando…' : `⬇ Descargar todas (${imagenes.length})`}
               </button>
             )}
             <span className="text-xs text-gray-400">Hasta 7 por modelo · JPG, PNG o WebP · la tienda usa ~5</span>
