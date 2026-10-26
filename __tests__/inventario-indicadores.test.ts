@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  completarCapacidadDesdeVentas,
   velocidadVenta,
   diasCobertura,
   rotacionMensual,
@@ -305,5 +306,47 @@ describe('stockSinMovimiento', () => {
     const res = stockSinMovimiento(stock, [])
     expect(res[0].modelo).toBe('Samsung Galaxy A17 4/128GB') // 5×300=1500 > 10×100=1000
     expect(res.reduce((s, r) => s + r.capital, 0)).toBe(2500)
+  })
+})
+
+describe('completarCapacidadDesdeVentas', () => {
+  it('caso real Edge 70: el catálogo sin capacidad adopta el nombre único de ventas', () => {
+    const stock = [{ modelo: 'Motorola Moto Edge 70 Fusion', qty: 26 }]
+    const ventas = [{ modelo: 'Motorola Edge 70 Fusion 8/256GB' }]
+    const r = completarCapacidadDesdeVentas(stock, ventas)
+    expect(r[0].modelo).toBe('Motorola Edge 70 Fusion 8/256GB')
+    expect(r[0].qty).toBe(26)
+    // y con el nombre adoptado, el join de cobertura matchea
+    expect(normalizarModelo(r[0].modelo)).toBe(normalizarModelo('Motorola Edge 70 Fusion 8/256GB'))
+  })
+
+  it('caso real Redmi A5: capacidad escrita con "+" también matchea', () => {
+    const stock = [{ modelo: 'Xiaomi Redmi A5', qty: 29 }]
+    const ventas = [{ modelo: 'Xiaomi Redmi A5 4+128GB' }]
+    expect(completarCapacidadDesdeVentas(stock, ventas)[0].modelo).toBe('Xiaomi Redmi A5 4+128GB')
+  })
+
+  it('con dos variantes de capacidad en ventas NO adivina: deja el nombre original', () => {
+    const stock = [{ modelo: 'Motorola Moto G17', qty: 10 }]
+    const ventas = [{ modelo: 'Motorola Moto G17 128GB' }, { modelo: 'Motorola Moto G17 256GB' }]
+    expect(completarCapacidadDesdeVentas(stock, ventas)[0].modelo).toBe('Motorola Moto G17')
+  })
+
+  it('stock que ya trae capacidad queda intacto aunque difiera de ventas', () => {
+    const stock = [{ modelo: 'Samsung A07 4/64GB', qty: 5 }]
+    const ventas = [{ modelo: 'Samsung Galaxy A07 64GB' }]
+    expect(completarCapacidadDesdeVentas(stock, ventas)[0].modelo).toBe('Samsung A07 4/64GB')
+  })
+
+  it('sin match en ventas queda intacto', () => {
+    const stock = [{ modelo: 'Nubia Focus 2' }]
+    expect(completarCapacidadDesdeVentas(stock, [{ modelo: 'Moto G06 64GB' }])[0].modelo).toBe('Nubia Focus 2')
+  })
+
+  it('la misma variante repetida en ventas no cuenta como ambigüedad', () => {
+    const stock = [{ modelo: 'Xiaomi Redmi A5', qty: 29 }]
+    const ventas = [{ modelo: 'Xiaomi Redmi A5 4+128GB' }, { modelo: 'Redmi A5 128GB' }]
+    // ambas ventas reducen a la MISMA clave con capacidad → única, matchea
+    expect(completarCapacidadDesdeVentas(stock, ventas)[0].modelo).toBe('Xiaomi Redmi A5 4+128GB')
   })
 })

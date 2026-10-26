@@ -27,6 +27,7 @@ import { buscarPrecio } from '@/lib/utils'
 import {
   stockSinMovimiento,
   coberturaPorModelos,
+  completarCapacidadDesdeVentas,
   diasCobertura,
   velocidadVenta,
   normalizarModelo,
@@ -191,13 +192,20 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     for (const s of stockDetalle) {
       stockBrutoPorNombre.set(s.model_name, (stockBrutoPorNombre.get(s.model_name) ?? 0) + s.qty)
     }
+    // El catálogo puede nombrar el modelo sin capacidad (Edge 70 Fusion, Redmi
+    // A5) y el cruce con ventas no matchea: completar desde la variante única
+    // de ventas antes de los joins (sin movimiento y cobertura por modelo)
+    const ventas30Lista = Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas }))
     const sinMovimiento = stockSinMovimiento(
-      Array.from(stockBrutoPorNombre.entries()).map(([modelo, qty]) => ({
-        modelo,
-        qty,
-        valorUnit: buscarPrecio(costosCelulares, modelo) || precioVentaDe(modelo) || 0,
-      })),
-      Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
+      completarCapacidadDesdeVentas(
+        Array.from(stockBrutoPorNombre.entries()).map(([modelo, qty]) => ({
+          modelo,
+          qty,
+          valorUnit: buscarPrecio(costosCelulares, modelo) || precioVentaDe(modelo) || 0,
+        })),
+        ventas30Lista,
+      ),
+      ventas30Lista,
     )
 
     // ── Kits ───────────────────────────────────────────────────────────────
@@ -233,8 +241,11 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     // Desglose por modelo de celulares (cobertura para compras), sobre el
     // mismo neto de pendientes que el stock y la valorización.
     const modelosCelulares = coberturaPorModelos(
-      netoCel.map(s => ({ modelo: s.model_name, qty: s.qty })),
-      Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas })),
+      completarCapacidadDesdeVentas(
+        netoCel.map(s => ({ modelo: s.model_name, qty: s.qty })),
+        ventas30Lista,
+      ),
+      ventas30Lista,
     )
 
     // ── Accesorios ─────────────────────────────────────────────────────────

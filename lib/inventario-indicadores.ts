@@ -92,6 +92,45 @@ export function normalizarModelo(nombre: string): string {
   return n.split(/\s+/).filter(t => /[a-z0-9]/.test(t)).sort().join(' ')
 }
 
+/** La clave sin los tokens de capacidad ("256gb"), para detectar variantes del mismo modelo. */
+function claveSinCapacidad(key: string): { base: string; tieneCapacidad: boolean } {
+  const tokens = key.split(' ')
+  const sinCap = tokens.filter(t => !/^\d+gb$/.test(t))
+  return { base: sinCap.join(' '), tieneCapacidad: sinCap.length !== tokens.length }
+}
+
+/**
+ * El catálogo de devices a veces nombra el modelo SIN capacidad ("Motorola
+ * Moto Edge 70 Fusion") mientras la tienda vende "Motorola Edge 70 Fusion
+ * 8/256GB": las claves normalizadas difieren solo en el token de capacidad y
+ * el cruce stock↔ventas lo da como "vende sin stock" (bug real, 26u invisibles).
+ * Si el stock no trae capacidad y en ventas hay UNA sola variante cuya clave
+ * sin capacidad coincide, el stock adopta el nombre de ventas (canónico).
+ * Con dos capacidades posibles no adivina: deja el nombre original.
+ */
+export function completarCapacidadDesdeVentas<T extends { modelo: string }>(
+  stock: T[],
+  ventas: { modelo: string }[],
+): T[] {
+  // base (clave sin capacidad) → set de claves completas de ventas + un nombre ejemplo
+  const variantes = new Map<string, Map<string, string>>()
+  for (const v of ventas) {
+    const key = normalizarModelo(v.modelo)
+    const { base, tieneCapacidad } = claveSinCapacidad(key)
+    if (!tieneCapacidad) continue
+    const porClave = variantes.get(base) ?? new Map<string, string>()
+    if (!porClave.has(key)) porClave.set(key, v.modelo)
+    variantes.set(base, porClave)
+  }
+  return stock.map(s => {
+    const key = normalizarModelo(s.modelo)
+    if (claveSinCapacidad(key).tieneCapacidad) return s
+    const porClave = variantes.get(key)
+    if (!porClave || porClave.size !== 1) return s
+    return { ...s, modelo: porClave.values().next().value! }
+  })
+}
+
 export interface CoberturaModelo {
   modelo: string
   stock: number
