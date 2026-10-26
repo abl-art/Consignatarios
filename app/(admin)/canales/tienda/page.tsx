@@ -9,7 +9,7 @@ export default function TiendaPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1 mt-2">Tienda Online</h1>
       <p className="text-sm text-gray-500 mb-6">Ecommerce directo al consumidor con financiación GOcuotas</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a
           href="https://gocelular.gocuotas.com/tienda"
           target="_blank"
@@ -40,6 +40,21 @@ export default function TiendaPage() {
           </div>
           <div className="p-5">
             <p className="text-sm text-gray-500">Funnel de conversión por canal, revenue y modelos más vendidos</p>
+          </div>
+        </Link>
+
+        <Link
+          href="/canales/tienda/imagenes"
+          className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+        >
+          <div className="bg-violet-600 px-5 py-4 flex items-center gap-3">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h2 className="text-lg font-semibold text-white">Imágenes Tienda</h2>
+          </div>
+          <div className="p-5">
+            <p className="text-sm text-gray-500">Subí fotos de la web y salen en el formato estándar de la tienda, listas para cargar</p>
           </div>
         </Link>
       </div>
