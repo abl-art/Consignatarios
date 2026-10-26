@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import ReglasCompatibilidad from './ReglasCompatibilidad'
+import BuscadorTac from './BuscadorTac'
 
 const VALID_TOKEN = 'catalogo2026go'
 
@@ -25,6 +26,7 @@ export default async function CatalogoPage({
         </div>
       </div>
       <div className="max-w-5xl mx-auto p-6">
+        <BuscadorTac token={VALID_TOKEN} />
         <ReglasCompatibilidad />
       </div>
     </div>
