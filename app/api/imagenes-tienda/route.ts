@@ -7,6 +7,7 @@ import {
   quitarFondoSolido,
   bboxAlfa,
   encajeEnLienzo,
+  evaluarResolucion,
 } from '@/lib/imagenes-tienda'
 
 export const maxDuration = 60
@@ -68,6 +69,17 @@ export async function POST(request: NextRequest) {
 
     const cw = bb.maxx - bb.minx + 1
     const ch = bb.maxy - bb.miny + 1
+
+    // El estándar de la tienda lleva el producto a ~1700px: una foto chica
+    // estirada sale borrosa, mejor avisar/rechazar que publicar mousse
+    const resolucion = evaluarResolucion(cw, ch)
+    if (resolucion.nivel === 'rechazo') {
+      return NextResponse.json(
+        { error: `La foto es demasiado chica para la tienda (el producto mide ${resolucion.ladoMayor}px y se necesita ~1700px) — buscá una versión más grande: en Google Imágenes usá Herramientas → Tamaño → Grande` },
+        { status: 400 }
+      )
+    }
+
     const encaje = encajeEnLienzo(cw, ch)
     const contenido = await sharp(raw.data, { raw: { width: w, height: h, channels: 4 } })
       .extract({ left: bb.minx, top: bb.miny, width: cw, height: ch })
@@ -89,7 +101,10 @@ export async function POST(request: NextRequest) {
     if (errUpload) return NextResponse.json({ error: errUpload.message }, { status: 500 })
 
     const { data: pub } = supabase.storage.from('imagenes-tienda').getPublicUrl(path)
-    return NextResponse.json({ path, url: pub.publicUrl, fondoRemovido })
+    const advertencia = resolucion.nivel === 'advertencia'
+      ? `la foto original es chica (el producto mide ${resolucion.ladoMayor}px, ideal ≥1700px): puede verse algo borrosa en la tienda — revisala en la vista previa`
+      : null
+    return NextResponse.json({ path, url: pub.publicUrl, fondoRemovido, advertencia })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error inesperado' }, { status: 500 })
   }

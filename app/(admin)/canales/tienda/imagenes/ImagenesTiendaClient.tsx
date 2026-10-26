@@ -30,6 +30,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
   const [imagenes, setImagenes] = useState<ImagenTienda[]>([])
   const [subiendo, setSubiendo] = useState<string | null>(null)
   const [errores, setErrores] = useState<string[]>([])
+  const [avisos, setAvisos] = useState<string[]>([])
   const [confirmarBorrar, setConfirmarBorrar] = useState<string | null>(null)
   const [descargando, setDescargando] = useState(false)
   const [cargando, startTransition] = useTransition()
@@ -45,6 +46,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
     setProductoId(id)
     setImagenes([])
     setErrores([])
+    setAvisos([])
     setConfirmarBorrar(null)
     if (id) startTransition(async () => setImagenes(await getImagenesModelo(id)))
   }
@@ -52,7 +54,9 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
   async function subirArchivos(files: FileList | null) {
     if (!files || !productoId) return
     setErrores([])
+    setAvisos([])
     const nuevos: string[] = []
+    const nuevosAvisos: string[] = []
     for (const file of Array.from(files)) {
       setSubiendo(file.name)
       const fd = new FormData()
@@ -62,12 +66,14 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
         const res = await fetch('/api/imagenes-tienda', { method: 'POST', body: fd })
         const json = await res.json()
         if (!res.ok) nuevos.push(`${file.name}: ${json.error}`)
+        else if (json.advertencia) nuevosAvisos.push(`${file.name}: ${json.advertencia}`)
       } catch {
         nuevos.push(`${file.name}: error de red`)
       }
     }
     setSubiendo(null)
     setErrores(nuevos)
+    setAvisos(nuevosAvisos)
     generados.add(productoId)
     setImagenes(await getImagenesModelo(productoId))
     if (inputRef.current) inputRef.current.value = ''
@@ -146,10 +152,19 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
             )}
             <span className="text-xs text-gray-400">Hasta 7 por modelo · JPG, PNG o WebP · la tienda usa ~5</span>
           </div>
+          <p className="text-xs text-gray-400 mb-4">
+            💡 Para que salgan nítidas buscá fotos grandes (el producto ≥1700px): en Google Imágenes → Herramientas → Tamaño → Grande
+          </p>
 
           {errores.length > 0 && (
             <div className="mb-4 text-sm text-red-600 space-y-1">
               {errores.map((e, i) => <p key={i}>✗ {e}</p>)}
+            </div>
+          )}
+
+          {avisos.length > 0 && (
+            <div className="mb-4 text-sm text-amber-600 space-y-1">
+              {avisos.map((a, i) => <p key={i}>⚠ {a}</p>)}
             </div>
           )}
 

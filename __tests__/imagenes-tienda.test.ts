@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo } from '@/lib/imagenes-tienda'
+import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo, evaluarResolucion } from '@/lib/imagenes-tienda'
 
 // Arma un buffer RGBA desde una grilla de caracteres: 'B' blanco opaco, 'N' negro opaco,
 // 'R' rojo opaco, '.' transparente
@@ -125,5 +125,30 @@ describe('slugModelo', () => {
 
   it('quita acentos y colapsa separadores', () => {
     expect(slugModelo('Pulsera  inteligente — Xiaomi 9 Activé')).toBe('pulsera-inteligente-xiaomi-9-active')
+  })
+})
+
+describe('evaluarResolucion', () => {
+  it('fuente grande pasa sin aviso (solo achica o estira hasta 10%)', () => {
+    expect(evaluarResolucion(2200, 1800).nivel).toBe('ok')
+    expect(evaluarResolucion(1700, 900).nivel).toBe('ok')
+    expect(evaluarResolucion(1550, 1000).nivel).toBe('ok') // estira 1.097x
+  })
+
+  it('fuente mediana procesa con advertencia (estira entre 1.1x y 2x)', () => {
+    const r = evaluarResolucion(1000, 800)
+    expect(r.nivel).toBe('advertencia')
+    expect(r.ladoMayor).toBe(1000)
+  })
+
+  it('fuente chica se rechaza (estiraría más de 2x)', () => {
+    const r = evaluarResolucion(600, 849)
+    expect(r.nivel).toBe('rechazo')
+    expect(r.ladoMayor).toBe(849)
+  })
+
+  it('el umbral exacto: 850 es advertencia, 1546 también, 1546+ depende del factor', () => {
+    expect(evaluarResolucion(850, 500).nivel).toBe('advertencia')
+    expect(evaluarResolucion(849, 500).nivel).toBe('rechazo')
   })
 })
