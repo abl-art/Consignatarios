@@ -85,6 +85,23 @@ export function evaluarResolucion(cw: number, ch: number): { nivel: 'ok' | 'adve
   return { nivel, ladoMayor }
 }
 
+const MARCAS_CONOCIDAS = ['Samsung', 'Motorola', 'Xiaomi', 'Honor', 'Nubia', 'JBL', 'TCL', 'ZTE', 'Redmi'] as const
+
+/**
+ * Marca para las píldoras de filtro, detectada en cualquier parte del nombre
+ * (compras_productos no tiene columna marca; los accesorios arrancan con el
+ * tipo, ej. "Auriculares JBL..."). Redmi/Galaxy sueltos mapean a su marca madre.
+ */
+export function marcaDeModelo(nombre: string): string {
+  const n = nombre.toLowerCase()
+  for (const marca of MARCAS_CONOCIDAS) {
+    if (n.includes(marca.toLowerCase())) return marca === 'Redmi' ? 'Xiaomi' : marca
+  }
+  if (n.includes('galaxy')) return 'Samsung'
+  if (n.includes('moto ')) return 'Motorola'
+  return 'Otras'
+}
+
 /** Nombre de archivo prolijo a partir del nombre del modelo. */
 export function slugModelo(nombre: string): string {
   return nombre

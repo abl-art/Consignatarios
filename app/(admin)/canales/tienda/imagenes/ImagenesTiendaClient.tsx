@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { getImagenesModelo, borrarImagenTienda, type ImagenTienda } from '@/lib/actions/imagenes-tienda'
-import { slugModelo } from '@/lib/imagenes-tienda'
+import { slugModelo, marcaDeModelo } from '@/lib/imagenes-tienda'
 
 type Modelo = { id: string; nombre: string; categoria: string }
 
@@ -37,10 +37,22 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
   const inputRef = useRef<HTMLInputElement>(null)
   const generados = useState(() => new Set(conImagenes))[0]
 
+  const [marca, setMarca] = useState('Todas')
+
   const modelo = modelos.find(m => m.id === productoId)
   const slug = modelo ? slugModelo(modelo.nombre) : 'imagen'
 
-  const categorias = [...new Set(modelos.map(m => m.categoria))]
+  const ORDEN_MARCAS = ['Samsung', 'Motorola', 'Xiaomi', 'Honor', 'Nubia', 'JBL', 'Otras']
+  const marcasPresentes = new Set(modelos.map(m => marcaDeModelo(m.nombre)))
+  const marcas = ['Todas', ...ORDEN_MARCAS.filter(m => marcasPresentes.has(m))]
+  const filtrados = marca === 'Todas' ? modelos : modelos.filter(m => marcaDeModelo(m.nombre) === marca)
+  const categorias = [...new Set(filtrados.map(m => m.categoria))]
+
+  function elegirMarca(m: string) {
+    setMarca(m)
+    // si el modelo elegido no es de la marca nueva, se resetea la selección
+    if (modelo && m !== 'Todas' && marcaDeModelo(modelo.nombre) !== m) elegirModelo('')
+  }
 
   function elegirModelo(id: string) {
     setProductoId(id)
@@ -104,6 +116,19 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <label className="block text-sm font-medium text-gray-700 mb-2">Modelo</label>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {marcas.map(m => (
+            <button
+              key={m}
+              onClick={() => elegirMarca(m)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                marca === m ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
         <select
           value={productoId}
           onChange={e => elegirModelo(e.target.value)}
@@ -112,7 +137,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
           <option value="">Elegí un modelo…</option>
           {categorias.map(cat => (
             <optgroup key={cat} label={cat}>
-              {modelos.filter(m => m.categoria === cat).map(m => (
+              {filtrados.filter(m => m.categoria === cat).map(m => (
                 <option key={m.id} value={m.id}>
                   {m.nombre}{generados.has(m.id) ? ' ✓' : ''}
                 </option>

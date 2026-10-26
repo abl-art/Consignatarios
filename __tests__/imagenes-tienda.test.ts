@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo, evaluarResolucion } from '@/lib/imagenes-tienda'
+import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo, evaluarResolucion, marcaDeModelo } from '@/lib/imagenes-tienda'
 
 // Arma un buffer RGBA desde una grilla de caracteres: 'B' blanco opaco, 'N' negro opaco,
 // 'R' rojo opaco, '.' transparente
@@ -152,5 +152,24 @@ describe('evaluarResolucion', () => {
   it('el umbral del rechazo: 850 es advertencia, 849 rechazo', () => {
     expect(evaluarResolucion(850, 500).nivel).toBe('advertencia')
     expect(evaluarResolucion(849, 500).nivel).toBe('rechazo')
+  })
+})
+
+describe('marcaDeModelo', () => {
+  it('detecta la marca en cualquier parte del nombre', () => {
+    expect(marcaDeModelo('Motorola Moto G17 256GB')).toBe('Motorola')
+    expect(marcaDeModelo('Samsung Galaxy A17 128GB')).toBe('Samsung')
+    expect(marcaDeModelo('Auriculares JBL Wave Beam 2')).toBe('JBL')
+    expect(marcaDeModelo('HONOR X5c 4/128GB')).toBe('Honor')
+    expect(marcaDeModelo('Nubia Music 2 128/4GB')).toBe('Nubia')
+  })
+
+  it('Redmi y Galaxy sueltos mapean a la marca madre', () => {
+    expect(marcaDeModelo('Redmi Note 14 128/6GB')).toBe('Xiaomi')
+    expect(marcaDeModelo('Galaxy Tab A11 4+64 GB')).toBe('Samsung')
+  })
+
+  it('lo desconocido cae en Otras', () => {
+    expect(marcaDeModelo('Kit de Seguridad')).toBe('Otras')
   })
 })
