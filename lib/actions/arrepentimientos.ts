@@ -8,7 +8,8 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cargarRescate } from '@/lib/actions/rescates'
-import { MOTIVOS_DESCARTE_ARREPENTIMIENTO } from '@/lib/arrepentimientos'
+import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden } from '@/lib/arrepentimientos'
+import { reembolsarOrdenGocuotas, getOrdenGocuotas } from '@/lib/gocuotas-api'
 
 export interface SolicitudArrepentimiento {
   id: string
@@ -90,4 +91,48 @@ export async function descartarArrepentimiento(id: string, motivo: string): Prom
   if (error) return { error: error.message }
   revalidatePath('/compras/envios')
   return { ok: true }
+}
+
+/**
+ * Botón "Anular orden" (v2): reembolso TOTAL de la orden GOcuotas por API.
+ * Guard puro puedeAnularOrden (pendiente + orden activa + no expedido); tras
+ * el refund se verifica con GET el estado real de la orden y se refresca el
+ * chip. NO resuelve la solicitud: Yami corrobora y descarta como siempre.
+ */
+export async function anularOrdenArrepentimiento(id: string): Promise<{ ok?: true; statusNuevo?: string; error?: string }> {
+  const admin = createAdminClient()
+  const { data: fila } = await admin
+    .from('arrepentimientos')
+    .select('estado, gocuotas_order_id, gocuotas_status, fulfillment, refund_api_at')
+    .eq('id', id)
+    .single()
+  if (!fila) return { error: 'Solicitud no encontrada.' }
+  if (fila.refund_api_at) return { error: 'Esta orden ya fue reembolsada por API.' }
+
+  const guard = puedeAnularOrden({
+    estado: fila.estado,
+    gocuotasOrderId: fila.gocuotas_order_id,
+    gocuotasStatus: fila.gocuotas_status,
+    fulfillment: fila.fulfillment,
+  })
+  if (!guard.ok) return { error: guard.error }
+
+  const refund = await reembolsarOrdenGocuotas(fila.gocuotas_order_id!)
+  if (!refund.ok) return { error: refund.error }
+
+  // Verificación post-refund: el estado real de la orden según GOcuotas
+  const orden = await getOrdenGocuotas(fila.gocuotas_order_id!)
+  const statusNuevo = orden?.discarded_at ? 'discarded' : (orden?.status ?? fila.gocuotas_status)
+
+  const { error } = await admin
+    .from('arrepentimientos')
+    .update({
+      refund_api_at: new Date().toISOString(),
+      refund_api_detalle: refund.detalle,
+      gocuotas_status: statusNuevo,
+    })
+    .eq('id', id)
+  if (error) return { error: `Refund OK pero no se pudo registrar: ${error.message}` }
+  revalidatePath('/compras/envios')
+  return { ok: true, statusNuevo: statusNuevo ?? undefined }
 }

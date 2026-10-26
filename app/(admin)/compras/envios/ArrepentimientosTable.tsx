@@ -9,9 +9,10 @@ import { useRouter } from 'next/navigation'
 import {
   confirmarArrepentimiento,
   descartarArrepentimiento,
+  anularOrdenArrepentimiento,
   type SolicitudArrepentimiento,
 } from '@/lib/actions/arrepentimientos'
-import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, type EstadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
+import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden, type EstadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
 
 function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -70,7 +71,7 @@ export default function ArrepentimientosTable({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [armada, setArmada] = useState<{ id: string; accion: 'confirmar' | 'descartar' } | null>(null)
+  const [armada, setArmada] = useState<{ id: string; accion: 'confirmar' | 'descartar' | 'anular' } | null>(null)
   const [motivo, setMotivo] = useState<string>(MOTIVOS_DESCARTE_ARREPENTIMIENTO[0])
   const [error, setError] = useState<string | null>(null)
   const [verResueltas, setVerResueltas] = useState(false)
@@ -81,7 +82,7 @@ export default function ArrepentimientosTable({
   const pendConDespacho = pendientes.filter(s => s.tracking).length
   const pendSinDespacho = pendientes.length - pendConDespacho
 
-  const ejecutar = (s: SolicitudArrepentimiento, accion: 'confirmar' | 'descartar') => {
+  const ejecutar = (s: SolicitudArrepentimiento, accion: 'confirmar' | 'descartar' | 'anular') => {
     if (armada?.id !== s.id || armada.accion !== accion) {
       setArmada({ id: s.id, accion })
       setError(null)
@@ -91,7 +92,9 @@ export default function ArrepentimientosTable({
       const res =
         accion === 'confirmar'
           ? await confirmarArrepentimiento(s.id)
-          : await descartarArrepentimiento(s.id, motivo)
+          : accion === 'anular'
+            ? await anularOrdenArrepentimiento(s.id)
+            : await descartarArrepentimiento(s.id, motivo)
       if (res.error) setError(res.error)
       else {
         setArmada(null)
@@ -194,7 +197,27 @@ export default function ArrepentimientosTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5"><EstadoOrdenChip status={s.gocuotasStatus} /></td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <EstadoOrdenChip status={s.gocuotasStatus} />
+                    {(() => {
+                      const guard = puedeAnularOrden(s)
+                      const armado = armada?.id === s.id && armada.accion === 'anular'
+                      return (
+                        <button
+                          onClick={() => ejecutar(s, 'anular')}
+                          disabled={!guard.ok || isPending}
+                          title={guard.ok ? 'Reembolso TOTAL de la orden por API GOcuotas (no se puede deshacer)' : guard.error}
+                          className={`ml-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 border transition-colors ${
+                            armado
+                              ? 'bg-rose-600 text-white border-rose-600'
+                              : 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100 disabled:opacity-40'
+                          }`}
+                        >
+                          {armado ? '¿Reembolsar TOTAL?' : 'Anular orden'}
+                        </button>
+                      )
+                    })()}
+                  </td>
                   <td className="px-4 py-2.5 text-xs">{s.producto ?? '—'}</td>
                   <td className="px-4 py-2.5 text-xs">
                     {s.tracking ? (
@@ -212,7 +235,18 @@ export default function ArrepentimientosTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5"><FulfillmentChip fulfillment={s.fulfillment} /></td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <FulfillmentChip fulfillment={s.fulfillment} />
+                    {s.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado'].includes(s.fulfillment) && (
+                      <button
+                        disabled
+                        title="Cancela el pedido en el warehouse — disponible cuando esté el endpoint de cancelación (en desarrollo)"
+                        className="ml-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 border text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed"
+                      >
+                        Cancelar pedido
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => ejecutar(s, 'confirmar')}

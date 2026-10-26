@@ -140,3 +140,31 @@ export function estadisticaDemoraArrepentimiento(
     mas240h: horas.filter((h) => h >= 240).length,
   }
 }
+
+// ── Anulación de orden por API (v2, botones de Yamila) ──────────────────────
+
+/** Estados de GOcuotas que cuentan como orden vigente (mismo criterio que el chip "activa"). */
+const STATUS_ORDEN_ACTIVA = ['approved', 'paid', 'collected']
+
+/**
+ * Guard del botón "Anular orden": solo solicitudes pendientes, con orden de
+ * GOcuotas identificada y vigente, y cuyo pedido NO salió del depósito (un
+ * expedido se gestiona por rescate — reembolsar ahí dejaría el equipo en la
+ * calle con la orden anulada).
+ */
+export function puedeAnularOrden(s: {
+  estado: string
+  gocuotasOrderId: string | null
+  gocuotasStatus: string | null
+  fulfillment: string | null
+}): { ok: true } | { ok: false; error: string } {
+  if (s.estado !== 'pendiente') return { ok: false, error: 'La solicitud ya fue resuelta' }
+  if (!s.gocuotasOrderId) return { ok: false, error: 'Sin orden de GOcuotas identificada' }
+  if (!s.gocuotasStatus || !STATUS_ORDEN_ACTIVA.includes(s.gocuotasStatus)) {
+    return { ok: false, error: `La orden no está activa (estado: ${s.gocuotasStatus ?? 'desconocido'})` }
+  }
+  if (s.fulfillment === 'expedido') {
+    return { ok: false, error: 'El pedido ya fue expedido: corresponde rescate, no reembolso' }
+  }
+  return { ok: true }
+}

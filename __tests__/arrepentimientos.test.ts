@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  puedeAnularOrden,
   decidirAccionMail,
   evaluarVentanaArrepentimiento,
   esMailDelBoton,
@@ -145,5 +146,40 @@ describe('estadisticaDemoraArrepentimiento', () => {
 
   it('sin casos devuelve mediana null', () => {
     expect(estadisticaDemoraArrepentimiento([], {}).medianaHoras).toBeNull()
+  })
+})
+
+describe('puedeAnularOrden', () => {
+  const base = {
+    estado: 'pendiente' as const,
+    gocuotasOrderId: '19108832',
+    gocuotasStatus: 'approved',
+    fulfillment: 'en cola' as string | null,
+  }
+
+  it('pendiente + orden activa + sin expedir: se puede anular', () => {
+    expect(puedeAnularOrden(base)).toEqual({ ok: true })
+    expect(puedeAnularOrden({ ...base, gocuotasStatus: 'paid' })).toEqual({ ok: true })
+    expect(puedeAnularOrden({ ...base, fulfillment: null })).toEqual({ ok: true })
+    expect(puedeAnularOrden({ ...base, fulfillment: 'cancelado' })).toEqual({ ok: true })
+  })
+
+  it('expedido NO se anula por botón: corresponde rescate manual', () => {
+    const r = puedeAnularOrden({ ...base, fulfillment: 'expedido' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/expedido/i)
+  })
+
+  it('orden ya anulada o no activa no se reembolsa', () => {
+    expect(puedeAnularOrden({ ...base, gocuotasStatus: 'discarded' }).ok).toBe(false)
+    expect(puedeAnularOrden({ ...base, gocuotasStatus: null }).ok).toBe(false)
+  })
+
+  it('sin order id de GOcuotas no hay contra qué anular', () => {
+    expect(puedeAnularOrden({ ...base, gocuotasOrderId: null }).ok).toBe(false)
+  })
+
+  it('solo solicitudes pendientes', () => {
+    expect(puedeAnularOrden({ ...base, estado: 'descartada' }).ok).toBe(false)
   })
 })
