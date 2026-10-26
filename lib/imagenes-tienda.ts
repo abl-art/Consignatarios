@@ -74,13 +74,14 @@ export function encajeEnLienzo(cw: number, ch: number, lienzo = LIENZO_TIENDA, e
 /**
  * Califica la resolución del contenido (el producto, ya sin fondo) contra el
  * objetivo de 1700px: estirar poco no se nota, estirar mucho sale borroso en
- * la tienda. 'ok' estira hasta 10%, 'advertencia' hasta 2×, más que eso se rechaza.
+ * la tienda. 'ok' estira hasta 1,25× (un render de 1500px de otra tienda pasa
+ * limpio), 'advertencia' hasta 2×, más que eso se rechaza.
  */
 export function evaluarResolucion(cw: number, ch: number): { nivel: 'ok' | 'advertencia' | 'rechazo'; ladoMayor: number } {
   const objetivo = Math.round(LIENZO_TIENDA * ESCALA_CONTENIDO)
   const ladoMayor = Math.max(cw, ch)
   const factor = objetivo / ladoMayor
-  const nivel = factor <= 1.1 ? 'ok' : factor <= 2 ? 'advertencia' : 'rechazo'
+  const nivel = factor <= 1.25 ? 'ok' : factor <= 2 ? 'advertencia' : 'rechazo'
   return { nivel, ladoMayor }
 }
 

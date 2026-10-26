@@ -129,13 +129,15 @@ describe('slugModelo', () => {
 })
 
 describe('evaluarResolucion', () => {
-  it('fuente grande pasa sin aviso (solo achica o estira hasta 10%)', () => {
+  it('fuente grande pasa sin aviso (solo achica o estira hasta 1.25x)', () => {
     expect(evaluarResolucion(2200, 1800).nivel).toBe('ok')
     expect(evaluarResolucion(1700, 900).nivel).toBe('ok')
-    expect(evaluarResolucion(1550, 1000).nivel).toBe('ok') // estira 1.097x
+    expect(evaluarResolucion(1500, 1000).nivel).toBe('ok') // render típico de otra tienda, estira 1.13x
+    expect(evaluarResolucion(1360, 1000).nivel).toBe('ok') // justo en el límite 1.25x
   })
 
-  it('fuente mediana procesa con advertencia (estira entre 1.1x y 2x)', () => {
+  it('fuente mediana procesa con advertencia (estira entre 1.25x y 2x)', () => {
+    expect(evaluarResolucion(1359, 800).nivel).toBe('advertencia')
     const r = evaluarResolucion(1000, 800)
     expect(r.nivel).toBe('advertencia')
     expect(r.ladoMayor).toBe(1000)
@@ -147,7 +149,7 @@ describe('evaluarResolucion', () => {
     expect(r.ladoMayor).toBe(849)
   })
 
-  it('el umbral exacto: 850 es advertencia, 1546 también, 1546+ depende del factor', () => {
+  it('el umbral del rechazo: 850 es advertencia, 849 rechazo', () => {
     expect(evaluarResolucion(850, 500).nivel).toBe('advertencia')
     expect(evaluarResolucion(849, 500).nivel).toBe('rechazo')
   })
