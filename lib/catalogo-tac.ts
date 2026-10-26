@@ -2,8 +2,8 @@
 // (los primeros 8 dígitos del IMEI) y sabe si ese modelo se puede vender con
 // GOcelular. La verdad sale de la base de devices enrolados: si el TAC ya
 // operó con Trustonic (ready_for_use/active/locked/released) el modelo está
-// habilitado; si Trustonic lo rechazó (non_enrollable_tacs), o solo se lo vio
-// pendiente/inactivo, o nunca apareció, no está listo.
+// habilitado; si no (TAC sin cargar en Trustonic —non_enrollable_tacs—, visto
+// solo pendiente/inactivo, o nunca visto) falta solicitar la carga.
 
 /** Estados de trustonic_status que prueban que el TAC es operable. */
 export const ESTADOS_VENDIBLES = ['ready_for_use', 'active', 'locked', 'released'] as const
@@ -35,8 +35,11 @@ export function evaluarTac(datos: {
   const equiposOk = datos.estados
     .filter(e => (ESTADOS_VENDIBLES as readonly string[]).includes(e.status))
     .reduce((s, e) => s + e.count, 0)
-  if (datos.enListaNegra) return { vendible: false, motivo: 'lista_negra', equiposOk }
+  // Un equipo operando prueba que el TAC ya está cargado en Trustonic — gana
+  // aunque el TAC figure en non_enrollable_tacs (esa lista marca intentos
+  // viejos de enrolar un TAC aún sin cargar, no una incompatibilidad)
   if (equiposOk > 0) return { vendible: true, motivo: 'ok', equiposOk }
+  if (datos.enListaNegra) return { vendible: false, motivo: 'lista_negra', equiposOk: 0 }
   if (datos.estados.length > 0) return { vendible: false, motivo: 'sin_estados_validos', equiposOk: 0 }
   return { vendible: false, motivo: 'desconocido', equiposOk: 0 }
 }

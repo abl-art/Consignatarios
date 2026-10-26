@@ -76,11 +76,7 @@ export default function BuscadorTac({ token }: { token: string }) {
           <p className="text-red-700 text-sm mt-0.5">
             TAC {resultado.tac}{nombreEquipo ? <> — <b>{nombreEquipo}</b></> : null}
           </p>
-          <p className="text-red-600 text-xs mt-1">
-            {resultado.motivo === 'lista_negra'
-              ? 'Este modelo no es compatible con el sistema de bloqueo.'
-              : 'Solicitá la carga a tu ejecutivo de GOcuotas.'}
-          </p>
+          <p className="text-red-600 text-xs mt-1">Solicitá la carga a tu ejecutivo de GOcuotas.</p>
         </div>
       )}
     </div>

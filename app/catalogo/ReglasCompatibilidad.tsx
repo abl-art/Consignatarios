@@ -3,6 +3,7 @@
 // - Samsung Knox Guard: Android 12 nativo en adelante, fabricado para región Américas.
 // - Motorola Motosafe 3.0: familia 6 en adelante (lanzada desde 2025).
 // - Xiaomi: línea 15 en adelante (desde ago 2025); la línea 14 ya está habilitada y en uso.
+// - Honor (oct 2026): los modelos que GOcelular ya vende (X5c, X5c Plus, X7d) y los posteriores.
 // - Nubia: solo los modelos habilitados expresamente por GOcelular.
 
 interface ReglaMarca {
@@ -51,6 +52,18 @@ const REGLAS: ReglaMarca[] = [
     ],
     si: ['Redmi 15', 'Redmi 15C', 'Redmi Note 15', 'Redmi Note 15 Pro', 'Redmi 14C', 'Redmi Note 14', 'Redmi A5'],
     no: ['Redmi 13 / 13C', 'Redmi Note 13', 'Redmi A3', 'POCO y líneas viejas', 'Toda línea 13 o anterior'],
+  },
+  {
+    marca: 'Honor',
+    solucion: 'DLC',
+    headerClass: 'bg-teal-700',
+    regla: 'Los modelos que GOcelular ya comercializa y todos los lanzados después de esos.',
+    detalle: [
+      'Hoy: X5c, X5c Plus y X7d — y cualquier Honor que salga al mercado con posterioridad a estos.',
+      'Los modelos anteriores a esa camada no están habilitados.',
+    ],
+    si: ['X5c', 'X5c Plus', 'X7d', 'Lanzados después de estos'],
+    no: ['Honor X5', 'X6a / X6b', 'X7c', 'Cualquier modelo anterior'],
   },
   {
     marca: 'Nubia',

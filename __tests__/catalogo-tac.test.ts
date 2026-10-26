@@ -44,8 +44,14 @@ describe('evaluarTac', () => {
     expect(r.motivo).toBe('sin_estados_validos')
   })
 
-  it('la lista negra de Trustonic manda aunque haya equipos activos', () => {
+  it('un equipo operando gana aunque el TAC figure en la lista de no-enrolables (entrada vieja)', () => {
     const r = evaluarTac({ estados: [{ status: 'active', count: 2 }], enListaNegra: true })
+    expect(r.vendible).toBe(true)
+    expect(r.motivo).toBe('ok')
+  })
+
+  it('TAC solo en la lista de no-enrolables: falta solicitar la carga', () => {
+    const r = evaluarTac({ estados: [], enListaNegra: true })
     expect(r.vendible).toBe(false)
     expect(r.motivo).toBe('lista_negra')
   })
