@@ -74,8 +74,14 @@ export async function POST(request: NextRequest) {
     // estirada sale borrosa, mejor avisar/rechazar que publicar mousse
     const resolucion = evaluarResolucion(cw, ch)
     if (resolucion.nivel === 'rechazo') {
+      // Dos causas distintas piden dos consejos distintos: archivo chico
+      // (típico: guardaron la miniatura de Google en vez de la imagen grande)
+      // vs imagen grande donde el producto ocupa una esquinita (banners)
+      const consejo = Math.max(w, h) < 1200
+        ? 'el archivo descargado vino chico — en Google Imágenes hacé CLIC en el resultado para abrirlo en el panel grande, esperá a que cargue nítida y recién ahí botón derecho → Guardar imagen (guardar desde la grilla baja una miniatura). Mejor todavía: bajala de la página del fabricante'
+        : 'la imagen es grande pero el producto ocupa una parte chica — buscá una foto donde el producto llene el cuadro'
       return NextResponse.json(
-        { error: `La foto es demasiado chica para la tienda (el producto mide ${resolucion.ladoMayor}px y se necesita ~1700px) — buscá una versión más grande: en Google Imágenes usá Herramientas → Tamaño → Grande` },
+        { error: `Foto demasiado chica para la tienda: el archivo es de ${w}×${h}px y el producto mide ${resolucion.ladoMayor}px (se necesita ~1700px). ${consejo}` },
         { status: 400 }
       )
     }
