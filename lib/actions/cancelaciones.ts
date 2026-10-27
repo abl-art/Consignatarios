@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCancelacionWebhook, getCancelacionEstado } from '@/lib/gocelular-webhook'
-import { puedeCancelarPedido, esCancelacionConfirmada, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+import { puedeCancelarPedido, veredictoCancelacion, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
 
 function resumen(body: Record<string, unknown> | null): string {
   if (!body) return 'sin detalle'
@@ -59,7 +59,12 @@ export async function aplicarCancelarPedido(id: string): Promise<{ ok?: true; er
 
   await admin
     .from('arrepentimientos')
-    .update({ cancelacion_wh_at: new Date().toISOString(), cancelacion_wh_detalle: resumen(res.body) })
+    .update({
+      cancelacion_wh_at: new Date().toISOString(),
+      cancelacion_wh_detalle: resumen(res.body),
+      // pendiente de Andreani desde ya — el chip lo dice y Anular orden se bloquea
+      fulfillment: 'cancelación pedida',
+    })
     .eq('id', id)
   revalidatePath('/compras/envios')
   return { ok: true }
@@ -70,15 +75,23 @@ export async function aplicarCancelarPedido(id: string): Promise<{ ok?: true; er
  * `cancelado`, el fulfillment local pasa a cancelado para que la fila lo
  * refleje al instante (el cron lo confirmaría recién a los 30 min).
  */
-export async function confirmarCancelacionPedido(id: string): Promise<{ estado: string; confirmada: boolean; error?: string }> {
+export async function confirmarCancelacionPedido(
+  id: string,
+): Promise<{ estado: string; veredicto: 'confirmada' | 'rechazada' | 'pendiente'; error?: string }> {
   const { admin, fila } = await cargarArrep(id)
-  if (!fila?.order_number) return { estado: 'desconocido', confirmada: false, error: 'Solicitud sin orden.' }
+  if (!fila?.order_number) return { estado: 'desconocido', veredicto: 'pendiente', error: 'Solicitud sin orden.' }
 
   const res = await getCancelacionEstado({ order_number: fila.order_number })
   const estado = (res.body?.estado ?? res.body?.resultado ?? 'desconocido') as string
-  if (!esCancelacionConfirmada(estado)) return { estado, confirmada: false }
+  const veredicto = veredictoCancelacion(estado)
 
-  await admin.from('arrepentimientos').update({ fulfillment: 'cancelado' }).eq('id', id)
-  revalidatePath('/compras/envios')
-  return { estado, confirmada: true }
+  if (veredicto === 'confirmada') {
+    await admin.from('arrepentimientos').update({ fulfillment: 'cancelado' }).eq('id', id)
+    revalidatePath('/compras/envios')
+  } else if (estado === 'no_cancelable_expedido') {
+    // Andreani la rechazó porque el pedido salió: reflejarlo ya (rescate)
+    await admin.from('arrepentimientos').update({ fulfillment: 'expedido' }).eq('id', id)
+    revalidatePath('/compras/envios')
+  }
+  return { estado, veredicto }
 }

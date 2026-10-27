@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, veredictoCancelacion, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
 
 describe('puedeCancelarPedido', () => {
   const base = { estado: 'pendiente', orderNumber: 'SO-9BRH9A', fulfillment: 'enviado a Andreani' as string | null }
@@ -70,5 +70,24 @@ describe('interpretarPreview', () => {
     expect(interpretarPreview({ resultado: 'sin_pedido_wh' }).cancelable).toBe(false)
     expect(interpretarPreview({ resultado: 'cancelable' }).cancelable).toBe(true)
     expect(interpretarPreview(null).cancelable).toBe(true)
+  })
+})
+
+describe('veredictoCancelacion (contrato Pedro 27/10)', () => {
+  it('cancelado confirma; requiere_atencion y no_cancelable_expedido rechazan; el resto sigue pendiente', () => {
+    expect(veredictoCancelacion('cancelado')).toBe('confirmada')
+    expect(veredictoCancelacion('requiere_atencion')).toBe('rechazada')
+    expect(veredictoCancelacion('no_cancelable_expedido')).toBe('rechazada')
+    expect(veredictoCancelacion('cancelacion_pedida')).toBe('pendiente')
+    expect(veredictoCancelacion('vivo')).toBe('pendiente')
+    expect(veredictoCancelacion(null)).toBe('pendiente')
+  })
+})
+
+describe('puedeCancelarPedido con cancelación ya pedida', () => {
+  it('no deja pedirla dos veces y explica que está pendiente de Andreani', () => {
+    const r = puedeCancelarPedido({ estado: 'pendiente', orderNumber: 'SO-X', fulfillment: 'cancelación pedida' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/pendiente de confirmación/i)
   })
 })

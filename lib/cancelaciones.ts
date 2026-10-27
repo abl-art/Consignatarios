@@ -17,7 +17,13 @@ export function puedeCancelarPedido(s: {
   if (s.estado !== 'pendiente') return { ok: false, error: 'La solicitud ya fue resuelta' }
   if (!s.orderNumber) return { ok: false, error: 'Sin orden identificada' }
   if (!s.fulfillment || !(FULFILLMENTS_CANCELABLES as readonly string[]).includes(s.fulfillment)) {
-    return { ok: false, error: s.fulfillment === 'expedido' ? 'Ya salió del depósito: corresponde rescate' : s.fulfillment === 'cancelado' ? 'El pedido ya está cancelado' : 'Sin pedido en el circuito del warehouse' }
+    return {
+      ok: false,
+      error: s.fulfillment === 'expedido' ? 'Ya salió del depósito: corresponde rescate'
+        : s.fulfillment === 'cancelado' ? 'El pedido ya está cancelado'
+        : s.fulfillment === 'cancelación pedida' ? 'La cancelación ya fue pedida — pendiente de confirmación de Andreani'
+        : 'Sin pedido en el circuito del warehouse',
+    }
   }
   return { ok: true }
 }
@@ -42,6 +48,18 @@ export function esReintentable(status: number, body: { resultado?: string; retry
 /** El estado del GET que cierra el ciclo. */
 export function esCancelacionConfirmada(estado: string | null | undefined): boolean {
   return estado === 'cancelado'
+}
+
+/**
+ * Estados terminales del GET (contrato de Pedro 27/10): `cancelado` cierra
+ * bien; `requiere_atencion` y `no_cancelable_expedido` cierran MAL — la
+ * cancelación fue rechazada y NO corresponde anular la orden todavía.
+ * `cancelacion_pedida` sigue pendiente de Andreani.
+ */
+export function veredictoCancelacion(estado: string | null | undefined): 'confirmada' | 'rechazada' | 'pendiente' {
+  if (estado === 'cancelado') return 'confirmada'
+  if (estado === 'requiere_atencion' || estado === 'no_cancelable_expedido') return 'rechazada'
+  return 'pendiente'
 }
 
 /**

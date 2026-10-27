@@ -53,7 +53,11 @@ export function etiquetaFulfillment(f: { whEstado: string | null; pickeado: bool
   if (f.pickeado) return 'pickeado'
   if (f.whEstado === 'sent') return 'enviado a Andreani'
   if (f.whEstado === 'queued') return 'en cola'
-  if (f.whEstado === 'cancelled' || f.whEstado === 'cancel_requested') return 'cancelado'
+  if (f.whEstado === 'cancelled') return 'cancelado'
+  // cancel_requested = la cancelación fue PEDIDA pero Andreani aún no la
+  // confirmó (contrato de Pedro 27/10: "cancelacion_pedida significa
+  // pendiente de Andreani, no cancelado") — todavía NO se puede anular la orden
+  if (f.whEstado === 'cancel_requested') return 'cancelación pedida'
   return f.whEstado
 }
 
@@ -165,6 +169,9 @@ export function puedeAnularOrden(s: {
   }
   if (s.fulfillment === 'expedido') {
     return { ok: false, error: 'El pedido ya fue expedido: corresponde rescate, no reembolso' }
+  }
+  if (s.fulfillment === 'cancelación pedida') {
+    return { ok: false, error: 'La cancelación del envío está pendiente de confirmación de Andreani — esperá el resultado antes de reembolsar' }
   }
   return { ok: true }
 }

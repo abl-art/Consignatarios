@@ -16,7 +16,7 @@ describe('etiquetaFulfillment', () => {
     expect(etiquetaFulfillment({ whEstado: 'sent', pickeado: true })).toBe('pickeado')
     expect(etiquetaFulfillment({ whEstado: 'expedido', pickeado: true })).toBe('expedido')
     expect(etiquetaFulfillment({ whEstado: 'cancelled', pickeado: false })).toBe('cancelado')
-    expect(etiquetaFulfillment({ whEstado: 'cancel_requested', pickeado: false })).toBe('cancelado')
+    expect(etiquetaFulfillment({ whEstado: 'cancel_requested', pickeado: false })).toBe('cancelación pedida') // contrato Pedro 27/10: pendiente de Andreani, NO cancelado
     expect(etiquetaFulfillment({ whEstado: null, pickeado: false })).toBeNull()
     // pickeado manda aunque el pedido WH diga otra cosa rara (salvo expedido)
     expect(etiquetaFulfillment({ whEstado: 'requires_attention', pickeado: true })).toBe('pickeado')
@@ -181,5 +181,13 @@ describe('puedeAnularOrden', () => {
 
   it('solo solicitudes pendientes', () => {
     expect(puedeAnularOrden({ ...base, estado: 'descartada' }).ok).toBe(false)
+  })
+})
+
+describe('puedeAnularOrden con cancelación pendiente de Andreani', () => {
+  it('bloquea el reembolso mientras la cancelación no esté confirmada (bug real 27/10)', () => {
+    const r = puedeAnularOrden({ estado: 'pendiente', gocuotasOrderId: '555', gocuotasStatus: 'approved', fulfillment: 'cancelación pedida' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/pendiente de confirmación/i)
   })
 })
