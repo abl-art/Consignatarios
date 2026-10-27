@@ -1,0 +1,74 @@
+import { describe, it, expect } from 'vitest'
+import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+
+describe('puedeCancelarPedido', () => {
+  const base = { estado: 'pendiente', orderNumber: 'SO-9BRH9A', fulfillment: 'enviado a Andreani' as string | null }
+
+  it('pendiente con pedido en el circuito: se puede', () => {
+    expect(puedeCancelarPedido(base).ok).toBe(true)
+    expect(puedeCancelarPedido({ ...base, fulfillment: 'en cola' }).ok).toBe(true)
+    expect(puedeCancelarPedido({ ...base, fulfillment: 'pickeado' }).ok).toBe(true)
+  })
+
+  it('expedido va a rescate, cancelado ya está, sin fulfillment no hay pedido', () => {
+    const exp = puedeCancelarPedido({ ...base, fulfillment: 'expedido' })
+    expect(exp.ok).toBe(false)
+    if (!exp.ok) expect(exp.error).toMatch(/rescate/i)
+    expect(puedeCancelarPedido({ ...base, fulfillment: 'cancelado' }).ok).toBe(false)
+    expect(puedeCancelarPedido({ ...base, fulfillment: null }).ok).toBe(false)
+  })
+
+  it('resueltas y sin orden no', () => {
+    expect(puedeCancelarPedido({ ...base, estado: 'descartada' }).ok).toBe(false)
+    expect(puedeCancelarPedido({ ...base, orderNumber: null }).ok).toBe(false)
+  })
+})
+
+describe('validarMotivo', () => {
+  it('entre 10 y 500 caracteres', () => {
+    expect(validarMotivo(MOTIVO_ARREPENTIMIENTO)).toBe(true)
+    expect(validarMotivo('corto')).toBe(false)
+    expect(validarMotivo('x'.repeat(501))).toBe(false)
+    expect(validarMotivo('   diez ch  ')).toBe(false) // el trim lo deja en menos de 10
+  })
+})
+
+describe('esReintentable (reglas del contrato de Pedro)', () => {
+  it('vivo y sin_pedido_wh se reintentan en unos minutos', () => {
+    expect(esReintentable(200, { resultado: 'vivo' })).toBe(true)
+    expect(esReintentable(200, { resultado: 'sin_pedido_wh' })).toBe(true)
+    expect(esReintentable(200, { resultado: 'cancelado' })).toBe(false)
+  })
+
+  it('409 no se reintenta salvo retryable true', () => {
+    expect(esReintentable(409, { resultado: 'conflicto' })).toBe(false)
+    expect(esReintentable(409, { resultado: 'conflicto', retryable: true })).toBe(true)
+  })
+
+  it('5xx (incl. 503 refund_disabled) se puede reintentar', () => {
+    expect(esReintentable(503, { resultado: 'refund_disabled' })).toBe(true)
+    expect(esReintentable(500, null)).toBe(true)
+  })
+})
+
+describe('esCancelacionConfirmada', () => {
+  it('solo cancelado cierra el ciclo', () => {
+    expect(esCancelacionConfirmada('cancelado')).toBe(true)
+    expect(esCancelacionConfirmada('vivo')).toBe(false)
+    expect(esCancelacionConfirmada(null)).toBe(false)
+  })
+})
+
+describe('interpretarPreview', () => {
+  it('no_cancelable_* bloquea el apply (caso real: expedido entre cron y cron)', () => {
+    const r = interpretarPreview({ resultado: 'no_cancelable_expedido' })
+    expect(r.cancelable).toBe(false)
+    expect(r.motivo).toContain('no_cancelable_expedido')
+  })
+
+  it('sin_pedido_wh pide reintentar, cancelable sigue', () => {
+    expect(interpretarPreview({ resultado: 'sin_pedido_wh' }).cancelable).toBe(false)
+    expect(interpretarPreview({ resultado: 'cancelable' }).cancelable).toBe(true)
+    expect(interpretarPreview(null).cancelable).toBe(true)
+  })
+})

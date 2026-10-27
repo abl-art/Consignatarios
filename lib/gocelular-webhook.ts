@@ -164,3 +164,76 @@ export async function sendWholesaleWebhook(rawBody: string): Promise<WholesaleRe
   }
   return last
 }
+
+// ── API de cancelaciones del warehouse (contrato de Pedro, 27/10/2026) ──────
+
+const CANCELACIONES_URL = 'https://gocelular.gocuotas.com/api/webhooks/gocelular/cancelaciones'
+
+export interface CancelacionResponse {
+  resultado?: string
+  estado?: string
+  detalle?: string
+  retryable?: boolean
+  [k: string]: unknown
+}
+
+export interface CancelacionResult {
+  ok: boolean
+  status: number
+  body: CancelacionResponse | null
+}
+
+/** POST preview/apply. Sin auto-reintentos: la regla de reintento (409/vivo) la decide quien llama. */
+export async function sendCancelacionWebhook(payload: {
+  mode: 'preview' | 'apply'
+  accion: 'cancelar_pedido' | 'cancelar_orden'
+  order_number?: string
+  proforma_number?: string
+  motivo: string
+  source: string
+}): Promise<CancelacionResult> {
+  const secret = process.env.GOCELULAR_WEBHOOK_SECRET
+  const url = process.env.GOCELULAR_CANCELACIONES_URL || CANCELACIONES_URL
+  if (!secret) return { ok: false, status: 0, body: { detalle: 'secret_no_configurado' } }
+  const rawBody = JSON.stringify(payload)
+  const ts = buildTimestamp()
+  const sig = signWebhook(secret, ts, rawBody)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Gocelular-Signature': sig,
+        'X-Gocelular-Timestamp': ts,
+      },
+      body: rawBody,
+      signal: AbortSignal.timeout(15000),
+    })
+    const body = (await res.json().catch(() => null)) as CancelacionResponse | null
+    return { ok: res.status === 200, status: res.status, body }
+  } catch {
+    return { ok: false, status: 0, body: { detalle: 'sin_respuesta' } }
+  }
+}
+
+/** GET del estado de la cancelación (el apply es asincrónico, ~1 min). La firma del GET es timestamp + ".". */
+export async function getCancelacionEstado(query: { order_number?: string; proforma_number?: string }): Promise<CancelacionResult> {
+  const secret = process.env.GOCELULAR_WEBHOOK_SECRET
+  const base = process.env.GOCELULAR_CANCELACIONES_URL || CANCELACIONES_URL
+  if (!secret) return { ok: false, status: 0, body: { detalle: 'secret_no_configurado' } }
+  const params = new URLSearchParams()
+  if (query.order_number) params.set('order_number', query.order_number)
+  if (query.proforma_number) params.set('proforma_number', query.proforma_number)
+  const ts = buildTimestamp()
+  const sig = signWebhook(secret, ts, '')
+  try {
+    const res = await fetch(`${base}?${params.toString()}`, {
+      headers: { 'X-Gocelular-Signature': sig, 'X-Gocelular-Timestamp': ts },
+      signal: AbortSignal.timeout(10000),
+    })
+    const body = (await res.json().catch(() => null)) as CancelacionResponse | null
+    return { ok: res.status === 200, status: res.status, body }
+  } catch {
+    return { ok: false, status: 0, body: { detalle: 'sin_respuesta' } }
+  }
+}

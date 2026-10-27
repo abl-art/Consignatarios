@@ -15,6 +15,7 @@ import { cargarSiniestro, setNotaCredito } from '@/lib/actions/siniestros'
 import { descartarDemora } from '@/lib/actions/demoras'
 import { setEstadoSiniestroStock } from '@/lib/actions/siniestros-stock'
 import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden } from '@/lib/arrepentimientos'
+import BotonCancelarPedido from './BotonCancelarPedido'
 
 // Botones por tipo de acción; key identifica la variante dentro de la tarjeta
 type Boton = { key: string; label: string; confirm: string; title: string; cls: string }
@@ -124,6 +125,15 @@ function Tarjeta({ r, idx, onIr }: { r: ResultadoBusqueda; idx: number; onIr: (t
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
+          )}
+          {r.accion?.tipo === 'arrepentimiento' && r.accion.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado'].includes(r.accion.fulfillment) && (
+            <BotonCancelarPedido
+              compacto
+              arrepId={r.accion.id}
+              estado="pendiente"
+              orderNumber={r.orden}
+              fulfillment={r.accion.fulfillment}
+            />
           )}
           {botones.map(b => (
             <button

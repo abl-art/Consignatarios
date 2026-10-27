@@ -13,6 +13,7 @@ import {
   type SolicitudArrepentimiento,
 } from '@/lib/actions/arrepentimientos'
 import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden, type EstadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
+import BotonCancelarPedido from './BotonCancelarPedido'
 
 function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -238,13 +239,12 @@ export default function ArrepentimientosTable({
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <FulfillmentChip fulfillment={s.fulfillment} />
                     {s.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado'].includes(s.fulfillment) && (
-                      <button
-                        disabled
-                        title="Cancela el pedido en el warehouse — disponible cuando esté el endpoint de cancelación (en desarrollo)"
-                        className="ml-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 border text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed"
-                      >
-                        Cancelar pedido
-                      </button>
+                      <BotonCancelarPedido
+                        arrepId={s.id}
+                        estado={s.estado}
+                        orderNumber={s.orderNumber}
+                        fulfillment={s.fulfillment}
+                      />
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
