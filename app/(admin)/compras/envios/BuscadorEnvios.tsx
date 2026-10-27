@@ -9,12 +9,12 @@
 import { useMemo, useState, useTransition } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { buscarEnvios, LABEL_TAB, type AccionBusqueda, type FuentesBusqueda, type ResultadoBusqueda } from '@/lib/buscador-envios'
-import { confirmarArrepentimiento, descartarArrepentimiento } from '@/lib/actions/arrepentimientos'
+import { confirmarArrepentimiento, descartarArrepentimiento, anularOrdenArrepentimiento } from '@/lib/actions/arrepentimientos'
 import { cargarRescate } from '@/lib/actions/rescates'
 import { cargarSiniestro, setNotaCredito } from '@/lib/actions/siniestros'
 import { descartarDemora } from '@/lib/actions/demoras'
 import { setEstadoSiniestroStock } from '@/lib/actions/siniestros-stock'
-import { MOTIVOS_DESCARTE_ARREPENTIMIENTO } from '@/lib/arrepentimientos'
+import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden } from '@/lib/arrepentimientos'
 
 // Botones por tipo de acción; key identifica la variante dentro de la tarjeta
 type Boton = { key: string; label: string; confirm: string; title: string; cls: string }
@@ -22,6 +22,7 @@ type Boton = { key: string; label: string; confirm: string; title: string; cls: 
 const BOTONES: Record<AccionBusqueda['tipo'], Boton[]> = {
   arrepentimiento: [
     { key: 'confirmar', label: 'Confirmar', confirm: '¿Confirmar rescate?', title: 'Crear el rescate en Andreani (pestaña Rescates)', cls: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+    { key: 'anular', label: 'Anular orden', confirm: '¿Reembolsar TOTAL?', title: 'Reembolso TOTAL de la orden por API GOcuotas (no se puede deshacer)', cls: 'bg-rose-50 text-rose-700 hover:bg-rose-100' },
     { key: 'descartar', label: 'Descartar', confirm: '¿Descartar?', title: 'Descartar la solicitud con motivo', cls: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
   ],
   demora: [
@@ -40,7 +41,9 @@ const BOTONES: Record<AccionBusqueda['tipo'], Boton[]> = {
 function ejecutarAccion(accion: AccionBusqueda, key: string, motivo: string): Promise<{ ok?: true; error?: string }> {
   switch (accion.tipo) {
     case 'arrepentimiento':
-      return key === 'confirmar' ? confirmarArrepentimiento(accion.id) : descartarArrepentimiento(accion.id, motivo)
+      return key === 'confirmar' ? confirmarArrepentimiento(accion.id)
+        : key === 'anular' ? anularOrdenArrepentimiento(accion.id)
+        : descartarArrepentimiento(accion.id, motivo)
     case 'demora':
       return key === 'rescate' ? cargarRescate(accion.tracking, 'No Entregado')
         : key === 'siniestro' ? cargarSiniestro(accion.tracking)
@@ -79,6 +82,10 @@ function Tarjeta({ r, idx, onIr }: { r: ResultadoBusqueda; idx: number; onIr: (t
 
   const botones = r.accion ? BOTONES[r.accion.tipo] : []
   const confirmarDeshabilitado = r.accion?.tipo === 'arrepentimiento' && !r.accion.tracking
+  // El guard del botón Anular orden es el mismo de la tabla de Arrepentimientos
+  const guardAnular = r.accion?.tipo === 'arrepentimiento'
+    ? puedeAnularOrden({ estado: 'pendiente', gocuotasOrderId: r.accion.gocuotasOrderId, gocuotasStatus: r.accion.gocuotasStatus, fulfillment: r.accion.fulfillment })
+    : null
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 border-b border-gray-100 last:border-b-0 text-sm" data-testid={`buscador-resultado-${idx}`}>
@@ -122,8 +129,12 @@ function Tarjeta({ r, idx, onIr }: { r: ResultadoBusqueda; idx: number; onIr: (t
             <button
               key={b.key}
               onClick={() => clickear(b.key)}
-              disabled={enviando || (b.key === 'confirmar' && confirmarDeshabilitado)}
-              title={b.key === 'confirmar' && confirmarDeshabilitado ? 'Sin despacho: anular la orden y descartar' : b.title}
+              disabled={enviando || (b.key === 'confirmar' && confirmarDeshabilitado) || (b.key === 'anular' && guardAnular !== null && !guardAnular.ok)}
+              title={
+                b.key === 'confirmar' && confirmarDeshabilitado ? 'Sin despacho: anular la orden y descartar'
+                : b.key === 'anular' && guardAnular !== null && !guardAnular.ok ? guardAnular.error
+                : b.title
+              }
               className={`text-xs font-medium rounded-lg px-2.5 py-1 transition-colors disabled:opacity-40 ${
                 armado === b.key ? 'bg-gray-900 text-white' : b.cls
               }`}

@@ -138,6 +138,7 @@ export default async function EnviosPage({
     arrepentimientos: arrepentimientos.map(s => ({
       id: s.id, nombre: s.nombre, dni: s.dni, orderNumber: s.orderNumber, tracking: s.tracking,
       producto: s.producto, estado: s.estado, fulfillment: s.fulfillment,
+      gocuotasOrderId: s.gocuotasOrderId, gocuotasStatus: s.gocuotasStatus,
     })),
     rescates: rescates.map(r => ({
       orderNumber: r.orderNumber, cliente: r.cliente, dni: r.dni, tracking: r.tracking,

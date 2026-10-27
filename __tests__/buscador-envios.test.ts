@@ -63,17 +63,17 @@ describe('buscarEnvios', () => {
 
   it('agrupa resultados de varias pestañas en el orden de las tabs', () => {
     const rescate = { orderNumber: 'SO-DEM001', cliente: 'Juan Pérez', dni: '28456123', tracking: '360009999999', producto: 'Moto G06', estado: 'en_viaje' as const, motivo: 'No Entregado' }
-    const arrep = { id: 'a1', nombre: 'Juan Pérez', dni: '28456123', orderNumber: 'SO-OTRA', tracking: null, producto: null, estado: 'pendiente' as const, fulfillment: null }
+    const arrep = { id: 'a1', nombre: 'Juan Pérez', dni: '28456123', orderNumber: 'SO-OTRA', tracking: null, producto: null, estado: 'pendiente' as const, fulfillment: null, gocuotasOrderId: null, gocuotasStatus: null }
     const r = buscarEnvios('28456123', fuentes({ rescates: [rescate], demoras: [DEMORA], arrepentimientos: [arrep] }))
     expect(r.map(x => x.tab)).toEqual(['demoras', 'arrepentimientos', 'rescates'])
   })
 
   it('arrepentimiento pendiente lleva acción con id y tracking; resuelto no', () => {
-    const pend = { id: 'a1', nombre: 'Juan', dni: '30111222', orderNumber: null, tracking: '360', producto: null, estado: 'pendiente' as const, fulfillment: 'expedido' }
+    const pend = { id: 'a1', nombre: 'Juan', dni: '30111222', orderNumber: null, tracking: '360', producto: null, estado: 'pendiente' as const, fulfillment: 'expedido', gocuotasOrderId: '555', gocuotasStatus: 'approved' }
     const hecha = { ...pend, id: 'a2', estado: 'confirmada' as const }
     const r = buscarEnvios('30111222', fuentes({ arrepentimientos: [pend, hecha] }))
     expect(r).toHaveLength(2)
-    expect(r[0].accion).toEqual({ tipo: 'arrepentimiento', id: 'a1', tracking: '360' })
+    expect(r[0].accion).toEqual({ tipo: 'arrepentimiento', id: 'a1', tracking: '360', gocuotasOrderId: '555', gocuotasStatus: 'approved', fulfillment: 'expedido' })
     expect(r[1].accion).toBeNull()
   })
 

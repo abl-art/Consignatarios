@@ -35,6 +35,8 @@ export interface ArrepentimientoBusqueda {
   producto: string | null
   estado: 'pendiente' | 'confirmada' | 'descartada'
   fulfillment: string | null
+  gocuotasOrderId: string | null
+  gocuotasStatus: string | null
 }
 export interface RescateBusqueda {
   orderNumber: string
@@ -90,7 +92,7 @@ export const LABEL_TAB: Record<TabBusqueda, string> = {
 }
 
 export type AccionBusqueda =
-  | { tipo: 'arrepentimiento'; id: string; tracking: string | null }
+  | { tipo: 'arrepentimiento'; id: string; tracking: string | null; gocuotasOrderId: string | null; gocuotasStatus: string | null; fulfillment: string | null }
   | { tipo: 'demora'; tracking: string }
   | { tipo: 'siniestro-nc'; tracking: string; notaCredito: boolean }
   | { tipo: 'siniestro-wh'; id: string }
@@ -164,7 +166,9 @@ export function buscarEnvios(query: string, fuentes: FuentesBusqueda): Resultado
       tracking: s.tracking,
       producto: s.producto,
       estado,
-      accion: s.estado === 'pendiente' ? { tipo: 'arrepentimiento', id: s.id, tracking: s.tracking } : null,
+      accion: s.estado === 'pendiente'
+        ? { tipo: 'arrepentimiento', id: s.id, tracking: s.tracking, gocuotasOrderId: s.gocuotasOrderId, gocuotasStatus: s.gocuotasStatus, fulfillment: s.fulfillment }
+        : null,
     })
   }
 
