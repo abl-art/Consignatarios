@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { fetchTodos, guardarTodos, guardarNotas, guardarNotasGuardadas, fetchNotasGuardadas, guardarNotasEventos, fetchNotasEventos } from './actions'
 import MailsTab from './MailsTab'
+import BacklogTab from './BacklogTab'
 
 interface Todo {
   id: string
@@ -105,7 +106,7 @@ async function saveWithRetry(
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export default function NotasClient({ initialTodos, initialNotas, initialGuardadas, initialNotasEventos }: Props) {
-  const [tab, setTab] = useState<'todo' | 'notas' | 'guardadas' | 'mails'>('todo')
+  const [tab, setTab] = useState<'todo' | 'backlog' | 'notas' | 'guardadas' | 'mails'>('todo')
   // Shared state lives here — survives tab switches (no remount = no data loss)
   const [guardadas, setGuardadas] = useState<NotaGuardada[]>(initialGuardadas)
   const [notasContent, setNotasContent] = useState(initialNotas)
@@ -183,7 +184,7 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       <p className="text-sm text-gray-500 mb-4">Tu espacio de trabajo personal</p>
 
       <div className="flex border-b border-gray-200 mb-4">
-        {(['todo', 'notas', 'guardadas', 'mails'] as const).map(t => (
+        {(['todo', 'backlog', 'notas', 'guardadas', 'mails'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -193,7 +194,7 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t === 'todo' ? 'ToDo' : t === 'notas' ? 'Notas' : t === 'guardadas' ? `Guardadas (${guardadas.length})` : 'Mails'}
+            {t === 'todo' ? 'ToDo' : t === 'backlog' ? 'Backlog Operaciones' : t === 'notas' ? 'Notas' : t === 'guardadas' ? `Guardadas (${guardadas.length})` : 'Mails'}
           </button>
         ))}
       </div>
@@ -201,6 +202,9 @@ export default function NotasClient({ initialTodos, initialNotas, initialGuardad
       {/* Tabs always mounted, hidden with CSS — contentEditable divs survive tab switches */}
       <div style={{ display: tab === 'todo' ? 'block' : 'none' }}>
         <TodoTab initialData={initialTodos} initialNotasEventos={initialNotasEventos} />
+      </div>
+      <div style={{ display: tab === 'backlog' ? 'block' : 'none' }}>
+        <BacklogTab />
       </div>
       <div style={{ display: tab === 'notas' ? 'block' : 'none' }}>
         <NotasTab notasContent={notasContent} onContentChange={updateNotasContent} onClearContent={clearNotasContent} guardadas={guardadas} updateGuardadas={updateGuardadas} />
