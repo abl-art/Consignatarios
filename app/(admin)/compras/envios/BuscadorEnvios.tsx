@@ -126,7 +126,7 @@ function Tarjeta({ r, idx, onIr }: { r: ResultadoBusqueda; idx: number; onIr: (t
               ))}
             </select>
           )}
-          {r.accion?.tipo === 'arrepentimiento' && r.accion.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado', 'cancelación pedida'].includes(r.accion.fulfillment) && (
+          {r.accion?.tipo === 'arrepentimiento' && r.accion.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado', 'cancelación pedida', 'cancelación no realizada'].includes(r.accion.fulfillment) && (
             <BotonCancelarPedido
               compacto
               arrepId={r.accion.id}

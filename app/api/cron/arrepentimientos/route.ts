@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { decidirAccionMail, etiquetaFulfillment, evaluarVentanaArrepentimiento } from '@/lib/arrepentimientos'
 import { leerEstadoBuzon, leerMailsNuevos } from '@/lib/arrepentimientos-mail'
 import { fetchEstadoOrdenGocuotas, fetchFulfillmentPedido, fetchOrdenPorDni, fetchRescateYaSolicitado } from '@/lib/gocelular'
+import { getCancelacionEstado } from '@/lib/gocelular-webhook'
+import { etiquetaDesdeGetCancelacion } from '@/lib/cancelaciones'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -159,6 +161,17 @@ export async function GET(request: Request) {
       const ful = await fetchFulfillmentPedido(p.order_number)
       const etiqueta = ful ? etiquetaFulfillment(ful) : null
       if (etiqueta && etiqueta !== p.fulfillment) update.fulfillment = etiqueta
+      // La réplica no distingue si Andreani RECHAZÓ el intento por API (canal
+      // mail) — eso lo sabe el GET de cancelaciones. Para filas con la
+      // cancelación en curso, la etiqueta fina sale de ahí (y así la fila se
+      // transforma sola a expedido → rescate cuando Andreani expide igual).
+      const fulLocal = (update.fulfillment as string | undefined) ?? p.fulfillment
+      if (fulLocal === 'cancelación pedida' || fulLocal === 'cancelación no realizada') {
+        const res = await getCancelacionEstado({ order_number: p.order_number })
+        const fina = etiquetaDesdeGetCancelacion(res.body as { estado?: string; canal?: string | null } | null)
+        if (fina && fina !== p.fulfillment) update.fulfillment = fina
+        else if (!fina && p.fulfillment === 'cancelación no realizada') delete update.fulfillment
+      }
     }
     if (!p.tracking) {
       const orden = await fetchOrdenPorDni(p.dni)
@@ -168,7 +181,11 @@ export async function GET(request: Request) {
         update.order_number = orden.orderNumber
         update.gocuotas_order_id = orden.gocuotasOrderId
         update.gocuotas_status = orden.gocuotasStatus
-        update.fulfillment = etiquetaFulfillment(orden)
+        // Regla de Emiliano (27/10): si la cancelación venía en curso/rechazada
+        // y APARECIÓ el seguimiento, la fila pasa a expedido ya — se resuelve
+        // con Confirmar (rescate), sin esperar al estado del warehouse
+        const veniaCancelando = p.fulfillment === 'cancelación pedida' || p.fulfillment === 'cancelación no realizada'
+        update.fulfillment = orden.tracking && veniaCancelando ? 'expedido' : etiquetaFulfillment(orden)
         update.producto = orden.producto
         update.otras_ordenes = orden.otrasOrdenes
       }

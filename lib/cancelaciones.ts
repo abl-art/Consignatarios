@@ -22,6 +22,7 @@ export function puedeCancelarPedido(s: {
       error: s.fulfillment === 'expedido' ? 'Ya salió del depósito: corresponde rescate'
         : s.fulfillment === 'cancelado' ? 'El pedido ya está cancelado'
         : s.fulfillment === 'cancelación pedida' ? 'La cancelación ya fue pedida — pendiente de confirmación de Andreani'
+        : s.fulfillment === 'cancelación no realizada' ? 'Andreani la rechazó — queda solo el reintento por mail; el caso va a rescate cuando expida'
         : 'Sin pedido en el circuito del warehouse',
     }
   }
@@ -60,6 +61,22 @@ export function veredictoCancelacion(estado: string | null | undefined): 'confir
   if (estado === 'cancelado') return 'confirmada'
   if (estado === 'requiere_atencion' || estado === 'no_cancelable_expedido') return 'rechazada'
   return 'pendiente'
+}
+
+/**
+ * Traduce el GET de cancelaciones a la etiqueta local de fulfillment (regla
+ * de Emiliano 27/10): `canal: mail` significa que Andreani RECHAZÓ el intento
+ * por API y queda solo el reintento por mail (pocas chances) → "cancelación
+ * no realizada", no "pendiente". `no_cancelable_expedido` pasa la fila a
+ * expedido para resolverla con Confirmar (rescate). null = no tocar.
+ */
+export function etiquetaDesdeGetCancelacion(body: { estado?: string; canal?: string | null } | null): string | null {
+  if (!body?.estado) return null
+  if (body.estado === 'cancelado') return 'cancelado'
+  if (body.estado === 'no_cancelable_expedido') return 'expedido'
+  if (body.estado === 'requiere_atencion') return 'cancelación no realizada'
+  if (body.estado === 'cancelacion_pedida') return body.canal === 'mail' ? 'cancelación no realizada' : 'cancelación pedida'
+  return null
 }
 
 /**

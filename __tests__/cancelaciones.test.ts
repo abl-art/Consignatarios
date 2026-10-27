@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, veredictoCancelacion, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, veredictoCancelacion, etiquetaDesdeGetCancelacion, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
 
 describe('puedeCancelarPedido', () => {
   const base = { estado: 'pendiente', orderNumber: 'SO-9BRH9A', fulfillment: 'enviado a Andreani' as string | null }
@@ -89,5 +89,23 @@ describe('puedeCancelarPedido con cancelación ya pedida', () => {
     const r = puedeCancelarPedido({ estado: 'pendiente', orderNumber: 'SO-X', fulfillment: 'cancelación pedida' })
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toMatch(/pendiente de confirmación/i)
+  })
+})
+
+describe('etiquetaDesdeGetCancelacion (regla de Emiliano 27/10)', () => {
+  it('canal mail = Andreani rechazó el intento por API → cancelación no realizada', () => {
+    expect(etiquetaDesdeGetCancelacion({ estado: 'cancelacion_pedida', canal: 'mail' })).toBe('cancelación no realizada')
+    expect(etiquetaDesdeGetCancelacion({ estado: 'cancelacion_pedida', canal: 'api' })).toBe('cancelación pedida')
+  })
+
+  it('terminales: cancelado queda, expedido manda la fila a rescate, requiere_atencion a no realizada', () => {
+    expect(etiquetaDesdeGetCancelacion({ estado: 'cancelado' })).toBe('cancelado')
+    expect(etiquetaDesdeGetCancelacion({ estado: 'no_cancelable_expedido' })).toBe('expedido')
+    expect(etiquetaDesdeGetCancelacion({ estado: 'requiere_atencion' })).toBe('cancelación no realizada')
+  })
+
+  it('sin datos o estado desconocido: no tocar', () => {
+    expect(etiquetaDesdeGetCancelacion(null)).toBeNull()
+    expect(etiquetaDesdeGetCancelacion({ estado: 'algo_nuevo' })).toBeNull()
   })
 })

@@ -31,11 +31,12 @@ function FulfillmentChip({ fulfillment }: { fulfillment: string | null }) {
     expedido: { clase: 'text-blue-700 bg-blue-50 border-blue-200', hint: 'Ya salió del depósito: corresponde rescate' },
     cancelado: { clase: 'text-gray-500 bg-gray-50 border-gray-200', hint: 'Pedido warehouse cancelado' },
     'cancelación pedida': { clase: 'text-amber-700 bg-amber-50 border-amber-200', hint: 'Pendiente de confirmación de Andreani — todavía NO anular la orden' },
+    'cancelación no realizada': { clase: 'text-rose-700 bg-rose-50 border-rose-200', hint: 'Andreani rechazó la cancelación (queda un reintento por mail, pocas chances) — cuando aparezca el seguimiento la fila pasa a expedido: resolver con Confirmar (rescate). NO anular la orden' },
   }
   const e = estilos[fulfillment] ?? { clase: 'text-gray-600 bg-gray-50 border-gray-200', hint: `Estado warehouse: ${fulfillment}` }
   return (
     <span title={e.hint} className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${e.clase}`}>
-      {fulfillment === 'enviado a Andreani' || fulfillment === 'pickeado' ? '⚠ ' : fulfillment === 'cancelación pedida' ? '⏳ ' : ''}{fulfillment}
+      {fulfillment === 'enviado a Andreani' || fulfillment === 'pickeado' ? '⚠ ' : fulfillment === 'cancelación pedida' ? '⏳ ' : fulfillment === 'cancelación no realizada' ? '✗ ' : ''}{fulfillment}
     </span>
   )
 }
@@ -239,7 +240,7 @@ export default function ArrepentimientosTable({
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <FulfillmentChip fulfillment={s.fulfillment} />
-                    {s.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado', 'cancelación pedida'].includes(s.fulfillment) && (
+                    {s.fulfillment && ['en cola', 'enviado a Andreani', 'pickeado', 'cancelación pedida', 'cancelación no realizada'].includes(s.fulfillment) && (
                       <BotonCancelarPedido
                         arrepId={s.id}
                         estado={s.estado}

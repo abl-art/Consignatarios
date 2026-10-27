@@ -37,8 +37,8 @@ export default function BotonCancelarPedido({
   const pollRef = useRef(0)
 
   const guard = puedeCancelarPedido({ estado, orderNumber, fulfillment })
-  // Fila ya en "cancelación pedida" (cron o recarga): el botón sirve para consultar el estado
-  const esPendienteAndreani = fulfillment === 'cancelación pedida' && fase === 'idle'
+  // Fila con la cancelación en curso (cron o recarga): el botón sirve para consultar el estado
+  const esPendienteAndreani = (fulfillment === 'cancelación pedida' || fulfillment === 'cancelación no realizada') && fase === 'idle'
 
   async function sondear() {
     pollRef.current += 1
@@ -102,7 +102,7 @@ export default function BotonCancelarPedido({
     : fase === 'aplicando' ? 'pidiendo cancelación…'
     : fase === 'cancelando' ? '⏳ pendiente de Andreani…'
     : fase === 'demorado' ? '⏳ pendiente de Andreani — volver a consultar'
-    : fase === 'rechazado' ? '✗ cancelación rechazada'
+    : fase === 'rechazado' ? '✗ cancelación no realizada'
     : esPendienteAndreani ? '⏳ consultar estado'
     : 'Cancelar pedido'
 
@@ -111,7 +111,7 @@ export default function BotonCancelarPedido({
     : !guard.ok
     ? guard.error
     : fase === 'rechazado'
-      ? `Andreani la rechazó (${detalle}) — NO anular la orden: el caso sigue por rescate/gestión`
+      ? `Andreani no realizó la cancelación (${detalle}) — NO anular la orden: cuando aparezca el seguimiento, resolver con Confirmar (rescate)`
       : fase === 'armado' && detalle
         ? `Preview de GOcelular: ${detalle}`
         : 'Frena el pedido en el warehouse/Andreani — la orden de GOcuotas sigue viva (el refund es Anular orden)'

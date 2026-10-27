@@ -173,5 +173,8 @@ export function puedeAnularOrden(s: {
   if (s.fulfillment === 'cancelación pedida') {
     return { ok: false, error: 'La cancelación del envío está pendiente de confirmación de Andreani — esperá el resultado antes de reembolsar' }
   }
+  if (s.fulfillment === 'cancelación no realizada') {
+    return { ok: false, error: 'Andreani rechazó la cancelación: el envío sigue vivo — cuando aparezca el seguimiento se resuelve con Confirmar (rescate)' }
+  }
   return { ok: true }
 }

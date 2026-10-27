@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCancelacionWebhook, getCancelacionEstado } from '@/lib/gocelular-webhook'
-import { puedeCancelarPedido, veredictoCancelacion, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+import { puedeCancelarPedido, etiquetaDesdeGetCancelacion, interpretarPreview, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
 
 function resumen(body: Record<string, unknown> | null): string {
   if (!body) return 'sin detalle'
@@ -83,15 +83,16 @@ export async function confirmarCancelacionPedido(
 
   const res = await getCancelacionEstado({ order_number: fila.order_number })
   const estado = (res.body?.estado ?? res.body?.resultado ?? 'desconocido') as string
-  const veredicto = veredictoCancelacion(estado)
+  const etiqueta = etiquetaDesdeGetCancelacion(res.body as { estado?: string; canal?: string | null } | null)
 
-  if (veredicto === 'confirmada') {
-    await admin.from('arrepentimientos').update({ fulfillment: 'cancelado' }).eq('id', id)
-    revalidatePath('/compras/envios')
-  } else if (estado === 'no_cancelable_expedido') {
-    // Andreani la rechazó porque el pedido salió: reflejarlo ya (rescate)
-    await admin.from('arrepentimientos').update({ fulfillment: 'expedido' }).eq('id', id)
+  if (etiqueta && etiqueta !== fila.fulfillment) {
+    await admin.from('arrepentimientos').update({ fulfillment: etiqueta }).eq('id', id)
     revalidatePath('/compras/envios')
   }
+
+  const veredicto: 'confirmada' | 'rechazada' | 'pendiente' =
+    etiqueta === 'cancelado' ? 'confirmada'
+    : etiqueta === 'expedido' || etiqueta === 'cancelación no realizada' ? 'rechazada'
+    : 'pendiente'
   return { estado, veredicto }
 }
