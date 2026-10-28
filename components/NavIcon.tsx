@@ -25,6 +25,7 @@ export type IconName =
   | 'celia'
   | 'novedades'
   | 'carga-simple'
+  | 'seguros'
 
 /**
  * Iconos de sidebar. Usa strokes de 1.8px para buena legibilidad a 16px.
@@ -220,6 +221,14 @@ export default function NavIcon({ name, className = 'w-4 h-4 shrink-0' }: NavIco
         <svg {...common}>
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+        </svg>
+      )
+    case 'seguros':
+      // Escudo con check — seguro por robo (certificados, cobertura)
+      return (
+        <svg {...common}>
+          <path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" />
+          <path d="M9 12l2 2 4-4" />
         </svg>
       )
     default:

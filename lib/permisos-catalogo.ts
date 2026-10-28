@@ -179,6 +179,15 @@ export const CATALOGO: SeccionCatalogo[] = [
     ],
   },
   {
+    id: 'seguros',
+    label: 'Seguros',
+    icon: 'seguros',
+    href: '/seguros',
+    subitems: [
+      { id: SUBITEM_ROOT, label: 'Seguros', ruta: '/seguros', operar: true },
+    ],
+  },
+  {
     id: 'sync',
     label: 'Sincronización',
     icon: 'sync',
