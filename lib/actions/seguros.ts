@@ -29,13 +29,18 @@ export interface SegurosConfig {
 
 export async function getSegurosConfig(): Promise<SegurosConfig> {
   const supabase = createAdminClient()
-  const [{ data: config }, { data: parametros }] = await Promise.all([
+  const [
+    { data: config, error: errorConfig },
+    { data: parametros, error: errorParametros },
+  ] = await Promise.all([
     supabase.from('seguros_config').select('activo, activado_at').eq('id', 1).single(),
     supabase
       .from('seguros_parametros')
       .select('tipo, porcentaje, vigente_desde')
       .order('vigente_desde', { ascending: true }),
   ])
+  if (errorConfig) throw new Error(errorConfig.message)
+  if (errorParametros) throw new Error(errorParametros.message)
 
   return {
     activo: config?.activo ?? false,
@@ -56,7 +61,8 @@ export async function getSegurosConfig(): Promise<SegurosConfig> {
  */
 export async function setSeguroActivo(activo: boolean): Promise<void> {
   const supabase = createAdminClient()
-  const { data: actual } = await supabase.from('seguros_config').select('activo').eq('id', 1).single()
+  const { data: actual, error: errorActual } = await supabase.from('seguros_config').select('activo').eq('id', 1).single()
+  if (errorActual) throw new Error(errorActual.message)
   const transicionAActivo = activo && !(actual?.activo ?? false)
 
   const update: { activo: boolean; activado_at?: string } = { activo }
@@ -97,7 +103,12 @@ function enLotes<T>(items: T[], tamano: number): T[][] {
 
 export async function sincronizarSeguros(): Promise<{ emitidos: number; novedades: number }> {
   const supabase = createAdminClient()
-  const { data: config } = await supabase.from('seguros_config').select('activo, activado_at').eq('id', 1).single()
+  const { data: config, error: errorConfig } = await supabase
+    .from('seguros_config')
+    .select('activo, activado_at')
+    .eq('id', 1)
+    .single()
+  if (errorConfig) throw new Error(errorConfig.message)
 
   if (!config?.activo || !config.activado_at) return { emitidos: 0, novedades: 0 }
 
@@ -106,7 +117,10 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
   // 1) Ventas nuevas desde la activación → certificados nuevos (emitidos o pendientes).
   const ventas = await fetchVentasAsegurables(config.activado_at)
 
-  const { data: existentesRows } = await supabase.from('seguros_certificados').select('gocuotas_order_id')
+  const { data: existentesRows, error: errorExistentes } = await supabase
+    .from('seguros_certificados')
+    .select('gocuotas_order_id')
+  if (errorExistentes) throw new Error(errorExistentes.message)
   const ordenesExistentes = new Set((existentesRows ?? []).map((r) => r.gocuotas_order_id as string))
 
   const productos = await getProductosCelularesConPrecio()
@@ -150,10 +164,11 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
   }
 
   // 2) Certificados pendientes: reintentar costo (lista o imei) y emitir.
-  const { data: pendientesRows } = await supabase
+  const { data: pendientesRows, error: errorPendientes } = await supabase
     .from('seguros_certificados')
     .select('id, articulo, imei')
     .eq('estado', 'pendiente')
+  if (errorPendientes) throw new Error(errorPendientes.message)
 
   const pendientes = pendientesRows ?? []
   if (pendientes.length > 0) {
@@ -185,9 +200,10 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
   }
 
   // 3) Novedades de ciclo de vida: cambio de IMEI, anulación por descarte o contracargo.
-  const { data: certsActualesRows } = await supabase
+  const { data: certsActualesRows, error: errorCertsActuales } = await supabase
     .from('seguros_certificados')
     .select('id, gocuotas_order_id, imei, fecha_anula, fecha_siniestro')
+  if (errorCertsActuales) throw new Error(errorCertsActuales.message)
 
   const certsActuales: CertActual[] = (certsActualesRows ?? []).map((c) => ({
     id: c.id as string,

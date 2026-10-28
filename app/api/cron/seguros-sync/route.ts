@@ -14,6 +14,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const resultado = await sincronizarSeguros()
-  return NextResponse.json(resultado, { status: 200 })
+  try {
+    const resultado = await sincronizarSeguros()
+    return NextResponse.json({ ok: true, ...resultado }, { status: 200 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
+  }
 }

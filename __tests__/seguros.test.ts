@@ -170,6 +170,30 @@ describe('prepararCertificados', () => {
     expect(c.domicilio).toBe('Av. X 123')
   })
 
+  it('linkedAt formato pg (espacio) posterior a activadoAt ISO (T) el mismo día: SÍ genera certificado', () => {
+    // Regresión: comparar como string haría ' ' (0x20) < 'T' (0x54) y perdería
+    // en silencio toda venta vinculada el mismo día de la activación.
+    const certs = prepararCertificados(
+      [venta({ linkedAt: '2026-10-28 15:02:13.064+00' })],
+      new Set(),
+      new Map(),
+      new Map(),
+      '2026-10-28T12:00:00+00:00',
+    )
+    expect(certs).toHaveLength(1)
+  })
+
+  it('linkedAt formato pg (espacio) anterior a activadoAt ISO (T) el mismo día: NO genera certificado', () => {
+    const certs = prepararCertificados(
+      [venta({ linkedAt: '2026-10-28 09:00:00.000+00' })],
+      new Set(),
+      new Map(),
+      new Map(),
+      '2026-10-28T12:00:00+00:00',
+    )
+    expect(certs).toHaveLength(0)
+  })
+
   it('venta sin DNI: dni queda null, el resto del certificado se genera igual', () => {
     const [c] = prepararCertificados(
       [venta({ dni: null })],

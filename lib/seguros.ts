@@ -101,6 +101,37 @@ function resolverCosto(
 }
 
 /**
+ * Timestamp con separador espacio ("2026-10-22 18:25:58.527+00", formato nativo
+ * de pg — así vienen linkedAt/orderCreatedAt desde lib/gocelular.ts) u 'T' ISO
+ * ("2026-10-28T12:00:00+00:00", formato de PostgREST/Supabase — así viene
+ * activadoAt), con o sin fracción de segundos y con offset "+00"/"+00:00"/"Z".
+ * Parseo manual (no delega en el parser nativo de Date, cuyo soporte de
+ * "T"+offset sin colon es inconsistente) para poder comparar dos timestamps de
+ * fuentes distintas de forma numérica y no por orden lexicográfico de string:
+ * con comparación de string, ' ' (0x20) < 'T' (0x54) hace que CUALQUIER
+ * linkedAt del mismo día que la activación compare como "anterior" para
+ * siempre, perdiendo certificados en silencio.
+ */
+const TS_REGEX = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*(Z|[+-]\d{2}:?\d{0,2})?$/
+
+export function aEpocaMs(timestamp: string): number {
+  const m = TS_REGEX.exec(timestamp.trim())
+  if (!m) return new Date(timestamp).getTime() // fallback defensivo, no debería pasar con los formatos esperados
+  const [, y, mo, d, h, mi, s, fracRaw, offRaw] = m
+  const ms = fracRaw ? Math.round(Number(`0.${fracRaw}`) * 1000) : 0
+  let offsetMin = 0
+  if (offRaw && offRaw !== 'Z') {
+    const signo = offRaw[0] === '-' ? -1 : 1
+    const digitos = offRaw.slice(1).replace(':', '')
+    const offH = Number(digitos.slice(0, 2))
+    const offM = Number(digitos.slice(2, 4) || '0')
+    offsetMin = signo * (offH * 60 + offM)
+  }
+  const utcMs = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s), ms)
+  return utcMs - offsetMin * 60000
+}
+
+/**
  * Prepara los certificados a emitir para las ventas vinculadas nuevas: filtra las
  * que ya tienen certificado (idempotencia) y las vinculadas antes de activar el
  * seguro, resuelve costo/suma asegurada y calcula la vigencia (9 meses desde el
@@ -115,7 +146,7 @@ export function prepararCertificados(
 ): CertificadoNuevo[] {
   return ventas
     .filter(v => !ordenesExistentes.has(v.gocuotasOrderId))
-    .filter(v => v.linkedAt >= activadoAt)
+    .filter(v => aEpocaMs(v.linkedAt) >= aEpocaMs(activadoAt))
     .map(v => {
       const { costoSinIva, costoFuente } = resolverCosto(v, costosPorClave, costoPorImei)
       const sumaAsegurada = costoSinIva !== null ? redondear2(costoSinIva * (1 + MARGEN_SUMA_ASEGURADA)) : null
