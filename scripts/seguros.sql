@@ -158,13 +158,19 @@ $$;
 -- seguros_emitir_pendiente: completa un certificado que había quedado
 -- pendiente (sin costo/suma determinados al momento de la venta). Asigna el
 -- siguiente número bajo el mismo advisory lock que seguros_emitir y pasa el
--- estado a 'emitido'.
+-- estado a 'emitido'. Guardado por estado = 'pendiente': si el cert_id no
+-- existe o ya fue emitido, el UPDATE no afecta filas y la función devuelve
+-- false sin tocar numero/costo/suma (evita doble emisión / número huérfano
+-- en llamadas repetidas o con id inválido).
+DROP FUNCTION IF EXISTS seguros_emitir_pendiente(uuid, numeric, numeric, text);
+
 CREATE OR REPLACE FUNCTION seguros_emitir_pendiente(cert_id uuid, costo numeric, suma numeric, fuente text)
-RETURNS void
+RETURNS boolean
 LANGUAGE plpgsql
 AS $$
 DECLARE
   next_numero int;
+  filas_afectadas int;
 BEGIN
   PERFORM pg_advisory_xact_lock(815001);
 
@@ -177,6 +183,9 @@ BEGIN
       costo_fuente = fuente,
       estado = 'emitido',
       updated_at = now()
-  WHERE id = cert_id;
+  WHERE id = cert_id AND estado = 'pendiente';
+
+  GET DIAGNOSTICS filas_afectadas = ROW_COUNT;
+  RETURN filas_afectadas > 0;
 END;
 $$;
