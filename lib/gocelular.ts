@@ -2,6 +2,7 @@ import { getPool, getGocuotasPool } from './db-pool'
 import type { VentaMensualDim, PuntoMensual } from './proyeccion-ventas'
 import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS, CLIENTES_TODOS, sqlCondicionClientes, type FiltroClientes } from './client-ids'
 import type { OrdenDeDni } from './arrepentimientos'
+import type { VentaAsegurable } from './seguros'
 
 export { CLIENT_IDS_PROPIOS }
 
@@ -3365,6 +3366,239 @@ export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPrepara
       })),
       disponiblesPorNombre: stockRes.rows.map((r) => ({ nombre: r.nombre, disponibles: Number(r.disponibles) })),
     }
+  } finally {
+    client.release()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// --- Seguros ---
+// Seguro por robo: ventas asegurables (link GOcelular↔GOcuotas) y novedades
+// de ciclo de vida de los certificados ya emitidos. Lógica pura en
+// lib/seguros.ts; estos fetchers solo traen datos crudos de la réplica
+// (`getPool()`) y de la base directa de GOcuotas (`getGocuotasPool()`).
+// ---------------------------------------------------------------------------
+
+/**
+ * Ventas con asignación de IMEI vigente y lista para control (listas para
+ * asegurar), vinculadas desde `desdeISO` en adelante. El JOIN a
+ * `store_orders` ya limita el universo a tienda propia (las órdenes de
+ * terceros/consignación no tienen fila en `store_orders`).
+ */
+export async function fetchVentasAsegurables(desdeISO: string): Promise<VentaAsegurable[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{
+      gocuotas_order_id: string
+      store_order_id: string
+      pedido_numero: string
+      linked_at: string
+      order_created_at: string
+      imei: string
+      dni: string | null
+      cliente: string | null
+      shipping_street: string | null
+      shipping_number: string | null
+      shipping_floor: string | null
+      shipping_apartment: string | null
+      branch_address: string | null
+      cp: string | null
+      localidad: string | null
+      articulo: string
+    }>(
+      `SELECT oda.order_id AS gocuotas_order_id,
+              so.id::text AS store_order_id,
+              so.order_number AS pedido_numero,
+              oda.linked_at::text AS linked_at,
+              go.order_created_at::text AS order_created_at,
+              oda.imei AS imei,
+              so.customer_dni AS dni,
+              so.customer_name AS cliente,
+              so.shipping_street AS shipping_street,
+              so.shipping_number AS shipping_number,
+              so.shipping_floor AS shipping_floor,
+              so.shipping_apartment AS shipping_apartment,
+              so.shipping_branch_address AS branch_address,
+              so.shipping_postal_code AS cp,
+              so.shipping_city AS localidad,
+              so.product_name AS articulo
+       FROM order_device_assignments oda
+       JOIN gocuotas_orders go ON go.order_id = oda.order_id
+       JOIN store_orders so ON so.gocuotas_order_id = oda.order_id
+       WHERE oda.state = 'ready_for_control'
+         AND oda.unlinked_at IS NULL
+         AND length(oda.imei) = 15
+         AND oda.linked_at >= $1`,
+      [desdeISO]
+    )
+    return res.rows.map((r) => ({
+      gocuotasOrderId: r.gocuotas_order_id,
+      storeOrderId: r.store_order_id,
+      pedidoNumero: r.pedido_numero,
+      linkedAt: r.linked_at,
+      orderCreatedAt: r.order_created_at,
+      imei: r.imei,
+      dni: r.dni,
+      cliente: r.cliente,
+      shippingStreet: r.shipping_street,
+      shippingNumber: r.shipping_number,
+      shippingFloor: r.shipping_floor,
+      shippingApartment: r.shipping_apartment,
+      branchAddress: r.branch_address,
+      cp: r.cp,
+      localidad: r.localidad,
+      articulo: r.articulo,
+    }))
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * IMEI de la asignación vigente (no desvinculada) por order_id. Si una orden
+ * tuviera más de una asignación vigente (no debería pasar en operación
+ * normal), gana la de `linked_at` más reciente.
+ */
+export async function fetchImeiActualPorOrden(orderIds: string[]): Promise<Map<string, string>> {
+  const pool = getPool()
+  if (!pool || orderIds.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ order_id: string; imei: string }>(
+      `SELECT DISTINCT ON (order_id) order_id, imei
+       FROM order_device_assignments
+       WHERE order_id = ANY($1) AND unlinked_at IS NULL
+       ORDER BY order_id, linked_at DESC`,
+      [orderIds]
+    )
+    return new Map(res.rows.map((r) => [r.order_id, r.imei]))
+  } finally {
+    client.release()
+  }
+}
+
+/** Órdenes descartadas (de las dadas) con la fecha de descarte. */
+export async function fetchOrdenesDescartadas(orderIds: string[]): Promise<Map<string, string>> {
+  const pool = getPool()
+  if (!pool || orderIds.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ order_id: string; fecha: string }>(
+      `SELECT order_id, order_discarded_at::date::text AS fecha
+       FROM gocuotas_orders
+       WHERE order_id = ANY($1) AND order_discarded_at IS NOT NULL`,
+      [orderIds]
+    )
+    return new Map(res.rows.map((r) => [r.order_id, r.fecha]))
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Órdenes de GOcelular con contracargo, con la fecha del primer chargeback.
+ * Misma base/joins que `fetchOrderIdsConContracargo` (base directa de
+ * GOcuotas, tiendas `LIKE '%gocelular%'`), agregando `MIN(created_at)`.
+ */
+export async function fetchContracargosConFecha(): Promise<Map<string, string>> {
+  const gocuotasPool = getGocuotasPool()
+  if (!gocuotasPool) return new Map()
+
+  const client = await gocuotasPool.connect()
+  try {
+    const res = await client.query<{ order_id: string; fecha: string }>(
+      `SELECT o.id AS order_id, MIN(c.created_at)::date::text AS fecha
+       FROM chargebacks c
+       JOIN installments i ON c.chargebackeable_id = i.id AND c.chargebackeable_type = 'Installment'
+       JOIN orders o ON i.order_id = o.id
+       WHERE o.store_id IN (SELECT id FROM stores WHERE LOWER(name) LIKE '%gocelular%')
+       GROUP BY o.id`
+    )
+    return new Map(res.rows.map((r) => [String(r.order_id), r.fecha]))
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Factura B autorizada por orden (una por orden, la más vieja). Prefiere
+ * `invoice_scope = 'device'` sobre `'order'` cuando existen las dos.
+ */
+export async function fetchFacturasBPorOrden(
+  orderIds: string[]
+): Promise<Map<string, { numero: string; fecha: string }>> {
+  const pool = getPool()
+  if (!pool || orderIds.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ gocuotas_order_id: string; numero: string; fecha: string }>(
+      `SELECT DISTINCT ON (gocuotas_order_id)
+              gocuotas_order_id,
+              invoice_number AS numero,
+              authorized_at::date::text AS fecha
+       FROM invoices
+       WHERE type::text = 'factura_b'
+         AND status::text = 'authorized'
+         AND gocuotas_order_id = ANY($1)
+         AND invoice_scope IN ('device', 'order')
+       ORDER BY gocuotas_order_id,
+                (CASE WHEN invoice_scope = 'device' THEN 0 ELSE 1 END),
+                authorized_at ASC`,
+      [orderIds]
+    )
+    return new Map(res.rows.map((r) => [r.gocuotas_order_id, { numero: r.numero, fecha: r.fecha }]))
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Estado de mora de una orden: hay mora si existe una cuota vencida, no
+ * cobrada y no descartada. `diasMaximos` es el peor atraso entre esas cuotas.
+ */
+export async function fetchCuotasMora(orderId: string): Promise<{ enMora: boolean; diasMaximos: number }> {
+  const pool = getPool()
+  if (!pool) return { enMora: false, diasMaximos: 0 }
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ dias_maximos: number | null }>(
+      `SELECT MAX(days_overdue) AS dias_maximos
+       FROM gocuotas_installments
+       WHERE order_id = $1
+         AND installment_due_at < now()
+         AND installment_collected_at IS NULL
+         AND installment_discarded_at IS NULL`,
+      [orderId]
+    )
+    const diasMaximos = res.rows[0]?.dias_maximos
+    if (diasMaximos === null || diasMaximos === undefined) return { enMora: false, diasMaximos: 0 }
+    return { enMora: true, diasMaximos: Number(diasMaximos) }
+  } finally {
+    client.release()
+  }
+}
+
+/** Costo (`inventory_items.price`, sin IVA) por IMEI — fallback cuando no hay costo por modelo. */
+export async function fetchCostoPorImei(imeis: string[]): Promise<Map<string, number>> {
+  const pool = getPool()
+  if (!pool || imeis.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ imei: string; price: string | null }>(
+      `SELECT imei, price
+       FROM inventory_items
+       WHERE imei = ANY($1) AND price IS NOT NULL`,
+      [imeis]
+    )
+    return new Map(res.rows.filter((r) => r.price !== null).map((r) => [r.imei, Number(r.price)]))
   } finally {
     client.release()
   }
