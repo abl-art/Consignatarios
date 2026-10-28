@@ -115,7 +115,18 @@ export default async function SegurosPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-full mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Seguros por Robo</h1>
+      <div className="flex items-center gap-3 mb-1">
+        <h1 className="text-2xl font-bold text-gray-900">Seguros por Robo</h1>
+        <a
+          href="/seguros/manual"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 hover:bg-violet-100"
+          title="Activar el seguro, leer certificados, el Excel del broker, cambiar los % y el circuito de siniestro — con capturas"
+        >
+          📖 Manual operativo
+        </a>
+      </div>
       <p className="text-sm text-gray-500 mb-6">Certificados, prima mensual y resultado del seguro por robo</p>
 
       {(syncError || certificadosError || siniestrosError) && (

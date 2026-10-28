@@ -14,6 +14,7 @@ const nextConfig = {
       '/compras/envios/manual': ['./docs/manual-envios-posventa/manual-inline.html'],
       '/compras/manual': ['./docs/manual-compras/manual-inline.html'],
       '/canales/tienda/imagenes/manual': ['./docs/manual-imagenes-tienda/manual-inline.html'],
+      '/seguros/manual': ['./docs/manual-seguros/manual-inline.html'],
       '/grupo-go/pnl': ['./docs/pnl-mensual-gocuotas/pnl-mensual.html'],
     },
   },
