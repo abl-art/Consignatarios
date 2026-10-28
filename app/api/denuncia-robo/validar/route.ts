@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { TOKEN_DENUNCIA, normalizarDni } from '@/lib/seguros'
+import { esCertificadoVigente } from '@/lib/denuncia-robo'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,9 +38,13 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
   const hoy = new Date().toISOString().slice(0, 10)
+  // El filtro de vigencia se aplica dos veces a propósito: en la query (por
+  // performance/índices) y de nuevo en JS con `esCertificadoVigente` — la
+  // misma función pura que usa el POST de creación, para que la definición
+  // de "vigente" nunca pueda divergir entre los dos endpoints.
   const { data, error } = await supabase
     .from('seguros_certificados')
-    .select('id, dni, articulo, inicio_vig')
+    .select('id, dni, articulo, inicio_vig, estado, fecha_anula, fecha_siniestro, fin_vig')
     .eq('estado', 'emitido')
     .is('fecha_anula', null)
     .is('fecha_siniestro', null)
@@ -51,7 +56,13 @@ export async function POST(request: NextRequest) {
   }
 
   const matches = (data ?? []).filter(
-    (c) => c.dni !== null && normalizarDni(c.dni) === dniNormalizado
+    (c) =>
+      esCertificadoVigente(
+        { estado: c.estado, fechaAnula: c.fecha_anula, fechaSiniestro: c.fecha_siniestro, finVig: c.fin_vig },
+        hoy
+      ) &&
+      c.dni !== null &&
+      normalizarDni(c.dni) === dniNormalizado
   )
 
   if (matches.length === 0) {

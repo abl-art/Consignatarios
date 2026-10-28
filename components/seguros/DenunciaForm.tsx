@@ -9,6 +9,12 @@ type Paso = 'dni' | 'elegir' | 'archivo' | 'enviado'
 const EXTENSIONES_ACEPTADAS = '.jpg,.jpeg,.png,.pdf'
 const MAX_BYTES = 10 * 1024 * 1024
 
+/** "2026-09-28" -> "28/09/2026". Formateo manual (no Date) para no arrastrar timezone sobre una fecha sin hora. */
+function formatearFechaCorta(fechaIso: string): string {
+  const [y, m, d] = fechaIso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
 /**
  * Flujo del cliente final: DNI → validar (matchea contra certificados
  * vigentes) → elegir la compra si hay más de una → adjuntar foto/PDF →
@@ -140,7 +146,7 @@ export default function DenunciaForm({ token }: { token: string }) {
                 className="w-full text-left border border-gray-300 rounded-lg px-3 py-2.5 text-sm hover:bg-gray-50"
               >
                 <span className="font-medium text-gray-900 block">{c.articulo}</span>
-                <span className="block text-xs text-gray-500">Comprado el {c.fechaCompra}</span>
+                <span className="block text-xs text-gray-500">Comprado el {formatearFechaCorta(c.fechaCompra)}</span>
               </button>
             ))}
           </div>
