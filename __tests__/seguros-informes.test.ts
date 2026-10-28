@@ -2,9 +2,41 @@ import { describe, it, expect } from 'vitest'
 import {
   devengoMensual,
   tasaSiniestralidad,
+  COLUMNAS_BROKER,
+  filasBroker,
   type CertDevengo,
   type ParametroPct,
 } from '@/lib/seguros-informes'
+import type { CertificadoRow } from '@/lib/actions/seguros'
+
+function certBroker(over: Partial<CertificadoRow> = {}): CertificadoRow {
+  return {
+    id: 'cert-1',
+    numero: 1,
+    gocuotasOrderId: 'go-1',
+    storeOrderId: 'store-1',
+    pedidoNumero: 'PED-1',
+    dni: '12345678',
+    cliente: 'Perez Juan',
+    domicilio: 'Calle Falsa 123',
+    cp: '1000',
+    localidad: 'CABA',
+    articulo: 'Motorola Moto G06 4/64GB',
+    imei: '350000000000001',
+    costoSinIva: 242000,
+    sumaAsegurada: 266200,
+    costoFuente: 'lista',
+    inicioVig: '2026-10-15',
+    finVig: '2027-07-15',
+    fechaAnula: null,
+    motivoAnula: null,
+    fechaSiniestro: null,
+    estado: 'emitido',
+    createdAt: '2026-10-15T00:00:00Z',
+    updatedAt: '2026-10-15T00:00:00Z',
+    ...over,
+  }
+}
 
 function certDevengo(over: Partial<CertDevengo> = {}): CertDevengo {
   return {
@@ -175,5 +207,108 @@ describe('tasaSiniestralidad', () => {
 
   it('sin emitidos: tasaPct 0, sin división por cero', () => {
     expect(tasaSiniestralidad([])).toEqual({ emitidos: 0, siniestrados: 0, tasaPct: 0 })
+  })
+})
+
+describe('COLUMNAS_BROKER', () => {
+  it('encabezado exacto de 19 columnas, en orden', () => {
+    expect(COLUMNAS_BROKER).toEqual([
+      'N° certificado ',
+      'Tipo ',
+      'Nº Documento',
+      'Cliente (Apellido y Nombre)',
+      'Domicilio',
+      'Codigo Postal',
+      'Localidad',
+      'Articulo (Descripcion, marca, modelo)',
+      'IMEI',
+      'SUMA ASEGURADA',
+      'Fecha Factura',
+      'Fecha Anula',
+      'Inicio Vig',
+      'Fin Vig',
+      'Tipo de comprobante (fac A/B - NC A/B)',
+      'Nº Factura',
+      'Fecha Siniestro',
+      'N° Orden GOcuotas',
+      'N° Pedido GOcelular',
+    ])
+    expect(COLUMNAS_BROKER).toHaveLength(19)
+  })
+})
+
+describe('filasBroker', () => {
+  it('fila completa con factura: Tipo DNI, comprobante Factura B, fechas DD/MM/YYYY', () => {
+    const cert = certBroker()
+    const facturas = new Map([['go-1', { numero: 'FB-001', fecha: '2026-10-16' }]])
+
+    const filas = filasBroker([cert], facturas)
+
+    expect(filas).toEqual([[
+      1,
+      'DNI',
+      '12345678',
+      'Perez Juan',
+      'Calle Falsa 123',
+      '1000',
+      'CABA',
+      'Motorola Moto G06 4/64GB',
+      '350000000000001',
+      266200,
+      '16/10/2026',
+      null,
+      '15/10/2026',
+      '15/07/2027',
+      'Factura B',
+      'FB-001',
+      null,
+      'go-1',
+      'PED-1',
+    ]])
+  })
+
+  it('cert sin factura: Fecha Factura (col 11) y Nº Factura (col 16) en null', () => {
+    const cert = certBroker()
+
+    const filas = filasBroker([cert], new Map())
+
+    expect(filas[0][10]).toBeNull()
+    expect(filas[0][15]).toBeNull()
+  })
+
+  it('cert estado pendiente: excluido del reporte', () => {
+    const pendiente = certBroker({ estado: 'pendiente', numero: null, gocuotasOrderId: 'go-pend' })
+    const emitido = certBroker({ numero: 2, gocuotasOrderId: 'go-2' })
+
+    const filas = filasBroker([pendiente, emitido], new Map())
+
+    expect(filas).toHaveLength(1)
+    expect(filas[0][17]).toBe('go-2')
+  })
+
+  it('cert anulado: incluido, con su Fecha Anula (col 12) formateada', () => {
+    const anulado = certBroker({ fechaAnula: '2026-11-03', motivoAnula: 'descartada' })
+
+    const filas = filasBroker([anulado], new Map())
+
+    expect(filas).toHaveLength(1)
+    expect(filas[0][11]).toBe('03/11/2026')
+  })
+
+  it('cert con siniestro: Fecha Siniestro (col 17) formateada; sin siniestro, null', () => {
+    const siniestrado = certBroker({ fechaSiniestro: '2026-12-20' })
+    const sinSiniestro = certBroker({ numero: 2, gocuotasOrderId: 'go-2' })
+
+    expect(filasBroker([siniestrado], new Map())[0][16]).toBe('20/12/2026')
+    expect(filasBroker([sinSiniestro], new Map())[0][16]).toBeNull()
+  })
+
+  it('ordena las filas por numero ascendente', () => {
+    const c2 = certBroker({ numero: 2, gocuotasOrderId: 'go-2' })
+    const c1 = certBroker({ numero: 1, gocuotasOrderId: 'go-1' })
+
+    const filas = filasBroker([c2, c1], new Map())
+
+    expect(filas.map(f => f[0])).toEqual([1, 2])
   })
 })

@@ -1,6 +1,9 @@
 // Seguro por robo: informes de devengo mensual (prima/ingreso/resultado) y
-// siniestralidad sobre los certificados ya emitidos (lib/seguros.ts). Lógica
-// pura: recibe certificados y parámetros de tasa, no toca la base.
+// siniestralidad sobre los certificados ya emitidos (lib/seguros.ts), más el
+// export de las 19 columnas que consume el broker. Lógica pura: recibe
+// certificados y parámetros de tasa, no toca la base.
+
+import type { CertificadoRow } from '@/lib/actions/seguros'
 
 /** Redondeo estándar a 2 decimales, evitando el drift de punto flotante. */
 function redondear2(n: number): number {
@@ -145,4 +148,82 @@ export function tasaSiniestralidad(
   const siniestrados = emitidos.filter(c => c.fechaSiniestro !== null).length
   const tasaPct = emitidos.length === 0 ? 0 : redondear2((siniestrados / emitidos.length) * 100)
   return { emitidos: emitidos.length, siniestrados, tasaPct }
+}
+
+// ---------------------------------------------------------------------------
+// Export Excel del broker
+// ---------------------------------------------------------------------------
+
+/** 'YYYY-MM-DD' → 'DD/MM/YYYY': reordenamiento de string puro, sin pasar por Date. */
+function aFechaDDMMYYYY(fecha: string): string {
+  const [anio, mes, dia] = fecha.split('-')
+  return `${dia}/${mes}/${anio}`
+}
+
+const TIPO_DOCUMENTO = 'DNI'
+const TIPO_COMPROBANTE = 'Factura B'
+
+/** Encabezado exacto (19 columnas, en este orden) que espera el broker del seguro por robo. */
+export const COLUMNAS_BROKER: string[] = [
+  'N° certificado ',
+  'Tipo ',
+  'Nº Documento',
+  'Cliente (Apellido y Nombre)',
+  'Domicilio',
+  'Codigo Postal',
+  'Localidad',
+  'Articulo (Descripcion, marca, modelo)',
+  'IMEI',
+  'SUMA ASEGURADA',
+  'Fecha Factura',
+  'Fecha Anula',
+  'Inicio Vig',
+  'Fin Vig',
+  'Tipo de comprobante (fac A/B - NC A/B)',
+  'Nº Factura',
+  'Fecha Siniestro',
+  'N° Orden GOcuotas',
+  'N° Pedido GOcelular',
+]
+
+/**
+ * Filas del export del broker: un certificado por fila, en las 19 columnas de
+ * COLUMNAS_BROKER. Los certificados 'pendiente' (sin póliza emitida todavía)
+ * se excluyen; los anulados se incluyen con su Fecha Anula. `facturas` mapea
+ * gocuotas_order_id → factura B autorizada (ver fetchFacturasBPorOrden); si un
+ * certificado no tiene factura, Fecha Factura y Nº Factura van en null. Las
+ * filas salen ordenadas por número de certificado ascendente.
+ */
+export function filasBroker(
+  certs: CertificadoRow[],
+  facturas: Map<string, { numero: string; fecha: string }>,
+): (string | number | null)[][] {
+  return certs
+    .filter(c => c.estado !== 'pendiente')
+    .slice()
+    .sort((a, b) => (a.numero ?? Infinity) - (b.numero ?? Infinity))
+    .map(c => {
+      const factura = facturas.get(c.gocuotasOrderId) ?? null
+      return [
+        c.numero,
+        TIPO_DOCUMENTO,
+        c.dni,
+        c.cliente,
+        c.domicilio,
+        c.cp,
+        c.localidad,
+        c.articulo,
+        c.imei,
+        c.sumaAsegurada,
+        factura ? aFechaDDMMYYYY(factura.fecha) : null,
+        c.fechaAnula ? aFechaDDMMYYYY(c.fechaAnula) : null,
+        aFechaDDMMYYYY(c.inicioVig),
+        aFechaDDMMYYYY(c.finVig),
+        TIPO_COMPROBANTE,
+        factura ? factura.numero : null,
+        c.fechaSiniestro ? aFechaDDMMYYYY(c.fechaSiniestro) : null,
+        c.gocuotasOrderId,
+        c.pedidoNumero,
+      ]
+    })
 }
