@@ -55,7 +55,13 @@ function finEfectivo(c: CertDevengo): string {
   return candidatas.reduce((min, d) => (d < min ? d : min))
 }
 
-/** Porcentaje vigente para un mes dado: el parámetro con mayor vigenteDesde <= ese mes. Lista de entrada puede venir sin ordenar. */
+/**
+ * Porcentaje vigente para un mes dado: el parámetro con mayor vigenteDesde <= ese
+ * mes. Lista de entrada puede venir sin ordenar. Si el mes es anterior a TODOS los
+ * tramos (gap de configuración, ej. no se cargó la tasa vigente al momento de la
+ * emisión), devuelve 0% a propósito — "sin tramo cargado" nunca debe trabar el
+ * informe ni inflar un monto; simplemente no devenga nada ese mes.
+ */
 function pctVigente(params: ParametroPct[], mes: string): number {
   let mejor: ParametroPct | null = null
   for (const p of params) {

@@ -107,6 +107,41 @@ describe('devengoMensual', () => {
     expect(dic.prima).toBe(1800) // 100000 * 1.8%
   })
 
+  it('mes anterior a todos los tramos: 0% por fallback (gap de configuración), el mes siguiente ya cubierto devenga normal', () => {
+    const cert = certDevengo({
+      inicioVig: '2026-09-01', // un mes antes del primer tramo de prima/ingreso
+      finVig: '2027-07-01',
+      sumaAsegurada: 100000,
+      costoSinIva: 100000,
+    })
+    const primas: ParametroPct[] = [{ porcentaje: 2, vigenteDesde: '2026-10' }]
+    const ingresos: ParametroPct[] = [{ porcentaje: 3, vigenteDesde: '2026-10' }]
+
+    const resultado = devengoMensual([cert], primas, ingresos, '2026-10')
+
+    const sep = resultado.find(m => m.mes === '2026-09')!
+    const oct = resultado.find(m => m.mes === '2026-10')!
+    expect(sep.certificados).toBe(1) // vigente, pero sin tramo cargado todavía
+    expect(sep.prima).toBe(0)
+    expect(sep.ingreso).toBe(0)
+    expect(oct.prima).toBe(2000) // 100000 * 2%, ya con el tramo vigente
+    expect(oct.ingreso).toBe(3000) // 100000 * 3%
+  })
+
+  it('fechaAnula en el mismo mes que inicioVig: devenga exactamente 1 mes', () => {
+    const cert = certDevengo({
+      inicioVig: '2026-10-01',
+      fechaAnula: '2026-10-20',
+      finVig: '2027-07-01',
+    })
+
+    const resultado = devengoMensual([cert], PRIMA_2, INGRESO_3, '2026-11')
+
+    expect(resultado.map(m => m.mes)).toEqual(['2026-10', '2026-11'])
+    expect(resultado[0].certificados).toBe(1)
+    expect(resultado[1].certificados).toBe(0)
+  })
+
   it('certificados con estado pendiente no devengan (no cuentan ni para los meses ni para los montos)', () => {
     const pendiente = certDevengo({ estado: 'pendiente', inicioVig: '2026-08-01', finVig: '2026-08-31' })
     const vigente = certDevengo({ inicioVig: '2026-10-01', finVig: '2026-10-31' })
