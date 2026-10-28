@@ -49,6 +49,9 @@ export type CertificadoNuevo = {
   estado: 'emitido' | 'pendiente'
 }
 
+/** Token de acceso del formulario público de denuncias (/denuncia-robo), mismo patrón que /catalogo. */
+export const TOKEN_DENUNCIA = 'denuncia2026go'
+
 /** Solo dígitos, sin ceros a la izquierda (conserva al menos un dígito). */
 export function normalizarDni(dni: string): string {
   const soloDigitos = dni.replace(/\D/g, '')
