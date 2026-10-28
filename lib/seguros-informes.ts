@@ -59,17 +59,29 @@ function finEfectivo(c: CertDevengo): string {
 }
 
 /**
- * Porcentaje vigente para un mes dado: el parámetro con mayor vigenteDesde <= ese
- * mes. Lista de entrada puede venir sin ordenar. Si el mes es anterior a TODOS los
- * tramos (gap de configuración, ej. no se cargó la tasa vigente al momento de la
- * emisión), devuelve 0% a propósito — "sin tramo cargado" nunca debe trabar el
- * informe ni inflar un monto; simplemente no devenga nada ese mes.
+ * Porcentaje vigente para un mes dado: entre los parámetros cuyo mes de
+ * vigencia (aMes(vigenteDesde)) es <= ese mes, gana el de mayor vigenteDesde
+ * COMPLETO (comparación de string 'YYYY-MM-DD', no solo el mes). El % sigue
+ * rigiendo para todo el mes calendario de su vigenteDesde — un tramo que
+ * arranca a mitad de mes aplica igual desde el día 1 de ese mes; eso no
+ * cambia. Lo que sí importa es el desempate entre dos tramos del MISMO mes
+ * calendario (ej. una corrección de un % tipeado mal, cargada unos días
+ * después con una vigenteDesde distinta pero el mismo mes): antes el
+ * desempate era por mes (`aMes`), así que el tramo más viejo ganaba para
+ * siempre y la corrección nunca se aplicaba aunque ambos chips se vieran en
+ * la UI. Ahora gana el de vigenteDesde completo más reciente. Empate en
+ * vigenteDesde completo idéntico: gana el último de la lista de entrada
+ * (last-written wins) — lista de entrada puede venir sin ordenar. Si el mes
+ * es anterior a TODOS los tramos (gap de configuración, ej. no se cargó la
+ * tasa vigente al momento de la emisión), devuelve 0% a propósito — "sin
+ * tramo cargado" nunca debe trabar el informe ni inflar un monto; simplemente
+ * no devenga nada ese mes.
  */
 function pctVigente(params: ParametroPct[], mes: string): number {
   let mejor: ParametroPct | null = null
   for (const p of params) {
-    const desde = aMes(p.vigenteDesde)
-    if (compararMeses(desde, mes) <= 0 && (mejor === null || compararMeses(desde, aMes(mejor.vigenteDesde)) > 0)) {
+    if (compararMeses(aMes(p.vigenteDesde), mes) > 0) continue
+    if (mejor === null || p.vigenteDesde >= mejor.vigenteDesde) {
       mejor = p
     }
   }

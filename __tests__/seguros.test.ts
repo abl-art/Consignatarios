@@ -6,6 +6,7 @@ import {
   armarDomicilio,
   prepararCertificados,
   novedadesDeCertificados,
+  fechaRoboEnRango,
   type VentaAsegurable,
   type CertActual,
 } from '@/lib/seguros'
@@ -271,5 +272,24 @@ describe('novedadesDeCertificados', () => {
   it('sin cambios: []', () => {
     const novedades = novedadesDeCertificados([cert()], new Map(), new Map(), new Map())
     expect(novedades).toEqual([])
+  })
+})
+
+describe('fechaRoboEnRango', () => {
+  it('fechaRobo dentro de la vigencia y no futura: true', () => {
+    expect(fechaRoboEnRango('2026-10-01', '2026-10-15', '2026-10-28')).toBe(true)
+  })
+
+  it('fechaRobo anterior al inicio de vigencia: false', () => {
+    expect(fechaRoboEnRango('2026-10-01', '2026-09-30', '2026-10-28')).toBe(false)
+  })
+
+  it('fechaRobo futura (posterior a hoy): false', () => {
+    expect(fechaRoboEnRango('2026-10-01', '2026-11-01', '2026-10-28')).toBe(false)
+  })
+
+  it('extremos inclusive: igual al inicio de vigencia o igual a hoy son válidos', () => {
+    expect(fechaRoboEnRango('2026-10-01', '2026-10-01', '2026-10-28')).toBe(true)
+    expect(fechaRoboEnRango('2026-10-01', '2026-10-28', '2026-10-28')).toBe(true)
   })
 })

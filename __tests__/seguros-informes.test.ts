@@ -139,6 +139,28 @@ describe('devengoMensual', () => {
     expect(dic.prima).toBe(1800) // 100000 * 1.8%
   })
 
+  it('corrección en el mismo mes calendario: tramo 2.5 vigente 2026-11-03 y tramo 2.2 vigente 2026-11-15 → noviembre Y diciembre usan 2.2 (gana el vigenteDesde completo más reciente, no el más viejo del mismo mes)', () => {
+    const primas: ParametroPct[] = [
+      { porcentaje: 2.5, vigenteDesde: '2026-11-03' },
+      { porcentaje: 2.2, vigenteDesde: '2026-11-15' },
+    ]
+    const cert = certDevengo({
+      inicioVig: '2026-11-01',
+      finVig: '2027-07-01',
+      sumaAsegurada: 100000,
+      costoSinIva: 100000,
+    })
+
+    const resultado = devengoMensual([cert], primas, [{ porcentaje: 0, vigenteDesde: '2026-01' }], '2026-12')
+
+    const nov = resultado.find(m => m.mes === '2026-11')!
+    const dic = resultado.find(m => m.mes === '2026-12')!
+    // la corrección rige para TODO noviembre (el tramo arranca a mitad de
+    // mes pero el % gobierna el mes calendario entero) y también diciembre
+    expect(nov.prima).toBe(2200) // 100000 * 2.2%, no 2500
+    expect(dic.prima).toBe(2200)
+  })
+
   it('mes anterior a todos los tramos: 0% por fallback (gap de configuración), el mes siguiente ya cubierto devenga normal', () => {
     const cert = certDevengo({
       inicioVig: '2026-09-01', // un mes antes del primer tramo de prima/ingreso

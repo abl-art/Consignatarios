@@ -42,10 +42,16 @@ export async function POST(request: NextRequest) {
   // performance/índices) y de nuevo en JS con `esCertificadoVigente` — la
   // misma función pura que usa el POST de creación, para que la definición
   // de "vigente" nunca pueda divergir entre los dos endpoints.
+  // El DNI también se filtra en la query (prepararCertificados en lib/seguros.ts
+  // ya normaliza con normalizarDni antes de persistir, así que el valor
+  // guardado coincide con dniNormalizado) y de nuevo en JS más abajo — antes
+  // solo filtraba en JS y esta query traía TODOS los certificados vigentes
+  // del país en cada intento de denuncia.
   const { data, error } = await supabase
     .from('seguros_certificados')
     .select('id, dni, articulo, inicio_vig, estado, fecha_anula, fecha_siniestro, fin_vig')
     .eq('estado', 'emitido')
+    .eq('dni', dniNormalizado)
     .is('fecha_anula', null)
     .is('fecha_siniestro', null)
     .gte('fin_vig', hoy)

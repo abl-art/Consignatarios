@@ -12,7 +12,7 @@ import {
 } from '@/lib/gocelular'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
-import { prepararCertificados, novedadesDeCertificados, type CertActual } from '@/lib/seguros'
+import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
@@ -279,9 +279,15 @@ export async function getCertificados(): Promise<CertificadoRow[]> {
     )
     .order('numero', { ascending: true, nullsFirst: false })
 
-  if (error || !data) return []
+  // Fail-loud: antes un error de lectura (ej. caída de DB) se devolvía como
+  // [] silencioso, indistinguible de "no hay certificados" — el export del
+  // broker (app/api/seguros/export/route.ts) podía salir con un Excel vacío
+  // pero con pinta legítima. Ahora el error se propaga; cada caller decide
+  // cómo mostrarlo (export → 500 json; página → banner de aviso, ver
+  // app/(admin)/seguros/page.tsx).
+  if (error) throw new Error(error.message)
 
-  return data.map((r) => ({
+  return (data ?? []).map((r) => ({
     id: r.id as string,
     numero: r.numero as number | null,
     gocuotasOrderId: r.gocuotas_order_id as string,
@@ -498,12 +504,29 @@ export async function resolverSiniestro(
 
   const supabase = createAdminClient()
 
-  const { data: siniestro, error: errorSiniestro } = await supabase
+  const { data: siniestroRaw, error: errorSiniestro } = await supabase
     .from('seguros_siniestros')
-    .select('certificado_id')
+    .select('certificado_id, seguros_certificados(inicio_vig)')
     .eq('id', id)
     .single()
   if (errorSiniestro) throw new Error(errorSiniestro.message)
+
+  const siniestro = siniestroRaw as unknown as {
+    certificado_id: string
+    seguros_certificados: { inicio_vig: string } | null
+  }
+
+  // Rango válido de fechaRobo (positivo únicamente): no antes de que empiece
+  // la vigencia de la póliza ni después de hoy. Sin esta validación el
+  // backoffice podía marcar un siniestro con cualquier fecha arbitraria
+  // (fuera de cobertura o en el futuro) y quedaba igual de "cerrado".
+  if (resultado === 'positivo') {
+    const inicioVig = siniestro.seguros_certificados?.inicio_vig
+    const hoy = new Date().toISOString().slice(0, 10)
+    if (inicioVig && !fechaRoboEnRango(inicioVig, opts.fechaRobo!, hoy)) {
+      throw new Error('La fecha del robo debe estar entre el inicio de vigencia y hoy.')
+    }
+  }
 
   const resueltoAt = new Date().toISOString()
 

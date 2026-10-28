@@ -58,6 +58,16 @@ export function normalizarDni(dni: string): string {
   return soloDigitos.replace(/^0+(?=\d)/, '')
 }
 
+/**
+ * fechaRobo dentro del rango válido para cerrar un siniestro como positivo:
+ * no puede ser anterior al inicio de vigencia de la póliza (robo "antes" de
+ * estar asegurado) ni posterior a hoy (robo "futuro"). Comparación de string
+ * 'YYYY-MM-DD' (orden lexicográfico = cronológico), ambos extremos inclusive.
+ */
+export function fechaRoboEnRango(inicioVig: string, fechaRobo: string, hoy: string): boolean {
+  return inicioVig <= fechaRobo && fechaRobo <= hoy
+}
+
 /** Redondeo estándar a 2 decimales, evitando el drift de punto flotante. */
 function redondear2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
