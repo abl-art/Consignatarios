@@ -1,6 +1,7 @@
 import {
   getSegurosConfig,
   getCertificados,
+  getSiniestros,
   sincronizarSeguros,
   type SegurosConfig,
 } from '@/lib/actions/seguros'
@@ -12,6 +13,7 @@ import SegurosTabs from '@/components/seguros/SegurosTabs'
 import CertificadosTab from '@/components/seguros/CertificadosTab'
 import PrimaMensualTab from '@/components/seguros/PrimaMensualTab'
 import ResultadoTab from '@/components/seguros/ResultadoTab'
+import SiniestrosTab from '@/components/seguros/SiniestrosTab'
 
 // Siempre fresco: sincronizarSeguros() corre emisión/novedades en cada visita
 // y las server actions (activar/desactivar, setParametro) ya revalidan
@@ -42,13 +44,22 @@ export default async function SegurosPage() {
   // getSegurosConfig(), y marca el flag para avisar en el banner en vez de
   // mostrar en silencio una tabla vacía como si no hubiera certificados.
   let certificadosError = false
-  const [config, certificados] = await Promise.all([
+  let siniestrosError = false
+  const [config, certificados, siniestros] = await Promise.all([
     getSegurosConfig().catch(() => CONFIG_VACIA),
     getCertificados().catch(() => {
       certificadosError = true
       return []
     }),
+    getSiniestros().catch(() => {
+      siniestrosError = true
+      return []
+    }),
   ])
+
+  const siniestrosAbiertos = siniestros.filter(
+    (s) => s.estado !== 'resuelto_positivo' && s.estado !== 'resuelto_negativo',
+  ).length
 
   const emitidosIds = certificados.filter((c) => c.estado !== 'pendiente').map((c) => c.gocuotasOrderId)
   const facturasMap = await fetchFacturasBPorOrden(emitidosIds).catch(() => new Map<string, { numero: string; fecha: string }>())
@@ -94,6 +105,12 @@ export default async function SegurosPage() {
       label: 'Resultado',
       content: <ResultadoTab devengo={devengo} ingresos={ingresos} siniestralidad={siniestralidad} operar={operar} />,
     },
+    {
+      id: 'siniestros',
+      // SegurosTabs no soporta badge propio: el conteo de no-resueltos va en la etiqueta.
+      label: siniestrosAbiertos > 0 ? `Siniestros (${siniestrosAbiertos})` : 'Siniestros',
+      content: <SiniestrosTab siniestros={siniestros} />,
+    },
   ]
 
   return (
@@ -101,13 +118,16 @@ export default async function SegurosPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Seguros por Robo</h1>
       <p className="text-sm text-gray-500 mb-6">Certificados, prima mensual y resultado del seguro por robo</p>
 
-      {(syncError || certificadosError) && (
+      {(syncError || certificadosError || siniestrosError) && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 space-y-1">
           {syncError && (
             <p>No se pudo sincronizar automáticamente ({syncError}). Mostrando el último estado guardado.</p>
           )}
           {certificadosError && (
             <p>No se pudieron leer los certificados — la tabla puede verse vacía aunque haya certificados cargados. Reintentá recargando la página.</p>
+          )}
+          {siniestrosError && (
+            <p>No se pudieron leer los siniestros — la pestaña puede verse vacía aunque haya denuncias cargadas. Reintentá recargando la página.</p>
           )}
         </div>
       )}

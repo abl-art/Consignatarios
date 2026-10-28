@@ -8,6 +8,7 @@ import {
   fetchOrdenesDescartadas,
   fetchContracargosConFecha,
   fetchCostoPorImei,
+  fetchCuotasMora,
 } from '@/lib/gocelular'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
@@ -305,4 +306,183 @@ export async function getCertificados(): Promise<CertificadoRow[]> {
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Siniestros (denuncias de robo cargadas por el cliente)
+// ---------------------------------------------------------------------------
+
+export type EstadoSiniestro = 'nuevo' | 'en_gestion' | 'reclamado' | 'resuelto_positivo' | 'resuelto_negativo'
+
+export type SiniestroRow = {
+  id: string
+  certificadoId: string
+  estado: EstadoSiniestro
+  dniIngresado: string
+  archivoPath: string
+  fechaRobo: string | null
+  montoReconocido: number | null
+  nota: string | null
+  createdAt: string
+  resueltoAt: string | null
+  // del certificado (join)
+  cliente: string | null
+  dni: string | null
+  articulo: string
+  imei: string
+  sumaAsegurada: number | null
+  inicioVig: string
+  finVig: string
+  gocuotasOrderId: string
+  // mora en vivo (réplica GOcuotas) — solo para backoffice, nunca al cliente
+  enMora: boolean
+  diasMaximos: number
+}
+
+type SiniestroConCertRaw = {
+  id: string
+  certificado_id: string
+  estado: string
+  dni_ingresado: string
+  archivo_path: string
+  fecha_robo: string | null
+  monto_reconocido: string | number | null
+  nota: string | null
+  created_at: string
+  resuelto_at: string | null
+  seguros_certificados: {
+    cliente: string | null
+    dni: string | null
+    articulo: string
+    imei: string
+    suma_asegurada: string | number | null
+    inicio_vig: string
+    fin_vig: string
+    gocuotas_order_id: string
+  } | null
+}
+
+/**
+ * Casos de siniestro con los datos del certificado y la mora en vivo del
+ * pedido (fetchCuotasMora contra la réplica de GOcuotas) — una consulta por
+ * caso; a la escala esperada (decenas de denuncias) es aceptable, no hace
+ * falta batchear.
+ */
+export async function getSiniestros(): Promise<SiniestroRow[]> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('seguros_siniestros')
+    .select(
+      'id, certificado_id, dni_ingresado, archivo_path, estado, fecha_robo, monto_reconocido, nota, created_at, resuelto_at, seguros_certificados(cliente, dni, articulo, imei, suma_asegurada, inicio_vig, fin_vig, gocuotas_order_id)',
+    )
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return []
+
+  const filas = await Promise.all(
+    (data as unknown as SiniestroConCertRaw[]).map(async (r) => {
+      const cert = r.seguros_certificados
+      const { enMora, diasMaximos } = cert ? await fetchCuotasMora(cert.gocuotas_order_id) : { enMora: false, diasMaximos: 0 }
+      return {
+        id: r.id,
+        certificadoId: r.certificado_id,
+        estado: r.estado as EstadoSiniestro,
+        dniIngresado: r.dni_ingresado,
+        archivoPath: r.archivo_path,
+        fechaRobo: r.fecha_robo,
+        montoReconocido: r.monto_reconocido !== null ? Number(r.monto_reconocido) : null,
+        nota: r.nota,
+        createdAt: r.created_at,
+        resueltoAt: r.resuelto_at,
+        cliente: cert?.cliente ?? null,
+        dni: cert?.dni ?? null,
+        articulo: cert?.articulo ?? '',
+        imei: cert?.imei ?? '',
+        sumaAsegurada: cert?.suma_asegurada !== null && cert?.suma_asegurada !== undefined ? Number(cert.suma_asegurada) : null,
+        inicioVig: cert?.inicio_vig ?? '',
+        finVig: cert?.fin_vig ?? '',
+        gocuotasOrderId: cert?.gocuotas_order_id ?? '',
+        enMora,
+        diasMaximos,
+      }
+    }),
+  )
+
+  return filas
+}
+
+/** URL firmada de la denuncia (bucket privado 'denuncias-robo') por 1 hora — mismo patrón que urlCv de reclutamiento. */
+export async function getDenunciaUrl(archivoPath: string): Promise<string | null> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.storage.from('denuncias-robo').createSignedUrl(archivoPath, 3600)
+  return data?.signedUrl || null
+}
+
+/** Avance de estado intermedio: nuevo→en_gestion→reclamado. La resolución final pasa por resolverSiniestro. */
+export async function setEstadoSiniestro(id: string, estado: 'en_gestion' | 'reclamado'): Promise<void> {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('seguros_siniestros').update({ estado }).eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/seguros')
+}
+
+/**
+ * Cierra un siniestro. Positivo exige `fechaRobo` y, además de cerrar el
+ * siniestro, marca `fecha_siniestro` en el CERTIFICADO — es el cierre con
+ * marca propia: detiene el devengo de prima (lib/seguros-informes.ts) y
+ * llena la columna 17 del Excel del broker (Task 6). Negativo solo cierra
+ * el siniestro; el certificado sigue vigente, sin tocar.
+ */
+export async function resolverSiniestro(
+  id: string,
+  resultado: 'positivo' | 'negativo',
+  opts: { fechaRobo?: string; montoReconocido?: number; nota?: string },
+): Promise<void> {
+  if (resultado === 'positivo' && !opts.fechaRobo) {
+    throw new Error('Falta la fecha del robo para cerrar el siniestro como positivo.')
+  }
+
+  const supabase = createAdminClient()
+
+  const { data: siniestro, error: errorSiniestro } = await supabase
+    .from('seguros_siniestros')
+    .select('certificado_id')
+    .eq('id', id)
+    .single()
+  if (errorSiniestro) throw new Error(errorSiniestro.message)
+
+  const resueltoAt = new Date().toISOString()
+
+  if (resultado === 'positivo') {
+    const { error: errorUpdate } = await supabase
+      .from('seguros_siniestros')
+      .update({
+        estado: 'resuelto_positivo',
+        resuelto_at: resueltoAt,
+        fecha_robo: opts.fechaRobo,
+        monto_reconocido: opts.montoReconocido ?? null,
+        nota: opts.nota ?? null,
+      })
+      .eq('id', id)
+    if (errorUpdate) throw new Error(errorUpdate.message)
+
+    const { error: errorCert } = await supabase
+      .from('seguros_certificados')
+      .update({ fecha_siniestro: opts.fechaRobo, updated_at: resueltoAt })
+      .eq('id', siniestro.certificado_id)
+    if (errorCert) throw new Error(errorCert.message)
+  } else {
+    const { error: errorUpdate } = await supabase
+      .from('seguros_siniestros')
+      .update({
+        estado: 'resuelto_negativo',
+        resuelto_at: resueltoAt,
+        nota: opts.nota ?? null,
+      })
+      .eq('id', id)
+    if (errorUpdate) throw new Error(errorUpdate.message)
+  }
+
+  revalidatePath('/seguros')
 }
