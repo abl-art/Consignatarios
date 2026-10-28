@@ -337,6 +337,8 @@ export type SiniestroRow = {
   // mora en vivo (réplica GOcuotas) — solo para backoffice, nunca al cliente
   enMora: boolean
   diasMaximos: number
+  /** true si fetchCuotasMora falló para este caso puntual (réplica caída/lenta) — degrada solo esta fila, nunca toda la pestaña. */
+  moraSinDato: boolean
 }
 
 type SiniestroConCertRaw = {
@@ -366,7 +368,11 @@ type SiniestroConCertRaw = {
  * Casos de siniestro con los datos del certificado y la mora en vivo del
  * pedido (fetchCuotasMora contra la réplica de GOcuotas) — una consulta por
  * caso; a la escala esperada (decenas de denuncias) es aceptable, no hace
- * falta batchear.
+ * falta batchear. Cada fetchCuotasMora está en su propio try/catch: si la
+ * réplica falla o está lenta para UN caso, esa fila degrada a "sin dato"
+ * (moraSinDato=true) pero el resto de la pestaña sigue andando — antes un
+ * solo fetch fallido tiraba abajo todo Promise.all y getSiniestros()
+ * devolvía [] (pestaña entera vacía) por culpa de un solo caso.
  */
 export async function getSiniestros(): Promise<SiniestroRow[]> {
   const supabase = createAdminClient()
@@ -382,7 +388,18 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
   const filas = await Promise.all(
     (data as unknown as SiniestroConCertRaw[]).map(async (r) => {
       const cert = r.seguros_certificados
-      const { enMora, diasMaximos } = cert ? await fetchCuotasMora(cert.gocuotas_order_id) : { enMora: false, diasMaximos: 0 }
+      let enMora = false
+      let diasMaximos = 0
+      let moraSinDato = !cert
+      if (cert) {
+        try {
+          const mora = await fetchCuotasMora(cert.gocuotas_order_id)
+          enMora = mora.enMora
+          diasMaximos = mora.diasMaximos
+        } catch {
+          moraSinDato = true
+        }
+      }
       return {
         id: r.id,
         certificadoId: r.certificado_id,
@@ -404,6 +421,7 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
         gocuotasOrderId: cert?.gocuotas_order_id ?? '',
         enMora,
         diasMaximos,
+        moraSinDato,
       }
     }),
   )
@@ -418,11 +436,26 @@ export async function getDenunciaUrl(archivoPath: string): Promise<string | null
   return data?.signedUrl || null
 }
 
-/** Avance de estado intermedio: nuevo→en_gestion→reclamado. La resolución final pasa por resolverSiniestro. */
+/**
+ * Avance de estado intermedio: nuevo→en_gestion→reclamado. La transición es
+ * un UPDATE condicionado al estado de ORIGEN esperado (no read-then-write):
+ * si 0 filas fueron afectadas, el caso no estaba en ese estado (ya avanzó,
+ * se resolvió, o es un doble click) y se rechaza con un error claro. La
+ * resolución final pasa por resolverSiniestro.
+ */
 export async function setEstadoSiniestro(id: string, estado: 'en_gestion' | 'reclamado'): Promise<void> {
+  const estadoOrigen: EstadoSiniestro = estado === 'en_gestion' ? 'nuevo' : 'en_gestion'
   const supabase = createAdminClient()
-  const { error } = await supabase.from('seguros_siniestros').update({ estado }).eq('id', id)
+  const { data, error } = await supabase
+    .from('seguros_siniestros')
+    .update({ estado })
+    .eq('id', id)
+    .eq('estado', estadoOrigen)
+    .select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error(`No se pudo pasar a "${estado}": el caso ya no está en "${estadoOrigen}" (puede haber avanzado o resuelto en otra pestaña/sesión).`)
+  }
 
   revalidatePath('/seguros')
 }
@@ -433,6 +466,26 @@ export async function setEstadoSiniestro(id: string, estado: 'en_gestion' | 'rec
  * marca propia: detiene el devengo de prima (lib/seguros-informes.ts) y
  * llena la columna 17 del Excel del broker (Task 6). Negativo solo cierra
  * el siniestro; el certificado sigue vigente, sin tocar.
+ *
+ * Orden de escrituras — fail-safe: el CERTIFICADO (fuente de verdad
+ * financiera) se escribe PRIMERO, el siniestro después. Si el proceso se
+ * cae entre medio, un reintento es inocuo: la escritura del certificado es
+ * condicional (`.is('fecha_siniestro', null)`, no-op si ya está seteada) y
+ * la del siniestro también es condicional (solo si todavía no está
+ * resuelto) — así no hay ventana donde el certificado quede sin marcar pero
+ * el caso ya luzca cerrado.
+ *
+ * Guardas (ambas vía UPDATE condicional, no read-then-write — evitan el
+ * TOCTOU de una lectura previa más una escritura separada):
+ *  - Doble resolución: el UPDATE del siniestro solo aplica si su estado
+ *    todavía es 'nuevo' | 'en_gestion' | 'reclamado'; 0 filas afectadas ⇒
+ *    throw "ya estaba resuelto".
+ *  - Certificado ya siniestrado por OTRO caso: el UPDATE de
+ *    seguros_certificados solo aplica si fecha_siniestro es NULL. Si ya
+ *    tenía una fecha (de un siniestro previo sobre el mismo certificado),
+ *    NO se sobreescribe — regla de "un solo evento": la primera fecha
+ *    queda. El caso actual se cierra igual (su propio fecha_robo queda
+ *    guardado en el siniestro), solo que no toca la fecha del certificado.
  */
 export async function resolverSiniestro(
   id: string,
@@ -454,34 +507,43 @@ export async function resolverSiniestro(
 
   const resueltoAt = new Date().toISOString()
 
+  // 1) Certificado primero (positivo únicamente) — condicional a que todavía
+  // no tenga fecha_siniestro; si ya la tiene (otro caso la marcó antes), se
+  // deja como está y se sigue de largo.
   if (resultado === 'positivo') {
-    const { error: errorUpdate } = await supabase
-      .from('seguros_siniestros')
-      .update({
-        estado: 'resuelto_positivo',
-        resuelto_at: resueltoAt,
-        fecha_robo: opts.fechaRobo,
-        monto_reconocido: opts.montoReconocido ?? null,
-        nota: opts.nota ?? null,
-      })
-      .eq('id', id)
-    if (errorUpdate) throw new Error(errorUpdate.message)
-
     const { error: errorCert } = await supabase
       .from('seguros_certificados')
       .update({ fecha_siniestro: opts.fechaRobo, updated_at: resueltoAt })
       .eq('id', siniestro.certificado_id)
+      .is('fecha_siniestro', null)
     if (errorCert) throw new Error(errorCert.message)
-  } else {
-    const { error: errorUpdate } = await supabase
-      .from('seguros_siniestros')
-      .update({
-        estado: 'resuelto_negativo',
-        resuelto_at: resueltoAt,
-        nota: opts.nota ?? null,
-      })
-      .eq('id', id)
-    if (errorUpdate) throw new Error(errorUpdate.message)
+  }
+
+  // 2) Siniestro después — condicional a que no esté ya resuelto.
+  const updateSiniestro =
+    resultado === 'positivo'
+      ? {
+          estado: 'resuelto_positivo' as const,
+          resuelto_at: resueltoAt,
+          fecha_robo: opts.fechaRobo,
+          monto_reconocido: opts.montoReconocido ?? null,
+          nota: opts.nota ?? null,
+        }
+      : {
+          estado: 'resuelto_negativo' as const,
+          resuelto_at: resueltoAt,
+          nota: opts.nota ?? null,
+        }
+
+  const { data: filaResuelta, error: errorUpdate } = await supabase
+    .from('seguros_siniestros')
+    .update(updateSiniestro)
+    .eq('id', id)
+    .in('estado', ['nuevo', 'en_gestion', 'reclamado'])
+    .select('id')
+  if (errorUpdate) throw new Error(errorUpdate.message)
+  if (!filaResuelta || filaResuelta.length === 0) {
+    throw new Error('Este siniestro ya estaba resuelto (puede haberse cerrado en otra pestaña/sesión).')
   }
 
   revalidatePath('/seguros')

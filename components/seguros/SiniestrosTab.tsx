@@ -41,7 +41,17 @@ function EstadoChip({ estado }: { estado: EstadoSiniestro }) {
   )
 }
 
-function MoraChip({ enMora, diasMaximos }: { enMora: boolean; diasMaximos: number }) {
+function MoraChip({ enMora, diasMaximos, sinDato }: { enMora: boolean; diasMaximos: number; sinDato: boolean }) {
+  if (sinDato) {
+    return (
+      <span
+        className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-500 border-gray-200"
+        title="No se pudo consultar la mora (falla puntual contra la réplica) — recargá la página para reintentar"
+      >
+        — sin dato
+      </span>
+    )
+  }
   if (!enMora) {
     return (
       <span className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-green-50 text-green-700 border-green-200">
@@ -173,12 +183,21 @@ function ResolverPanel({ id }: { id: string }) {
       setConfirmando(false)
       return
     }
+    let montoReconocido: number | undefined
+    if (monto) {
+      montoReconocido = Number(monto)
+      if (Number.isNaN(montoReconocido)) {
+        setError('El monto reconocido no es un número válido.')
+        setConfirmando(false)
+        return
+      }
+    }
     setError(null)
     startTransition(async () => {
       try {
         await resolverSiniestro(id, resultado, {
           fechaRobo: fechaRobo || undefined,
-          montoReconocido: monto ? Number(monto) : undefined,
+          montoReconocido,
           nota: nota || undefined,
         })
         router.refresh()
@@ -313,7 +332,7 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
         {fecha(s.inicioVig)} – {fecha(s.finVig)}
       </td>
       {!resuelta && (
-        <td className="px-4 py-3"><MoraChip enMora={s.enMora} diasMaximos={s.diasMaximos} /></td>
+        <td className="px-4 py-3"><MoraChip enMora={s.enMora} diasMaximos={s.diasMaximos} sinDato={s.moraSinDato} /></td>
       )}
       <td className="px-4 py-3"><VerDenuncia archivoPath={s.archivoPath} /></td>
       {resuelta ? (
