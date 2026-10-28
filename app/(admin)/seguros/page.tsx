@@ -35,9 +35,19 @@ export default async function SegurosPage() {
     syncError = e instanceof Error ? e.message : 'Error desconocido al sincronizar'
   }
 
+  // getCertificados() ya swallowea errores de query devolviendo [] (ver
+  // lib/actions/seguros.ts), pero un fallo antes de esa query (ej.
+  // createAdminClient() tirando por env vars faltantes) rechazaría la
+  // promesa igual — este catch le da la misma garantía de "nunca tira" que
+  // getSegurosConfig(), y marca el flag para avisar en el banner en vez de
+  // mostrar en silencio una tabla vacía como si no hubiera certificados.
+  let certificadosError = false
   const [config, certificados] = await Promise.all([
     getSegurosConfig().catch(() => CONFIG_VACIA),
-    getCertificados(),
+    getCertificados().catch(() => {
+      certificadosError = true
+      return []
+    }),
   ])
 
   const emitidosIds = certificados.filter((c) => c.estado !== 'pendiente').map((c) => c.gocuotasOrderId)
@@ -91,9 +101,14 @@ export default async function SegurosPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Seguros por Robo</h1>
       <p className="text-sm text-gray-500 mb-6">Certificados, prima mensual y resultado del seguro por robo</p>
 
-      {syncError && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          No se pudo sincronizar automáticamente ({syncError}). Mostrando el último estado guardado.
+      {(syncError || certificadosError) && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 space-y-1">
+          {syncError && (
+            <p>No se pudo sincronizar automáticamente ({syncError}). Mostrando el último estado guardado.</p>
+          )}
+          {certificadosError && (
+            <p>No se pudieron leer los certificados — la tabla puede verse vacía aunque haya certificados cargados. Reintentá recargando la página.</p>
+          )}
         </div>
       )}
 
