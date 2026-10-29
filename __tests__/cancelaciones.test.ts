@@ -156,3 +156,14 @@ describe('construirPayloadCancelacion', () => {
     expect(r.ok).toBe(false)
   })
 })
+
+// Caso real SO-AMCPBE (29/10): pickeado = equipo ya asignado → la API de
+// Pedro responde no_es_wh ("nada que cancelar en el depósito") en preview Y
+// apply. El botón no debe armarse ni marcar "cancelación pedida".
+describe('interpretarPreview con no_es_wh', () => {
+  it('no_es_wh → no cancelable, con aviso de gestión manual', () => {
+    const r = interpretarPreview({ resultado: 'no_es_wh' })
+    expect(r.cancelable).toBe(false)
+    expect(r.motivo).toMatch(/asignado|manual/i)
+  })
+})

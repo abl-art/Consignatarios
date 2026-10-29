@@ -79,6 +79,15 @@ export async function aplicarCancelarPedido(id: string): Promise<{ ok?: true; er
   })
   if (!res.ok) return { error: `La cancelación falló (${res.status}): ${resumen(res.body)}` }
 
+  // Un 200 cuyo resultado NO es del vocabulario de cancelación significa que
+  // no se pidió nada (no_es_wh / vivo / sin_pedido_wh) — marcar "cancelación
+  // pedida" acá mentiría (caso real SO-AMCPBE: pickeado → no_es_wh).
+  const resultadoApply = res.body?.resultado ?? 'desconocido'
+  if (!['cancelacion_pedida', 'cancelacion_pedida_por_mail', 'cancelado'].includes(resultadoApply)) {
+    const veredicto = interpretarPreview(res.body)
+    return { error: veredicto.cancelable ? `GOcelular no pidió la cancelación (resultado: ${resultadoApply})` : veredicto.motivo }
+  }
+
   await admin
     .from('arrepentimientos')
     .update({
