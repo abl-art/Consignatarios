@@ -496,3 +496,22 @@ describe('devengoMensual — base del ingreso', () => {
     expect(r[0].prima).toBe(2200) // 2% de 110000
   })
 })
+
+describe('devengoMensual — prima del mes del siniestro', () => {
+  it('venta 25/6 y siniestro 27/6: junio paga la prima COMPLETA (la prima vigente siempre se paga — sin ella la aseguradora no cubre), julio ya no', () => {
+    const cert = certDevengo({
+      inicioVig: '2026-06-25',
+      fechaSiniestro: '2026-06-27',
+      finVig: '2027-03-25',
+      sumaAsegurada: 242000,
+      costoSinIva: 242000,
+    })
+    const r = devengoMensual([cert], PRIMA_2, INGRESO_3, '2026-07')
+    const jun = r.find(m => m.mes === '2026-06')!
+    const jul = r.find(m => m.mes === '2026-07')!
+    expect(jun.certificados).toBe(1)
+    expect(jun.prima).toBe(4840) // 2% de 242000, mes completo, sin prorrateo
+    expect(jul.certificados).toBe(0)
+    expect(jul.prima).toBe(0)
+  })
+})
