@@ -34,6 +34,54 @@ export function validarMotivo(motivo: string): boolean {
   return l >= 10 && l <= 500
 }
 
+export type AccionCancelacion = 'cancelar_pedido' | 'cancelar_orden' | 'solicitar_devolucion'
+export type ModalidadDevolucion = 'domicilio' | 'sucursal'
+
+export interface PayloadCancelacion {
+  mode: 'preview' | 'apply'
+  accion: AccionCancelacion
+  order_number: string
+  motivo: string
+  source: '360'
+  modalidad?: ModalidadDevolucion
+  ventana?: { inicio: string; fin: string }
+}
+
+/**
+ * Arma el payload exacto del POST de cancelaciones (contrato 29/10):
+ * `modalidad` es obligatoria en solicitar_devolucion y PROHIBIDA en las otras
+ * acciones — Pedro rechaza cualquier campo desconocido con 400, así que las
+ * claves condicionales no pueden viajar ni en undefined.
+ */
+export function construirPayloadCancelacion(input: {
+  mode: 'preview' | 'apply'
+  accion: AccionCancelacion
+  orderNumber: string
+  motivo: string
+  modalidad?: ModalidadDevolucion
+  ventana?: { inicio: string; fin: string }
+}): { ok: true; payload: PayloadCancelacion } | { ok: false; error: string } {
+  if (!validarMotivo(input.motivo)) return { ok: false, error: 'El motivo debe tener entre 10 y 500 caracteres.' }
+  if (input.accion === 'solicitar_devolucion' && !input.modalidad) {
+    return { ok: false, error: 'La devolución necesita modalidad: domicilio o sucursal.' }
+  }
+  if (input.accion !== 'solicitar_devolucion' && (input.modalidad || input.ventana)) {
+    return { ok: false, error: `modalidad/ventana solo valen para solicitar_devolucion (acción: ${input.accion}).` }
+  }
+  const payload: PayloadCancelacion = {
+    mode: input.mode,
+    accion: input.accion,
+    order_number: input.orderNumber,
+    motivo: input.motivo,
+    source: '360',
+  }
+  if (input.accion === 'solicitar_devolucion') {
+    payload.modalidad = input.modalidad
+    if (input.ventana) payload.ventana = input.ventana
+  }
+  return { ok: true, payload }
+}
+
 /**
  * Regla de reintento del contrato: `vivo` y `sin_pedido_wh` se reintentan en
  * unos minutos; un 409 NO se reintenta salvo que traiga retryable true; 5xx

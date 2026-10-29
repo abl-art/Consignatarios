@@ -150,17 +150,26 @@ export function estadisticaDemoraArrepentimiento(
 /** Estados de GOcuotas que cuentan como orden vigente (mismo criterio que el chip "activa"). */
 const STATUS_ORDEN_ACTIVA = ['approved', 'paid', 'collected']
 
+/** Umbrales de rescate/devolución que ya cierran el circuito de Andreani — a
+ * partir de ahí el reembolso no deja nada "en la calle" y puede habilitarse. */
+const RESCATE_ESTADOS_HABILITAN = ['rescate_confirmado', 'rescate_recibido']
+const DEVOLUCION_ESTADOS_HABILITAN = ['retiro_realizado', 'devolucion_recibida']
+
 /**
  * Guard del botón "Anular orden": solo solicitudes pendientes, con orden de
- * GOcuotas identificada y vigente, y cuyo pedido NO salió del depósito (un
- * expedido se gestiona por rescate — reembolsar ahí dejaría el equipo en la
- * calle con la orden anulada).
+ * GOcuotas identificada y vigente. Para un pedido YA expedido no alcanza con
+ * anular la orden — por default sigue bloqueado ("corresponde rescate, no
+ * reembolso"), salvo que el rescate o la devolución ya estén en un umbral que
+ * cierra el circuito con Andreani (equipo de vuelta o devolución confirmada):
+ * ahí sí se puede reembolsar sin dejar el equipo en la calle.
  */
 export function puedeAnularOrden(s: {
   estado: string
   gocuotasOrderId: string | null
   gocuotasStatus: string | null
   fulfillment: string | null
+  rescateEstado?: string | null
+  devolucionEstado?: string | null
 }): { ok: true } | { ok: false; error: string } {
   if (s.estado !== 'pendiente') return { ok: false, error: 'La solicitud ya fue resuelta' }
   if (!s.gocuotasOrderId) return { ok: false, error: 'Sin orden de GOcuotas identificada' }
@@ -168,7 +177,11 @@ export function puedeAnularOrden(s: {
     return { ok: false, error: `La orden no está activa (estado: ${s.gocuotasStatus ?? 'desconocido'})` }
   }
   if (s.fulfillment === 'expedido') {
-    return { ok: false, error: 'El pedido ya fue expedido: corresponde rescate, no reembolso' }
+    const rescateCierra = !!s.rescateEstado && RESCATE_ESTADOS_HABILITAN.includes(s.rescateEstado)
+    const devolucionCierra = !!s.devolucionEstado && DEVOLUCION_ESTADOS_HABILITAN.includes(s.devolucionEstado)
+    if (!rescateCierra && !devolucionCierra) {
+      return { ok: false, error: 'El pedido ya fue expedido: corresponde rescate, no reembolso' }
+    }
   }
   if (s.fulfillment === 'cancelación pedida') {
     return { ok: false, error: 'La cancelación del envío está pendiente de confirmación de Andreani — esperá el resultado antes de reembolsar' }

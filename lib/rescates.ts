@@ -231,7 +231,7 @@ export function armarRescatesManuales(
  * resuelve solo: a veces el equipo no aparece en el depósito aunque figure
  * rendido, así que todos los cierra el usuario.
  */
-export function separarResueltos(rescates: Rescate[]): { pendientes: Rescate[]; resueltos: Rescate[] } {
+export function separarResueltos<T extends Rescate>(rescates: T[]): { pendientes: T[]; resueltos: T[] } {
   return {
     pendientes: rescates.filter(r => !r.resueltoAt),
     resueltos: rescates.filter(r => r.resueltoAt),
@@ -242,7 +242,7 @@ export function separarResueltos(rescates: Rescate[]): { pendientes: Rescate[]; 
  * Filtra por fecha de solicitud del rescate (día local de Andreani, -03:00).
  * desde/hasta en formato YYYY-MM-DD, inclusive; vacíos = sin límite.
  */
-export function filtrarRescatesPorFecha(rescates: Rescate[], desde: string, hasta: string): Rescate[] {
+export function filtrarRescatesPorFecha<T extends Rescate>(rescates: T[], desde: string, hasta: string): T[] {
   return rescates.filter(r => {
     const dia = r.solicitadoAt.slice(0, 10)
     if (desde && dia < desde) return false

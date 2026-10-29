@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, veredictoCancelacion, etiquetaDesdeGetCancelacion, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
+import { construirPayloadCancelacion, puedeCancelarPedido, validarMotivo, esReintentable, esCancelacionConfirmada, interpretarPreview, veredictoCancelacion, etiquetaDesdeGetCancelacion, MOTIVO_ARREPENTIMIENTO } from '@/lib/cancelaciones'
 
 describe('puedeCancelarPedido', () => {
   const base = { estado: 'pendiente', orderNumber: 'SO-9BRH9A', fulfillment: 'enviado a Andreani' as string | null }
@@ -107,5 +107,52 @@ describe('etiquetaDesdeGetCancelacion (regla de Emiliano 27/10)', () => {
   it('sin datos o estado desconocido: no tocar', () => {
     expect(etiquetaDesdeGetCancelacion(null)).toBeNull()
     expect(etiquetaDesdeGetCancelacion({ estado: 'algo_nuevo' })).toBeNull()
+  })
+})
+
+// Payload del POST de cancelaciones (contrato completo 29/10): modalidad es
+// obligatoria en solicitar_devolucion y PROHIBIDA en las otras acciones
+// ("cualquier campo desconocido rechaza el request").
+describe('construirPayloadCancelacion', () => {
+  const base = { mode: 'preview' as const, orderNumber: 'SO-ABC123', motivo: 'Arrepentimiento del cliente — solicitado desde GOcelular360' }
+
+  it('cancelar_pedido: sin claves modalidad ni ventana en el payload', () => {
+    const r = construirPayloadCancelacion({ ...base, accion: 'cancelar_pedido' })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.payload).toEqual({
+        mode: 'preview',
+        accion: 'cancelar_pedido',
+        order_number: 'SO-ABC123',
+        motivo: base.motivo,
+        source: '360',
+      })
+      expect('modalidad' in r.payload).toBe(false)
+      expect('ventana' in r.payload).toBe(false)
+    }
+  })
+
+  it('solicitar_devolucion exige modalidad', () => {
+    const r = construirPayloadCancelacion({ ...base, accion: 'solicitar_devolucion' })
+    expect(r.ok).toBe(false)
+  })
+
+  it('solicitar_devolucion con modalidad la incluye; sin ventana no agrega la clave', () => {
+    const r = construirPayloadCancelacion({ ...base, accion: 'solicitar_devolucion', modalidad: 'domicilio' })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.payload.modalidad).toBe('domicilio')
+      expect('ventana' in r.payload).toBe(false)
+    }
+  })
+
+  it('modalidad en cancelar_pedido se rechaza (Pedro responde 400)', () => {
+    const r = construirPayloadCancelacion({ ...base, accion: 'cancelar_pedido', modalidad: 'domicilio' })
+    expect(r.ok).toBe(false)
+  })
+
+  it('motivo fuera de 10-500 caracteres se rechaza local', () => {
+    const r = construirPayloadCancelacion({ ...base, motivo: 'corto', accion: 'cancelar_pedido' })
+    expect(r.ok).toBe(false)
   })
 })
