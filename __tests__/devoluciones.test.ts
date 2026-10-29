@@ -8,6 +8,7 @@ import {
   banderasDevolucion,
   esDevolucionFinalizada,
   separarResueltos,
+  devolucionesPedidasSinShipment,
 } from '@/lib/devoluciones'
 import type { FilaDevolucion } from '@/lib/actions/devoluciones'
 
@@ -277,6 +278,7 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
     resueltoAt: null,
     pedroEstado: null,
     banderaPedro: null,
+    pedidaWebhook: null,
     ...overrides,
   }
 }
@@ -309,5 +311,33 @@ describe('separarResueltos', () => {
     const { pendientes, resueltas } = separarResueltos([a, b, c])
     expect(pendientes.map(f => f.orderNumber)).toEqual(['A', 'C'])
     expect(resueltas.map(f => f.orderNumber)).toEqual(['B'])
+  })
+})
+
+// Devoluciones pedidas por webhook (devoluciones_pedidas) que todavía no
+// tienen su shipment type='return' en la réplica → fila sintética en la
+// pestaña. Cubierta = ya hay return para esa orden o para ese tracking.
+describe('devolucionesPedidasSinShipment', () => {
+  const returns = [
+    { orderNumber: 'SO-CONRET', tracking: '360001111111111' },
+    { orderNumber: 'SO-OTRA', tracking: '360002222222222' },
+  ]
+
+  it('pedida sin return de su orden ni su tracking → queda como sintética', () => {
+    const pedidas = [{ orderNumber: 'SO-NUEVA', tracking: '360009999999999' }]
+    expect(devolucionesPedidasSinShipment(pedidas, returns)).toEqual(pedidas)
+  })
+
+  it('pedida cuya orden ya tiene return → cubierta', () => {
+    expect(devolucionesPedidasSinShipment([{ orderNumber: 'SO-CONRET', tracking: null }], returns)).toEqual([])
+  })
+
+  it('pedida cuyo tracking ya aparece como return → cubierta (aunque la orden difiera)', () => {
+    expect(devolucionesPedidasSinShipment([{ orderNumber: 'SO-X', tracking: '360002222222222' }], returns)).toEqual([])
+  })
+
+  it('pedida sin tracking todavía (Andreani no creó el envío) → sintética', () => {
+    const pedidas = [{ orderNumber: 'SO-SINTRACK', tracking: null }]
+    expect(devolucionesPedidasSinShipment(pedidas, returns)).toEqual(pedidas)
   })
 })

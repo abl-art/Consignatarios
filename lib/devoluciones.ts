@@ -209,3 +209,23 @@ export function banderasDevolucion(d: DatosBanderas): string[] {
   }
   return banderas
 }
+
+export interface DevolucionPedidaRef {
+  orderNumber: string
+  tracking: string | null
+}
+
+/**
+ * Devoluciones pedidas por el webhook (devoluciones_pedidas) que todavía no
+ * tienen su shipment type='return' en la réplica → se muestran como fila
+ * sintética "devolución pedida" hasta que el envío inverso aparece. Cubierta =
+ * ya existe un return para esa orden o para ese tracking.
+ */
+export function devolucionesPedidasSinShipment<T extends DevolucionPedidaRef>(
+  pedidas: T[],
+  returns: { orderNumber: string; tracking: string | null }[],
+): T[] {
+  const ordenes = new Set(returns.map(r => r.orderNumber))
+  const trackings = new Set(returns.map(r => r.tracking).filter((t): t is string => t !== null))
+  return pedidas.filter(p => !ordenes.has(p.orderNumber) && !(p.tracking !== null && trackings.has(p.tracking)))
+}
