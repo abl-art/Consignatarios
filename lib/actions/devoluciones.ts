@@ -45,6 +45,8 @@ export interface FilaDevolucion {
   provincia: string | null
   returnCreadoAt: string
   ordenAnulada: boolean
+  /** order_status crudo de GOcuotas (réplica) — input del guard de Anular orden */
+  gocuotasStatus: string | null
   inventarioStatus: string | null
   trustonicObservado: string | null
   entrega: SeguimientoAndreani
@@ -302,6 +304,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         provincia: c?.provincia ?? null,
         returnCreadoAt: p.createdAt,
         ordenAnulada,
+        gocuotasStatus: c?.go_status ?? null,
         inventarioStatus: c?.inv_status ?? null,
         trustonicObservado: c?.tru_obs ?? null,
         entrega,
@@ -342,6 +345,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         provincia: r.provincia,
         returnCreadoAt: r.ret_creado,
         ordenAnulada,
+        gocuotasStatus: r.go_status,
         inventarioStatus: r.inv_status,
         trustonicObservado: r.tru_obs,
         entrega,

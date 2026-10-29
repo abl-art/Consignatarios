@@ -9,12 +9,19 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { fetchRescates, fetchEnviosPorTracking } from '@/lib/gocelular'
+import { getCancelacionEstado } from '@/lib/gocelular-webhook'
 import {
   armarRescatesManuales,
   MOTIVOS_RESCATE,
   type Rescate,
   type SeguimientoRescate,
 } from '@/lib/rescates'
+
+/** Rescate + la segunda fuente: el bloque `rescate` del GET de Pedro (contrato 29/10). */
+export type RescateConPedro = Rescate & {
+  pedroEstado: string | null
+  pedroRazon: string | null
+}
 
 async function getSeguimientos(): Promise<SeguimientoRescate[]> {
   const supabase = createAdminClient()
@@ -24,9 +31,12 @@ async function getSeguimientos(): Promise<SeguimientoRescate[]> {
 
 /**
  * Rescates detectados en el tracking de Andreani + los cargados a mano que
- * todavía no aparecen ahí (Pendientes de aceptación), con su motivo.
+ * todavía no aparecen ahí (Pendientes de aceptación), con su motivo y la
+ * segunda fuente de Pedro (solo filas sin resolver con orden — las resueltas
+ * no gastan requests; Pedro informa rescates pedidos desde el 28/10/2026,
+ * las anteriores vienen null).
  */
-export async function getRescatesCompletos(): Promise<Rescate[]> {
+export async function getRescatesCompletos(): Promise<RescateConPedro[]> {
   const ahora = new Date()
   const seguimientos = await getSeguimientos()
   const autos = await fetchRescates(ahora, seguimientos)
@@ -34,7 +44,18 @@ export async function getRescatesCompletos(): Promise<Rescate[]> {
   const faltantes = seguimientos.filter(s => !yaListados.has(s.tracking)).map(s => s.tracking)
   const manualesRaw = await fetchEnviosPorTracking(faltantes)
   const manuales = armarRescatesManuales(manualesRaw, seguimientos, ahora, yaListados)
-  return [...manuales, ...autos]
+  const todos = [...manuales, ...autos]
+  return Promise.all(
+    todos.map(async (r): Promise<RescateConPedro> => {
+      if (r.resueltoAt || !r.orderNumber) return { ...r, pedroEstado: null, pedroRazon: null }
+      try {
+        const { body } = await getCancelacionEstado({ order_number: r.orderNumber })
+        return { ...r, pedroEstado: body?.rescate?.estado ?? null, pedroRazon: body?.rescate?.razon ?? null }
+      } catch {
+        return { ...r, pedroEstado: null, pedroRazon: null }
+      }
+    }),
+  )
 }
 
 export async function cargarRescate(tracking: string, motivo: string): Promise<{ ok?: true; error?: string }> {

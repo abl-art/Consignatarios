@@ -12,7 +12,7 @@ import type { SiniestroStock } from '@/lib/siniestros-stock'
 import { getCortesControlStock, type CorteControlStock } from '@/lib/actions/control-stock'
 import { netoPorModelo } from '@/lib/control-stock'
 import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
-import { getRescatesCompletos } from '@/lib/actions/rescates'
+import { getRescatesCompletos, type RescateConPedro } from '@/lib/actions/rescates'
 import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/actions/arrepentimientos'
 import { getDevoluciones, type FilaDevolucion } from '@/lib/actions/devoluciones'
 import { separarResueltos } from '@/lib/devoluciones'
@@ -48,7 +48,7 @@ export default async function EnviosPage({
   const [facturas, facturasWarehouse] = await Promise.all([getFacturasEnvios(), getFacturasWarehouse()])
   let asns: AsnResumen[] = []
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
-  let rescates: Rescate[] = []
+  let rescates: RescateConPedro[] = []
   let siniestros: Siniestro[] = []
   let productosStock: ProductoStock[] = []
   let demoras: DemoraEntrega[] = []

@@ -279,6 +279,7 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
     pedroEstado: null,
     banderaPedro: null,
     pedidaWebhook: null,
+    gocuotasStatus: null,
     ...overrides,
   }
 }

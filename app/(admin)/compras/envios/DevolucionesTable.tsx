@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import type { FilaDevolucion, SeguimientoAndreani } from '@/lib/actions/devoluciones'
 import { setRecibidoWhGo, setDevolucionResuelta } from '@/lib/actions/devoluciones'
 import { formatearDuracion, separarResueltos } from '@/lib/devoluciones'
-import { etiquetaDevolucion } from '@/lib/estados-andreani'
+import { etiquetaDevolucion, claseDevolucion } from '@/lib/estados-andreani'
+import BotonAnularOrden from './BotonAnularOrden'
 
 function fecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -96,12 +97,42 @@ function RecibidoWhCheck({ tracking, recibido }: { tracking: string | null; reci
 function PedroChip({ estado }: { estado: string | null }) {
   const etiqueta = etiquetaDevolucion(estado)
   if (!etiqueta) return null
+  const clase = claseDevolucion(estado)
+  const cls =
+    clase === 'ok' ? 'bg-green-50 text-green-700 border-green-200'
+    : clase === 'mal' ? 'bg-red-50 text-red-700 border-red-200'
+    : 'bg-gray-50 text-gray-600 border-gray-200'
   return (
     <span
-      className="inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium bg-gray-50 text-gray-600 border-gray-200"
-      title="Estado reportado por Pedro (GOcelular) — segunda fuente de control"
+      className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${cls}`}
+      title="Estado reportado por Pedro (GOcelular) — segunda fuente de control; con retiro realizado / devolución recibida se habilita Anular orden"
     >
-      {etiqueta}
+      {clase === 'mal' ? '⚠️ ' : ''}{etiqueta}
+    </span>
+  )
+}
+
+// Devolución disparada desde el 360 por el webhook: chip de modalidad + link a
+// la etiqueta PDF (en sucursal se la manda al cliente para pegar en el paquete).
+function PedidaWebhookChip({ orderNumber, pedida }: { orderNumber: string; pedida: { modalidad: string; estado: string | null } | null }) {
+  if (!pedida) return null
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className="inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium bg-indigo-50 text-indigo-700 border-indigo-200"
+        title="Devolución pedida desde el 360 por el webhook de GOcelular"
+      >
+        360 · {pedida.modalidad}
+      </span>
+      <a
+        href={`/compras/envios/etiqueta-devolucion?order=${encodeURIComponent(orderNumber)}`}
+        target="_blank"
+        rel="noreferrer"
+        className="text-[11px] text-indigo-700 hover:underline whitespace-nowrap"
+        title="Descargar la etiqueta PDF de la devolución (para mandarle al cliente)"
+      >
+        🏷 etiqueta
+      </a>
     </span>
   )
 }
@@ -269,7 +300,12 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
               </td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.entrega} /></td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.devolucion} /></td>
-              <td className="py-2 pr-3"><PedroChip estado={d.pedroEstado} /></td>
+              <td className="py-2 pr-3">
+                <div className="space-y-1">
+                  <PedroChip estado={d.pedroEstado} />
+                  <PedidaWebhookChip orderNumber={d.orderNumber} pedida={d.pedidaWebhook} />
+                </div>
+              </td>
               <td className="py-2 pr-3 text-center"><RecibidoWhCheck tracking={d.devolucion.tracking} recibido={d.recibidoWhGo} /></td>
               <td className="py-2 pr-3">
                 {d.banderas.length === 0 && !d.banderaPedro ? (
@@ -296,7 +332,18 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
                   </div>
                 )}
               </td>
-              <td className="py-2 pr-3"><AccionResuelto tracking={d.devolucion.tracking} resueltoAt={d.resueltoAt} /></td>
+              <td className="py-2 pr-3">
+                <div className="space-y-1">
+                  <AccionResuelto tracking={d.devolucion.tracking} resueltoAt={d.resueltoAt} />
+                  {!d.ordenAnulada && (
+                    <BotonAnularOrden
+                      gocuotasOrderId={d.gocuotasOrderId}
+                      gocuotasStatus={d.gocuotasStatus}
+                      devolucionEstado={d.pedroEstado}
+                    />
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
