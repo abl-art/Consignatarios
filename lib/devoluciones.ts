@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import type { FilaDevolucion } from '@/lib/actions/devoluciones'
 
 // Seguimiento de envíos Andreani (entrega y devolución) por consulta en vivo a la
 // API pública de tracking. El número viaja cifrado en un parámetro `payload`
@@ -176,6 +177,23 @@ export const ESTADOS_DEVOLUCION_FINAL = ['Devuelto']
 export function esDevolucionFinalizada(estadoDevolucion: string | null, banderas: string[]): boolean {
   if (banderas.length > 0) return false
   return estadoDevolucion !== null && ESTADOS_DEVOLUCION_FINAL.includes(estadoDevolucion)
+}
+
+// Separa las filas de la pestaña Devoluciones en pendientes/resueltas según el
+// tilde manual resueltoAt — NUNCA según el estado de Andreani. Una devolución
+// puede estar "Devuelto" en Andreani y seguir pendiente si nadie la cerró a
+// mano (nada se archiva solo); reemplaza el split que antes hacía
+// esDevolucionFinalizada.
+export function separarResueltos(
+  filas: FilaDevolucion[],
+): { pendientes: FilaDevolucion[]; resueltas: FilaDevolucion[] } {
+  const pendientes: FilaDevolucion[] = []
+  const resueltas: FilaDevolucion[] = []
+  for (const fila of filas) {
+    if (fila.resueltoAt != null) resueltas.push(fila)
+    else pendientes.push(fila)
+  }
+  return { pendientes, resueltas }
 }
 
 export function banderasDevolucion(d: DatosBanderas): string[] {

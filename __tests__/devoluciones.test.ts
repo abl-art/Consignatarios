@@ -7,7 +7,9 @@ import {
   formatearDuracion,
   banderasDevolucion,
   esDevolucionFinalizada,
+  separarResueltos,
 } from '@/lib/devoluciones'
+import type { FilaDevolucion } from '@/lib/actions/devoluciones'
 
 // Clave e IV públicos del front de seguimiento de Andreani (NEXT_PUBLIC_* expuestos
 // en www.andreani.com/__ENV.js). El payload es determinístico: mismo número → mismo
@@ -249,5 +251,61 @@ describe('esDevolucionFinalizada', () => {
 
   it('NO es finalizada sin estado (devolución sin movimiento)', () => {
     expect(esDevolucionFinalizada(null, ['devolucion_sin_movimiento'])).toBe(false)
+  })
+})
+
+// Fixture mínimo de una fila de la tabla de devoluciones. Los campos que no
+// importan para separarResueltos quedan con valores neutros.
+function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
+  return {
+    orderNumber: 'ORD-1',
+    gocuotasOrderId: null,
+    cliente: 'Cliente',
+    dni: null,
+    producto: 'Producto',
+    imei: null,
+    ciudad: null,
+    provincia: null,
+    returnCreadoAt: '2026-10-01T00:00:00Z',
+    ordenAnulada: false,
+    inventarioStatus: null,
+    trustonicObservado: null,
+    entrega: { tracking: null, estadoActual: null, tramos: [], totalHoras: 0, consultado: false },
+    devolucion: { tracking: null, estadoActual: null, tramos: [], totalHoras: 0, consultado: false },
+    banderas: [],
+    recibidoWhGo: false,
+    resueltoAt: null,
+    ...overrides,
+  }
+}
+
+describe('separarResueltos', () => {
+  it('manda a pendientes una fila con estadoActual terminal (Devuelto) pero resueltoAt null: nada se archiva solo', () => {
+    const fila = filaDevolucion({
+      devolucion: { tracking: '123', estadoActual: 'Devuelto', tramos: [], totalHoras: 10, consultado: true },
+      resueltoAt: null,
+    })
+    const { pendientes, resueltas } = separarResueltos([fila])
+    expect(pendientes).toEqual([fila])
+    expect(resueltas).toEqual([])
+  })
+
+  it('manda a resueltas una fila con resueltoAt seteado, sin importar el estado de Andreani', () => {
+    const fila = filaDevolucion({
+      devolucion: { tracking: '456', estadoActual: 'En retiro', tramos: [], totalHoras: 5, consultado: true },
+      resueltoAt: '2026-10-20T12:00:00Z',
+    })
+    const { pendientes, resueltas } = separarResueltos([fila])
+    expect(resueltas).toEqual([fila])
+    expect(pendientes).toEqual([])
+  })
+
+  it('separa un mix de filas en sus dos grupos preservando el orden', () => {
+    const a = filaDevolucion({ orderNumber: 'A', resueltoAt: null })
+    const b = filaDevolucion({ orderNumber: 'B', resueltoAt: '2026-10-15T00:00:00Z' })
+    const c = filaDevolucion({ orderNumber: 'C', resueltoAt: null })
+    const { pendientes, resueltas } = separarResueltos([a, b, c])
+    expect(pendientes.map(f => f.orderNumber)).toEqual(['A', 'C'])
+    expect(resueltas.map(f => f.orderNumber)).toEqual(['B'])
   })
 })

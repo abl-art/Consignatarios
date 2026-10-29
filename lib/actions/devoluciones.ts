@@ -49,6 +49,8 @@ export interface FilaDevolucion {
   banderas: string[]
   /** Tilde manual: el equipo entró físicamente al depósito de GOcuotas */
   recibidoWhGo: boolean
+  /** Cierre manual del caso (botón Resolver). null = pendiente de gestión. */
+  resueltoAt: string | null
 }
 
 interface ReturnRaw {
@@ -98,17 +100,27 @@ async function consultarAndreani(tracking: string | null, ahora: Date): Promise<
   }
 }
 
-// Tildes "Recibido WH GO" de devoluciones_seguimiento en Supabase, por tracking
-// del retorno. Si la query falla, nadie aparece tildado (no bloquea la pestaña).
-async function getRecibidosWh(): Promise<Set<string>> {
+interface SeguimientoDevolucion {
+  recibidoWhGo: boolean
+  resueltoAt: string | null
+}
+
+// Tildes manuales de devoluciones_seguimiento en Supabase, por tracking del
+// retorno: "Recibido WH GO" y el cierre manual (resuelto_at). Si la query
+// falla, nadie aparece tildado ni resuelto (no bloquea la pestaña).
+async function getSeguimientoDevoluciones(): Promise<Map<string, SeguimientoDevolucion>> {
   try {
     const supabase = createAdminClient()
     const { data } = await supabase
       .from('devoluciones_seguimiento')
-      .select('tracking, recibido_wh')
-    return new Set((data ?? []).filter(r => r.recibido_wh).map(r => r.tracking))
+      .select('tracking, recibido_wh, resuelto_at')
+    const map = new Map<string, SeguimientoDevolucion>()
+    for (const r of data ?? []) {
+      map.set(r.tracking, { recibidoWhGo: !!r.recibido_wh, resueltoAt: r.resuelto_at ?? null })
+    }
+    return map
   } catch {
-    return new Set()
+    return new Map()
   }
 }
 
@@ -122,6 +134,26 @@ export async function setRecibidoWhGo(tracking: string, recibido: boolean): Prom
     .from('devoluciones_seguimiento')
     .upsert(
       { tracking, recibido_wh: recibido, recibido_wh_at: recibido ? new Date().toISOString() : null },
+      { onConflict: 'tracking' }
+    )
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/envios')
+  return { ok: true }
+}
+
+/**
+ * Marca (o desmarca) una devolución como resuelta, por tracking del retorno.
+ * Ninguna devolución se archiva sola por su estado de Andreani — Yami la
+ * cierra a mano con el botón Resolver. El upsert crea la fila de seguimiento
+ * si todavía no existía.
+ */
+export async function setDevolucionResuelta(tracking: string, resuelto: boolean): Promise<{ ok?: true; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('devoluciones_seguimiento')
+    .upsert(
+      { tracking, resuelto_at: resuelto ? new Date().toISOString() : null },
       { onConflict: 'tracking' }
     )
   if (error) return { error: error.message }
@@ -162,7 +194,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   )
 
   const ahora = new Date()
-  const recibidos = await getRecibidosWh()
+  const seguimientos = await getSeguimientoDevoluciones()
   return Promise.all(
     rows.map(async (r): Promise<FilaDevolucion> => {
       const [entrega, devolucion] = await Promise.all([
@@ -170,6 +202,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         consultarAndreani(r.ret_tracking, ahora),
       ])
       const ordenAnulada = r.go_status === 'discarded'
+      const seguimiento = seguimientos.get(r.ret_tracking)
       return {
         orderNumber: r.order_number,
         gocuotasOrderId: r.gocuotas_order_id,
@@ -185,7 +218,8 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         trustonicObservado: r.tru_obs,
         entrega,
         devolucion,
-        recibidoWhGo: recibidos.has(r.ret_tracking),
+        recibidoWhGo: seguimiento?.recibidoWhGo ?? false,
+        resueltoAt: seguimiento?.resueltoAt ?? null,
         banderas: banderasDevolucion({
           entregaEstado: entrega.estadoActual,
           inventarioStatus: r.inv_status,
