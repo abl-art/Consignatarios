@@ -132,3 +132,16 @@ El negocio cierra así (decidido por Emiliano):
 - Nombres de estados, componentes de UI (seguir estilo Finanzas/Compras: FinanzasTabs, tarjetas de navegación estilo Compras), y ubicación de la tarjeta de entrada a /seguros.
 - Librería del export (`xlsx` ya es dependencia).
 - Manual operativo: la página nueva es operada por Yami ⇒ **lleva manual operativo** (regla del repo), a generar al final de la implementación.
+
+## Etapa 2a — Cierres mensuales (agregado 29/10/2026, aprobado por Emiliano)
+
+La tabla de certificados es dinámica (estados cambian); lo facturado por la aseguradora debe controlarse contra una **foto congelada** de cada mes, no contra el presente.
+
+- **Tabla `seguros_cierres`**: una fila por mes cerrado — `mes` ('YYYY-MM', unique), `congelado_at`, `resumen` jsonb (certificados por estado, suma vigente, prima, ingreso, resultado del mes cerrado) y `filas_excel` jsonb (las filas del Excel del broker, 19 columnas, exactamente como estaban al congelar).
+- **Cron el día 1 de cada mes** (`/api/cron/seguros-cierre`, patrón congelar-proyecciones con `?force=1` y `?mes=`): congela el mes anterior. Idempotente (unique mes). **No-op si no hay ningún certificado emitido** (seguro nunca prendido → sin ruido).
+- **Pestaña "Cierres"** (5ta) en /seguros: tabla de cierres (mes, congelado el, certificados, suma vigente, prima, ingreso, resultado) + descarga del Excel histórico de cada cierre (`/api/seguros/export?cierre=YYYY-MM`, servido desde `filas_excel`) + botón "Congelar mes anterior" manual (confirmación 2 pasos) para el primer cierre o si el cron falló.
+- Manual operativo: actualizar con la sección de cierres (regla del repo).
+
+## Etapa 2b — Constancia de cobertura + mail al cliente (PENDIENTE de datos del broker)
+
+Modelo recibido (Sancor Seguros, "Constancia de Cobertura — Robo Tecnología", a primera pérdida absoluta, mundo entero). Al emitirse cada certificado: generar PDF de la constancia (formato del modelo + **IMEI**, que el modelo no trae) y mandarlo por mail a `store_orders.customer_email` explicando el seguro y cómo actuar ante robo (denuncia policial **con el IMEI** + link al formulario). Si el mail falla, el certificado queda emitido y reintenta en el próximo sync. Agregar la aclaración del IMEI también al formulario público. **Bloqueado hasta que el broker responda**: número de póliza colectiva, significado del campo Ref (¿nuestro correlativo?), si la constancia replica el formato Sancor/productor tal cual o va con marca GOcelular, y si "ubicación del riesgo" = domicilio de envío del cliente.
