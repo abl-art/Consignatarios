@@ -5,6 +5,7 @@ import {
   COLUMNAS_BROKER,
   filasBroker,
   armarCierre,
+  esMesCierreValido,
   type CertDevengo,
   type ParametroPct,
 } from '@/lib/seguros-informes'
@@ -406,5 +407,25 @@ describe('armarCierre', () => {
       resultado: 0,
     })
     expect(filas).toEqual([])
+  })
+})
+
+describe('esMesCierreValido', () => {
+  it('acepta un mes pasado bien formado', () => {
+    expect(esMesCierreValido('2026-09', '2026-10')).toBe(true)
+    expect(esMesCierreValido('2025-12', '2026-10')).toBe(true)
+  })
+
+  it('rechaza el mes actual y meses futuros (todavía no cerraron)', () => {
+    expect(esMesCierreValido('2026-10', '2026-10')).toBe(false)
+    expect(esMesCierreValido('2027-03', '2026-10')).toBe(false)
+  })
+
+  it('rechaza formatos inválidos (sin padding, mes 13, basura)', () => {
+    expect(esMesCierreValido('2026-9', '2026-10')).toBe(false)
+    expect(esMesCierreValido('2026-13', '2026-10')).toBe(false)
+    expect(esMesCierreValido('2026-00', '2026-10')).toBe(false)
+    expect(esMesCierreValido('garbage', '2026-10')).toBe(false)
+    expect(esMesCierreValido('2026-09-01', '2026-10')).toBe(false)
   })
 })

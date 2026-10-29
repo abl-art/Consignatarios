@@ -14,7 +14,7 @@ import {
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
-import { armarCierre, type ResumenCierre } from '@/lib/seguros-informes'
+import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguros-informes'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
@@ -580,6 +580,12 @@ export async function resolverSiniestro(
 
 export type CierreRow = { mes: string; congeladoAt: string; resumen: ResumenCierre }
 
+/** 'YYYY-MM' del mes calendario actual, en UTC. */
+function mesActualUTC(): string {
+  const hoy = new Date()
+  return `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 /** 'YYYY-MM' del mes calendario anterior al actual, en UTC. */
 function mesAnteriorUTC(): string {
   const hoy = new Date()
@@ -612,6 +618,20 @@ function mesAnteriorUTC(): string {
 export async function congelarCierre(opts?: { mes?: string; force?: boolean }): Promise<{ ok: boolean; motivo?: string }> {
   const mes = opts?.mes ?? mesAnteriorUTC()
   const force = opts?.force ?? false
+
+  // Fail-loud (regla del repo): un mes malformado generaría un cierre falso
+  // (o colgaría devengoMensual) y un mes no cerrado congelaría una foto
+  // incompleta que además bloquea al cron real vía on-conflict.
+  if (!esMesCierreValido(mes, mesActualUTC())) {
+    throw new Error(`Mes inválido para cierre: "${mes}" (formato YYYY-MM y anterior al mes en curso)`)
+  }
+
+  // La foto debe incluir todo lo ocurrido hasta el momento de congelar:
+  // sin esto, una anulación o venta del último día del mes sincronizada
+  // después del cierre quedaría fuera del snapshot para siempre (el cron
+  // corre 05:00 UTC, antes del seguros-sync de las 12:00). Si el sync
+  // falla, mejor no congelar (el cron devuelve 500 y se reintenta).
+  await sincronizarSeguros()
 
   const [certs, config] = await Promise.all([getCertificados(), getSegurosConfig()])
   const emitidos = certs.filter((c) => c.estado !== 'pendiente')

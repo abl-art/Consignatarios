@@ -215,6 +215,17 @@ export type ResumenCierre = {
   resultado: number
 }
 
+/**
+ * ¿`mes` es un mes válido para congelar un cierre? Formato estricto 'YYYY-MM'
+ * y estrictamente ANTERIOR a `mesActual` (el mes en curso no cerró todavía;
+ * un mes futuro congelaría un cierre falso que además bloquearía al cron real
+ * por el on-conflict). Con formato libre, un string no comparable ('garbage')
+ * colgaría el loop de devengoMensual — por eso se valida antes de computar.
+ */
+export function esMesCierreValido(mes: string, mesActual: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(mes) && mes < mesActual
+}
+
 /** Último día (inclusive) de un 'YYYY-MM', como 'YYYY-MM-DD'. */
 function ultimoDiaMes(mes: string): string {
   const [anio, mesNum] = mes.split('-').map(Number)
