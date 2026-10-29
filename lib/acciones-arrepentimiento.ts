@@ -54,8 +54,58 @@ export function resolverAccion(fulfillment: string | null): ResultadoAccion {
 export function accionDesdeEstadoPedro(estado: string): AccionAndreani | 'manual' {
   if (estado === 'no_cancelable_expedido') return 'rescate'
   if (estado === 'no_cancelable_entregado') return 'solicitar_devolucion'
-  if (estado === 'sin_pedido_wh') return 'manual'
+  if (estado === 'sin_pedido_wh' || estado === 'no_es_wh') return 'manual'
   if (estado.startsWith('rescate')) return 'rescate'
   if (estado.startsWith('devolucion') || estado.startsWith('retiro')) return 'solicitar_devolucion'
   return 'manual'
+}
+
+export type RuteoPreview =
+  | { tipo: 'go'; accion: AccionAndreani; label: string }
+  | { tipo: 'reintentar'; motivo: string }
+  | { tipo: 'manual'; motivo: string }
+  | { tipo: 'ninguna'; motivo: string }
+
+/**
+ * Ruteo del RESULTADO del preview (mode: preview = "qué haría apply") al
+ * estado del botón inteligente, según el contrato completo de Pedro (29/10,
+ * docs/gocelular-cancelaciones-api.md). El rescate NO es una acción propia
+ * del POST: un apply de cancelar_pedido sobre un expedido lo pide solo
+ * (rescate automático), por eso `no_cancelable_expedido` es un GO.
+ */
+export function rutearPreview(resultado: string | null): RuteoPreview {
+  switch (resultado) {
+    case 'cancelacion_pedida':
+    case 'cancelacion_pedida_por_mail':
+    case 'cancelado':
+      return { tipo: 'go', accion: 'cancelar_pedido', label: 'Cancelar pedido' }
+    case 'no_cancelable_expedido':
+      return { tipo: 'go', accion: 'rescate', label: 'Pedir rescate' }
+    case 'no_cancelable_entregado':
+      return { tipo: 'go', accion: 'solicitar_devolucion', label: 'Pedir devolución' }
+    case 'rescate_pedido':
+    case 'rescate_confirmado':
+    case 'rescate_recibido':
+      return { tipo: 'ninguna', motivo: 'Rescate ya en curso — se sigue en la pestaña Rescates' }
+    case 'rescate_rechazado':
+      return { tipo: 'manual', motivo: 'Andreani rechazó el rescate — lo resuelve un operador de GOcelular; si el paquete llega al cliente, corresponde devolución' }
+    case 'devolucion_pedida':
+    case 'retiro_solicitado':
+    case 'retiro_confirmado':
+    case 'retiro_realizado':
+    case 'devolucion_recibida':
+      return { tipo: 'ninguna', motivo: 'Devolución ya en curso — se sigue en la pestaña Devoluciones' }
+    case 'retiro_fallido':
+      return { tipo: 'manual', motivo: 'Andreani no pudo retirar el paquete — lo revisa un operador de GOcelular' }
+    case 'vivo':
+      return { tipo: 'reintentar', motivo: 'El pedido sigue activo y todavía no se pudo cancelar — reintentá en unos minutos' }
+    case 'sin_pedido_wh':
+      return { tipo: 'reintentar', motivo: 'La orden está paga pero el pedido del warehouse todavía no se creó — reintentá en unos minutos' }
+    case 'no_es_wh':
+      return { tipo: 'manual', motivo: 'Sin pedido en Andreani (stock local o equipo ya asignado) — nada que cancelar en el depósito: anulá la orden y descartá' }
+    case 'requiere_atencion':
+      return { tipo: 'manual', motivo: 'El pedido está en la cola de un operador de GOcelular — esperá su resolución' }
+    default:
+      return { tipo: 'manual', motivo: `GOcelular respondió un estado desconocido (${resultado ?? 'sin resultado'}) — resolver a mano` }
+  }
 }
