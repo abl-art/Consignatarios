@@ -145,7 +145,16 @@ export async function previewAccionAndreani(
     source: '360',
   })
   if (!res.ok) return { error: errorAmigable(res.status, res.body) }
-  return { ruteo: rutearPreview(res.body?.resultado ?? null), mensaje: resumen(res.body) }
+
+  // El preview es ambiguo para rescate_* (proyección vs vigente, caso real
+  // SO-ANF39G): el GET desambigua — bloque rescate ausente = proyección → GO.
+  const resultado = res.body?.resultado ?? null
+  let rescateVigente: boolean | undefined
+  if (resultado?.startsWith('rescate')) {
+    const est = await getCancelacionEstado({ order_number: fila.order_number }, { timeoutMs: 5000 })
+    if (est.ok) rescateVigente = est.body?.rescate != null
+  }
+  return { ruteo: rutearPreview(resultado, { rescateVigente }), mensaje: resumen(res.body) }
 }
 
 /**
