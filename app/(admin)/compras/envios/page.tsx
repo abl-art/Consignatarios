@@ -15,7 +15,7 @@ import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos } from '@/lib/actions/rescates'
 import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/actions/arrepentimientos'
 import { getDevoluciones, type FilaDevolucion } from '@/lib/actions/devoluciones'
-import { esDevolucionFinalizada } from '@/lib/devoluciones'
+import { separarResueltos } from '@/lib/devoluciones'
 import { getDemorasDescartadas } from '@/lib/actions/demoras'
 import { formatearMoneda } from '@/lib/utils'
 import type { FuentesBusqueda } from '@/lib/buscador-envios'
@@ -111,10 +111,9 @@ export default async function EnviosPage({
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   // Devoluciones: estado en vivo de los dos seguimientos de Andreani (entrega + devolución)
   const devoluciones: FilaDevolucion[] = await getDevoluciones().catch(() => [])
-  // Pendientes de gestión = las que no están devueltas/cerradas (badge de la pestaña)
-  const devolucionesPendientes = devoluciones.filter(
-    d => !esDevolucionFinalizada(d.devolucion.estadoActual, d.banderas),
-  ).length
+  // Pendientes de gestión = las que nadie cerró a mano con el botón Resolver
+  // (badge de la pestaña) — ninguna devolución se archiva sola por su estado de Andreani.
+  const devolucionesPendientes = separarResueltos(devoluciones).pendientes.length
   const totalAlertas = alertas.requierenAtencion.length + alertas.expedidosSinImei.length
   const siniestrosWhAbiertos = siniestrosStock.filter(s => s.estado === 'abierto').length
   const siniestrosPendientes = siniestros.filter(s => !s.resueltoAt).length
