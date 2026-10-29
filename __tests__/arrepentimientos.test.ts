@@ -191,3 +191,35 @@ describe('puedeAnularOrden con cancelación pendiente de Andreani', () => {
     if (!r.ok) expect(r.error).toMatch(/pendiente de confirmación/i)
   })
 })
+
+describe('puedeAnularOrden: umbrales de rescate/devolución sobre expedido', () => {
+  const base = { estado: 'pendiente' as const, gocuotasOrderId: '1', gocuotasStatus: 'approved' as const }
+
+  it('expedido con rescate solo pedido (no confirmado): sigue bloqueado', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', rescateEstado: 'rescate_pedido' }).ok).toBe(false)
+  })
+
+  it('expedido con rescate confirmado: habilita el reembolso', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', rescateEstado: 'rescate_confirmado' }).ok).toBe(true)
+  })
+
+  it('expedido con rescate recibido: habilita el reembolso', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', rescateEstado: 'rescate_recibido' }).ok).toBe(true)
+  })
+
+  it('expedido con retiro solo solicitado (no realizado): sigue bloqueado', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', devolucionEstado: 'retiro_solicitado' }).ok).toBe(false)
+  })
+
+  it('expedido con retiro realizado: habilita el reembolso', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', devolucionEstado: 'retiro_realizado' }).ok).toBe(true)
+  })
+
+  it('expedido con devolución recibida: habilita el reembolso', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'expedido', devolucionEstado: 'devolucion_recibida' }).ok).toBe(true)
+  })
+
+  it('no regresión: pre-despacho sigue habilitado sin pasar los campos nuevos', () => {
+    expect(puedeAnularOrden({ ...base, fulfillment: 'en cola' }).ok).toBe(true)
+  })
+})
