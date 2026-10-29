@@ -123,6 +123,10 @@ export function etiquetaDesdeGetCancelacion(body: { estado?: string; canal?: str
   if (body.estado === 'cancelado') return 'cancelado'
   if (body.estado === 'no_cancelable_expedido') return 'expedido'
   if (body.estado === 'requiere_atencion') return 'cancelación no realizada'
+  // Contrato 29/10: el viejo "cancelacion_pedida + canal mail" ahora llega
+  // como estado propio — misma regla de Emiliano: Andreani rechazó el intento
+  // por API, queda el reintento por mail (pocas chances) → no realizada.
+  if (body.estado === 'cancelacion_pedida_por_mail') return 'cancelación no realizada'
   if (body.estado === 'cancelacion_pedida') return body.canal === 'mail' ? 'cancelación no realizada' : 'cancelación pedida'
   return null
 }
@@ -135,5 +139,9 @@ export function interpretarPreview(body: { resultado?: string } | null): { cance
   const r = body?.resultado ?? 'desconocido'
   if (r.startsWith('no_cancelable')) return { cancelable: false, motivo: `GOcelular responde ${r} — el pedido ya no se puede cancelar (refrescá la fila)` }
   if (r === 'sin_pedido_wh') return { cancelable: false, motivo: 'GOcelular no encuentra pedido en el warehouse — reintentá en unos minutos' }
+  // Caso real SO-AMCPBE (29/10): pickeado = equipo ya asignado → fuera del
+  // circuito de cancelación de la API. Gestión manual con GOcelular (frenar
+  // la expedición / desvincular el equipo) o esperar expedido → rescate.
+  if (r === 'no_es_wh') return { cancelable: false, motivo: 'La API de GOcelular no tiene nada que cancelar acá (stock local o equipo ya asignado) — gestión manual: pedir a GOcelular frenar la expedición, o esperar a expedido y pedir el rescate' }
   return { cancelable: true, motivo: r }
 }

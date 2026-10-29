@@ -72,8 +72,24 @@ export type RuteoPreview =
  * docs/gocelular-cancelaciones-api.md). El rescate NO es una acción propia
  * del POST: un apply de cancelar_pedido sobre un expedido lo pide solo
  * (rescate automático), por eso `no_cancelable_expedido` es un GO.
+ *
+ * AMBIGÜEDAD del preview (casos reales 29/10): para una acción YA HECHA
+ * devuelve el estado vigente (SO-FGDU2R → 'cancelado'), pero para una acción
+ * POR HACER devuelve la proyección (SO-ANF39G → 'rescate_pedido' con el GET
+ * sin bloque rescate). `rescateVigente` desambigua: el que llama mira el GET
+ * — bloque rescate presente = en curso de verdad; ausente = proyección → GO.
+ * Sin dato (GET falló) se queda en 'ninguna': con duda no se dispara.
  */
-export function rutearPreview(resultado: string | null): RuteoPreview {
+export function rutearPreview(
+  resultado: string | null,
+  opts?: { rescateVigente?: boolean },
+): RuteoPreview {
+  if (
+    (resultado === 'rescate_pedido' || resultado === 'rescate_confirmado' || resultado === 'rescate_recibido') &&
+    opts?.rescateVigente === false
+  ) {
+    return { tipo: 'go', accion: 'rescate', label: 'Pedir rescate' }
+  }
   switch (resultado) {
     case 'cancelacion_pedida':
     case 'cancelacion_pedida_por_mail':

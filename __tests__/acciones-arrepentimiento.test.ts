@@ -80,10 +80,25 @@ describe('rutearPreview', () => {
     expect(rutearPreview('no_cancelable_entregado')).toEqual({ tipo: 'go', accion: 'solicitar_devolucion', label: 'Pedir devolución' })
   })
 
-  it('rescate ya en curso → ninguna (contrato: no reintentar el apply, se sigue en Rescates)', () => {
+  // Caso real SO-ANF39G (29/10): el preview devuelve 'rescate_pedido' como
+  // PROYECCIÓN ("el apply pediría el rescate") cuando el GET no tiene bloque
+  // rescate — igual ambigüedad que 'cancelado'. El GET desambigua.
+  it('rescate_* con GET sin bloque rescate = proyección → go rescate', () => {
+    expect(rutearPreview('rescate_pedido', { rescateVigente: false })).toEqual({ tipo: 'go', accion: 'rescate', label: 'Pedir rescate' })
+    expect(rutearPreview('rescate_confirmado', { rescateVigente: false })).toEqual({ tipo: 'go', accion: 'rescate', label: 'Pedir rescate' })
+  })
+
+  it('rescate ya en curso (GET con bloque rescate, o sin dato del GET) → ninguna', () => {
+    expect(rutearPreview('rescate_pedido', { rescateVigente: true }).tipo).toBe('ninguna')
+    expect(rutearPreview('rescate_confirmado', { rescateVigente: true }).tipo).toBe('ninguna')
+    expect(rutearPreview('rescate_recibido', { rescateVigente: true }).tipo).toBe('ninguna')
+    // sin dato (GET falló): conservador, no disparar
     expect(rutearPreview('rescate_pedido').tipo).toBe('ninguna')
-    expect(rutearPreview('rescate_confirmado').tipo).toBe('ninguna')
     expect(rutearPreview('rescate_recibido').tipo).toBe('ninguna')
+  })
+
+  it('rescate_rechazado → manual aunque el GET no tenga bloque (nunca auto-disparar sobre un rechazo)', () => {
+    expect(rutearPreview('rescate_rechazado', { rescateVigente: false }).tipo).toBe('manual')
   })
 
   it('rescate_rechazado → manual (lo resuelve un operador; si llegó al cliente, devolución)', () => {
