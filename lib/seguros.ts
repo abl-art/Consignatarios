@@ -56,6 +56,20 @@ export function normalizarDni(dni: string): string {
   return soloDigitos.replace(/^0+(?=\d)/, '')
 }
 
+/**
+ * ¿El certificado admite baja manual? Solo los emitidos sin novedad: un
+ * pendiente todavía no es póliza, un anulado ya está de baja y un siniestrado
+ * cerró su ciclo. La action (bajaManualCertificado) replica este guard en el
+ * WHERE del update — misma definición, nunca divergen.
+ */
+export function puedeDarseDeBaja(cert: {
+  estado: 'emitido' | 'pendiente'
+  fechaAnula: string | null
+  fechaSiniestro: string | null
+}): boolean {
+  return cert.estado === 'emitido' && cert.fechaAnula === null && cert.fechaSiniestro === null
+}
+
 export type FiltroCertificados = { dni?: string; desde?: string; hasta?: string }
 
 /**

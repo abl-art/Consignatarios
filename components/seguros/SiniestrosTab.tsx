@@ -41,7 +41,7 @@ function EstadoChip({ estado }: { estado: EstadoSiniestro }) {
   )
 }
 
-function MoraChip({ enMora, diasMaximos, sinDato }: { enMora: boolean; diasMaximos: number; sinDato: boolean }) {
+function MoraChip({ enMora, diasMaximos, deudaTotal, sinDato }: { enMora: boolean; diasMaximos: number; deudaTotal: number; sinDato: boolean }) {
   if (sinDato) {
     return (
       <span
@@ -62,9 +62,9 @@ function MoraChip({ enMora, diasMaximos, sinDato }: { enMora: boolean; diasMaxim
   return (
     <span
       className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-red-50 text-red-700 border-red-200"
-      title="Cobertura suspendida: el seguro no cubre siniestros con cuotas en mora"
+      title="Cobertura suspendida: el seguro no cubre siniestros con cuotas en mora. Días = atraso de la cuota más vieja; $ = deuda total impaga de la orden"
     >
-      ⚠️ En mora ({diasMaximos}d)
+      ⚠️ En mora ({diasMaximos}d · {formatearMoneda(deudaTotal)})
     </span>
   )
 }
@@ -320,6 +320,9 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
       <td className="px-4 py-3 text-gray-900">
         {s.cliente || '—'}
         <div className="text-xs text-gray-500">DNI {s.dni ?? s.dniIngresado}</div>
+        <div className="text-xs text-gray-400 whitespace-nowrap" title="N° de pedido GOcelular · N° de orden GOcuotas">
+          {s.pedidoNumero ?? '—'} · GOcuotas {s.gocuotasOrderId || '—'}
+        </div>
       </td>
       <td className="px-4 py-3 text-gray-600 max-w-[180px]">
         <div className="truncate" title={s.articulo}>{s.articulo || '—'}</div>
@@ -332,7 +335,7 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
         {fecha(s.inicioVig)} – {fecha(s.finVig)}
       </td>
       {!resuelta && (
-        <td className="px-4 py-3"><MoraChip enMora={s.enMora} diasMaximos={s.diasMaximos} sinDato={s.moraSinDato} /></td>
+        <td className="px-4 py-3"><MoraChip enMora={s.enMora} diasMaximos={s.diasMaximos} deudaTotal={s.deudaTotal} sinDato={s.moraSinDato} /></td>
       )}
       <td className="px-4 py-3"><VerDenuncia archivoPath={s.archivoPath} /></td>
       {resuelta ? (

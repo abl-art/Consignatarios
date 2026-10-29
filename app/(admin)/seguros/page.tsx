@@ -13,7 +13,7 @@ import {
   resultadoPorModeloSinIva,
   type CertDevengo,
 } from '@/lib/seguros-informes'
-import { fetchFacturasBPorOrden } from '@/lib/gocelular'
+import { fetchFacturasBPorOrden, fetchMoraPorOrdenes, type MoraOrden } from '@/lib/gocelular'
 import { getUsuarioActual } from '@/lib/permisos-server'
 import { puedeOperar } from '@/lib/permisos'
 import SegurosTabs from '@/components/seguros/SegurosTabs'
@@ -78,6 +78,11 @@ export default async function SegurosPage() {
   const facturasMap = await fetchFacturasBPorOrden(emitidosIds).catch(() => new Map<string, { numero: string; fecha: string }>())
   const facturas = Object.fromEntries(facturasMap)
 
+  // Mora en vivo por certificado (réplica, una query batch). null = no se
+  // pudo consultar → la columna Mora muestra "sin dato", nunca "al día".
+  const moraMap = await fetchMoraPorOrdenes(emitidosIds).catch(() => null)
+  const moraPorOrden: Record<string, MoraOrden> | null = moraMap ? Object.fromEntries(moraMap) : null
+
   // hastaMes = mes actual: el devengo es un control histórico (prima/ingreso
   // ya cobrados sobre certificados emitidos), no hay nada que proyectar hacia
   // meses futuros todavía sin vigencia.
@@ -116,6 +121,7 @@ export default async function SegurosPage() {
           operar={operar}
           primaActual={primaActual}
           siniestralidad={siniestralidad}
+          moraPorOrden={moraPorOrden}
         />
       ),
     },

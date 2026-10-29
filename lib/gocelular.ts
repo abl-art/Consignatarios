@@ -3585,6 +3585,44 @@ export async function fetchCuotasMora(orderId: string): Promise<{ enMora: boolea
   }
 }
 
+export type MoraOrden = { diasMora: number; deudaTotal: number }
+
+/**
+ * Mora por orden en batch (réplica GOcuotas), para la tabla de Certificados
+ * de /seguros y los casos de Siniestros: diasMora = días de atraso de la
+ * cuota VENCIDA impaga más vieja (0 = al día), deudaTotal = $ de TODAS las
+ * cuotas impagas no descartadas (vencidas + por vencer — lo que falta cobrar
+ * de la orden). Órdenes sin cuotas impagas no aparecen en el Map (= al día
+ * sin deuda).
+ */
+export async function fetchMoraPorOrdenes(orderIds: string[]): Promise<Map<string, MoraOrden>> {
+  const pool = getPool()
+  if (!pool || orderIds.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ order_id: string; dias_mora: number | null; deuda_total: string }>(
+      `SELECT order_id,
+              MAX(CASE WHEN installment_due_at < now() THEN days_overdue END) AS dias_mora,
+              COALESCE(SUM(installment_amount), 0)::text AS deuda_total
+       FROM gocuotas_installments
+       WHERE order_id = ANY($1)
+         AND installment_collected_at IS NULL
+         AND installment_discarded_at IS NULL
+       GROUP BY order_id`,
+      [orderIds]
+    )
+    return new Map(
+      res.rows.map((r) => [
+        r.order_id,
+        { diasMora: r.dias_mora !== null ? Number(r.dias_mora) : 0, deudaTotal: Number(r.deuda_total) },
+      ])
+    )
+  } finally {
+    client.release()
+  }
+}
+
 /** Costo (`inventory_items.price`, sin IVA) por IMEI — fallback cuando no hay costo por modelo. */
 export async function fetchCostoPorImei(imeis: string[]): Promise<Map<string, number>> {
   const pool = getPool()

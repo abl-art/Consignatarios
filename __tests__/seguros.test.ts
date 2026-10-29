@@ -3,6 +3,7 @@ import { normalizarModelo } from '@/lib/inventario-indicadores'
 import {
   normalizarDni,
   filtrarCertificados,
+  puedeDarseDeBaja,
   sumarMeses,
   armarDomicilio,
   prepararCertificados,
@@ -321,5 +322,17 @@ describe('filtrarCertificados', () => {
     expect(filtrarCertificados(certs, { hasta: '2026-11-20' })).toEqual([certs[0], certs[1]])
     expect(filtrarCertificados(certs, { desde: '2026-11-01', hasta: '2026-11-30' })).toEqual([certs[1]])
     expect(filtrarCertificados(certs, { dni: '99888777', desde: '2026-12-01' })).toEqual([])
+  })
+})
+
+describe('puedeDarseDeBaja', () => {
+  it('solo un emitido sin anulación ni siniestro puede darse de baja', () => {
+    expect(puedeDarseDeBaja({ estado: 'emitido', fechaAnula: null, fechaSiniestro: null })).toBe(true)
+  })
+
+  it('pendientes, anulados y siniestrados no', () => {
+    expect(puedeDarseDeBaja({ estado: 'pendiente', fechaAnula: null, fechaSiniestro: null })).toBe(false)
+    expect(puedeDarseDeBaja({ estado: 'emitido', fechaAnula: '2026-10-20', fechaSiniestro: null })).toBe(false)
+    expect(puedeDarseDeBaja({ estado: 'emitido', fechaAnula: null, fechaSiniestro: '2026-10-20' })).toBe(false)
   })
 })

@@ -8,7 +8,7 @@ import {
   fetchOrdenesDescartadas,
   fetchContracargosConFecha,
   fetchCostoPorImei,
-  fetchCuotasMora,
+  fetchMoraPorOrdenes,
   fetchFacturasBPorOrden,
 } from '@/lib/gocelular'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
@@ -186,11 +186,9 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
       if (costo === undefined) continue
 
       const fuente: 'lista' | 'inventario' = porClave !== undefined ? 'lista' : 'inventario'
-      // Misma regla que prepararCertificados (lib/seguros.ts): suma asegurada =
-      // costo sin IVA + 10%, redondeado a 2 decimales. Esa constante no está
-      // exportada (es interna de lib/seguros.ts, fuera del scope de Task 4),
-      // así que se repite el cálculo acá para las recuperaciones de pendientes.
-      const suma = Math.round((costo * 1.1 + Number.EPSILON) * 100) / 100
+      // Misma regla que prepararCertificados (lib/seguros.ts): suma asegurada
+      // = costo sin IVA, sin colchón (regla de Emiliano 29/10/2026).
+      const suma = costo
       const { data: emitido, error } = await supabase.rpc('seguros_emitir_pendiente', {
         cert_id: p.id,
         costo,
@@ -265,7 +263,7 @@ export type CertificadoRow = {
   inicioVig: string
   finVig: string
   fechaAnula: string | null
-  motivoAnula: 'descartada' | 'contracargo' | null
+  motivoAnula: 'descartada' | 'contracargo' | 'baja_manual' | null
   fechaSiniestro: string | null
   estado: 'emitido' | 'pendiente'
   createdAt: string
@@ -308,7 +306,7 @@ export async function getCertificados(): Promise<CertificadoRow[]> {
     inicioVig: r.inicio_vig as string,
     finVig: r.fin_vig as string,
     fechaAnula: r.fecha_anula as string | null,
-    motivoAnula: r.motivo_anula as 'descartada' | 'contracargo' | null,
+    motivoAnula: r.motivo_anula as 'descartada' | 'contracargo' | 'baja_manual' | null,
     fechaSiniestro: r.fecha_siniestro as string | null,
     estado: r.estado as 'emitido' | 'pendiente',
     createdAt: r.created_at as string,
@@ -342,10 +340,13 @@ export type SiniestroRow = {
   inicioVig: string
   finVig: string
   gocuotasOrderId: string
+  pedidoNumero: string | null
   // mora en vivo (réplica GOcuotas) — solo para backoffice, nunca al cliente
   enMora: boolean
   diasMaximos: number
-  /** true si fetchCuotasMora falló para este caso puntual (réplica caída/lenta) — degrada solo esta fila, nunca toda la pestaña. */
+  /** $ de todas las cuotas impagas no descartadas de la orden (vencidas + por vencer). */
+  deudaTotal: number
+  /** true si la consulta de mora falló (réplica caída/lenta) — degrada el dato de mora, nunca la pestaña. */
   moraSinDato: boolean
 }
 
@@ -369,46 +370,47 @@ type SiniestroConCertRaw = {
     inicio_vig: string
     fin_vig: string
     gocuotas_order_id: string
+    pedido_numero: string | null
   } | null
 }
 
 /**
  * Casos de siniestro con los datos del certificado y la mora en vivo del
- * pedido (fetchCuotasMora contra la réplica de GOcuotas) — una consulta por
- * caso; a la escala esperada (decenas de denuncias) es aceptable, no hace
- * falta batchear. Cada fetchCuotasMora está en su propio try/catch: si la
- * réplica falla o está lenta para UN caso, esa fila degrada a "sin dato"
- * (moraSinDato=true) pero el resto de la pestaña sigue andando — antes un
- * solo fetch fallido tiraba abajo todo Promise.all y getSiniestros()
- * devolvía [] (pestaña entera vacía) por culpa de un solo caso.
+ * pedido — UNA consulta batch a la réplica (fetchMoraPorOrdenes) para todos
+ * los casos: días de atraso de la cuota más vieja + deuda total impaga. Si
+ * la consulta de mora falla, TODAS las filas degradan a moraSinDato=true
+ * pero la pestaña sigue andando (los datos del certificado no dependen de
+ * la réplica).
  */
 export async function getSiniestros(): Promise<SiniestroRow[]> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('seguros_siniestros')
     .select(
-      'id, certificado_id, dni_ingresado, archivo_path, estado, fecha_robo, monto_reconocido, nota, created_at, resuelto_at, seguros_certificados(cliente, dni, articulo, imei, suma_asegurada, inicio_vig, fin_vig, gocuotas_order_id)',
+      'id, certificado_id, dni_ingresado, archivo_path, estado, fecha_robo, monto_reconocido, nota, created_at, resuelto_at, seguros_certificados(cliente, dni, articulo, imei, suma_asegurada, inicio_vig, fin_vig, gocuotas_order_id, pedido_numero)',
     )
     .order('created_at', { ascending: false })
 
   if (error || !data) return []
 
-  const filas = await Promise.all(
-    (data as unknown as SiniestroConCertRaw[]).map(async (r) => {
-      const cert = r.seguros_certificados
-      let enMora = false
-      let diasMaximos = 0
-      let moraSinDato = !cert
-      if (cert) {
-        try {
-          const mora = await fetchCuotasMora(cert.gocuotas_order_id)
-          enMora = mora.enMora
-          diasMaximos = mora.diasMaximos
-        } catch {
-          moraSinDato = true
-        }
-      }
-      return {
+  const casos = data as unknown as SiniestroConCertRaw[]
+  let morasPorOrden: Map<string, { diasMora: number; deudaTotal: number }> | null = null
+  try {
+    morasPorOrden = await fetchMoraPorOrdenes(
+      casos.flatMap((r) => (r.seguros_certificados ? [r.seguros_certificados.gocuotas_order_id] : [])),
+    )
+  } catch {
+    morasPorOrden = null
+  }
+
+  const filas = casos.map((r) => {
+    const cert = r.seguros_certificados
+    const mora = cert && morasPorOrden ? morasPorOrden.get(cert.gocuotas_order_id) : undefined
+    const enMora = (mora?.diasMora ?? 0) > 0
+    const diasMaximos = mora?.diasMora ?? 0
+    const deudaTotal = mora?.deudaTotal ?? 0
+    const moraSinDato = !cert || morasPorOrden === null
+    return {
         id: r.id,
         certificadoId: r.certificado_id,
         estado: r.estado as EstadoSiniestro,
@@ -427,12 +429,13 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
         inicioVig: cert?.inicio_vig ?? '',
         finVig: cert?.fin_vig ?? '',
         gocuotasOrderId: cert?.gocuotas_order_id ?? '',
+        pedidoNumero: cert?.pedido_numero ?? null,
         enMora,
         diasMaximos,
+        deudaTotal,
         moraSinDato,
       }
-    }),
-  )
+  })
 
   return filas
 }
@@ -569,6 +572,36 @@ export async function resolverSiniestro(
   if (errorUpdate) throw new Error(errorUpdate.message)
   if (!filaResuelta || filaResuelta.length === 0) {
     throw new Error('Este siniestro ya estaba resuelto (puede haberse cerrado en otra pestaña/sesión).')
+  }
+
+  revalidatePath('/seguros')
+}
+
+/**
+ * Baja manual de un certificado (ej.: cliente con mora muy alta declarado
+ * incobrable — no tiene sentido seguir pagando prima). Anula con motivo
+ * 'baja_manual' y fecha de hoy: el mes en curso devenga prima completa
+ * (la prima vigente siempre se paga) y a partir del mes siguiente no.
+ * Guard de estado en el WHERE (misma definición que puedeDarseDeBaja de
+ * lib/seguros.ts): solo emitidos sin anulación ni siniestro; 0 filas
+ * afectadas ⇒ el certificado ya no estaba en condiciones de baja.
+ * V1 manual a propósito: cuando haya una regla clara de incobrabilidad se
+ * automatiza en el sync.
+ */
+export async function bajaManualCertificado(certId: string): Promise<void> {
+  const supabase = createAdminClient()
+  const hoy = new Date().toISOString().slice(0, 10)
+  const { data, error } = await supabase
+    .from('seguros_certificados')
+    .update({ fecha_anula: hoy, motivo_anula: 'baja_manual', updated_at: new Date().toISOString() })
+    .eq('id', certId)
+    .eq('estado', 'emitido')
+    .is('fecha_anula', null)
+    .is('fecha_siniestro', null)
+    .select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('El certificado ya no está en condiciones de darse de baja (anulado, siniestrado o pendiente).')
   }
 
   revalidatePath('/seguros')

@@ -7,10 +7,11 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { setSeguroActivo, type CertificadoRow, type SegurosConfig } from '@/lib/actions/seguros'
+import { setSeguroActivo, bajaManualCertificado, type CertificadoRow, type SegurosConfig } from '@/lib/actions/seguros'
 import { formatearMoneda } from '@/lib/utils'
-import { filtrarCertificados } from '@/lib/seguros'
+import { filtrarCertificados, puedeDarseDeBaja } from '@/lib/seguros'
 import type { ResumenPrimaActual } from '@/lib/seguros-informes'
+import type { MoraOrden } from '@/lib/gocelular'
 
 type Estado = 'vigente' | 'anulado' | 'siniestrado' | 'pendiente'
 
@@ -44,6 +45,62 @@ function fecha(iso: string | null): string {
   return `${d}/${m}/${y}`
 }
 
+// Botón Baja con confirmación en 2 pasos (patrón Resolver de Siniestros):
+// anula el certificado manualmente — caso típico: mora muy alta declarada
+// incobrable, no tiene sentido seguir pagando la prima.
+function BajaButton({ certId, onError }: { certId: string; onError: (msg: string | null) => void }) {
+  const router = useRouter()
+  const [confirmando, setConfirmando] = useState(false)
+  const [pending, startTransition] = useTransition()
+
+  function ejecutar() {
+    onError(null)
+    startTransition(async () => {
+      try {
+        await bajaManualCertificado(certId)
+        setConfirmando(false)
+        router.refresh()
+      } catch (e) {
+        onError(e instanceof Error ? e.message : 'Error inesperado')
+        setConfirmando(false)
+      }
+    })
+  }
+
+  if (!confirmando) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirmando(true)}
+        className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 whitespace-nowrap"
+        title="Dar de baja el certificado (anulación manual — deja de devengar prima el mes que viene)"
+      >
+        Baja
+      </button>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={ejecutar}
+        className="px-2 py-1 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+      >
+        {pending ? '…' : '¿Confirmar?'}
+      </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => setConfirmando(false)}
+        className="text-xs text-gray-400 hover:text-gray-600"
+      >
+        ✕
+      </button>
+    </span>
+  )
+}
+
 interface Props {
   certificados: CertificadoRow[]
   config: SegurosConfig
@@ -51,9 +108,11 @@ interface Props {
   operar: boolean
   primaActual: ResumenPrimaActual
   siniestralidad: { emitidos: number; siniestrados: number; tasaPct: number }
+  /** Mora por gocuotasOrderId (batch server-side); null = no se pudo consultar. */
+  moraPorOrden: Record<string, MoraOrden> | null
 }
 
-export default function CertificadosTab({ certificados, config, facturas, operar, primaActual, siniestralidad }: Props) {
+export default function CertificadosTab({ certificados, config, facturas, operar, primaActual, siniestralidad, moraPorOrden }: Props) {
   const router = useRouter()
   const [activo, setActivo] = useState(config.activo)
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
@@ -260,34 +319,39 @@ export default function CertificadosTab({ certificados, config, facturas, operar
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">N°</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Cliente</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">DNI</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Artículo</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">IMEI</th>
+              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Cliente / DNI</th>
+              <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Artículo / IMEI</th>
               <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500">Suma</th>
               <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Inicio vig.</th>
               <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Fin vig.</th>
               <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">Estado</th>
               <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500">N° factura</th>
+              <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500">Mora / deuda</th>
+              {operar && <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500">Acción</th>}
             </tr>
           </thead>
           <tbody>
             {pendientes.length > 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium border-b border-amber-100">
+                <td colSpan={operar ? 10 : 9} className="px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium border-b border-amber-100">
                   Pendientes de emisión — sin costo de lista — revisar
                 </td>
               </tr>
             )}
             {filas.map((c) => {
               const factura = facturas[c.gocuotasOrderId]
+              const mora = moraPorOrden ? moraPorOrden[c.gocuotasOrderId] : undefined
               return (
                 <tr key={c.id} className={`border-b border-gray-50 ${c._estado === 'pendiente' ? 'bg-amber-50/40' : ''}`}>
                   <td className="px-3 py-2 text-xs text-gray-700">{c.numero ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-900">{c.cliente ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600">{c.dni ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600">{c.articulo}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 font-mono">{c.imei}</td>
+                  <td className="px-3 py-2 text-xs">
+                    <p className="text-gray-900">{c.cliente ?? '—'}</p>
+                    <p className="text-gray-400">{c.dni ?? '—'}</p>
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    <p className="text-gray-600">{c.articulo}</p>
+                    <p className="text-gray-400 font-mono">{c.imei}</p>
+                  </td>
                   <td className="px-3 py-2 text-xs text-right font-mono text-gray-900">
                     {c.sumaAsegurada !== null ? formatearMoneda(c.sumaAsegurada) : '—'}
                   </td>
@@ -295,12 +359,34 @@ export default function CertificadosTab({ certificados, config, facturas, operar
                   <td className="px-3 py-2 text-xs text-gray-600">{fecha(c.finVig)}</td>
                   <td className="px-3 py-2"><EstadoChip estado={c._estado} /></td>
                   <td className="px-3 py-2 text-xs text-gray-600">{factura ? factura.numero : '—'}</td>
+                  <td className="px-3 py-2 text-xs text-right">
+                    {moraPorOrden === null ? (
+                      <span className="text-gray-400" title="No se pudo consultar la mora">sin dato</span>
+                    ) : !mora || mora.diasMora === 0 ? (
+                      <span className="text-green-700">✅ Al día</span>
+                    ) : (
+                      <span
+                        className={mora.diasMora >= 60 ? 'text-red-600 font-semibold' : 'text-amber-600'}
+                        title="Días de atraso de la cuota más vieja · deuda total impaga de la orden"
+                      >
+                        ⚠️ {mora.diasMora}d
+                        <span className="block font-mono text-gray-500 font-normal">{formatearMoneda(mora.deudaTotal)}</span>
+                      </span>
+                    )}
+                  </td>
+                  {operar && (
+                    <td className="px-3 py-2 text-right">
+                      {puedeDarseDeBaja(c) && (
+                        <BajaButton certId={c.id} onError={setError} />
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-sm text-gray-400">
+                <td colSpan={operar ? 10 : 9} className="px-3 py-8 text-center text-sm text-gray-400">
                   {hayFiltro ? 'Ningún certificado coincide con el filtro' : 'Sin certificados todavía'}
                 </td>
               </tr>
