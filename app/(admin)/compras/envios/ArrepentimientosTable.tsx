@@ -14,6 +14,7 @@ import {
 } from '@/lib/actions/arrepentimientos'
 import { MOTIVOS_DESCARTE_ARREPENTIMIENTO, puedeAnularOrden, type EstadisticaDemoraArrepentimiento } from '@/lib/arrepentimientos'
 import BotonCancelarPedido from './BotonCancelarPedido'
+import BotonAccionAndreani from './BotonAccionAndreani'
 
 function fechaCorta(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -148,8 +149,9 @@ export default function ArrepentimientosTable({
         <div className="px-4 pt-4">
           <h2 className="text-sm font-semibold text-gray-900">Solicitudes pendientes ({pendientes.length})</h2>
           <p className="text-xs text-gray-400 mb-2">
-            Mails del Botón de Arrepentimiento, cargados automáticamente cada 30 min. Confirmar crea el
-            rescate (pestaña Rescates); si no hay despacho, anulá la orden en GOcuotas y descartá.
+            Mails del Botón de Arrepentimiento, cargados automáticamente cada 30 min. En expedidos, «Acción Andreani»
+            consulta a GOcelular y dispara rescate o devolución por webhook; Confirmar registra el rescate solo localmente
+            (fallback mientras la integración esté apagada). Sin despacho: anulá la orden en GOcuotas y descartá.
           </p>
         </div>
         {pendientes.length === 0 ? (
@@ -248,6 +250,9 @@ export default function ArrepentimientosTable({
                         fulfillment={s.fulfillment}
                       />
                     )}
+                    {s.fulfillment === 'expedido' && s.orderNumber && (
+                      <BotonAccionAndreani arrepId={s.id} />
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button
@@ -309,7 +314,7 @@ export default function ArrepentimientosTable({
                   <td className="px-4 py-2 font-mono text-xs">{s.orderNumber ?? '—'}</td>
                   <td className="px-4 py-2 text-xs">
                     {s.estado === 'confirmada' ? (
-                      <span className="text-emerald-700">✓ rescate confirmado</span>
+                      <span className="text-emerald-700">✓ confirmada (rescate/devolución en su pestaña)</span>
                     ) : (
                       <span>descartada — {s.descarteMotivo}</span>
                     )}

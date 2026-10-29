@@ -13,7 +13,34 @@ import {
   separarResueltos,
   type EstadoRescate,
 } from '@/lib/rescates'
-import { cargarRescate, setMotivoRescate, setRescateResuelto } from '@/lib/actions/rescates'
+import { cargarRescate, setMotivoRescate, setRescateResuelto, type RescateConPedro } from '@/lib/actions/rescates'
+import { etiquetaRescate, claseRescate } from '@/lib/estados-andreani'
+import BotonAnularOrden from './BotonAnularOrden'
+
+// Segunda fuente: el estado del rescate que reporta Pedro por el webhook
+// (contrato 29/10 — informa rescates pedidos desde el 28/10, los viejos
+// vienen sin dato). rescate_rechazado se destaca con su razón: es el caso
+// que NO se resuelve solo y Andreani no siempre refleja.
+function PedroRescateChip({ estado, razon }: { estado: string | null; razon: string | null }) {
+  const etiqueta = etiquetaRescate(estado)
+  if (!etiqueta) return <span className="text-gray-300">—</span>
+  const clase = claseRescate(estado)
+  const cls =
+    clase === 'ok' ? 'bg-green-50 text-green-700 border-green-200'
+    : clase === 'mal' ? 'bg-red-50 text-red-700 border-red-200'
+    : 'bg-gray-50 text-gray-600 border-gray-200'
+  return (
+    <span className="inline-block">
+      <span
+        className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${cls}`}
+        title={`Estado reportado por Pedro (GOcelular)${razon ? ` — ${razon}` : ''}`}
+      >
+        {clase === 'mal' ? '⚠️ ' : ''}{etiqueta}
+      </span>
+      {clase === 'mal' && razon && <span className="block text-[10px] text-red-600 max-w-[160px]">{razon}</span>}
+    </span>
+  )
+}
 
 const CHIP_POR_ESTADO: Record<EstadoRescate, string> = {
   pendiente: 'bg-violet-50 text-violet-700 border-violet-200',
@@ -262,7 +289,7 @@ function AccionResuelto({ tracking, resueltoAt }: { tracking: string | null; res
   )
 }
 
-function TablaRescates({ rescates }: { rescates: Rescate[] }) {
+function TablaRescates({ rescates }: { rescates: RescateConPedro[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -274,6 +301,7 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
             <th className="text-left px-4 py-3 font-medium text-gray-600">Destino</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600">Tracking</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600" title="Orden GOcuotas: activa (delivered) o anulada (discarded)">Orden GOcuotas</th>
+            <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del rescate según Pedro (webhook GOcelular) — segunda fuente de control; habilita Anular orden con rescate confirmado/recibido">Pedro</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600">Solicitado</th>
             <th className="text-left px-4 py-3 font-medium text-gray-600">Último evento</th>
@@ -312,7 +340,20 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
                   <span className="text-gray-600">—</span>
                 )}
               </td>
-              <td className="px-4 py-3"><OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} /></td>
+              <td className="px-4 py-3">
+                <OrdenGocuotasChip activa={r.ordenActiva} status={r.gocuotasStatus} />
+                {r.ordenActiva === true && (
+                  <div className="mt-1">
+                    <BotonAnularOrden
+                      gocuotasOrderId={r.gocuotasOrderId}
+                      gocuotasStatus={r.gocuotasStatus}
+                      orderNumber={r.orderNumber}
+                      rescateEstado={r.pedroEstado}
+                    />
+                  </div>
+                )}
+              </td>
+              <td className="px-4 py-3"><PedroRescateChip estado={r.pedroEstado} razon={r.pedroRazon} /></td>
               <td className="px-4 py-3"><SelectMotivo rescate={r} /></td>
               <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fecha(r.solicitadoAt)}</td>
               <td className="px-4 py-3 text-gray-600">
@@ -330,7 +371,7 @@ function TablaRescates({ rescates }: { rescates: Rescate[] }) {
   )
 }
 
-export default function RescatesTable({ rescates }: { rescates: Rescate[] }) {
+export default function RescatesTable({ rescates }: { rescates: RescateConPedro[] }) {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoRescate | null>(null)

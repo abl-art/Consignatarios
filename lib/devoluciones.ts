@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import type { FilaDevolucion } from '@/lib/actions/devoluciones'
 
 // Seguimiento de envíos Andreani (entrega y devolución) por consulta en vivo a la
 // API pública de tracking. El número viaja cifrado en un parámetro `payload`
@@ -178,6 +179,23 @@ export function esDevolucionFinalizada(estadoDevolucion: string | null, banderas
   return estadoDevolucion !== null && ESTADOS_DEVOLUCION_FINAL.includes(estadoDevolucion)
 }
 
+// Separa las filas de la pestaña Devoluciones en pendientes/resueltas según el
+// tilde manual resueltoAt — NUNCA según el estado de Andreani. Una devolución
+// puede estar "Devuelto" en Andreani y seguir pendiente si nadie la cerró a
+// mano (nada se archiva solo); reemplaza el split que antes hacía
+// esDevolucionFinalizada.
+export function separarResueltos(
+  filas: FilaDevolucion[],
+): { pendientes: FilaDevolucion[]; resueltas: FilaDevolucion[] } {
+  const pendientes: FilaDevolucion[] = []
+  const resueltas: FilaDevolucion[] = []
+  for (const fila of filas) {
+    if (fila.resueltoAt != null) resueltas.push(fila)
+    else pendientes.push(fila)
+  }
+  return { pendientes, resueltas }
+}
+
 export function banderasDevolucion(d: DatosBanderas): string[] {
   const banderas: string[] = []
   if (d.entregaEstado === 'Entregado' && d.inventarioStatus === 'available') {
@@ -190,4 +208,24 @@ export function banderasDevolucion(d: DatosBanderas): string[] {
     banderas.push('devolucion_sin_movimiento')
   }
   return banderas
+}
+
+export interface DevolucionPedidaRef {
+  orderNumber: string
+  tracking: string | null
+}
+
+/**
+ * Devoluciones pedidas por el webhook (devoluciones_pedidas) que todavía no
+ * tienen su shipment type='return' en la réplica → se muestran como fila
+ * sintética "devolución pedida" hasta que el envío inverso aparece. Cubierta =
+ * ya existe un return para esa orden o para ese tracking.
+ */
+export function devolucionesPedidasSinShipment<T extends DevolucionPedidaRef>(
+  pedidas: T[],
+  returns: { orderNumber: string; tracking: string | null }[],
+): T[] {
+  const ordenes = new Set(returns.map(r => r.orderNumber))
+  const trackings = new Set(returns.map(r => r.tracking).filter((t): t is string => t !== null))
+  return pedidas.filter(p => !ordenes.has(p.orderNumber) && !(p.tracking !== null && trackings.has(p.tracking)))
 }
