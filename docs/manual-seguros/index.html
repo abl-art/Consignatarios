@@ -98,13 +98,14 @@
     <a href="#broker">📊 Excel del broker</a>
     <a href="#porcentajes">💰 Prima e Ingreso</a>
     <a href="#siniestro">🚨 Circuito de un siniestro</a>
+    <a href="#cierres">📦 Cierres mensuales</a>
     <a href="#oro">⭐ Reglas de oro</a>
   </nav>
 
   <h2 id="que-es">🛡️ Qué es el seguro por robo</h2>
   <p>Cuando el seguro está <b>activo</b>, cada venta de celular vinculada desde ese momento genera automáticamente un <b>certificado</b>: una póliza individual que cubre ese equipo (por IMEI) contra robo, por el tiempo de vigencia de la compra. GOcelular le cobra al cliente una <b>prima</b> (un % sobre la suma asegurada del equipo) y a su vez le paga una prima al <b>broker</b> asegurador — la diferencia entre lo que entra (ingreso) y lo que se paga (prima) es el <b>resultado</b> del negocio, que la página calcula mes a mes.</p>
   <p>Si el cliente sufre un robo, completa un <b>formulario público</b> con su DNI y una foto/PDF de la denuncia policial. Eso genera un <b>siniestro</b> que ves en la pestaña <b>Siniestros</b> de esta página, y le llega un mail de aviso a Yami para gestionarlo.</p>
-  <div class="callout tip"><b>💡 Todo lo que hace esta página vive en 4 pestañas</b>Certificados (altas, estados, switch, Excel del broker) · Prima Mensual (cuánto se devengó de prima) · Resultado (ingreso vs. prima vs. resultado, siniestralidad) · Siniestros (denuncias de robo cargadas por clientes, para gestionar hasta cerrarlas).</div>
+  <div class="callout tip"><b>💡 Todo lo que hace esta página vive en 5 pestañas</b>Certificados (altas, estados, switch, Excel del broker) · Prima Mensual (cuánto se devengó de prima) · Resultado (ingreso vs. prima vs. resultado, siniestralidad) · Siniestros (denuncias de robo cargadas por clientes, para gestionar hasta cerrarlas) · Cierres (la foto congelada de cada mes, para conciliar con la aseguradora).</div>
 
   <h2 id="switch">🔛 Activar y desactivar el seguro</h2>
   <p>Arriba de todo en la pestaña <b>Certificados</b> está el <b>switch maestro</b>: controla si el seguro está activo o no para toda la operación.</p>
@@ -181,6 +182,19 @@
   <div class="callout ojo"><b>⚠️ El chip de Mora</b>Si el cliente tiene cuotas vencidas de GOcuotas, aparece ⚠️ "En mora (Xd)" en rojo — la cobertura está suspendida mientras haya mora, así que antes de resolver un caso como positivo, revisá ese chip. "✅ Al día" significa que no hay impedimento por mora.</div>
   <div class="callout tip"><b>💡 El voucher al cliente</b>Cuando resolvés un siniestro como positivo, la app solo deja la marca en el certificado — el voucher o la resolución que se le comunica al cliente la entrega Yami a mano, fuera de la app.</div>
 
+  <h2 id="cierres">📦 Cierres mensuales</h2>
+  <p>La pestaña <b>Cierres</b> guarda una <b>foto congelada</b> de cada mes cerrado: cuántos certificados había (vigentes, anulados, siniestrados), la suma asegurada vigente, la prima, el ingreso y el resultado de ese mes — y además el <b>Excel del broker tal como quedó en ese momento</b>. Esa foto no cambia nunca, aunque después se anule un certificado o se modifique un %: es el registro que se concilia con la factura de la aseguradora.</p>
+  <ol class="pasos">
+    <li><b>Se congela solo:</b> el día 1 de cada mes, el sistema congela automáticamente el mes que acaba de terminar. En condiciones normales no hay que hacer nada.</li>
+    <li><b>Respaldo manual:</b> si el cierre automático no corrió todavía, arriba de la tabla aparece un cuadro <b>"Congelar [mes]"</b> — tocás el botón, confirmás (dos pasos) y listo. Cuando el mes ya está congelado, ese cuadro desaparece.</li>
+    <li><b>Descargar el Excel histórico:</b> cada fila tiene su botón <b>"⬇ Excel"</b> — descarga <code>seguros-robo-cierre-AAAA-MM.xlsx</code>, el reporte del broker <u>exactamente como quedó al congelar ese mes</u>.</li>
+  </ol>
+  <figure>
+    <div class="frame"><img src="img/doc-cierres.png" alt="Pestaña Cierres: tabla con un mes congelado, sus conteos por estado, prima, ingreso, resultado y botón de descarga del Excel"></div>
+    <figcaption>📸 <b>Cierres</b> — una fila por mes congelado, con los conteos por estado, los montos del mes y la descarga del Excel histórico.</figcaption>
+  </figure>
+  <div class="callout ojo"><b>⚠️ ¿Qué Excel uso?</b>El botón de la pestaña <b>Certificados</b> genera la foto de <u>hoy</u> (va cambiando con cada venta o novedad). El de un <b>cierre</b> es la foto de <u>ese mes</u> y no cambia nunca — para conciliar la factura de la aseguradora usá siempre el del cierre.</div>
+
   <h2 id="oro">⭐ Reglas de oro (resumen para la heladera)</h2>
   <div class="tablewrap"><table>
     <tr><th></th><th>Regla</th></tr>
@@ -192,6 +206,7 @@
     <tr><td>6️⃣</td><td>Un siniestro <b>resuelto no se puede reabrir</b> — fijate bien antes de confirmar (dos pasos a propósito).</td></tr>
     <tr><td>7️⃣</td><td><b>Positivo</b> siempre necesita la fecha del robo; sin eso, la app no te deja cerrar el caso.</td></tr>
     <tr><td>8️⃣</td><td>Revisá siempre el chip de <b>mora</b> antes de resolver un caso como positivo — es información de backoffice, el cliente nunca la ve.</td></tr>
+    <tr><td>9️⃣</td><td>Para conciliar la factura de la aseguradora usá el Excel del <b>cierre</b> del mes (pestaña Cierres), no el de Certificados — el del cierre está congelado y no cambia.</td></tr>
   </table></div>
 
   <p class="meta" style="margin-top:40px">Manual generado desde el código y la pantalla real de GOcelular360 · dudas de fondo: Emiliano · este documento se regenera cuando cambia la página.</p>

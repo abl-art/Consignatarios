@@ -2,6 +2,7 @@ import {
   getSegurosConfig,
   getCertificados,
   getSiniestros,
+  getCierres,
   sincronizarSeguros,
   type SegurosConfig,
 } from '@/lib/actions/seguros'
@@ -14,6 +15,7 @@ import CertificadosTab from '@/components/seguros/CertificadosTab'
 import PrimaMensualTab from '@/components/seguros/PrimaMensualTab'
 import ResultadoTab from '@/components/seguros/ResultadoTab'
 import SiniestrosTab from '@/components/seguros/SiniestrosTab'
+import CierresTab from '@/components/seguros/CierresTab'
 
 // Siempre fresco: sincronizarSeguros() corre emisión/novedades en cada visita
 // y las server actions (activar/desactivar, setParametro) ya revalidan
@@ -45,7 +47,8 @@ export default async function SegurosPage() {
   // mostrar en silencio una tabla vacía como si no hubiera certificados.
   let certificadosError = false
   let siniestrosError = false
-  const [config, certificados, siniestros] = await Promise.all([
+  let cierresError = false
+  const [config, certificados, siniestros, cierres] = await Promise.all([
     getSegurosConfig().catch(() => CONFIG_VACIA),
     getCertificados().catch(() => {
       certificadosError = true
@@ -53,6 +56,10 @@ export default async function SegurosPage() {
     }),
     getSiniestros().catch(() => {
       siniestrosError = true
+      return []
+    }),
+    getCierres().catch(() => {
+      cierresError = true
       return []
     }),
   ])
@@ -111,6 +118,11 @@ export default async function SegurosPage() {
       label: siniestrosAbiertos > 0 ? `Siniestros (${siniestrosAbiertos})` : 'Siniestros',
       content: <SiniestrosTab siniestros={siniestros} />,
     },
+    {
+      id: 'cierres',
+      label: 'Cierres',
+      content: <CierresTab cierres={cierres} operar={operar} />,
+    },
   ]
 
   return (
@@ -129,7 +141,7 @@ export default async function SegurosPage() {
       </div>
       <p className="text-sm text-gray-500 mb-6">Certificados, prima mensual y resultado del seguro por robo</p>
 
-      {(syncError || certificadosError || siniestrosError) && (
+      {(syncError || certificadosError || siniestrosError || cierresError) && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 space-y-1">
           {syncError && (
             <p>No se pudo sincronizar automáticamente ({syncError}). Mostrando el último estado guardado.</p>
@@ -139,6 +151,9 @@ export default async function SegurosPage() {
           )}
           {siniestrosError && (
             <p>No se pudieron leer los siniestros — la pestaña puede verse vacía aunque haya denuncias cargadas. Reintentá recargando la página.</p>
+          )}
+          {cierresError && (
+            <p>No se pudieron leer los cierres mensuales — la pestaña puede verse vacía aunque haya cierres congelados. Reintentá recargando la página.</p>
           )}
         </div>
       )}
