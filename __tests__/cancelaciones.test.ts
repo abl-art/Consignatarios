@@ -167,3 +167,14 @@ describe('interpretarPreview con no_es_wh', () => {
     expect(r.motivo).toMatch(/asignado|manual/i)
   })
 })
+
+// Vocabulario nuevo del contrato 29/10 (casos reales SO-PDPMHW/SO-VS7AUS):
+// el estado 'cancelacion_pedida' + canal mail de antes ahora llega como
+// 'cancelacion_pedida_por_mail'. Misma regla de Emiliano del 27/10: Andreani
+// rechazó el intento por API → "cancelación no realizada", no pendiente eterno.
+describe('etiquetaDesdeGetCancelacion con cancelacion_pedida_por_mail', () => {
+  it('cancelacion_pedida_por_mail → cancelación no realizada (cualquier canal)', () => {
+    expect(etiquetaDesdeGetCancelacion({ estado: 'cancelacion_pedida_por_mail', canal: 'mail' })).toBe('cancelación no realizada')
+    expect(etiquetaDesdeGetCancelacion({ estado: 'cancelacion_pedida_por_mail' })).toBe('cancelación no realizada')
+  })
+})

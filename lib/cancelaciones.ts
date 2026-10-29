@@ -123,6 +123,10 @@ export function etiquetaDesdeGetCancelacion(body: { estado?: string; canal?: str
   if (body.estado === 'cancelado') return 'cancelado'
   if (body.estado === 'no_cancelable_expedido') return 'expedido'
   if (body.estado === 'requiere_atencion') return 'cancelación no realizada'
+  // Contrato 29/10: el viejo "cancelacion_pedida + canal mail" ahora llega
+  // como estado propio — misma regla de Emiliano: Andreani rechazó el intento
+  // por API, queda el reintento por mail (pocas chances) → no realizada.
+  if (body.estado === 'cancelacion_pedida_por_mail') return 'cancelación no realizada'
   if (body.estado === 'cancelacion_pedida') return body.canal === 'mail' ? 'cancelación no realizada' : 'cancelación pedida'
   return null
 }
