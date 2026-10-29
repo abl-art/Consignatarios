@@ -9,10 +9,12 @@ import {
   fetchContracargosConFecha,
   fetchCostoPorImei,
   fetchCuotasMora,
+  fetchFacturasBPorOrden,
 } from '@/lib/gocelular'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
+import { armarCierre, type ResumenCierre } from '@/lib/seguros-informes'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
@@ -570,4 +572,105 @@ export async function resolverSiniestro(
   }
 
   revalidatePath('/seguros')
+}
+
+// ---------------------------------------------------------------------------
+// Cierres mensuales (snapshot congelado para el broker + histórico)
+// ---------------------------------------------------------------------------
+
+export type CierreRow = { mes: string; congeladoAt: string; resumen: ResumenCierre }
+
+/** 'YYYY-MM' del mes calendario anterior al actual, en UTC. */
+function mesAnteriorUTC(): string {
+  const hoy = new Date()
+  const primerDiaMesActual = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1))
+  primerDiaMesActual.setUTCMonth(primerDiaMesActual.getUTCMonth() - 1)
+  return `${primerDiaMesActual.getUTCFullYear()}-${String(primerDiaMesActual.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * Congela el cierre de un mes: snapshot inmutable del resumen de devengo +
+ * conteos por estado + filas del Excel del broker (armarCierre, lib/seguros-informes.ts),
+ * guardado en seguros_cierres. Default `mes` = el mes calendario anterior al
+ * actual (UTC) — el cron corre el día 1, así que "el mes anterior" es
+ * siempre el que recién cerró.
+ *
+ * No-ops explícitos (nunca insertan):
+ *  - Sin ningún certificado 'emitido' todavía → {ok:false, motivo:'sin
+ *    certificados emitidos'} (nada que congelar).
+ *  - Mes ya congelado y !force → {ok:false, motivo:'ya congelado'} — detectado
+ *    vía INSERT ... ON CONFLICT (mes) DO NOTHING: si el upsert con
+ *    ignoreDuplicates no insertó ninguna fila (conflicto), no hay nada que
+ *    recongelar sin pedirlo explícitamente.
+ *
+ * `force`: borra el cierre existente de ese mes y vuelve a congelar (siembra
+ * manual / recongelar tras corregir un parámetro).
+ *
+ * `getCertificados` y `getSegurosConfig` ya tiran en error de lectura (no
+ * silencian) — un fallo acá se propaga, el cron lo captura y responde 500.
+ */
+export async function congelarCierre(opts?: { mes?: string; force?: boolean }): Promise<{ ok: boolean; motivo?: string }> {
+  const mes = opts?.mes ?? mesAnteriorUTC()
+  const force = opts?.force ?? false
+
+  const [certs, config] = await Promise.all([getCertificados(), getSegurosConfig()])
+  const emitidos = certs.filter((c) => c.estado !== 'pendiente')
+  if (emitidos.length === 0) return { ok: false, motivo: 'sin certificados emitidos' }
+
+  const facturas = await fetchFacturasBPorOrden(emitidos.map((c) => c.gocuotasOrderId))
+  const primas = config.parametros.filter((p) => p.tipo === 'prima')
+  const ingresos = config.parametros.filter((p) => p.tipo === 'ingreso')
+
+  const { resumen, filas } = armarCierre(certs, facturas, primas, ingresos, mes)
+
+  const supabase = createAdminClient()
+
+  if (force) {
+    const { error: errorDelete } = await supabase.from('seguros_cierres').delete().eq('mes', mes)
+    if (errorDelete) throw new Error(errorDelete.message)
+  }
+
+  const { data, error } = await supabase
+    .from('seguros_cierres')
+    .upsert({ mes, resumen, filas_excel: filas }, { onConflict: 'mes', ignoreDuplicates: true })
+    .select('id')
+  if (error) throw new Error(error.message)
+
+  if (!data || data.length === 0) {
+    // ignoreDuplicates hizo DO NOTHING: ya existía un cierre para este mes y
+    // no se pidió force → nada insertado, se informa como no-op.
+    return { ok: false, motivo: 'ya congelado' }
+  }
+
+  revalidatePath('/seguros')
+  return { ok: true }
+}
+
+/** Histórico de cierres congelados, más reciente primero. */
+export async function getCierres(): Promise<CierreRow[]> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('seguros_cierres')
+    .select('mes, congelado_at, resumen')
+    .order('mes', { ascending: false })
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((r) => ({
+    mes: r.mes as string,
+    congeladoAt: r.congelado_at as string,
+    resumen: r.resumen as ResumenCierre,
+  }))
+}
+
+/** Filas del Excel del broker congeladas para un mes puntual; null si ese mes no tiene cierre. */
+export async function getCierreFilas(mes: string): Promise<(string | number | null)[][] | null> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('seguros_cierres')
+    .select('filas_excel')
+    .eq('mes', mes)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+
+  return data ? (data.filas_excel as (string | number | null)[][]) : null
 }

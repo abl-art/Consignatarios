@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/seguros-sync",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/seguros-cierre",
+      "schedule": "0 5 1 * *"
     }
   ]
 }

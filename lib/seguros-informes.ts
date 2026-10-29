@@ -198,6 +198,119 @@ export const COLUMNAS_BROKER: string[] = [
   'N° Pedido GOcelular',
 ]
 
+// ---------------------------------------------------------------------------
+// Cierre mensual (snapshot congelado por lib/actions/seguros.ts::congelarCierre)
+// ---------------------------------------------------------------------------
+
+export type ResumenCierre = {
+  mes: string
+  certificados: number
+  vigentes: number
+  anulados: number
+  siniestrados: number
+  pendientes: number
+  sumaVigente: number
+  prima: number
+  ingreso: number
+  resultado: number
+}
+
+/** Último día (inclusive) de un 'YYYY-MM', como 'YYYY-MM-DD'. */
+function ultimoDiaMes(mes: string): string {
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const ultimoDia = new Date(Date.UTC(anio, mesNum, 0)).getUTCDate()
+  return `${mes}-${String(ultimoDia).padStart(2, '0')}`
+}
+
+/**
+ * Arma el cierre congelado de un mes: el resumen de devengo (delegado a
+ * devengoMensual, sin reimplementar la matemática) más los conteos por
+ * estado y las filas del Excel del broker (delegadas a filasBroker).
+ *
+ * Conteo por estado — relativo al MES PEDIDO, no al estado actual del
+ * certificado (un cierre de un mes pasado no se entera de novedades
+ * posteriores a ese mes):
+ *  - 'pendiente': por el campo `estado` (nunca devenga, ver devengoMensual).
+ *  - 'anulado': fechaAnula <= último día del mes pedido.
+ *  - 'siniestrado': fechaSiniestro <= último día del mes pedido.
+ *  - si un certificado tiene AMBAS fechas dentro del mes pedido, gana la más
+ *    temprana (el evento que realmente ocurrió primero).
+ *  - 'vigente': el resto — incluye certificados cuya fechaAnula/fechaSiniestro
+ *    es POSTERIOR al mes pedido: el cierre de octubre no sabe de una
+ *    anulación de noviembre, así que ese certificado era vigente en octubre
+ *    y devengó normalmente ese mes.
+ *
+ * `resumen.certificados` es el total de certificados pasados (vigentes +
+ * anulados + siniestrados + pendientes), no el conteo de devengoMensual para
+ * ese mes (que excluye pendientes). sumaVigente/prima/ingreso/resultado SÍ
+ * salen literal de la fila `mes` de devengoMensual (0 si ese mes no aparece,
+ * ej. no hay ningún certificado emitido todavía).
+ */
+export function armarCierre(
+  certs: CertificadoRow[],
+  facturas: Map<string, { numero: string; fecha: string }>,
+  primas: ParametroPct[],
+  ingresos: ParametroPct[],
+  mes: string,
+): { resumen: ResumenCierre; filas: (string | number | null)[][] } {
+  const finMesPedido = ultimoDiaMes(mes)
+
+  let vigentes = 0
+  let anulados = 0
+  let siniestrados = 0
+  let pendientes = 0
+
+  for (const c of certs) {
+    if (c.estado === 'pendiente') {
+      pendientes += 1
+      continue
+    }
+    const anuladoEnMes = c.fechaAnula !== null && c.fechaAnula <= finMesPedido
+    const siniestradoEnMes = c.fechaSiniestro !== null && c.fechaSiniestro <= finMesPedido
+
+    if (anuladoEnMes && siniestradoEnMes) {
+      // Ambas fechas caen dentro del mes pedido: gana la más temprana.
+      if (c.fechaSiniestro! <= c.fechaAnula!) siniestrados += 1
+      else anulados += 1
+    } else if (siniestradoEnMes) {
+      siniestrados += 1
+    } else if (anuladoEnMes) {
+      anulados += 1
+    } else {
+      vigentes += 1
+    }
+  }
+
+  const certsDevengo: CertDevengo[] = certs
+    .filter(c => c.estado !== 'pendiente')
+    .map(c => ({
+      costoSinIva: c.costoSinIva ?? 0,
+      sumaAsegurada: c.sumaAsegurada ?? 0,
+      inicioVig: c.inicioVig,
+      finVig: c.finVig,
+      fechaAnula: c.fechaAnula,
+      fechaSiniestro: c.fechaSiniestro,
+      estado: c.estado,
+    }))
+
+  const filaMes = devengoMensual(certsDevengo, primas, ingresos, mes).find(m => m.mes === mes)
+
+  const resumen: ResumenCierre = {
+    mes,
+    certificados: certs.length,
+    vigentes,
+    anulados,
+    siniestrados,
+    pendientes,
+    sumaVigente: filaMes?.sumaVigente ?? 0,
+    prima: filaMes?.prima ?? 0,
+    ingreso: filaMes?.ingreso ?? 0,
+    resultado: filaMes?.resultado ?? 0,
+  }
+
+  return { resumen, filas: filasBroker(certs, facturas) }
+}
+
 /**
  * Filas del export del broker: un certificado por fila, en las 19 columnas de
  * COLUMNAS_BROKER. Los certificados 'pendiente' (sin póliza emitida todavía)

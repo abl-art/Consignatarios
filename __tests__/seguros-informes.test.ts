@@ -4,6 +4,7 @@ import {
   tasaSiniestralidad,
   COLUMNAS_BROKER,
   filasBroker,
+  armarCierre,
   type CertDevengo,
   type ParametroPct,
 } from '@/lib/seguros-informes'
@@ -332,5 +333,78 @@ describe('filasBroker', () => {
     const filas = filasBroker([c2, c1], new Map())
 
     expect(filas.map(f => f[0])).toEqual([1, 2])
+  })
+})
+
+describe('armarCierre', () => {
+  it('resumen.prima/ingreso/resultado/sumaVigente/certificados iguales a la fila del mes de devengoMensual (caso pinned: costo 242000/suma 266200, prima 2%, ingreso 3%, mes 2026-10 → 5324/7260/1936)', () => {
+    const cert = certBroker()
+    const { resumen } = armarCierre([cert], new Map(), PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(resumen.mes).toBe('2026-10')
+    expect(resumen.sumaVigente).toBe(266200)
+    expect(resumen.prima).toBe(5324)
+    expect(resumen.ingreso).toBe(7260)
+    expect(resumen.resultado).toBe(1936)
+    expect(resumen.certificados).toBe(1)
+  })
+
+  it('conteos por estado relativos al mes pedido: 1 vigente + 1 anulado + 1 siniestrado + 1 pendiente', () => {
+    const vigente = certBroker({ numero: 1, gocuotasOrderId: 'go-1' })
+    const anulado = certBroker({ numero: 2, gocuotasOrderId: 'go-2', fechaAnula: '2026-10-20' })
+    const siniestrado = certBroker({ numero: 3, gocuotasOrderId: 'go-3', fechaSiniestro: '2026-10-15' })
+    const pendiente = certBroker({ numero: null, gocuotasOrderId: 'go-4', estado: 'pendiente', costoSinIva: null, sumaAsegurada: null })
+
+    const { resumen } = armarCierre([vigente, anulado, siniestrado, pendiente], new Map(), PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(resumen.vigentes).toBe(1)
+    expect(resumen.anulados).toBe(1)
+    expect(resumen.siniestrados).toBe(1)
+    expect(resumen.pendientes).toBe(1)
+    expect(resumen.certificados).toBe(4)
+  })
+
+  it('filas === filasBroker(certs, facturas) (pendiente excluido de filas pero contado en resumen)', () => {
+    const vigente = certBroker({ numero: 1, gocuotasOrderId: 'go-1' })
+    const anulado = certBroker({ numero: 2, gocuotasOrderId: 'go-2', fechaAnula: '2026-10-20' })
+    const siniestrado = certBroker({ numero: 3, gocuotasOrderId: 'go-3', fechaSiniestro: '2026-10-15' })
+    const pendiente = certBroker({ numero: null, gocuotasOrderId: 'go-4', estado: 'pendiente', costoSinIva: null, sumaAsegurada: null })
+    const certs = [vigente, anulado, siniestrado, pendiente]
+    const facturas = new Map([['go-1', { numero: 'FB-001', fecha: '2026-10-16' }]])
+
+    const { resumen, filas } = armarCierre(certs, facturas, PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(filas).toEqual(filasBroker(certs, facturas))
+    expect(filas).toHaveLength(3) // pendiente excluido
+    expect(resumen.certificados).toBe(4) // pero contado en el resumen
+  })
+
+  it('cert con fechaAnula posterior al mes pedido: cuenta como vigente en ese mes y devenga (el cierre de octubre no sabe de una anulación de noviembre)', () => {
+    const cert = certBroker({ fechaAnula: '2026-11-03' })
+
+    const { resumen } = armarCierre([cert], new Map(), PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(resumen.vigentes).toBe(1)
+    expect(resumen.anulados).toBe(0)
+    expect(resumen.sumaVigente).toBe(266200)
+    expect(resumen.prima).toBe(5324)
+  })
+
+  it('mes sin devengo (sin certs emitidos): resumen en ceros y filas []', () => {
+    const { resumen, filas } = armarCierre([], new Map(), PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(resumen).toEqual({
+      mes: '2026-10',
+      certificados: 0,
+      vigentes: 0,
+      anulados: 0,
+      siniestrados: 0,
+      pendientes: 0,
+      sumaVigente: 0,
+      prima: 0,
+      ingreso: 0,
+      resultado: 0,
+    })
+    expect(filas).toEqual([])
   })
 })
