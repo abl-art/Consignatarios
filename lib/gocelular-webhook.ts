@@ -169,11 +169,37 @@ export async function sendWholesaleWebhook(rawBody: string): Promise<WholesaleRe
 
 const CANCELACIONES_URL = 'https://gocelular.gocuotas.com/api/webhooks/gocelular/cancelaciones'
 
+export interface RescateWebhook {
+  estado?: string
+  razon?: string | null
+  tracking?: string | null
+}
+
+export interface DevolucionWebhook {
+  estado?: string
+  modalidad?: string | null
+  tracking?: string | null
+  etiqueta_url?: string | null
+}
+
+export interface ReembolsoWebhook {
+  estado?: string
+  monto?: number | null
+  id_gocuotas?: string | null
+}
+
 export interface CancelacionResponse {
   resultado?: string
   estado?: string
   detalle?: string
   retryable?: boolean
+  request_id?: string
+  canal?: string | null
+  code?: string
+  message?: string
+  reembolso?: ReembolsoWebhook | null
+  rescate?: RescateWebhook | null
+  devolucion?: DevolucionWebhook | null
   [k: string]: unknown
 }
 
@@ -186,11 +212,15 @@ export interface CancelacionResult {
 /** POST preview/apply. Sin auto-reintentos: la regla de reintento (409/vivo) la decide quien llama. */
 export async function sendCancelacionWebhook(payload: {
   mode: 'preview' | 'apply'
-  accion: 'cancelar_pedido' | 'cancelar_orden'
+  accion: 'cancelar_pedido' | 'cancelar_orden' | 'solicitar_devolucion'
   order_number?: string
   proforma_number?: string
   motivo: string
   source: string
+  // Solo solicitar_devolucion (Pedro rechaza campos desconocidos en las otras
+  // acciones): armar el payload con construirPayloadCancelacion.
+  modalidad?: 'domicilio' | 'sucursal'
+  ventana?: { inicio: string; fin: string }
 }): Promise<CancelacionResult> {
   const secret = process.env.GOCELULAR_WEBHOOK_SECRET
   const url = process.env.GOCELULAR_CANCELACIONES_URL || CANCELACIONES_URL
@@ -213,6 +243,32 @@ export async function sendCancelacionWebhook(payload: {
     return { ok: res.status === 200, status: res.status, body }
   } catch {
     return { ok: false, status: 0, body: { detalle: 'sin_respuesta' } }
+  }
+}
+
+/**
+ * GET de la etiqueta PDF de la devolución. Firma distinta al GET de estado:
+ * el material firmado es `timestamp + "." + order_number` (una firma sirve
+ * para una sola orden); una firma con body vacío da 401.
+ */
+export async function getEtiquetaDevolucion(orderNumber: string): Promise<
+  { ok: true; pdf: Buffer } | { ok: false; status: number; code: string }
+> {
+  const secret = process.env.GOCELULAR_WEBHOOK_SECRET
+  const base = process.env.GOCELULAR_CANCELACIONES_URL || CANCELACIONES_URL
+  if (!secret) return { ok: false, status: 0, code: 'secret_no_configurado' }
+  const ts = buildTimestamp()
+  const sig = signWebhook(secret, ts, orderNumber)
+  try {
+    const res = await fetch(`${base}/etiqueta?order_number=${encodeURIComponent(orderNumber)}`, {
+      headers: { 'X-Gocelular-Signature': sig, 'X-Gocelular-Timestamp': ts },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (res.status === 200) return { ok: true, pdf: Buffer.from(await res.arrayBuffer()) }
+    const body = (await res.json().catch(() => null)) as { code?: string } | null
+    return { ok: false, status: res.status, code: body?.code ?? `http_${res.status}` }
+  } catch {
+    return { ok: false, status: 0, code: 'sin_respuesta' }
   }
 }
 
