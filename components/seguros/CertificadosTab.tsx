@@ -9,6 +9,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { setSeguroActivo, type CertificadoRow, type SegurosConfig } from '@/lib/actions/seguros'
 import { formatearMoneda } from '@/lib/utils'
+import type { ResumenPrimaActual } from '@/lib/seguros-informes'
 
 type Estado = 'vigente' | 'anulado' | 'siniestrado' | 'pendiente'
 
@@ -47,9 +48,11 @@ interface Props {
   config: SegurosConfig
   facturas: Record<string, { numero: string; fecha: string }>
   operar: boolean
+  primaActual: ResumenPrimaActual
+  siniestralidad: { emitidos: number; siniestrados: number; tasaPct: number }
 }
 
-export default function CertificadosTab({ certificados, config, facturas, operar }: Props) {
+export default function CertificadosTab({ certificados, config, facturas, operar, primaActual, siniestralidad }: Props) {
   const router = useRouter()
   const [activo, setActivo] = useState(config.activo)
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
@@ -180,6 +183,24 @@ export default function CertificadosTab({ certificados, config, facturas, operar
         <div className="bg-white border border-amber-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Pendientes de emisión</p>
           <p className="text-2xl font-bold text-amber-700">{pendientes.length}</p>
+        </div>
+      </div>
+
+      {/* Prima del mes y siniestralidad */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Prima mensual (sin IVA)</p>
+          <p className="text-xl font-bold text-gray-900">{formatearMoneda(primaActual.primaMesSinIva)}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {primaActual.pctSinIva}% de la suma asegurada (contratado: {primaActual.pctConIva}% IVA inc.)
+          </p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Tasa de siniestralidad</p>
+          <p className={`text-xl font-bold ${siniestralidad.tasaPct >= 5 ? 'text-red-700' : siniestralidad.tasaPct >= 2 ? 'text-amber-600' : 'text-green-700'}`}>
+            {siniestralidad.tasaPct.toFixed(2)}%
+          </p>
+          <p className="text-xs text-gray-400 mt-1">{siniestralidad.siniestrados} siniestrados / {siniestralidad.emitidos} emitidos</p>
         </div>
       </div>
 

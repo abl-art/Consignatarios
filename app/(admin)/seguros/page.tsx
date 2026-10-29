@@ -6,7 +6,13 @@ import {
   sincronizarSeguros,
   type SegurosConfig,
 } from '@/lib/actions/seguros'
-import { devengoMensual, tasaSiniestralidad, type CertDevengo } from '@/lib/seguros-informes'
+import {
+  devengoMensual,
+  tasaSiniestralidad,
+  primaActualSinIva,
+  resultadoPorModeloSinIva,
+  type CertDevengo,
+} from '@/lib/seguros-informes'
 import { fetchFacturasBPorOrden } from '@/lib/gocelular'
 import { getUsuarioActual } from '@/lib/permisos-server'
 import { puedeOperar } from '@/lib/permisos'
@@ -95,12 +101,23 @@ export default async function SegurosPage() {
 
   const devengo = devengoMensual(certsDevengo, primas, ingresos, hastaMes)
   const siniestralidad = tasaSiniestralidad(certificados)
+  const primaActual = primaActualSinIva(devengo, primas, hastaMes)
+  const porModelo = resultadoPorModeloSinIva(certificados, primas, ingresos, hastaMes)
 
   const tabs = [
     {
       id: 'certificados',
       label: 'Certificados',
-      content: <CertificadosTab certificados={certificados} config={config} facturas={facturas} operar={operar} />,
+      content: (
+        <CertificadosTab
+          certificados={certificados}
+          config={config}
+          facturas={facturas}
+          operar={operar}
+          primaActual={primaActual}
+          siniestralidad={siniestralidad}
+        />
+      ),
     },
     {
       id: 'prima',
@@ -110,7 +127,15 @@ export default async function SegurosPage() {
     {
       id: 'resultado',
       label: 'Resultado',
-      content: <ResultadoTab devengo={devengo} ingresos={ingresos} siniestralidad={siniestralidad} operar={operar} />,
+      content: (
+        <ResultadoTab
+          devengo={devengo}
+          ingresos={ingresos}
+          siniestralidad={siniestralidad}
+          porModelo={porModelo}
+          operar={operar}
+        />
+      ),
     },
     {
       id: 'siniestros',

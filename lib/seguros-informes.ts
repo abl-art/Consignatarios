@@ -215,6 +215,92 @@ export type ResumenCierre = {
   resultado: number
 }
 
+const IVA = 1.21
+
+/** Monto neto de IVA (÷1,21), redondeado a 2 decimales. */
+export function sinIva(monto: number): number {
+  return redondear2(monto / IVA)
+}
+
+export type ResumenPrimaActual = { pctConIva: number; pctSinIva: number; primaMesSinIva: number }
+
+/**
+ * Resumen de la prima del mes en curso para la pestaña Certificados: el % de
+ * prima vigente (el contratado, IVA incluido) y su equivalente neto de IVA
+ * sobre la suma asegurada, más la prima devengada del mes sin IVA. Si el mes
+ * no tiene fila de devengo (sin certificados todavía) la prima es 0 pero el
+ * % vigente se informa igual.
+ */
+export function primaActualSinIva(devengo: MesDevengo[], primas: ParametroPct[], mes: string): ResumenPrimaActual {
+  const pctConIva = pctVigente(primas, mes)
+  const fila = devengo.find(m => m.mes === mes)
+  return {
+    pctConIva,
+    pctSinIva: redondear2(pctConIva / IVA),
+    primaMesSinIva: sinIva(fila?.prima ?? 0),
+  }
+}
+
+export type ResultadoModelo = { modelo: string; certificados: number; prima: number; ingreso: number; resultado: number }
+
+/**
+ * Resultado acumulado POR MODELO (artículo de la venta), neto de IVA — el
+ * "resultado real" del negocio del seguro: tanto la prima de la aseguradora
+ * como el ingreso embebido en el PVP son valores IVA incluido, así que ambos
+ * se netean (÷1,21) antes de restar. Acumula todos los meses devengados hasta
+ * hastaMes (misma matemática que devengoMensual, por grupo). Los 'pendiente'
+ * no devengan. Ordenado por resultado descendente.
+ */
+export function resultadoPorModeloSinIva(
+  certs: CertificadoRow[],
+  primas: ParametroPct[],
+  ingresos: ParametroPct[],
+  hastaMes: string,
+): ResultadoModelo[] {
+  const grupos = new Map<string, CertificadoRow[]>()
+  for (const c of certs) {
+    if (c.estado === 'pendiente') continue
+    const lista = grupos.get(c.articulo) ?? []
+    lista.push(c)
+    grupos.set(c.articulo, lista)
+  }
+
+  const out: ResultadoModelo[] = []
+  for (const [modelo, grupo] of grupos) {
+    const devengo = devengoMensual(
+      grupo.map(c => ({
+        costoSinIva: c.costoSinIva ?? 0,
+        sumaAsegurada: c.sumaAsegurada ?? 0,
+        inicioVig: c.inicioVig,
+        finVig: c.finVig,
+        fechaAnula: c.fechaAnula,
+        fechaSiniestro: c.fechaSiniestro,
+        estado: c.estado,
+      })),
+      primas,
+      ingresos,
+      hastaMes,
+    )
+    let prima = 0
+    let ingreso = 0
+    let resultado = 0
+    for (const m of devengo) {
+      prima += m.prima
+      ingreso += m.ingreso
+      resultado += m.resultado
+    }
+    out.push({
+      modelo,
+      certificados: grupo.length,
+      prima: sinIva(prima),
+      ingreso: sinIva(ingreso),
+      resultado: sinIva(resultado),
+    })
+  }
+
+  return out.sort((a, b) => b.resultado - a.resultado)
+}
+
 /**
  * ¿`mes` es un mes válido para congelar un cierre? Formato estricto 'YYYY-MM'
  * y estrictamente ANTERIOR a `mesActual` (el mes en curso no cerró todavía;

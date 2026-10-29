@@ -34,7 +34,6 @@ const html = `
           <tr><td style="padding:8px 14px;color:#71717a">Certificado</td><td style="padding:8px 14px;text-align:right"><b>N° 1</b></td></tr>
           <tr><td style="padding:8px 14px;color:#71717a;border-top:1px solid #e4e4e7">Equipo</td><td style="padding:8px 14px;text-align:right;border-top:1px solid #e4e4e7"><b>Moto G17 4/256GB</b></td></tr>
           <tr><td style="padding:8px 14px;color:#71717a;border-top:1px solid #e4e4e7">IMEI</td><td style="padding:8px 14px;text-align:right;border-top:1px solid #e4e4e7"><b style="font-family:monospace">${IMEI}</b></td></tr>
-          <tr><td style="padding:8px 14px;color:#71717a;border-top:1px solid #e4e4e7">Suma asegurada</td><td style="padding:8px 14px;text-align:right;border-top:1px solid #e4e4e7"><b>$ 266.200</b></td></tr>
           <tr><td style="padding:8px 14px;color:#71717a;border-top:1px solid #e4e4e7">Vigencia</td><td style="padding:8px 14px;text-align:right;border-top:1px solid #e4e4e7"><b>29/10/2026 al 29/07/2027</b></td></tr>
         </table>
         <h2 style="font-size:16px;margin:20px 0 8px">🚨 ¿Qué hacer si te lo roban?</h2>
@@ -48,6 +47,7 @@ const html = `
         </div>
         <div style="background:#fafafa;border:1px solid #e4e4e7;border-radius:10px;padding:12px 16px;font-size:13px;color:#52525b">
           <b>Para tener en cuenta</b><br>
+          • Si te roban el equipo, <b>se reemplaza el teléfono robado</b>. No se entregan créditos ni vouchers, ni se puede cambiar por otro equipo.<br>
           • La cobertura es por <b>robo</b> (no incluye extravío ni rotura).<br>
           • Mantené tus cuotas al día: la cobertura se suspende mientras haya cuotas vencidas.<br>
           • La vigencia es de 9 meses desde la compra.
@@ -69,7 +69,6 @@ Tu Motorola Moto G17 4/256GB comprado en GOcelular quedó cubierto contra robo e
 
 Certificado: N° 1
 IMEI: ${IMEI}
-Suma asegurada: $ 266.200
 Vigencia: 29/10/2026 al 29/07/2027
 
 ¿Qué hacer si te lo roban?
@@ -77,7 +76,7 @@ Vigencia: 29/10/2026 al 29/07/2027
 2) Cargá tu denuncia en ${LINK} — ingresá tu DNI y subí foto/PDF de la denuncia policial.
 3) Nuestro equipo revisa el caso y te contacta.
 
-Para tener en cuenta: la cobertura es por robo (no extravío ni rotura); mantené tus cuotas al día (la cobertura se suspende con cuotas vencidas); vigencia 9 meses desde la compra.
+Para tener en cuenta: si te roban el equipo, se reemplaza el teléfono robado — no se entregan créditos ni vouchers, ni se puede cambiar por otro equipo; la cobertura es por robo (no extravío ni rotura); mantené tus cuotas al día (la cobertura se suspende con cuotas vencidas); vigencia 9 meses desde la compra.
 
 GOcelular · Seguro por robo operado con Sancor Seguros a través de ASEGURALO Productores Asesores (Matr. 1574).`
 

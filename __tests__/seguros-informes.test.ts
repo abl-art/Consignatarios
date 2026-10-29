@@ -6,6 +6,9 @@ import {
   filasBroker,
   armarCierre,
   esMesCierreValido,
+  sinIva,
+  primaActualSinIva,
+  resultadoPorModeloSinIva,
   type CertDevengo,
   type ParametroPct,
 } from '@/lib/seguros-informes'
@@ -427,5 +430,59 @@ describe('esMesCierreValido', () => {
     expect(esMesCierreValido('2026-00', '2026-10')).toBe(false)
     expect(esMesCierreValido('garbage', '2026-10')).toBe(false)
     expect(esMesCierreValido('2026-09-01', '2026-10')).toBe(false)
+  })
+})
+
+describe('sinIva', () => {
+  it('divide por 1,21 y redondea a 2 decimales', () => {
+    expect(sinIva(121)).toBe(100)
+    expect(sinIva(5324)).toBe(4400)
+    expect(sinIva(0)).toBe(0)
+    expect(sinIva(100)).toBe(82.64)
+  })
+})
+
+describe('primaActualSinIva', () => {
+  it('devuelve el % vigente con y sin IVA y la prima del mes sin IVA', () => {
+    const devengo = devengoMensual([certDevengo()], PRIMA_2, INGRESO_3, '2026-10')
+    const r = primaActualSinIva(devengo, PRIMA_2, '2026-10')
+    expect(r.pctConIva).toBe(2)
+    expect(r.pctSinIva).toBe(1.65) // 2 / 1,21 redondeado a 2 dec
+    expect(r.primaMesSinIva).toBe(4400) // 5324 / 1,21
+  })
+
+  it('mes sin fila de devengo → prima 0, % igual al tramo vigente', () => {
+    const r = primaActualSinIva([], PRIMA_2, '2026-10')
+    expect(r.primaMesSinIva).toBe(0)
+    expect(r.pctConIva).toBe(2)
+  })
+})
+
+describe('resultadoPorModeloSinIva', () => {
+  it('agrupa por artículo y acumula prima/ingreso/resultado sin IVA', () => {
+    const g17a = certBroker({ id: 'a', gocuotasOrderId: 'go-a' }) // Moto G06 según certBroker? usa articulo del helper
+    const g17b = certBroker({ id: 'b', gocuotasOrderId: 'go-b' })
+    const otro = certBroker({ id: 'c', gocuotasOrderId: 'go-c', articulo: 'Samsung Galaxy A06 128GB', sumaAsegurada: 133100, costoSinIva: 121000 })
+
+    const r = resultadoPorModeloSinIva([g17a, g17b, otro], PRIMA_2, INGRESO_3, '2026-10')
+
+    expect(r).toHaveLength(2)
+    const moto = r.find(m => m.modelo === 'Motorola Moto G06 4/64GB')!
+    const sam = r.find(m => m.modelo === 'Samsung Galaxy A06 128GB')!
+    expect(moto.certificados).toBe(2)
+    // por cert: prima 5324, ingreso 7260, resultado 1936 (oct) → ×2, sin IVA
+    expect(moto.prima).toBe(8800) // 10648 / 1,21
+    expect(moto.ingreso).toBe(12000) // 14520 / 1,21
+    expect(moto.resultado).toBe(3200) // 3872 / 1,21
+    expect(sam.certificados).toBe(1)
+    expect(sam.prima).toBe(2200) // 133100*2% = 2662 → /1,21
+    // ordenado por resultado desc: moto primero
+    expect(r[0].modelo).toBe('Motorola Moto G06 4/64GB')
+  })
+
+  it('pendientes no cuentan y sin certificados devuelve []', () => {
+    const pend = certBroker({ id: 'p', gocuotasOrderId: 'go-p', estado: 'pendiente' })
+    expect(resultadoPorModeloSinIva([pend], PRIMA_2, INGRESO_3, '2026-10')).toEqual([])
+    expect(resultadoPorModeloSinIva([], PRIMA_2, INGRESO_3, '2026-10')).toEqual([])
   })
 })

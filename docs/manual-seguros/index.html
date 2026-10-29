@@ -127,6 +127,7 @@
     <tr><td><span class="pill rojo">Siniestrado</span></td><td>Tuvo un robo confirmado: alguien cerró un siniestro como "positivo" sobre este certificado (ver más abajo). Deja de devengar prima desde la fecha del robo.</td></tr>
     <tr><td><span class="pill ambar">Pendiente de emisión</span></td><td><b>Revisar estos.</b> La venta existe pero todavía no se pudo determinar el costo/suma asegurada del equipo (falta precio de lista, por ejemplo). Aparecen arriba de todo en la tabla, con una banda ámbar de aviso — el sistema reintenta emitirlos solo cuando el dato falte aparezca, pero si se acumulan muchos conviene avisar a Emiliano.</td></tr>
   </table></div>
+  <p>Debajo de las tarjetas por estado hay dos indicadores más: <b>Prima mensual (sin IVA)</b> — lo que devenga de prima el mes en curso, neto de IVA, con el % que representa de la suma asegurada (y entre paréntesis el % contratado con IVA) — y la <b>Tasa de siniestralidad</b> (la misma que ves en Resultado: verde &lt;2%, ámbar 2–5%, roja &gt;5%).</p>
   <p>La tabla de certificados trae, por cada venta asegurada: número de certificado, cliente, DNI, artículo e IMEI, suma asegurada, inicio y fin de vigencia, estado y número de factura B (si ya se emitió).</p>
 
   <h2 id="broker">📊 Descargar el Excel para el broker</h2>
@@ -149,6 +150,7 @@
     <div class="frame"><img src="img/doc-prima.png" alt="Pestaña Prima Mensual: editor de porcentaje con fecha de vigencia y tabla de devengo mes a mes"></div>
     <figcaption>📸 <b>Prima Mensual</b> — el editor del % arriba, con los tramos vigentes como chips, y la tabla de devengo mes a mes abajo.</figcaption>
   </figure>
+  <div class="callout tip"><b>💡 Resultado se mira SIN IVA</b>La pestaña <b>Resultado</b> muestra el ingreso, la prima y el resultado <u>netos de IVA</u> — el resultado real del negocio (tanto la prima de la aseguradora como el ingreso embebido en el precio son valores IVA incluido). La pestaña <b>Prima Mensual</b>, en cambio, muestra la prima <u>con IVA</u>: es el número que se concilia con la factura de la aseguradora. Debajo de la tabla mensual, el desplegable <b>"Resultado por modelo"</b> acumula certificados, ingreso, prima y resultado por modelo vendido.</div>
   <p>En <b>Resultado</b> además aparece la <b>tasa de siniestralidad</b> (siniestrados / emitidos): verde por debajo de 2%, ámbar entre 2% y 5%, roja por encima de 5% — es el termómetro de si el negocio del seguro está sano.</p>
   <figure>
     <div class="frame"><img src="img/doc-resultado.png" alt="Pestaña Resultado: editor de % de ingreso, tarjetas de resultado acumulado y siniestralidad, y tabla mes a mes"></div>

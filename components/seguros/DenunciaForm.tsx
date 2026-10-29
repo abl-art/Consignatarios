@@ -107,7 +107,7 @@ export default function DenunciaForm({ token }: { token: string }) {
       <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
         <p className="text-3xl mb-2">✓</p>
         <p className="text-base font-semibold text-gray-900">Recibimos tu denuncia</p>
-        <p className="text-sm text-gray-500 mt-1">Te contactamos a la brevedad.</p>
+        <p className="text-sm text-gray-500 mt-1">Te contactamos dentro de las 48 horas hábiles.</p>
       </div>
     )
   }
