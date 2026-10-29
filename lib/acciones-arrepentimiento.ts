@@ -77,8 +77,11 @@ export function rutearPreview(resultado: string | null): RuteoPreview {
   switch (resultado) {
     case 'cancelacion_pedida':
     case 'cancelacion_pedida_por_mail':
-    case 'cancelado':
       return { tipo: 'go', accion: 'cancelar_pedido', label: 'Cancelar pedido' }
+    case 'cancelado':
+      // Verificado contra prod (SO-FGDU2R, 29/10): el preview de una acción ya
+      // hecha devuelve el estado VIGENTE, no una proyección.
+      return { tipo: 'ninguna', motivo: 'El pedido ya está cancelado en el warehouse' }
     case 'no_cancelable_expedido':
       return { tipo: 'go', accion: 'rescate', label: 'Pedir rescate' }
     case 'no_cancelable_entregado':

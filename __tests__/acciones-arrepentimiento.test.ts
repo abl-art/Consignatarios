@@ -62,10 +62,14 @@ describe('accionDesdeEstadoPedro', () => {
 // Ruteo del RESULTADO del preview (mode: preview = "qué haría apply") al
 // estado del botón inteligente. Contrato completo de Pedro 29/10.
 describe('rutearPreview', () => {
-  it('cancelación viable (preview proyecta cancelacion_pedida/cancelado) → go cancelar_pedido', () => {
+  it('cancelación viable (preview proyecta cancelacion_pedida) → go cancelar_pedido', () => {
     expect(rutearPreview('cancelacion_pedida')).toEqual({ tipo: 'go', accion: 'cancelar_pedido', label: 'Cancelar pedido' })
     expect(rutearPreview('cancelacion_pedida_por_mail')).toEqual({ tipo: 'go', accion: 'cancelar_pedido', label: 'Cancelar pedido' })
-    expect(rutearPreview('cancelado')).toEqual({ tipo: 'go', accion: 'cancelar_pedido', label: 'Cancelar pedido' })
+  })
+
+  it('cancelado = ya está cancelado (verificado contra prod: el preview devuelve el estado vigente) → ninguna', () => {
+    const r = rutearPreview('cancelado')
+    expect(r.tipo).toBe('ninguna')
   })
 
   it('expedido sin rescate pedido → go rescate (el apply de cancelar_pedido lo pide, rescate automático)', () => {
