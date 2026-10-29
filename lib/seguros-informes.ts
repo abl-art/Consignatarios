@@ -129,8 +129,11 @@ export function devengoMensual(
       if (compararMeses(mes, r.inicio) >= 0 && compararMeses(mes, r.fin) <= 0) {
         certificados += 1
         sumaVigente += r.cert.sumaAsegurada
+        // Prima e ingreso sobre la MISMA base: la suma asegurada (regla de
+        // Emiliano 29/10/2026 — antes el ingreso iba sobre costoSinIva, pero
+        // con suma = costo sin IVA la base unificada es la lectura correcta).
         prima += r.cert.sumaAsegurada * (pctVigente(primas, mes) / 100)
-        ingreso += r.cert.costoSinIva * (pctVigente(ingresos, mes) / 100)
+        ingreso += r.cert.sumaAsegurada * (pctVigente(ingresos, mes) / 100)
       }
     }
 

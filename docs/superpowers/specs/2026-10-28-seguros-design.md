@@ -11,7 +11,7 @@ La página nueva **/seguros** (sección propia, tarjeta en el lugar que defina e
 
 El negocio cierra así (decidido por Emiliano):
 
-- **Ingreso:** 3% mensual sobre el costo sin IVA del equipo, embebido en el PVP (2,2% cubre la prima real + ~0,8-1% de profit). El PVP no cambia de fórmula: Emiliano sube el múltiplo de Lista de Precios de 2,07 a **2,34** (recomendado; 2,36 si quiere el 1%/mes garantizado). Ese cambio lo hace él a mano en Lista de Precios — **no es parte de este desarrollo**.
+- **Ingreso:** 3% mensual sobre la suma asegurada (= costo sin IVA; base unificada con la prima desde el 29/10/2026), embebido en el PVP (2,2% cubre la prima real + ~0,8-1% de profit). El PVP no cambia de fórmula: Emiliano sube el múltiplo de Lista de Precios de 2,07 a **2,34** (recomendado; 2,36 si quiere el 1%/mes garantizado). Ese cambio lo hace él a mano en Lista de Precios — **no es parte de este desarrollo**.
 - **Costo:** prima = 2% mensual (IVA inc.) × suma asegurada, por certificado vigente no anulado.
 - Los certificados anulados antes de los 9 meses dejan de devengar prima → el profit real queda algo arriba del nominal.
 
@@ -45,9 +45,9 @@ El negocio cierra así (decidido por Emiliano):
 - **Interruptor maestro** activable/desactivable cuando él quiera. Activo ⇒ entran **todas las ventas desde ese momento en adelante**. Al desactivar, no se emiten certificados nuevos; los existentes siguen su ciclo.
 - Elegible: venta de **celular** de la **tienda propia** que recibe **IMEI asignado**. El gatillo es la asignación del IMEI (`order_device_assignments.linked_at`, state `ready_for_control`), no el pago: sin IMEI no hay qué asegurar.
 - **N° de certificado correlativo desde 1**, sin huecos, asignado en orden de emisión.
-- **Suma asegurada = costo de lista sin IVA × 1,10, congelada al momento de la emisión** (no se recalcula si la lista cambia). Costo de lista = la misma regla de la app (`elegirCosto` de `lib/lista-precios.ts`: proveedor preferido por marca, fallback más barato).
+- **Suma asegurada = costo de lista sin IVA, congelada al momento de la emisión** (cambio 29/10/2026, decidido por Emiliano: se eliminó el colchón ×1,10 — encarecía la prima 1,8% del costo por vigencia para cubrir un evento de baja probabilidad; la suba del costo de reposición se autoasegura) (no se recalcula si la lista cambia). Costo de lista = la misma regla de la app (`elegirCosto` de `lib/lista-precios.ts`: proveedor preferido por marca, fallback más barato).
   - **Fallback si el modelo no tiene costo de lista al emitir** (modelo discontinuado o nombre que no matchea — call de Claude): usar el costo real de la unidad asignada (`inventory_items` del IMEI, que es literalmente el costo de reposición); si tampoco existe, el certificado queda en estado `pendiente de emisión` visible en la página con alerta — nunca se saltea la venta en silencio.
-  - Razón del costo sin IVA (validada con Emiliano): la pérdida real ante robo es reponer el equipo; el IVA de la reposición se recupera como crédito fiscal. Asegurar PVP sería sobre-asegurar y pagar prima de más. El ×1,10 da margen sobre el costo de reposición.
+  - Razón del costo sin IVA (validada con Emiliano): la pérdida real ante robo es reponer el equipo; el IVA de la reposición se recupera como crédito fiscal. Asegurar PVP sería sobre-asegurar y pagar prima de más. (El ×1,10 de margen se eliminó el 29/10/2026.)
 - **Vigencia: 9 meses fijos** desde la fecha de la orden, para todos (aunque la venta sea en 6 cuotas).
 
 ### Ciclo de vida del certificado
@@ -74,7 +74,7 @@ El negocio cierra así (decidido por Emiliano):
 | 7 | `Localidad` | `store_orders.shipping_city` |
 | 8 | `Articulo (Descripcion, marca, modelo)` | `store_orders.product_name` |
 | 9 | `IMEI` | `order_device_assignments.imei` — **el vigente en la orden** (se actualiza ante cambio por garantía) |
-| 10 | `SUMA ASEGURADA` | congelada en la emisión (costo sin IVA × 1,10) |
+| 10 | `SUMA ASEGURADA` | congelada en la emisión (= costo sin IVA) |
 | 11 | `Fecha Factura` | `invoices.authorized_at` de la Factura B |
 | 12 | `Fecha Anula` | fecha de anulación (null si vigente) |
 | 13 | `Inicio Vig` | fecha de la orden (`order_created_at` de la venta — NO el `created_at` de réplica) |
@@ -95,7 +95,7 @@ El negocio cierra así (decidido por Emiliano):
 
 ### Pestaña Resultado
 
-- **Ingreso:** % mensual configurable (default **3%** sobre el costo sin IVA congelado) devengado por mes por certificado vigente. Es el componente de seguro embebido en el PVP.
+- **Ingreso:** % mensual configurable (default **3%** sobre la suma asegurada congelada — misma base que la prima desde el 29/10/2026) devengado por mes por certificado vigente. Es el componente de seguro embebido en el PVP.
 - **Costo:** prima esperada del mes (de la pestaña Prima Mensual).
 - **Resultado:** ingreso − prima, por mes y acumulado.
 - **Siniestralidad (informativa, NO es costo):** certificados cerrados por robo ÷ emitidos, y opcionalmente $ reconocidos por la aseguradora vs prima pagada. Es el número que mira la aseguradora para renovar el 2% — herramienta de negociación.

@@ -29,7 +29,7 @@ function certBroker(over: Partial<CertificadoRow> = {}): CertificadoRow {
     articulo: 'Motorola Moto G06 4/64GB',
     imei: '350000000000001',
     costoSinIva: 242000,
-    sumaAsegurada: 266200,
+    sumaAsegurada: 242000,
     costoFuente: 'lista',
     inicioVig: '2026-10-15',
     finVig: '2027-07-15',
@@ -46,7 +46,7 @@ function certBroker(over: Partial<CertificadoRow> = {}): CertificadoRow {
 function certDevengo(over: Partial<CertDevengo> = {}): CertDevengo {
   return {
     costoSinIva: 242000,
-    sumaAsegurada: 266200,
+    sumaAsegurada: 242000,
     inicioVig: '2026-10-15',
     finVig: '2027-07-15',
     fechaAnula: null,
@@ -60,7 +60,7 @@ const PRIMA_2 = [{ porcentaje: 2, vigenteDesde: '2026-01' }]
 const INGRESO_3 = [{ porcentaje: 3, vigenteDesde: '2026-01' }]
 
 describe('devengoMensual', () => {
-  it('cert 2026-10-15 → 2027-07-15: devenga oct..jul (10 meses calendario), oct con prima 5324 / ingreso 7260 / resultado 1936', () => {
+  it('cert 2026-10-15 → 2027-07-15: devenga oct..jul (10 meses calendario), oct con prima 4840 / ingreso 7260 / resultado 2420', () => {
     const resultado = devengoMensual([certDevengo()], PRIMA_2, INGRESO_3, '2027-07')
 
     expect(resultado).toHaveLength(10)
@@ -79,10 +79,10 @@ describe('devengoMensual', () => {
 
     const oct = resultado[0]
     expect(oct.certificados).toBe(1)
-    expect(oct.sumaVigente).toBe(266200)
-    expect(oct.prima).toBe(5324)
+    expect(oct.sumaVigente).toBe(242000)
+    expect(oct.prima).toBe(4840)
     expect(oct.ingreso).toBe(7260)
-    expect(oct.resultado).toBe(1936)
+    expect(oct.resultado).toBe(2420)
 
     // devenga en todos los meses del rango, incluido el último (jul) inclusive
     const jul = resultado[resultado.length - 1]
@@ -281,7 +281,7 @@ describe('filasBroker', () => {
       'CABA',
       'Motorola Moto G06 4/64GB',
       '350000000000001',
-      266200,
+      242000,
       '16/10/2026',
       null,
       '15/10/2026',
@@ -341,15 +341,15 @@ describe('filasBroker', () => {
 })
 
 describe('armarCierre', () => {
-  it('resumen.prima/ingreso/resultado/sumaVigente/certificados iguales a la fila del mes de devengoMensual (caso pinned: costo 242000/suma 266200, prima 2%, ingreso 3%, mes 2026-10 → 5324/7260/1936)', () => {
+  it('resumen.prima/ingreso/resultado/sumaVigente/certificados iguales a la fila del mes de devengoMensual (caso pinned: costo 242000/suma 242000, prima 2%, ingreso 3%, mes 2026-10 → 4840/7260/2420)', () => {
     const cert = certBroker()
     const { resumen } = armarCierre([cert], new Map(), PRIMA_2, INGRESO_3, '2026-10')
 
     expect(resumen.mes).toBe('2026-10')
-    expect(resumen.sumaVigente).toBe(266200)
-    expect(resumen.prima).toBe(5324)
+    expect(resumen.sumaVigente).toBe(242000)
+    expect(resumen.prima).toBe(4840)
     expect(resumen.ingreso).toBe(7260)
-    expect(resumen.resultado).toBe(1936)
+    expect(resumen.resultado).toBe(2420)
     expect(resumen.certificados).toBe(1)
   })
 
@@ -390,8 +390,8 @@ describe('armarCierre', () => {
 
     expect(resumen.vigentes).toBe(1)
     expect(resumen.anulados).toBe(0)
-    expect(resumen.sumaVigente).toBe(266200)
-    expect(resumen.prima).toBe(5324)
+    expect(resumen.sumaVigente).toBe(242000)
+    expect(resumen.prima).toBe(4840)
   })
 
   it('mes sin devengo (sin certs emitidos): resumen en ceros y filas []', () => {
@@ -436,7 +436,7 @@ describe('esMesCierreValido', () => {
 describe('sinIva', () => {
   it('divide por 1,21 y redondea a 2 decimales', () => {
     expect(sinIva(121)).toBe(100)
-    expect(sinIva(5324)).toBe(4400)
+    expect(sinIva(4840)).toBe(4000)
     expect(sinIva(0)).toBe(0)
     expect(sinIva(100)).toBe(82.64)
   })
@@ -448,7 +448,7 @@ describe('primaActualSinIva', () => {
     const r = primaActualSinIva(devengo, PRIMA_2, '2026-10')
     expect(r.pctConIva).toBe(2)
     expect(r.pctSinIva).toBe(1.65) // 2 / 1,21 redondeado a 2 dec
-    expect(r.primaMesSinIva).toBe(4400) // 5324 / 1,21
+    expect(r.primaMesSinIva).toBe(4000) // 4840 / 1,21
   })
 
   it('mes sin fila de devengo → prima 0, % igual al tramo vigente', () => {
@@ -462,7 +462,7 @@ describe('resultadoPorModeloSinIva', () => {
   it('agrupa por artículo y acumula prima/ingreso/resultado sin IVA', () => {
     const g17a = certBroker({ id: 'a', gocuotasOrderId: 'go-a' }) // Moto G06 según certBroker? usa articulo del helper
     const g17b = certBroker({ id: 'b', gocuotasOrderId: 'go-b' })
-    const otro = certBroker({ id: 'c', gocuotasOrderId: 'go-c', articulo: 'Samsung Galaxy A06 128GB', sumaAsegurada: 133100, costoSinIva: 121000 })
+    const otro = certBroker({ id: 'c', gocuotasOrderId: 'go-c', articulo: 'Samsung Galaxy A06 128GB', sumaAsegurada: 121000, costoSinIva: 121000 })
 
     const r = resultadoPorModeloSinIva([g17a, g17b, otro], PRIMA_2, INGRESO_3, '2026-10')
 
@@ -470,12 +470,12 @@ describe('resultadoPorModeloSinIva', () => {
     const moto = r.find(m => m.modelo === 'Motorola Moto G06 4/64GB')!
     const sam = r.find(m => m.modelo === 'Samsung Galaxy A06 128GB')!
     expect(moto.certificados).toBe(2)
-    // por cert: prima 5324, ingreso 7260, resultado 1936 (oct) → ×2, sin IVA
-    expect(moto.prima).toBe(8800) // 10648 / 1,21
+    // por cert: prima 4840, ingreso 7260, resultado 2420 (oct) → ×2, sin IVA
+    expect(moto.prima).toBe(8000) // 9680 / 1,21
     expect(moto.ingreso).toBe(12000) // 14520 / 1,21
-    expect(moto.resultado).toBe(3200) // 3872 / 1,21
+    expect(moto.resultado).toBe(4000) // 4840 / 1,21
     expect(sam.certificados).toBe(1)
-    expect(sam.prima).toBe(2200) // 133100*2% = 2662 → /1,21
+    expect(sam.prima).toBe(2000) // 121000*2% = 2420 → /1,21
     // ordenado por resultado desc: moto primero
     expect(r[0].modelo).toBe('Motorola Moto G06 4/64GB')
   })
@@ -484,5 +484,15 @@ describe('resultadoPorModeloSinIva', () => {
     const pend = certBroker({ id: 'p', gocuotasOrderId: 'go-p', estado: 'pendiente' })
     expect(resultadoPorModeloSinIva([pend], PRIMA_2, INGRESO_3, '2026-10')).toEqual([])
     expect(resultadoPorModeloSinIva([], PRIMA_2, INGRESO_3, '2026-10')).toEqual([])
+  })
+})
+
+describe('devengoMensual — base del ingreso', () => {
+  it('el ingreso es % de la SUMA ASEGURADA, no del costo (regla de Emiliano 29/10)', () => {
+    // costo y suma distintos a propósito para fijar la base
+    const cert = certDevengo({ costoSinIva: 100000, sumaAsegurada: 110000, inicioVig: '2026-10-01', finVig: '2026-10-31' })
+    const r = devengoMensual([cert], PRIMA_2, INGRESO_3, '2026-10')
+    expect(r[0].ingreso).toBe(3300) // 3% de 110000 — con base costo daría 3000
+    expect(r[0].prima).toBe(2200) // 2% de 110000
   })
 })

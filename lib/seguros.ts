@@ -5,8 +5,6 @@ import { normalizarModelo } from '@/lib/inventario-indicadores'
 // descarte o contracargo, siniestro). Lógica pura; Task 4 persiste lo que estas
 // funciones devuelven contra seguros_certificados (scripts/seguros.sql).
 
-/** Suma asegurada = costo sin IVA + este margen fijo. */
-const MARGEN_SUMA_ASEGURADA = 0.1
 
 /** Meses de vigencia de la póliza desde la fecha de alta del pedido. */
 const MESES_VIGENCIA = 9
@@ -162,7 +160,11 @@ export function prepararCertificados(
     .filter(v => aEpocaMs(v.linkedAt) >= aEpocaMs(activadoAt))
     .map(v => {
       const { costoSinIva, costoFuente } = resolverCosto(v, costosPorClave, costoPorImei)
-      const sumaAsegurada = costoSinIva !== null ? redondear2(costoSinIva * (1 + MARGEN_SUMA_ASEGURADA)) : null
+      // Suma asegurada = costo sin IVA, sin colchón (regla de Emiliano
+      // 29/10/2026: la pérdida ante robo es reponer el equipo al costo; el
+      // ×1,10 original encarecía la prima 10% todos los meses para cubrir un
+      // evento improbable — la suba del costo se autoasegura).
+      const sumaAsegurada = costoSinIva
       return {
         gocuotasOrderId: v.gocuotasOrderId,
         storeOrderId: v.storeOrderId,
