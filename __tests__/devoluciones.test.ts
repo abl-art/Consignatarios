@@ -275,6 +275,8 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
     banderas: [],
     recibidoWhGo: false,
     resueltoAt: null,
+    pedroEstado: null,
+    banderaPedro: null,
     ...overrides,
   }
 }

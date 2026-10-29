@@ -4,6 +4,7 @@ import {
   claseDevolucion,
   etiquetaRescate,
   etiquetaDevolucion,
+  banderaDiscrepancia,
 } from '@/lib/estados-andreani'
 
 describe('claseRescate', () => {
@@ -123,5 +124,29 @@ describe('etiquetaDevolucion', () => {
 
   it('unknown state → raw string unchanged (Review Focus)', () => {
     expect(etiquetaDevolucion('algo_nuevo')).toBe('algo_nuevo')
+  })
+})
+
+describe('banderaDiscrepancia', () => {
+  it('andreani null → null', () => {
+    expect(banderaDiscrepancia(null, 'devolucion_recibida')).toBeNull()
+  })
+
+  it('pedro null → null', () => {
+    expect(banderaDiscrepancia('En devolución', null)).toBeNull()
+  })
+
+  it('pedro recibido pero andreani no terminal → flag', () => {
+    expect(banderaDiscrepancia('En devolución', 'devolucion_recibida')).toBe(
+      'Pedro marca el equipo recibido pero Andreani no lo refleja todavía'
+    )
+  })
+
+  it('ambos coherentes (andreani ya terminal) → null', () => {
+    expect(banderaDiscrepancia('Devuelto', 'devolucion_recibida')).toBeNull()
+  })
+
+  it('pedro no recibido → null', () => {
+    expect(banderaDiscrepancia('En devolución', 'retiro_solicitado')).toBeNull()
   })
 })

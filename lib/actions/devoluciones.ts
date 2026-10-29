@@ -11,6 +11,8 @@ import {
   banderasDevolucion,
   type TramoEstado,
 } from '@/lib/devoluciones'
+import { getCancelacionEstado } from '@/lib/gocelular-webhook'
+import { banderaDiscrepancia } from '@/lib/estados-andreani'
 
 // Clave e IV públicos del front de seguimiento de Andreani (expuestos en
 // www.andreani.com/__ENV.js: NEXT_PUBLIC_API_KEY / NEXT_PUBLIC_API_KEY_IV).
@@ -51,6 +53,10 @@ export interface FilaDevolucion {
   recibidoWhGo: boolean
   /** Cierre manual del caso (botón Resolver). null = pendiente de gestión. */
   resueltoAt: string | null
+  /** Estado crudo reportado por Pedro (webhook de GOcelular) para esta orden, o null si no se pudo consultar */
+  pedroEstado: string | null
+  /** Mensaje de discrepancia entre Andreani y Pedro, o null si no aplica */
+  banderaPedro: string | null
 }
 
 interface ReturnRaw {
@@ -97,6 +103,18 @@ async function consultarAndreani(tracking: string | null, ahora: Date): Promise<
     }
   } catch {
     return { tracking, estadoActual: null, tramos: [], totalHoras: 0, consultado: false }
+  }
+}
+
+// Segunda fuente (control): estado crudo que reportó Pedro para esta orden,
+// vía el webhook de cancelaciones/estado de GOcelular. No bloquea la fila —
+// si la consulta falla o no hay dato, queda null (igual que Andreani).
+async function consultarPedro(orderNumber: string): Promise<string | null> {
+  try {
+    const { body } = await getCancelacionEstado({ order_number: orderNumber })
+    return body?.estado ?? null
+  } catch {
+    return null
   }
 }
 
@@ -197,9 +215,10 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   const seguimientos = await getSeguimientoDevoluciones()
   return Promise.all(
     rows.map(async (r): Promise<FilaDevolucion> => {
-      const [entrega, devolucion] = await Promise.all([
+      const [entrega, devolucion, pedroEstado] = await Promise.all([
         consultarAndreani(r.out_tracking, ahora),
         consultarAndreani(r.ret_tracking, ahora),
+        consultarPedro(r.order_number),
       ])
       const ordenAnulada = r.go_status === 'discarded'
       const seguimiento = seguimientos.get(r.ret_tracking)
@@ -220,6 +239,8 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         devolucion,
         recibidoWhGo: seguimiento?.recibidoWhGo ?? false,
         resueltoAt: seguimiento?.resueltoAt ?? null,
+        pedroEstado,
+        banderaPedro: banderaDiscrepancia(devolucion.estadoActual, pedroEstado),
         banderas: banderasDevolucion({
           entregaEstado: entrega.estadoActual,
           inventarioStatus: r.inv_status,
