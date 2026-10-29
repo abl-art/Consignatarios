@@ -111,13 +111,14 @@ async function consultarAndreani(tracking: string | null, ahora: Date): Promise<
   }
 }
 
-// Segunda fuente (control): estado crudo que reportó Pedro para esta orden,
-// vía el webhook de cancelaciones/estado de GOcelular. No bloquea la fila —
-// si la consulta falla o no hay dato, queda null (igual que Andreani).
+// Segunda fuente (control): estado de la DEVOLUCIÓN que reportó Pedro para
+// esta orden — el bloque devolucion del GET, no el estado top-level (que para
+// órdenes sin devolución es vocabulario de pedido: cancelado, no_cancelable_*).
+// No bloquea la fila: timeout corto y si falla o no hay dato, queda null.
 async function consultarPedro(orderNumber: string): Promise<string | null> {
   try {
-    const { body } = await getCancelacionEstado({ order_number: orderNumber })
-    return body?.estado ?? null
+    const { body } = await getCancelacionEstado({ order_number: orderNumber }, { timeoutMs: 5000 })
+    return body?.devolucion?.estado ?? null
   } catch {
     return null
   }
@@ -286,13 +287,14 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   const sinteticas = Promise.all(
     sinShipment.map(async (p): Promise<FilaDevolucion> => {
       const c = contextos.get(p.orderNumber)
+      const seguimiento = p.tracking ? seguimientos.get(p.tracking) : undefined
       const [entrega, devolucion, pedroEstado] = await Promise.all([
         consultarAndreani(c?.out_tracking ?? null, ahora),
         consultarAndreani(p.tracking, ahora),
-        consultarPedro(p.orderNumber),
+        // Resueltas no gastan requests a Pedro (mismo criterio que Rescates)
+        seguimiento?.resueltoAt ? Promise.resolve(null) : consultarPedro(p.orderNumber),
       ])
       const ordenAnulada = c?.go_status === 'discarded'
-      const seguimiento = p.tracking ? seguimientos.get(p.tracking) : undefined
       return {
         orderNumber: p.orderNumber,
         gocuotasOrderId: c?.gocuotas_order_id ?? null,
@@ -327,13 +329,14 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
 
   const deShipments = Promise.all(
     rows.map(async (r): Promise<FilaDevolucion> => {
+      const seguimiento = seguimientos.get(r.ret_tracking)
       const [entrega, devolucion, pedroEstado] = await Promise.all([
         consultarAndreani(r.out_tracking, ahora),
         consultarAndreani(r.ret_tracking, ahora),
-        consultarPedro(r.order_number),
+        // Resueltas no gastan requests a Pedro (mismo criterio que Rescates)
+        seguimiento?.resueltoAt ? Promise.resolve(null) : consultarPedro(r.order_number),
       ])
       const ordenAnulada = r.go_status === 'discarded'
-      const seguimiento = seguimientos.get(r.ret_tracking)
       return {
         orderNumber: r.order_number,
         gocuotasOrderId: r.gocuotas_order_id,

@@ -5,6 +5,7 @@ import {
   etiquetaRescate,
   etiquetaDevolucion,
   banderaDiscrepancia,
+  estadosDesdeGetCancelacion,
 } from '@/lib/estados-andreani'
 
 describe('claseRescate', () => {
@@ -148,5 +149,28 @@ describe('banderaDiscrepancia', () => {
 
   it('pedro no recibido → null', () => {
     expect(banderaDiscrepancia('En devolución', 'retiro_solicitado')).toBeNull()
+  })
+})
+
+// Los estados que habilitan Anular orden deben salir del GET FRESCO de Pedro
+// dentro de la server action (nunca del browser): extracción pura de los
+// bloques rescate/devolucion del body del GET.
+describe('estadosDesdeGetCancelacion', () => {
+  it('body null → ambos null', () => {
+    expect(estadosDesdeGetCancelacion(null)).toEqual({ rescateEstado: null, devolucionEstado: null })
+  })
+
+  it('bloque rescate → rescateEstado; sin devolución → null', () => {
+    expect(estadosDesdeGetCancelacion({ rescate: { estado: 'rescate_confirmado' }, devolucion: null }))
+      .toEqual({ rescateEstado: 'rescate_confirmado', devolucionEstado: null })
+  })
+
+  it('bloque devolucion → devolucionEstado (NO el estado top-level)', () => {
+    expect(estadosDesdeGetCancelacion({ estado: 'no_cancelable_entregado', devolucion: { estado: 'retiro_realizado' } } as never))
+      .toEqual({ rescateEstado: null, devolucionEstado: 'retiro_realizado' })
+  })
+
+  it('bloques sin estado → null, no undefined', () => {
+    expect(estadosDesdeGetCancelacion({ rescate: {}, devolucion: {} })).toEqual({ rescateEstado: null, devolucionEstado: null })
   })
 })

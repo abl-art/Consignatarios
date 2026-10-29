@@ -49,7 +49,7 @@ export async function getRescatesCompletos(): Promise<RescateConPedro[]> {
     todos.map(async (r): Promise<RescateConPedro> => {
       if (r.resueltoAt || !r.orderNumber) return { ...r, pedroEstado: null, pedroRazon: null }
       try {
-        const { body } = await getCancelacionEstado({ order_number: r.orderNumber })
+        const { body } = await getCancelacionEstado({ order_number: r.orderNumber }, { timeoutMs: 5000 })
         return { ...r, pedroEstado: body?.rescate?.estado ?? null, pedroRazon: body?.rescate?.razon ?? null }
       } catch {
         return { ...r, pedroEstado: null, pedroRazon: null }

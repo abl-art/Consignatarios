@@ -339,6 +339,7 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
                     <BotonAnularOrden
                       gocuotasOrderId={d.gocuotasOrderId}
                       gocuotasStatus={d.gocuotasStatus}
+                      orderNumber={d.orderNumber}
                       devolucionEstado={d.pedroEstado}
                     />
                   )}

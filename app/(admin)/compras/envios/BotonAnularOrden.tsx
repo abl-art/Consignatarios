@@ -14,11 +14,14 @@ import { puedeAnularOrden } from '@/lib/arrepentimientos'
 export default function BotonAnularOrden({
   gocuotasOrderId,
   gocuotasStatus,
+  orderNumber,
   rescateEstado,
   devolucionEstado,
 }: {
   gocuotasOrderId: string | null
   gocuotasStatus: string | null
+  orderNumber: string
+  /** Solo pintan el botón — la autorización real la re-consulta la server action contra Pedro */
   rescateEstado?: string | null
   devolucionEstado?: string | null
 }) {
@@ -48,7 +51,7 @@ export default function BotonAnularOrden({
       return
     }
     startTransition(async () => {
-      const r = await anularOrdenCaso({ gocuotasOrderId, gocuotasStatus, rescateEstado, devolucionEstado })
+      const r = await anularOrdenCaso({ gocuotasOrderId, gocuotasStatus, orderNumber })
       if (r.error) {
         setError(r.error)
         setArmado(false)

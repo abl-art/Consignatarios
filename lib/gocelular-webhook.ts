@@ -272,8 +272,11 @@ export async function getEtiquetaDevolucion(orderNumber: string): Promise<
   }
 }
 
-/** GET del estado de la cancelación (el apply es asincrónico, ~1 min). La firma del GET es timestamp + ".". */
-export async function getCancelacionEstado(query: { order_number?: string; proforma_number?: string }): Promise<CancelacionResult> {
+/** GET del estado de la cancelación (el apply es asincrónico, ~1 min). La firma del GET es timestamp + ".". timeoutMs corto (5s) para los GET por fila de las pestañas. */
+export async function getCancelacionEstado(
+  query: { order_number?: string; proforma_number?: string },
+  opts?: { timeoutMs?: number },
+): Promise<CancelacionResult> {
   const secret = process.env.GOCELULAR_WEBHOOK_SECRET
   const base = process.env.GOCELULAR_CANCELACIONES_URL || CANCELACIONES_URL
   if (!secret) return { ok: false, status: 0, body: { detalle: 'secret_no_configurado' } }
@@ -285,7 +288,7 @@ export async function getCancelacionEstado(query: { order_number?: string; profo
   try {
     const res = await fetch(`${base}?${params.toString()}`, {
       headers: { 'X-Gocelular-Signature': sig, 'X-Gocelular-Timestamp': ts },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(opts?.timeoutMs ?? 10000),
     })
     const body = (await res.json().catch(() => null)) as CancelacionResponse | null
     return { ok: res.status === 200, status: res.status, body }

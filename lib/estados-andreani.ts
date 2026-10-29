@@ -87,6 +87,21 @@ const ANDREANI_TERMINALES = ['Devuelto', 'Entregado']
  * @param pedro Estado crudo reportado por Pedro vía webhook (o null si no se consultó)
  * @returns Mensaje de discrepancia, o null si no aplica o falta algún dato
  */
+/**
+ * Extrae los estados de rescate/devolución de los bloques del GET de Pedro.
+ * Es el input del guard de Anular orden DENTRO de la server action: el estado
+ * que habilita un reembolso total se re-consulta fresco server-side, nunca se
+ * confía en el que mandó el browser (puede estar viejo o forjado).
+ */
+export function estadosDesdeGetCancelacion(
+  body: { rescate?: { estado?: string } | null; devolucion?: { estado?: string } | null } | null,
+): { rescateEstado: string | null; devolucionEstado: string | null } {
+  return {
+    rescateEstado: body?.rescate?.estado ?? null,
+    devolucionEstado: body?.devolucion?.estado ?? null,
+  }
+}
+
 export function banderaDiscrepancia(andreani: string | null, pedro: string | null): string | null {
   if (andreani === null || pedro === null) return null
   const pedroRecibido = pedro === 'rescate_recibido' || pedro === 'devolucion_recibida'

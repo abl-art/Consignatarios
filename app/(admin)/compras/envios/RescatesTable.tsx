@@ -347,6 +347,7 @@ function TablaRescates({ rescates }: { rescates: RescateConPedro[] }) {
                     <BotonAnularOrden
                       gocuotasOrderId={r.gocuotasOrderId}
                       gocuotasStatus={r.gocuotasStatus}
+                      orderNumber={r.orderNumber}
                       rescateEstado={r.pedroEstado}
                     />
                   </div>
