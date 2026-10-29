@@ -9,6 +9,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { setSeguroActivo, type CertificadoRow, type SegurosConfig } from '@/lib/actions/seguros'
 import { formatearMoneda } from '@/lib/utils'
+import { filtrarCertificados } from '@/lib/seguros'
 import type { ResumenPrimaActual } from '@/lib/seguros-informes'
 
 type Estado = 'vigente' | 'anulado' | 'siniestrado' | 'pendiente'
@@ -58,6 +59,9 @@ export default function CertificadosTab({ certificados, config, facturas, operar
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [dniQuery, setDniQuery] = useState('')
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
 
   function activar() {
     setError(null)
@@ -93,7 +97,9 @@ export default function CertificadosTab({ certificados, config, facturas, operar
   const siniestrados = conEstado.filter(c => c._estado === 'siniestrado')
   const pendientes = conEstado.filter(c => c._estado === 'pendiente')
   const resto = conEstado.filter(c => c._estado !== 'pendiente')
-  const filas = [...pendientes, ...resto]
+  // El filtro afecta SOLO la tabla; las tarjetas resumen siguen siendo globales.
+  const filas = filtrarCertificados([...pendientes, ...resto], { dni: dniQuery, desde, hasta })
+  const hayFiltro = dniQuery.trim() !== '' || desde !== '' || hasta !== ''
 
   return (
     <div className="space-y-6">
@@ -204,6 +210,50 @@ export default function CertificadosTab({ certificados, config, facturas, operar
         </div>
       </div>
 
+      {/* Filtros de la tabla */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-end gap-3 flex-wrap">
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Buscar por DNI</label>
+          <input
+            value={dniQuery}
+            onChange={(e) => setDniQuery(e.target.value)}
+            inputMode="numeric"
+            placeholder="Ej: 30.123.456"
+            className="w-40 px-2 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Vendido desde</label>
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Vendido hasta</label>
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+          />
+        </div>
+        {hayFiltro && (
+          <button
+            type="button"
+            onClick={() => { setDniQuery(''); setDesde(''); setHasta('') }}
+            className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:text-gray-700 hover:border-gray-300"
+          >
+            ✕ Limpiar
+          </button>
+        )}
+        <p className="text-xs text-gray-400 ml-auto">
+          {hayFiltro ? `${filas.length} de ${conEstado.length} certificados` : `${conEstado.length} certificados`}
+        </p>
+      </div>
+
       {/* Tabla */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
@@ -251,7 +301,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
             {filas.length === 0 && (
               <tr>
                 <td colSpan={10} className="px-3 py-8 text-center text-sm text-gray-400">
-                  Sin certificados todavía
+                  {hayFiltro ? 'Ningún certificado coincide con el filtro' : 'Sin certificados todavía'}
                 </td>
               </tr>
             )}

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import {
   normalizarDni,
+  filtrarCertificados,
   sumarMeses,
   armarDomicilio,
   prepararCertificados,
@@ -291,5 +292,34 @@ describe('fechaRoboEnRango', () => {
   it('extremos inclusive: igual al inicio de vigencia o igual a hoy son válidos', () => {
     expect(fechaRoboEnRango('2026-10-01', '2026-10-01', '2026-10-28')).toBe(true)
     expect(fechaRoboEnRango('2026-10-01', '2026-10-28', '2026-10-28')).toBe(true)
+  })
+})
+
+describe('filtrarCertificados', () => {
+  const certs = [
+    { dni: '30123456', inicioVig: '2026-10-05' },
+    { dni: '99888777', inicioVig: '2026-11-20' },
+    { dni: null, inicioVig: '2026-12-01' },
+  ]
+
+  it('sin filtros devuelve todo', () => {
+    expect(filtrarCertificados(certs, {})).toEqual(certs)
+  })
+
+  it('por DNI: normaliza puntos/espacios y matchea por substring; dni null nunca matchea', () => {
+    expect(filtrarCertificados(certs, { dni: '30.123.456' })).toEqual([certs[0]])
+    expect(filtrarCertificados(certs, { dni: '998' })).toEqual([certs[1]])
+    expect(filtrarCertificados(certs, { dni: '000' })).toEqual([])
+  })
+
+  it('query de DNI solo con basura (sin dígitos) no filtra', () => {
+    expect(filtrarCertificados(certs, { dni: 'abc.' })).toEqual(certs)
+  })
+
+  it('rango de fechas sobre inicioVig, extremos inclusive; desde y hasta combinables con dni', () => {
+    expect(filtrarCertificados(certs, { desde: '2026-11-20' })).toEqual([certs[1], certs[2]])
+    expect(filtrarCertificados(certs, { hasta: '2026-11-20' })).toEqual([certs[0], certs[1]])
+    expect(filtrarCertificados(certs, { desde: '2026-11-01', hasta: '2026-11-30' })).toEqual([certs[1]])
+    expect(filtrarCertificados(certs, { dni: '99888777', desde: '2026-12-01' })).toEqual([])
   })
 })

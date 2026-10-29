@@ -56,6 +56,30 @@ export function normalizarDni(dni: string): string {
   return soloDigitos.replace(/^0+(?=\d)/, '')
 }
 
+export type FiltroCertificados = { dni?: string; desde?: string; hasta?: string }
+
+/**
+ * Filtro de la tabla de Certificados (un cert por teléfono vendido — la lista
+ * crece rápido): por DNI (normalizado, match por substring; una query sin
+ * ningún dígito no filtra) y por rango de fechas sobre inicioVig (= fecha de
+ * la venta), extremos inclusive. Tipado estructural para no depender del row
+ * completo de la action.
+ */
+export function filtrarCertificados<T extends { dni: string | null; inicioVig: string }>(
+  certs: T[],
+  filtro: FiltroCertificados,
+): T[] {
+  // Solo quitar separadores — NO normalizarDni: su strip de ceros iniciales
+  // convertiría la búsqueda '000' en '0' y matchearía casi todo.
+  const dniQuery = filtro.dni ? filtro.dni.replace(/\D/g, '') : ''
+  return certs.filter((c) => {
+    if (dniQuery && (c.dni === null || !c.dni.includes(dniQuery))) return false
+    if (filtro.desde && c.inicioVig < filtro.desde) return false
+    if (filtro.hasta && c.inicioVig > filtro.hasta) return false
+    return true
+  })
+}
+
 /**
  * fechaRobo dentro del rango válido para cerrar un siniestro como positivo:
  * no puede ser anterior al inicio de vigencia de la póliza (robo "antes" de
