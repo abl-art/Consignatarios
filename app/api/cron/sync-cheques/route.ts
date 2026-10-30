@@ -88,52 +88,68 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Fetch CSV from Google Sheets
-    const res = await fetch(SHEET_URL, { cache: 'no-store' })
-    if (!res.ok) {
+    // 1+2. Fetch + parse con reintentos: mientras alguien edita el sheet,
+    // gviz sirve snapshots erráticos (se midieron 6KB truncos y 19,5MB
+    // completos con minutos de diferencia). Se acepta la primera respuesta
+    // que supere el piso de filas; las truncas se descartan y se reintenta.
+    const MIN_FILAS = 10_000 // el sheet real tiene ~106k filas y solo crece
+    const INTENTOS = 3
+    let rows: ChequeRow[] = []
+    const intentosFallidos: string[] = []
+
+    for (let intento = 1; intento <= INTENTOS; intento++) {
+      const res = await fetch(SHEET_URL, { cache: 'no-store' })
+      if (!res.ok) {
+        intentosFallidos.push(`intento ${intento}: HTTP ${res.status}`)
+        continue
+      }
+      const csv = await res.text()
+
+      const lines = csv.split('\n').filter(l => l.trim().length > 0)
+      const parsed: ChequeRow[] = []
+      for (let i = 1; i < lines.length; i++) {
+        const fields = parseCsvLine(lines[i])
+
+        const numeroCheque = (fields[0] ?? '').trim()
+        const estadoCheque = (fields[2] ?? '').trim()
+        const cuit = (fields[3] ?? '').trim()
+        const nombre = (fields[4] ?? '').trim()
+        const fechaPagoRaw = (fields[6] ?? '').trim()
+        const importeRaw = (fields[7] ?? '').trim()
+
+        // Skip rows with empty cuit
+        if (!cuit) continue
+
+        // Parse and validate fecha_pago
+        const fechaPago = parseFechaPago(fechaPagoRaw)
+        if (!fechaPago) continue
+
+        // Parse and validate importe
+        const importe = parseImporte(importeRaw)
+        if (!importe || importe <= 0) continue
+
+        parsed.push({
+          numero_cheque: numeroCheque,
+          estado_cheque: estadoCheque,
+          cuit,
+          nombre,
+          fecha_pago: fechaPago,
+          importe,
+        })
+      }
+
+      if (parsed.length >= MIN_FILAS) {
+        rows = parsed
+        break
+      }
+      intentosFallidos.push(`intento ${intento}: ${csv.length} chars, ${parsed.length} filas válidas`)
+    }
+
+    if (rows.length === 0) {
       return NextResponse.json(
-        { error: `Failed to fetch sheet: ${res.status} ${res.statusText}` },
-        { status: 502 }
+        { error: `Ningún intento superó el piso de ${MIN_FILAS} filas (respuesta trunca o pestaña equivocada): ${intentosFallidos.join(' | ')}` },
+        { status: 422 }
       )
-    }
-    const csv = await res.text()
-
-    // 2. Parse rows (skip header)
-    const lines = csv.split('\n').filter(l => l.trim().length > 0)
-    if (lines.length < 2) {
-      return NextResponse.json({ error: 'Sheet has no data rows' }, { status: 422 })
-    }
-
-    const rows: ChequeRow[] = []
-    for (let i = 1; i < lines.length; i++) {
-      const fields = parseCsvLine(lines[i])
-
-      const numeroCheque = (fields[0] ?? '').trim()
-      const estadoCheque = (fields[2] ?? '').trim()
-      const cuit = (fields[3] ?? '').trim()
-      const nombre = (fields[4] ?? '').trim()
-      const fechaPagoRaw = (fields[6] ?? '').trim()
-      const importeRaw = (fields[7] ?? '').trim()
-
-      // Skip rows with empty cuit
-      if (!cuit) continue
-
-      // Parse and validate fecha_pago
-      const fechaPago = parseFechaPago(fechaPagoRaw)
-      if (!fechaPago) continue
-
-      // Parse and validate importe
-      const importe = parseImporte(importeRaw)
-      if (!importe || importe <= 0) continue
-
-      rows.push({
-        numero_cheque: numeroCheque,
-        estado_cheque: estadoCheque,
-        cuit,
-        nombre,
-        fecha_pago: fechaPago,
-        importe,
-      })
     }
 
     // 3. Reemplazo por generaciones: primero se inserta TODO con el synced_at
