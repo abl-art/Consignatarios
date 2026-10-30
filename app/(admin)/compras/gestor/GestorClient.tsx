@@ -246,15 +246,9 @@ export default function GestorClient({
   }, [productos, filtroCategoria, filtroMarca, busqueda, mostrarInactivos])
 
   const proveedoresFiltrados = useMemo(() => {
+    // Todos los proveedores pueden vender cualquier categoría: no se filtra
+    // por tipo de producto, solo por marca cuando se filtra Celulares por marca
     return proveedores.filter((prov) => {
-      let tipos: string[] = []
-      try {
-        const parsed = JSON.parse(prov.direccion || '[]')
-        tipos = Array.isArray(parsed) ? parsed : [prov.direccion].filter(Boolean)
-      } catch {
-        tipos = prov.direccion ? [prov.direccion] : []
-      }
-      if (filtroCategoria && tipos.length > 0 && !tipos.includes(filtroCategoria)) return false
       if (filtroMarca && filtroCategoria === 'Celulares') {
         const marcasProv = parseProvMarcas(prov.notas)
         if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false

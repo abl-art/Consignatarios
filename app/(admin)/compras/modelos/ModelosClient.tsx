@@ -92,19 +92,9 @@ export default function ModelosClient({
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
 
-  // Filter proveedores: only show those that supply the selected category
-  // When filtering by marca, also filter proveedores by marca
+  // Todos los proveedores pueden vender cualquier categoría: no se filtra por
+  // tipo de producto, solo por marca cuando se filtra Celulares por marca
   const proveedoresFiltrados = proveedores.filter((prov) => {
-    // Soportar formato viejo (string) y nuevo (JSON array) de tipos de producto
-    let tipos: string[] = []
-    try {
-      const parsed = JSON.parse(prov.direccion || '[]')
-      tipos = Array.isArray(parsed) ? parsed : [prov.direccion].filter(Boolean)
-    } catch {
-      tipos = prov.direccion ? [prov.direccion] : []
-    }
-    // If proveedor has tipos set and none match the selected category, hide it
-    if (filtroCategoria && tipos.length > 0 && !tipos.includes(filtroCategoria)) return false
     // If filtering by marca, only show proveedores that carry that marca
     if (filtroMarca && filtroCategoria === 'Celulares') {
       const marcasProv = parseProvMarcas(prov.notas)
