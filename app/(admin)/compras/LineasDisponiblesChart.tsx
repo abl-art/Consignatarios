@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { triggerSyncCheques } from '@/lib/actions/compras'
 import { formatearMoneda } from '@/lib/utils'
+import { armarLiberaciones } from '@/lib/lineas-proveedor'
 
 interface Cheque { importe: number; fecha_pago: string }
 interface LineaProveedor {
@@ -82,114 +83,47 @@ export default function LineasDisponiblesChart({ lineas, lastSync }: Props) {
       {/* Proveedores — collapsible */}
       {open && <div className="divide-y divide-gray-100 border-t border-gray-200">
         {lineas.filter(l => l.limite > 0).map(linea => {
-          // Build timeline points: start with disponible hoy, then add each cheque vencimiento
-          const grouped: Record<string, number> = {}
-          for (const ch of linea.cheques) {
-            grouped[ch.fecha_pago] = (grouped[ch.fecha_pago] || 0) + ch.importe
-          }
-
-          const puntos: { fecha: string; label: string; disponible: number; liberado: number }[] = []
-          // Sort dates
-          const fechas = Object.keys(grouped).sort()
-
-          let acumulado = linea.disponible
-          // Starting point: today
-          puntos.push({ fecha: 'hoy', label: 'Hoy', disponible: acumulado, liberado: 0 })
-
-          for (const f of fechas) {
-            acumulado += grouped[f]
-            puntos.push({
-              fecha: f,
-              label: fmtFecha(f),
-              disponible: acumulado,
-              liberado: grouped[f],
-            })
-          }
-
-          // SVG line chart dimensions
-          const svgW = 600
-          const svgH = 60
-          const padL = 0
-          const padR = 0
-          const usableW = svgW - padL - padR
-
-          const maxDisp = Math.max(...puntos.map(p => p.disponible), linea.limite)
-          const minDisp = Math.min(...puntos.map(p => p.disponible), 0)
-          const range = maxDisp - minDisp || 1
-
-          function xPos(i: number): number {
-            if (puntos.length <= 1) return padL + usableW / 2
-            return padL + (i / (puntos.length - 1)) * usableW
-          }
-          function yPos(val: number): number {
-            return svgH - 8 - ((val - minDisp) / range) * (svgH - 16)
-          }
-
-          // Build SVG path (step line)
-          let path = ''
-          for (let i = 0; i < puntos.length; i++) {
-            const x = xPos(i)
-            const y = yPos(puntos[i].disponible)
-            if (i === 0) {
-              path += `M ${x} ${y}`
-            } else {
-              // Step: horizontal then vertical
-              path += ` L ${x} ${yPos(puntos[i - 1].disponible)} L ${x} ${y}`
-            }
-          }
-
-          // Limite line y position
-          const limiteY = yPos(linea.limite)
+          const liberaciones = armarLiberaciones(linea.disponible, linea.cheques)
+          const sobregirada = linea.disponible < 0
+          const pctDisponible = Math.max(0, Math.min(100, (linea.disponible / linea.limite) * 100))
 
           return (
             <div key={linea.id} className="px-5 py-4">
-              {/* Proveedor name + disponible */}
-              <div className="flex items-baseline justify-between mb-1">
+              {/* Proveedor + disponible / límite */}
+              <div className="flex items-baseline justify-between gap-4">
                 <span className="text-sm font-medium text-gray-900">{linea.nombre}</span>
-                <span className="text-sm text-gray-500">
-                  Disponible: <span className="font-semibold text-gray-900">{formatearMoneda(linea.disponible)}</span>
+                <span className="text-sm text-gray-500 whitespace-nowrap">
+                  Disponible:{' '}
+                  <span className={`font-semibold ${sobregirada ? 'text-red-600' : 'text-gray-900'}`}>
+                    {formatearMoneda(linea.disponible)}
+                  </span>
                   <span className="text-gray-400 ml-1">/ {formatearMoneda(linea.limite)}</span>
                 </span>
               </div>
 
-              {/* Timeline chart */}
-              <div className="relative">
-                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-16" preserveAspectRatio="none">
-                  {/* Limite reference line (dashed) */}
-                  <line
-                    x1={0} y1={limiteY} x2={svgW} y2={limiteY}
-                    stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 3"
-                  />
+              {/* Barra de uso de la línea */}
+              <div className="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${sobregirada ? 'bg-red-400' : 'bg-indigo-500'}`}
+                  style={{ width: `${sobregirada ? 100 : pctDisponible}%` }}
+                />
+              </div>
 
-                  {/* Step line */}
-                  <path d={path} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" />
-
-                  {/* Points */}
-                  {puntos.map((p, i) => (
-                    <circle
-                      key={i}
-                      cx={xPos(i)}
-                      cy={yPos(p.disponible)}
-                      r="4"
-                      fill={i === 0 ? '#6366f1' : '#818cf8'}
-                      stroke="white"
-                      strokeWidth="1.5"
-                    />
-                  ))}
-                </svg>
-
-                {/* Labels below the chart */}
-                <div className="flex justify-between mt-1" style={{ paddingLeft: 0, paddingRight: 0 }}>
-                  {puntos.map((p, i) => (
-                    <div key={i} className="flex flex-col items-center" style={{ width: puntos.length <= 1 ? '100%' : undefined }}>
-                      <span className="text-[10px] font-medium text-indigo-600">{fmtCorto(p.disponible)}</span>
-                      <span className="text-[9px] text-gray-400">{p.label}</span>
-                      {p.liberado > 0 && (
-                        <span className="text-[9px] text-green-600">+{fmtCorto(p.liberado)}</span>
-                      )}
-                    </div>
-                  ))}
+              {/* Cronograma de liberación — fechas una al lado de la otra */}
+              <div className="mt-3 flex items-stretch gap-2 overflow-x-auto pb-1">
+                <div className={`flex-none rounded-lg px-3 py-1.5 text-center border ${sobregirada ? 'border-red-200 bg-red-50' : 'border-indigo-200 bg-indigo-50'}`}>
+                  <div className={`text-[10px] font-semibold uppercase tracking-wide ${sobregirada ? 'text-red-500' : 'text-indigo-500'}`}>Hoy</div>
+                  <div className="text-[11px] leading-4 text-transparent select-none">·</div>
+                  <div className={`text-sm font-semibold ${sobregirada ? 'text-red-700' : 'text-indigo-700'}`}>{fmtCorto(linea.disponible)}</div>
                 </div>
+
+                {liberaciones.map(lib => (
+                  <div key={lib.fecha} className="flex-none rounded-lg border border-gray-200 bg-gray-50/50 px-3 py-1.5 text-center">
+                    <div className="text-[10px] font-medium text-gray-400">{fmtFecha(lib.fecha)}</div>
+                    <div className="text-[11px] leading-4 font-medium text-green-600">+{fmtCorto(lib.liberado)}</div>
+                    <div className={`text-sm font-semibold ${lib.acumulado < 0 ? 'text-red-600' : 'text-gray-900'}`}>{fmtCorto(lib.acumulado)}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )

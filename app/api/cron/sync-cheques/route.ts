@@ -4,8 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+// Pestaña "Echeqs" referida por gid: el 29/10/2026 la renombraron (era "cheques")
+// y gviz con un nombre inexistente NO falla — devuelve la pestaña activa del
+// momento (a veces "Echeqs SyC", 1-2 filas con el mismo header), lo que vació
+// la tabla. El gid sobrevive renombres.
 const SHEET_URL =
-  'https://docs.google.com/spreadsheets/d/1fbcEB5o9nERC6BTmf94nVqOsKpJ3KJ6tVG_UPPbuaqg/gviz/tq?tqx=out:csv&sheet=cheques'
+  'https://docs.google.com/spreadsheets/d/1fbcEB5o9nERC6BTmf94nVqOsKpJ3KJ6tVG_UPPbuaqg/gviz/tq?tqx=out:csv&gid=426977699'
 
 /**
  * Parse a CSV line handling quoted fields (fields may contain commas and escaped quotes).
@@ -139,6 +143,18 @@ export async function GET(request: Request) {
     // vieja queda intacta y la corrida siguiente lo reintenta.
     const admin = createAdminClient()
     const now = new Date().toISOString()
+
+    // Guard de sanidad: una respuesta chica de Google (pestaña equivocada,
+    // sheet a medio editar) no debe pisar una generación grande ya cargada.
+    const { count: existentes } = await admin
+      .from('cheques_proveedor')
+      .select('*', { count: 'exact', head: true })
+    if ((existentes ?? 0) > 1000 && rows.length < (existentes ?? 0) * 0.5) {
+      return NextResponse.json(
+        { error: `Sanity check: el sheet trajo ${rows.length} filas vs ${existentes} existentes — no se reemplaza nada` },
+        { status: 422 }
+      )
+    }
 
     const BATCH = 1000
     const CONCURRENCIA = 8
