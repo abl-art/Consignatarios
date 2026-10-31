@@ -18,7 +18,6 @@ import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
 import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguros-informes'
-import { consultarImeiEnacom, type ConsultaEnacom } from '@/lib/enacom'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
@@ -536,16 +535,6 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
   })
 
   return filas
-}
-
-/**
- * Consulta en vivo del IMEI contra ENACOM, para la celda de la pestaña
- * Siniestros (se dispara desde el cliente DESPUÉS del render — ENACOM es
- * lento desde Vercel y bloqueaba la carga de la página). Nunca tira: degrada
- * a 'sin_dato'.
- */
-export async function consultarEnacom(imei: string): Promise<ConsultaEnacom> {
-  return consultarImeiEnacom(imei)
 }
 
 /** URL firmada de la denuncia (bucket privado 'denuncias-robo') por 1 hora — mismo patrón que urlCv de reclutamiento. */

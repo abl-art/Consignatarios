@@ -109,7 +109,14 @@ export async function consultarImeiEnacom(imei: string): Promise<ConsultaEnacom>
     if (!interpretado) console.error('[enacom] respuesta con forma inesperada (¿cambió Livewire?)')
     return interpretado ?? sinDato
   } catch (e) {
-    console.error('[enacom] excepción consultando:', e instanceof Error ? `${e.name}: ${e.message}` : e)
+    // La cadena de causas dice si es DNS/TLS/reset (undici anida el motivo real en e.cause).
+    const detalle: string[] = []
+    let err: unknown = e
+    for (let i = 0; i < 4 && err instanceof Error; i++) {
+      detalle.push(`${err.name}: ${err.message}${'code' in err ? ` (${(err as { code?: string }).code})` : ''}`)
+      err = err.cause
+    }
+    console.error('[enacom] excepción consultando:', detalle.join(' <- '))
     return sinDato
   }
 }

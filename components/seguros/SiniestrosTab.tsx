@@ -13,7 +13,6 @@ import {
   getDenunciaUrl,
   setEstadoSiniestro,
   resolverSiniestro,
-  consultarEnacom,
   type SiniestroRow,
   type EstadoSiniestro,
 } from '@/lib/actions/seguros'
@@ -83,8 +82,11 @@ function EnacomCell({ imei }: { imei: string }) {
 
   useEffect(() => {
     let vigente = true
-    consultarEnacom(imei)
-      .then((r) => { if (vigente) setResultado(r) })
+    // Endpoint dedicado (no server action): corre en iad1 porque ENACOM
+    // dropea conexiones desde gru1, la región de las actions.
+    fetch(`/api/seguros/enacom?imei=${encodeURIComponent(imei)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r: ConsultaEnacom | null) => { if (vigente) setResultado(r ?? { estado: 'sin_dato', mensaje: null }) })
       .catch(() => { if (vigente) setResultado({ estado: 'sin_dato', mensaje: null }) })
     return () => { vigente = false }
   }, [imei])
@@ -117,15 +119,17 @@ function EnacomCell({ imei }: { imei: string }) {
     )
   }
   return (
-    <a
-      href="https://imei.enacom.gob.ar/"
-      target="_blank"
-      rel="noreferrer"
-      className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 underline decoration-dotted"
-      title="No se pudo consultar ENACOM automáticamente — click para consultarlo a mano en imei.enacom.gob.ar (copiá el IMEI de la fila)"
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(imei).catch(() => {})
+        window.open('https://imei.enacom.gob.ar/', '_blank', 'noopener,noreferrer')
+      }}
+      className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100 underline decoration-dotted cursor-pointer"
+      title="La consulta automática no respondió (ENACOM restringe el acceso desde el hosting). Click: copia el IMEI y abre imei.enacom.gob.ar para verificarlo a mano — pegalo con Ctrl+V"
     >
-      — sin dato · ver en ENACOM
-    </a>
+      Verificar en ENACOM ↗
+    </button>
   )
 }
 
