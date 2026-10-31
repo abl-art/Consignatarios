@@ -89,7 +89,7 @@
   <p class="eyebrow">GOcelular360 · Manual operativo</p>
   <h1>🛡️ Seguros por Robo — qué es y cómo operarlo</h1>
   <p class="sub">La página <b>Seguros</b> (menú lateral, debajo de Finanzas) controla el seguro por robo que se le ofrece a cada cliente que compra un celular: quién está cubierto, cuánto se cobra y se paga de prima, el resultado del negocio y la gestión de las denuncias de robo que llegan desde el formulario público. Pensado para operar sin ayuda.</p>
-  <p class="meta">Actualizado el 29/10/2026 · Las capturas son reales; los números que veas al entrar van a ser los del día.</p>
+  <p class="meta">Actualizado el 31/10/2026 · Las capturas son reales; los números que veas al entrar van a ser los del día.</p>
 
   <nav class="toc">
     <a href="#que-es">🛡️ Qué es</a>
@@ -104,7 +104,8 @@
 
   <h2 id="que-es">🛡️ Qué es el seguro por robo</h2>
   <p>Cuando el seguro está <b>activo</b>, cada venta de celular vinculada desde ese momento genera automáticamente un <b>certificado</b>: una póliza individual que cubre ese equipo (por IMEI) contra robo, por el tiempo de vigencia de la compra. GOcelular le cobra al cliente una <b>prima</b> (un % sobre la suma asegurada del equipo) y a su vez le paga una prima al <b>broker</b> asegurador — la diferencia entre lo que entra (ingreso) y lo que se paga (prima) es el <b>resultado</b> del negocio, que la página calcula mes a mes.</p>
-  <p>Si el cliente sufre un robo, completa un <b>formulario público</b> con su DNI y una foto/PDF de la denuncia policial. Eso genera un <b>siniestro</b> que ves en la pestaña <b>Siniestros</b> de esta página, y le llega un mail de aviso a Yami para gestionarlo.</p>
+  <p>Al emitirse cada certificado, <b>el cliente recibe un mail automático</b> ("Tu seguro contra robo ya está activo") con su N° de certificado, el IMEI, la vigencia y las <b>3 condiciones para que un reclamo se apruebe</b>: cuotas al día, denuncia policial con el IMEI y baja del IMEI llamando al *910 (guardando el número de gestión de la operadora). El mail le pide guardarlo: el N° de certificado se lo exige el formulario de denuncia.</p>
+  <p>Si el cliente sufre un robo, completa un <b>formulario público</b> con su DNI, su <b>N° de certificado</b> (del mail), el <b>n° de gestión de la baja del IMEI</b> y una foto/PDF de la denuncia policial. Eso genera un <b>siniestro</b> que ves en la pestaña <b>Siniestros</b> de esta página, y le llega un mail de aviso a Yami para gestionarlo.</p>
   <div class="callout tip"><b>💡 Todo lo que hace esta página vive en 5 pestañas</b>Certificados (altas, estados, switch, Excel del broker) · Prima Mensual (cuánto se devengó de prima) · Resultado (ingreso vs. prima vs. resultado, siniestralidad) · Siniestros (denuncias de robo cargadas por clientes, para gestionar hasta cerrarlas) · Cierres (la foto congelada de cada mes, para conciliar con la aseguradora).</div>
 
   <h2 id="switch">🔛 Activar y desactivar el seguro</h2>
@@ -163,9 +164,9 @@
   <h2 id="siniestro">🚨 El circuito completo de un siniestro</h2>
   <p>Así es el camino completo, desde que a un cliente le roban el celular hasta que el certificado queda cerrado:</p>
   <ol class="pasos">
-    <li><b>El cliente recibe un link</b> al formulario público (<code>/denuncia-robo</code>) — se lo pasa Pedro por su circuito de atención al cliente.</li>
-    <li><b>El cliente completa el formulario:</b> ingresa su <b>DNI</b>, el sistema busca si tiene un certificado vigente a su nombre (sin mostrarle nunca nada del certificado real — ni nombre, ni IMEI, ni mora), elige la compra si tiene más de una, y sube una <b>foto o PDF</b> de la denuncia policial (hasta 10MB).</li>
-    <li><b>Le llega un mail a Yami</b> (<code>yamila@gocuotas.com</code> por defecto) avisando: cliente, DNI, artículo, IMEI y el ID del siniestro recién creado.</li>
+    <li><b>El cliente ya tiene el link y sus datos</b>: vienen en el mail de bienvenida que recibió al emitirse su certificado (y el link también lo publica Pedro por su circuito de atención al cliente).</li>
+    <li><b>El cliente completa el formulario:</b> ingresa su <b>DNI</b> y su <b>N° de certificado</b> (ambos obligatorios — el número está en su mail "Tu seguro contra robo"; si no coinciden, rechazo genérico sin revelar nada). <b>Si tiene cuotas vencidas, el formulario lo corta ahí mismo</b>: "Para reclamar tu seguro primero debés ponerte al día con las cuotas" — así solo llegan casos con cobertura. Con el match OK, carga el <b>n° de gestión de la baja del IMEI</b> (el que le dio la operadora al llamar al *910, obligatorio) y subeuna <b>foto o PDF</b> de la denuncia policial (hasta 10MB).</li>
+    <li><b>Le llega un mail a Yami</b> (<code>yamila@gocuotas.com</code> por defecto) con el certificado completo: N°, cliente, DNI, artículo, IMEI, suma asegurada, vigencia, pedido/orden y el <b>n° de gestión de la baja del IMEI</b> que declaró el cliente.</li>
     <li><b>Gestionar el caso</b> en <b>Seguros → Siniestros</b>: el caso nuevo aparece con el chip <span class="pill vig" style="background:#dbeafe;color:#1d4ed8">🆕 Nuevo</span>. Vas avanzando el estado con los botones de la tabla, sin confirmación (es solo seguimiento, no toca el certificado todavía):
       <br>🆕 Nuevo → (botón "→ En gestión") → 🔧 En gestión → (botón "→ Reclamado") → 📨 Reclamado.</li>
     <li><b>Resolver</b> (solo disponible en estado "Reclamado"): tocá <b>"Resolver"</b>, elegí:
@@ -184,6 +185,7 @@
     <figcaption>📸 <b>Siniestros</b> — cada caso con su chip de <b>mora</b> (información de backoffice, nunca visible al cliente), el link <b>"Ver denuncia"</b> para ver la foto/PDF subida, y el botón de acción según el estado.</figcaption>
   </figure>
   <p>Cada caso muestra, debajo del cliente y su DNI, los dos identificadores de la compra bien a mano: el <b>N° de pedido GOcelular</b> (SO-…) y el <b>N° de orden GOcuotas</b> — para cruzar con el Centro de Operaciones o con la plataforma sin salir de la pantalla.</p>
+  <div class="callout tip"><b>🔎 La columna "Baja IMEI / ENACOM"</b>Cada caso abierto muestra el <b>n° de gestión de la baja</b> que cargó el cliente y el <b>estado del IMEI en la base pública de ENACOM</b>, consultado en vivo: <b>✓ Bloqueado en ENACOM</b> (verde — la baja está confirmada por la fuente oficial), <b>⏳ Aún no figura</b> (ámbar — normal las primeras 24-48 hs: la operadora informa la baja con demora), o <b>"Verificar en ENACOM ↗"</b> cuando la consulta automática no responde: ese botón <u>copia el IMEI</u> y abre <code>imei.enacom.gob.ar</code> para chequearlo a mano (pegalo con Ctrl+V). <b>Regla de oro: reclamar a la aseguradora recién cuando ENACOM confirme el bloqueo.</b></div>
   <div class="callout ojo"><b>⚠️ El chip de Mora</b>Si el cliente tiene cuotas vencidas de GOcuotas, aparece ⚠️ "En mora (Xd · $deuda)" en rojo: los días de atraso de la cuota más vieja y la <b>deuda total impaga</b> de la orden. La cobertura está suspendida mientras haya mora, así que antes de resolver un caso como positivo, revisá ese chip. "✅ Al día" significa que no hay impedimento por mora.</div>
   <div class="callout tip"><b>💡 El voucher al cliente</b>Cuando resolvés un siniestro como positivo, la app solo deja la marca en el certificado — el voucher o la resolución que se le comunica al cliente la entrega Yami a mano, fuera de la app.</div>
 
