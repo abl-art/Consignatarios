@@ -10,11 +10,15 @@ import {
   fetchCostoPorImei,
   fetchMoraPorOrdenes,
   fetchFacturasBPorOrden,
+  fetchEmailsPorStoreOrder,
 } from '@/lib/gocelular'
+import { enviarMail } from '@/lib/mailer'
+import { armarMailCertificado } from '@/lib/seguros-mail'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
 import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguros-informes'
+import { consultarImeiEnacom, type ConsultaEnacom } from '@/lib/enacom'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
@@ -104,7 +108,7 @@ function enLotes<T>(items: T[], tamano: number): T[][] {
   return lotes
 }
 
-export async function sincronizarSeguros(): Promise<{ emitidos: number; novedades: number }> {
+export async function sincronizarSeguros(): Promise<{ emitidos: number; novedades: number; mails: number }> {
   const supabase = createAdminClient()
   const { data: config, error: errorConfig } = await supabase
     .from('seguros_config')
@@ -113,7 +117,7 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
     .single()
   if (errorConfig) throw new Error(errorConfig.message)
 
-  if (!config?.activo || !config.activado_at) return { emitidos: 0, novedades: 0 }
+  if (!config?.activo || !config.activado_at) return { emitidos: 0, novedades: 0, mails: 0 }
 
   let emitidos = 0
 
@@ -233,11 +237,92 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
     if (error) throw new Error(error.message)
   }
 
+  // 4) Mail de bienvenida al cliente (etapa 2b): emitidos con número y sin
+  // mail_enviado_at. Secundario por diseño — un fallo acá nunca voltea el
+  // sync (los certificados ya quedaron emitidos); lo no enviado reintenta en
+  // la próxima corrida.
+  let mails = 0
+  try {
+    mails = await enviarMailsPendientes(supabase)
+  } catch (e) {
+    console.error('[seguros] error enviando mails de bienvenida:', e instanceof Error ? e.message : e)
+  }
+
   if (emitidos > 0 || novedades.length > 0) {
     revalidatePath('/seguros')
   }
 
-  return { emitidos, novedades: novedades.length }
+  return { emitidos, novedades: novedades.length, mails }
+}
+
+/** Mails de bienvenida por corrida — mantiene el sync dentro del maxDuration y lejos del límite diario de Gmail. */
+const LOTE_MAILS = 50
+
+/**
+ * Envía el mail de bienvenida a los certificados emitidos que aún no lo
+ * recibieron. Concurrencia por claim-first: cada certificado se marca
+ * (`mail_enviado_at`, condicionado a NULL) ANTES de enviar — dos syncs
+ * simultáneos (visita a /seguros + cron) nunca duplican el mail; si el SMTP
+ * falla, el claim se libera y la próxima corrida reintenta. Certificados sin
+ * email en el pedido se saltean sin reclamar (quedan NULL, visibles si algún
+ * día hace falta auditarlos).
+ */
+async function enviarMailsPendientes(supabase: ReturnType<typeof createAdminClient>): Promise<number> {
+  const { data: sinMail, error } = await supabase
+    .from('seguros_certificados')
+    .select('id, numero, store_order_id, articulo, imei, inicio_vig, fin_vig')
+    .eq('estado', 'emitido')
+    .is('mail_enviado_at', null)
+    .not('numero', 'is', null)
+    .order('numero', { ascending: true })
+    .limit(LOTE_MAILS)
+  if (error) throw new Error(error.message)
+  if (!sinMail || sinMail.length === 0) return 0
+
+  const emails = await fetchEmailsPorStoreOrder(
+    sinMail.flatMap((c) => (c.store_order_id ? [c.store_order_id as string] : [])),
+  )
+
+  let enviados = 0
+  for (const c of sinMail) {
+    const email = c.store_order_id ? emails.get(c.store_order_id as string) : undefined
+    if (!email) continue
+
+    const { data: claimed, error: errorClaim } = await supabase
+      .from('seguros_certificados')
+      .update({ mail_enviado_at: new Date().toISOString() })
+      .eq('id', c.id)
+      .is('mail_enviado_at', null)
+      .select('id')
+    if (errorClaim) throw new Error(errorClaim.message)
+    if (!claimed || claimed.length === 0) continue // otro sync lo tomó
+
+    const mail = armarMailCertificado({
+      numero: c.numero as number,
+      articulo: c.articulo as string,
+      imei: c.imei as string,
+      inicioVig: c.inicio_vig as string,
+      finVig: c.fin_vig as string,
+    })
+
+    const resultado = await enviarMail({
+      para: email,
+      asunto: mail.asunto,
+      texto: mail.texto,
+      html: mail.html,
+      remitente: 'GOcelular',
+    })
+
+    if (resultado.ok) {
+      enviados += 1
+    } else {
+      console.error(`[seguros] mail del certificado ${c.numero} a ${email} falló: ${resultado.error}`)
+      // Liberar el claim para que la próxima corrida reintente.
+      await supabase.from('seguros_certificados').update({ mail_enviado_at: null }).eq('id', c.id)
+    }
+  }
+
+  return enviados
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +416,10 @@ export type SiniestroRow = {
   nota: string | null
   createdAt: string
   resueltoAt: string | null
+  /** N° de gestión de la baja del IMEI (*910) que declaró el cliente en el formulario. */
+  bajaImeiGestion: string | null
   // del certificado (join)
+  numero: number | null
   cliente: string | null
   dni: string | null
   articulo: string
@@ -341,6 +429,8 @@ export type SiniestroRow = {
   finVig: string
   gocuotasOrderId: string
   pedidoNumero: string | null
+  /** Estado del IMEI en la base pública de ENACOM — solo se consulta para casos abiertos; null = no consultado. */
+  enacom: ConsultaEnacom | null
   // mora en vivo (réplica GOcuotas) — solo para backoffice, nunca al cliente
   enMora: boolean
   diasMaximos: number
@@ -361,7 +451,9 @@ type SiniestroConCertRaw = {
   nota: string | null
   created_at: string
   resuelto_at: string | null
+  baja_imei_gestion: string | null
   seguros_certificados: {
+    numero: number | null
     cliente: string | null
     dni: string | null
     articulo: string
@@ -387,7 +479,7 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
   const { data, error } = await supabase
     .from('seguros_siniestros')
     .select(
-      'id, certificado_id, dni_ingresado, archivo_path, estado, fecha_robo, monto_reconocido, nota, created_at, resuelto_at, seguros_certificados(cliente, dni, articulo, imei, suma_asegurada, inicio_vig, fin_vig, gocuotas_order_id, pedido_numero)',
+      'id, certificado_id, dni_ingresado, archivo_path, estado, fecha_robo, monto_reconocido, nota, created_at, resuelto_at, baja_imei_gestion, seguros_certificados(numero, cliente, dni, articulo, imei, suma_asegurada, inicio_vig, fin_vig, gocuotas_order_id, pedido_numero)',
     )
     .order('created_at', { ascending: false })
 
@@ -403,6 +495,25 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
     morasPorOrden = null
   }
 
+  // Estado del IMEI en ENACOM, SOLO para casos abiertos (los resueltos ya no
+  // se gestionan) — deduplicado por IMEI y acotado para no colgar la carga
+  // de la pestaña con muchos casos; cada consulta ya degrada sola a
+  // 'sin_dato' en cualquier fallo (lib/enacom.ts).
+  const MAX_CONSULTAS_ENACOM = 10
+  const imeisAbiertos = [
+    ...new Set(
+      casos
+        .filter((r) => r.estado !== 'resuelto_positivo' && r.estado !== 'resuelto_negativo')
+        .flatMap((r) => (r.seguros_certificados?.imei ? [r.seguros_certificados.imei] : [])),
+    ),
+  ].slice(0, MAX_CONSULTAS_ENACOM)
+
+  const enacomPorImei = new Map<string, ConsultaEnacom>(
+    await Promise.all(
+      imeisAbiertos.map(async (imei): Promise<[string, ConsultaEnacom]> => [imei, await consultarImeiEnacom(imei)]),
+    ),
+  )
+
   const filas = casos.map((r) => {
     const cert = r.seguros_certificados
     const mora = cert && morasPorOrden ? morasPorOrden.get(cert.gocuotas_order_id) : undefined
@@ -410,6 +521,7 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
     const diasMaximos = mora?.diasMora ?? 0
     const deudaTotal = mora?.deudaTotal ?? 0
     const moraSinDato = !cert || morasPorOrden === null
+    const resuelto = r.estado === 'resuelto_positivo' || r.estado === 'resuelto_negativo'
     return {
         id: r.id,
         certificadoId: r.certificado_id,
@@ -421,6 +533,9 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
         nota: r.nota,
         createdAt: r.created_at,
         resueltoAt: r.resuelto_at,
+        bajaImeiGestion: r.baja_imei_gestion,
+        numero: cert?.numero ?? null,
+        enacom: !resuelto && cert ? (enacomPorImei.get(cert.imei) ?? { estado: 'sin_dato' as const, mensaje: null }) : null,
         cliente: cert?.cliente ?? null,
         dni: cert?.dni ?? null,
         articulo: cert?.articulo ?? '',

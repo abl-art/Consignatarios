@@ -5,6 +5,8 @@ import {
   esCertificadoVigente,
   firmaDeArchivo,
   MAX_BYTES_DENUNCIA,
+  normalizarNumeroCertificado,
+  validarBajaImei,
 } from '@/lib/denuncia-robo'
 
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0x00, 0x00])
@@ -153,5 +155,34 @@ describe('esCertificadoVigente', () => {
 
   test('no vigente: tiene fecha_siniestro', () => {
     expect(esCertificadoVigente({ ...base, fechaSiniestro: '2026-09-01' }, '2026-10-28')).toBe(false)
+  })
+})
+
+describe('normalizarNumeroCertificado', () => {
+  test('acepta el número pelado y con decoraciones del mail', () => {
+    expect(normalizarNumeroCertificado('123')).toBe(123)
+    expect(normalizarNumeroCertificado(' N° 123 ')).toBe(123)
+    expect(normalizarNumeroCertificado('#1.234')).toBe(1234)
+  })
+
+  test('rechaza vacío, cero y texto sin dígitos', () => {
+    expect(normalizarNumeroCertificado('')).toBeNull()
+    expect(normalizarNumeroCertificado('0')).toBeNull()
+    expect(normalizarNumeroCertificado('abc')).toBeNull()
+  })
+})
+
+describe('validarBajaImei', () => {
+  test('acepta formatos típicos de operadoras y normaliza espacios', () => {
+    expect(validarBajaImei('RE-123456789')).toEqual({ ok: true, valor: 'RE-123456789' })
+    expect(validarBajaImei('  1234567  ')).toEqual({ ok: true, valor: '1234567' })
+    expect(validarBajaImei('GESTION   45/2026')).toEqual({ ok: true, valor: 'GESTION 45/2026' })
+  })
+
+  test('rechaza corto, largo, caracteres raros y sin ningún dígito', () => {
+    expect(validarBajaImei('12').ok).toBe(false)
+    expect(validarBajaImei('x'.repeat(61)).ok).toBe(false)
+    expect(validarBajaImei('<script>123</script>').ok).toBe(false)
+    expect(validarBajaImei('sin numero').ok).toBe(false)
   })
 })

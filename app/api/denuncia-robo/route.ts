@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarMail } from '@/lib/mailer'
 import { TOKEN_DENUNCIA, normalizarDni } from '@/lib/seguros'
-import { validarArchivoDenuncia, sanitizarNombreArchivo, esCertificadoVigente } from '@/lib/denuncia-robo'
+import {
+  validarArchivoDenuncia,
+  sanitizarNombreArchivo,
+  esCertificadoVigente,
+  normalizarNumeroCertificado,
+  validarBajaImei,
+} from '@/lib/denuncia-robo'
+import { fetchMoraPorOrdenes } from '@/lib/gocelular'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +36,8 @@ export async function POST(request: NextRequest) {
 
   const certificadoId = formData.get('certificadoId')
   const dniInput = formData.get('dni')
+  const numeroInput = formData.get('numeroCertificado')
+  const bajaImeiInput = formData.get('bajaImei')
   const archivo = formData.get('archivo')
 
   if (typeof certificadoId !== 'string' || !certificadoId) {
@@ -36,6 +45,15 @@ export async function POST(request: NextRequest) {
   }
   if (typeof dniInput !== 'string' || !dniInput.trim()) {
     return NextResponse.json({ ok: false, error: 'Falta el DNI' }, { status: 400 })
+  }
+  if (typeof numeroInput !== 'string' || !numeroInput.trim()) {
+    return NextResponse.json({ ok: false, error: 'Falta el número de certificado' }, { status: 400 })
+  }
+  // Constancia de baja del IMEI (*910) obligatoria — regla de Emiliano
+  // 30/10/2026: sin baja del IMEI no hay reclamo que gestionar.
+  const bajaImei = validarBajaImei(typeof bajaImeiInput === 'string' ? bajaImeiInput : '')
+  if (!bajaImei.ok) {
+    return NextResponse.json({ ok: false, error: bajaImei.motivo }, { status: 400 })
   }
   if (!(archivo instanceof File)) {
     return NextResponse.json({ ok: false, error: 'Falta el archivo' }, { status: 400 })
@@ -63,7 +81,7 @@ export async function POST(request: NextRequest) {
   // sido manipulados antes de llegar acá.
   const { data: cert, error: errorCert } = await supabase
     .from('seguros_certificados')
-    .select('id, dni, cliente, articulo, imei, estado, fecha_anula, fecha_siniestro, fin_vig')
+    .select('id, numero, dni, cliente, articulo, imei, estado, fecha_anula, fecha_siniestro, inicio_vig, fin_vig, suma_asegurada, pedido_numero, gocuotas_order_id')
     .eq('id', certificadoId)
     .maybeSingle()
 
@@ -80,11 +98,32 @@ export async function POST(request: NextRequest) {
       hoy
     )
   const dniCoincide = !!cert && cert.dni !== null && normalizarDni(cert.dni) === dniNormalizado
+  // El N° de certificado también se re-valida acá: certificadoId (uuid) y
+  // numero viajan por separado desde el cliente y deben apuntar al MISMO
+  // certificado — un mismatch es manipulación o un bug del form.
+  const numeroCoincide = !!cert && normalizarNumeroCertificado(typeof numeroInput === 'string' ? numeroInput : '') === cert.numero
 
-  if (!cert || !vigente || !dniCoincide) {
+  if (!cert || !vigente || !dniCoincide || !numeroCoincide) {
     // Mismo mensaje genérico que /validar — no confirma ni niega si el
     // certificadoId existe, si está vigente o si el DNI es de otro titular.
     return NextResponse.json({ ok: false, error: MENSAJE_SIN_MATCH }, { status: 403 })
+  }
+
+  // Corte por mora también al crear (no solo en /validar): entre la
+  // validación y el envío pudo pasar tiempo, y el flujo de negocio es
+  // "primero al día, después denuncia". Fail-open si la réplica no responde
+  // (el gate humano es Yami, que ve la mora en vivo en la pestaña).
+  try {
+    const moras = await fetchMoraPorOrdenes([cert.gocuotas_order_id as string])
+    const mora = moras.get(cert.gocuotas_order_id as string)
+    if (mora && mora.diasMora > 0) {
+      return NextResponse.json(
+        { ok: false, error: 'Para reclamar tu seguro primero debés ponerte al día con las cuotas.' },
+        { status: 403 }
+      )
+    }
+  } catch (e) {
+    console.error('[denuncia-robo] mora sin dato (fail-open):', e instanceof Error ? e.message : e)
   }
 
   const timestamp = Date.now()
@@ -105,6 +144,7 @@ export async function POST(request: NextRequest) {
       dni_ingresado: dniNormalizado,
       archivo_path: path,
       estado: 'nuevo',
+      baja_imei_gestion: bajaImei.valor,
     })
     .select('id')
     .single()
@@ -121,10 +161,20 @@ export async function POST(request: NextRequest) {
   const texto = [
     'Nueva denuncia de robo cargada desde el formulario público (/denuncia-robo).',
     '',
+    `Certificado: N° ${cert.numero ?? '—'}`,
     `Cliente: ${cert.cliente ?? '(sin dato)'}`,
     `DNI: ${dniNormalizado}`,
     `Artículo: ${cert.articulo}`,
     `IMEI: ${cert.imei}`,
+    `Suma asegurada: ${cert.suma_asegurada ?? '—'}`,
+    `Vigencia: ${cert.inicio_vig} al ${cert.fin_vig}`,
+    `Pedido GOcelular: ${cert.pedido_numero ?? '—'} · Orden GOcuotas: ${cert.gocuotas_order_id}`,
+    `N° de gestión de baja del IMEI (*910): ${bajaImei.valor}`,
+    '',
+    'El cliente pasó el control de cuotas al día al denunciar. En la pestaña',
+    'Siniestros de /seguros tenés el caso completo con la mora en vivo y el',
+    'estado del IMEI en ENACOM (reclamar a la aseguradora recién cuando',
+    'ENACOM confirme el bloqueo).',
     `Siniestro ID: ${siniestro.id}`,
   ].join('\n')
 

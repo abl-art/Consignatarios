@@ -69,6 +69,41 @@ function MoraChip({ enMora, diasMaximos, deudaTotal, sinDato }: { enMora: boolea
   )
 }
 
+// Estado del IMEI en la base pública de ENACOM: "Bloqueado" es lo DESEADO
+// para un reclamo (el cliente hizo la baja al *910 y la operadora ya la
+// informó) — por eso va en verde. "Aún no figura" es esperable las primeras
+// 24-48 hs después del *910: la operadora informa con demora.
+function EnacomChip({ enacom }: { enacom: NonNullable<SiniestroRow['enacom']> }) {
+  if (enacom.estado === 'bloqueado') {
+    return (
+      <span
+        className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-green-50 text-green-700 border-green-200"
+        title={enacom.mensaje ?? 'El IMEI figura denunciado/bloqueado en ENACOM — la baja del cliente está confirmada por la fuente oficial'}
+      >
+        ✓ Bloqueado en ENACOM
+      </span>
+    )
+  }
+  if (enacom.estado === 'no_bloqueado') {
+    return (
+      <span
+        className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200"
+        title={enacom.mensaje ?? 'El IMEI todavía no figura bloqueado en ENACOM. La operadora informa la baja con 24-48 hs de demora — esperar la confirmación antes de reclamar a la aseguradora'}
+      >
+        ⏳ Aún no figura
+      </span>
+    )
+  }
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-500 border-gray-200"
+      title="No se pudo consultar ENACOM (falla puntual o cambio del sitio) — recargá la página para reintentar"
+    >
+      — sin dato
+    </span>
+  )
+}
+
 // Link "Ver denuncia": la URL firmada se pide a demanda (nunca se embebe en
 // el HTML de la página) y vence en 1 hora — mismo patrón que urlCv de
 // reclutamiento, pero generado por click en vez de precargado por fila.
@@ -319,7 +354,7 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
     <tr className="hover:bg-gray-50 align-top">
       <td className="px-4 py-3 text-gray-900">
         {s.cliente || '—'}
-        <div className="text-xs text-gray-500">DNI {s.dni ?? s.dniIngresado}</div>
+        <div className="text-xs text-gray-500">DNI {s.dni ?? s.dniIngresado} · Cert. N° {s.numero ?? '—'}</div>
         <div className="text-xs text-gray-400 whitespace-nowrap" title="N° de pedido GOcelular · N° de orden GOcuotas">
           {s.pedidoNumero ?? '—'} · GOcuotas {s.gocuotasOrderId || '—'}
         </div>
@@ -337,7 +372,22 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
       {!resuelta && (
         <td className="px-4 py-3"><MoraChip enMora={s.enMora} diasMaximos={s.diasMaximos} deudaTotal={s.deudaTotal} sinDato={s.moraSinDato} /></td>
       )}
-      <td className="px-4 py-3"><VerDenuncia archivoPath={s.archivoPath} /></td>
+      {!resuelta && (
+        <td className="px-4 py-3">
+          {s.enacom && <EnacomChip enacom={s.enacom} />}
+          <div className="text-xs text-gray-500 mt-1 font-mono" title="N° de gestión de la baja del IMEI (*910) declarado por el cliente">
+            {s.bajaImeiGestion ?? 'sin n° de gestión'}
+          </div>
+        </td>
+      )}
+      <td className="px-4 py-3">
+        <VerDenuncia archivoPath={s.archivoPath} />
+        {resuelta && s.bajaImeiGestion && (
+          <div className="text-xs text-gray-400 font-mono mt-0.5" title="N° de gestión de la baja del IMEI (*910)">
+            baja: {s.bajaImeiGestion}
+          </div>
+        )}
+      </td>
       {resuelta ? (
         <>
           <td className="px-4 py-3"><EstadoChip estado={s.estado} /></td>
@@ -373,7 +423,8 @@ export default function SiniestrosTab({ siniestros }: { siniestros: SiniestroRow
         reclamado) y cerralo: positivo marca el certificado como siniestrado (deja de devengar prima y aparece con
         fecha de siniestro en el export del broker); negativo solo cierra la denuncia, el certificado sigue vigente.
         El voucher al cliente lo entrega Yami a mano, fuera de la app. La mora es información de backoffice — nunca
-        se muestra al cliente.
+        se muestra al cliente. Reclamar a la aseguradora recién cuando ENACOM confirme el bloqueo del IMEI (la
+        operadora lo informa con 24-48 hs de demora después del *910).
       </p>
 
       {pendientes.length === 0 ? (
@@ -392,6 +443,7 @@ export default function SiniestrosTab({ siniestros }: { siniestros: SiniestroRow
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Suma asegurada</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Vigencia</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600" title="Mora en vivo del pedido — cobertura suspendida si hay cuotas vencidas">Mora</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600" title="Estado del IMEI en la base pública de ENACOM + n° de gestión de la baja declarado por el cliente">Baja IMEI / ENACOM</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Denuncia</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Estado / acción</th>
               </tr>

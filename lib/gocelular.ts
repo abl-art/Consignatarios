@@ -3458,6 +3458,34 @@ export async function fetchVentasAsegurables(desdeISO: string): Promise<VentaAse
 }
 
 /**
+ * Email del cliente por store_order_id (para el mail de bienvenida del seguro).
+ * Solo devuelve entradas con email no vacío — un pedido sin email simplemente
+ * no aparece en el mapa y el caller lo saltea.
+ */
+export async function fetchEmailsPorStoreOrder(storeOrderIds: string[]): Promise<Map<string, string>> {
+  const pool = getPool()
+  if (!pool || storeOrderIds.length === 0) return new Map()
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ id: string; email: string | null }>(
+      `SELECT id::text AS id, customer_email AS email
+       FROM store_orders
+       WHERE id::text = ANY($1)`,
+      [storeOrderIds]
+    )
+    const map = new Map<string, string>()
+    for (const r of res.rows) {
+      const email = (r.email ?? '').trim()
+      if (email) map.set(r.id, email)
+    }
+    return map
+  } finally {
+    client.release()
+  }
+}
+
+/**
  * IMEI de la asignación vigente (no desvinculada) por order_id. Si una orden
  * tuviera más de una asignación vigente (no debería pasar en operación
  * normal), gana la de `linked_at` más reciente.

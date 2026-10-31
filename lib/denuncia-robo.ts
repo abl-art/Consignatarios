@@ -94,6 +94,37 @@ export function sanitizarNombreArchivo(nombre: string): string {
   return limpio.slice(-120) || 'archivo'
 }
 
+/**
+ * N° de certificado tipeado por el cliente → entero positivo, o null si no
+ * tiene forma de número (tolera espacios, puntos de miles y un "N°"/"Nº"/"#"
+ * pegado — la gente copia del mail tal cual lo ve).
+ */
+export function normalizarNumeroCertificado(input: string): number | null {
+  const digitos = input.replace(/\D/g, '')
+  if (!digitos) return null
+  const numero = parseInt(digitos, 10)
+  return Number.isSafeInteger(numero) && numero > 0 ? numero : null
+}
+
+export type ResultadoBajaImei = { ok: true; valor: string } | { ok: false; motivo: string }
+
+/**
+ * Número de gestión/constancia de la baja del IMEI (lo da la operadora al
+ * llamar al *910). Cada operadora usa su formato (numérico, alfanumérico,
+ * con guiones), así que la validación es laxa a propósito: 4 a 60 caracteres
+ * de letras/números/espacios y separadores comunes. El objetivo es rechazar
+ * basura obvia ("-", "no tengo"→ pasa pero eso lo filtra Yami) sin rebotar
+ * constancias reales.
+ */
+export function validarBajaImei(input: string): ResultadoBajaImei {
+  const valor = input.trim().replace(/\s+/g, ' ')
+  if (valor.length < 4) return { ok: false, motivo: 'Ingresá el número de gestión que te dio la operadora al dar de baja el IMEI (mínimo 4 caracteres).' }
+  if (valor.length > 60) return { ok: false, motivo: 'El número de gestión no puede superar los 60 caracteres.' }
+  if (!/^[A-Za-z0-9 ._/#-]+$/.test(valor)) return { ok: false, motivo: 'El número de gestión solo puede tener letras, números y guiones.' }
+  if (!/[0-9]/.test(valor)) return { ok: false, motivo: 'El número de gestión debe incluir al menos un número.' }
+  return { ok: true, valor }
+}
+
 export type CertParaVigencia = {
   estado: string
   fechaAnula: string | null
