@@ -7,15 +7,17 @@
 // (fecha_siniestro) — por eso pide confirmación en 2 pasos, igual que
 // SiniestrosTable de Envíos (Siniestros Distribución): no hay "reabrir".
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   getDenunciaUrl,
   setEstadoSiniestro,
   resolverSiniestro,
+  consultarEnacom,
   type SiniestroRow,
   type EstadoSiniestro,
 } from '@/lib/actions/seguros'
+import type { ConsultaEnacom } from '@/lib/enacom'
 import { formatearMoneda } from '@/lib/utils'
 
 function fecha(iso: string | null): string {
@@ -72,35 +74,58 @@ function MoraChip({ enMora, diasMaximos, deudaTotal, sinDato }: { enMora: boolea
 // Estado del IMEI en la base pública de ENACOM: "Bloqueado" es lo DESEADO
 // para un reclamo (el cliente hizo la baja al *910 y la operadora ya la
 // informó) — por eso va en verde. "Aún no figura" es esperable las primeras
-// 24-48 hs después del *910: la operadora informa con demora.
-function EnacomChip({ enacom }: { enacom: NonNullable<SiniestroRow['enacom']> }) {
-  if (enacom.estado === 'bloqueado') {
+// 24-48 hs después del *910: la operadora informa con demora. La consulta se
+// dispara desde el cliente DESPUÉS del render (ENACOM tarda en responder
+// desde Vercel — no puede bloquear la carga de la pestaña); "sin dato" deja
+// el link para consultarlo a mano en el sitio de ENACOM.
+function EnacomCell({ imei }: { imei: string }) {
+  const [resultado, setResultado] = useState<ConsultaEnacom | null>(null)
+
+  useEffect(() => {
+    let vigente = true
+    consultarEnacom(imei)
+      .then((r) => { if (vigente) setResultado(r) })
+      .catch(() => { if (vigente) setResultado({ estado: 'sin_dato', mensaje: null }) })
+    return () => { vigente = false }
+  }, [imei])
+
+  if (resultado === null) {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-400 border-gray-200 animate-pulse">
+        Consultando ENACOM…
+      </span>
+    )
+  }
+  if (resultado.estado === 'bloqueado') {
     return (
       <span
         className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-green-50 text-green-700 border-green-200"
-        title={enacom.mensaje ?? 'El IMEI figura denunciado/bloqueado en ENACOM — la baja del cliente está confirmada por la fuente oficial'}
+        title={resultado.mensaje ?? 'El IMEI figura denunciado/bloqueado en ENACOM — la baja del cliente está confirmada por la fuente oficial'}
       >
         ✓ Bloqueado en ENACOM
       </span>
     )
   }
-  if (enacom.estado === 'no_bloqueado') {
+  if (resultado.estado === 'no_bloqueado') {
     return (
       <span
         className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200"
-        title={enacom.mensaje ?? 'El IMEI todavía no figura bloqueado en ENACOM. La operadora informa la baja con 24-48 hs de demora — esperar la confirmación antes de reclamar a la aseguradora'}
+        title={resultado.mensaje ?? 'El IMEI todavía no figura bloqueado en ENACOM. La operadora informa la baja con 24-48 hs de demora — esperar la confirmación antes de reclamar a la aseguradora'}
       >
         ⏳ Aún no figura
       </span>
     )
   }
   return (
-    <span
-      className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-500 border-gray-200"
-      title="No se pudo consultar ENACOM (falla puntual o cambio del sitio) — recargá la página para reintentar"
+    <a
+      href="https://imei.enacom.gob.ar/"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-block px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 underline decoration-dotted"
+      title="No se pudo consultar ENACOM automáticamente — click para consultarlo a mano en imei.enacom.gob.ar (copiá el IMEI de la fila)"
     >
-      — sin dato
-    </span>
+      — sin dato · ver en ENACOM
+    </a>
   )
 }
 
@@ -374,7 +399,7 @@ function FilaCaso({ s, resuelta }: { s: SiniestroRow; resuelta: boolean }) {
       )}
       {!resuelta && (
         <td className="px-4 py-3">
-          {s.enacom && <EnacomChip enacom={s.enacom} />}
+          {s.imei ? <EnacomCell imei={s.imei} /> : null}
           <div className="text-xs text-gray-500 mt-1 font-mono" title="N° de gestión de la baja del IMEI (*910) declarado por el cliente">
             {s.bajaImeiGestion ?? 'sin n° de gestión'}
           </div>

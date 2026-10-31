@@ -429,8 +429,6 @@ export type SiniestroRow = {
   finVig: string
   gocuotasOrderId: string
   pedidoNumero: string | null
-  /** Estado del IMEI en la base pública de ENACOM — solo se consulta para casos abiertos; null = no consultado. */
-  enacom: ConsultaEnacom | null
   // mora en vivo (réplica GOcuotas) — solo para backoffice, nunca al cliente
   enMora: boolean
   diasMaximos: number
@@ -495,24 +493,11 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
     morasPorOrden = null
   }
 
-  // Estado del IMEI en ENACOM, SOLO para casos abiertos (los resueltos ya no
-  // se gestionan) — deduplicado por IMEI y acotado para no colgar la carga
-  // de la pestaña con muchos casos; cada consulta ya degrada sola a
-  // 'sin_dato' en cualquier fallo (lib/enacom.ts).
-  const MAX_CONSULTAS_ENACOM = 10
-  const imeisAbiertos = [
-    ...new Set(
-      casos
-        .filter((r) => r.estado !== 'resuelto_positivo' && r.estado !== 'resuelto_negativo')
-        .flatMap((r) => (r.seguros_certificados?.imei ? [r.seguros_certificados.imei] : [])),
-    ),
-  ].slice(0, MAX_CONSULTAS_ENACOM)
-
-  const enacomPorImei = new Map<string, ConsultaEnacom>(
-    await Promise.all(
-      imeisAbiertos.map(async (imei): Promise<[string, ConsultaEnacom]> => [imei, await consultarImeiEnacom(imei)]),
-    ),
-  )
+  // El estado del IMEI en ENACOM NO se consulta acá: ENACOM responde lento
+  // desde Vercel (timeouts medidos el 31/10/2026) y bloquearía el render de
+  // /seguros. La pestaña lo pide por fila vía la action consultarEnacom
+  // (EnacomCell, solo casos abiertos), con timeout generoso y estado
+  // "consultando…".
 
   const filas = casos.map((r) => {
     const cert = r.seguros_certificados
@@ -521,7 +506,6 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
     const diasMaximos = mora?.diasMora ?? 0
     const deudaTotal = mora?.deudaTotal ?? 0
     const moraSinDato = !cert || morasPorOrden === null
-    const resuelto = r.estado === 'resuelto_positivo' || r.estado === 'resuelto_negativo'
     return {
         id: r.id,
         certificadoId: r.certificado_id,
@@ -535,7 +519,6 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
         resueltoAt: r.resuelto_at,
         bajaImeiGestion: r.baja_imei_gestion,
         numero: cert?.numero ?? null,
-        enacom: !resuelto && cert ? (enacomPorImei.get(cert.imei) ?? { estado: 'sin_dato' as const, mensaje: null }) : null,
         cliente: cert?.cliente ?? null,
         dni: cert?.dni ?? null,
         articulo: cert?.articulo ?? '',
@@ -553,6 +536,16 @@ export async function getSiniestros(): Promise<SiniestroRow[]> {
   })
 
   return filas
+}
+
+/**
+ * Consulta en vivo del IMEI contra ENACOM, para la celda de la pestaña
+ * Siniestros (se dispara desde el cliente DESPUÉS del render — ENACOM es
+ * lento desde Vercel y bloqueaba la carga de la página). Nunca tira: degrada
+ * a 'sin_dato'.
+ */
+export async function consultarEnacom(imei: string): Promise<ConsultaEnacom> {
+  return consultarImeiEnacom(imei)
 }
 
 /** URL firmada de la denuncia (bucket privado 'denuncias-robo') por 1 hora — mismo patrón que urlCv de reclutamiento. */

@@ -14,7 +14,11 @@ export type EstadoImeiEnacom = 'bloqueado' | 'no_bloqueado' | 'sin_dato'
 export type ConsultaEnacom = { estado: EstadoImeiEnacom; mensaje: string | null }
 
 const BASE = 'https://imei.enacom.gob.ar'
-const TIMEOUT_MS = 8000
+// Desde Vercel (gru1) ENACOM responde MUCHO más lento que desde Argentina —
+// 8s daba timeout seco (medido 31/10/2026). La consulta se dispara desde el
+// cliente después del render (EnacomCell), así que un timeout generoso no
+// frena la carga de la pestaña.
+const TIMEOUT_MS = 20000
 
 /**
  * Interpreta el JSON que devuelve el endpoint Livewire de ENACOM. La
@@ -66,13 +70,19 @@ export async function consultarImeiEnacom(imei: string): Promise<ConsultaEnacom>
 
   try {
     const r1 = await fetch(BASE + '/', { cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) })
-    if (!r1.ok) return sinDato
+    if (!r1.ok) {
+      console.error(`[enacom] página de consulta respondió ${r1.status}`)
+      return sinDato
+    }
     const cookies = r1.headers
       .getSetCookie()
       .map((c) => c.split(';')[0])
       .join('; ')
     const sesion = extraerSesionEnacom(await r1.text())
-    if (!sesion) return sinDato
+    if (!sesion) {
+      console.error('[enacom] no pude extraer csrf/snapshot del HTML (¿cambió la página?)')
+      return sinDato
+    }
 
     const r2 = await fetch(BASE + '/livewire/update', {
       method: 'POST',
@@ -90,10 +100,16 @@ export async function consultarImeiEnacom(imei: string): Promise<ConsultaEnacom>
       cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!r2.ok) return sinDato
+    if (!r2.ok) {
+      console.error(`[enacom] livewire/update respondió ${r2.status}`)
+      return sinDato
+    }
 
-    return interpretarRespuestaEnacom(await r2.text()) ?? sinDato
-  } catch {
+    const interpretado = interpretarRespuestaEnacom(await r2.text())
+    if (!interpretado) console.error('[enacom] respuesta con forma inesperada (¿cambió Livewire?)')
+    return interpretado ?? sinDato
+  } catch (e) {
+    console.error('[enacom] excepción consultando:', e instanceof Error ? `${e.name}: ${e.message}` : e)
     return sinDato
   }
 }
