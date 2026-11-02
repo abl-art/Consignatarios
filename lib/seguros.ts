@@ -121,6 +121,44 @@ export function fechaRoboEnRango(inicioVig: string, fechaRobo: string, hoy: stri
   return inicioVig <= fechaRobo && fechaRobo <= hoy
 }
 
+export type VentaPorAsegurar = {
+  pedidoNumero: string
+  articulo: string | null
+  cliente: string | null
+  paidAt: string
+  estado: 'sin vincular' | 'esperando equipo'
+}
+
+/**
+ * Ventas pagas que van camino al certificado pero aún no son asegurables (la
+ * tarjeta "Por emitir"): sin vincular a GOcuotas, o vinculadas esperando que
+ * el picking asigne el equipo/IMEI. Se excluyen las que ya tenían el equipo
+ * asignado ANTES de la activación del seguro (linked_at < activadoAt): esas
+ * nunca van a emitir — son ventas viejas ya entregadas, no pendientes.
+ */
+export function clasificarPorAsegurar(
+  rows: {
+    order_number: string
+    product_name: string | null
+    customer_name: string | null
+    paid_at: string
+    gocuotas_order_id: string | null
+    linked_at: string | null
+  }[],
+  activadoAt: string,
+): VentaPorAsegurar[] {
+  const activadoMs = aEpocaMs(activadoAt)
+  return rows
+    .filter(r => r.linked_at === null || aEpocaMs(r.linked_at) >= activadoMs)
+    .map(r => ({
+      pedidoNumero: r.order_number,
+      articulo: r.product_name,
+      cliente: r.customer_name,
+      paidAt: r.paid_at,
+      estado: (r.gocuotas_order_id === null ? 'sin vincular' : 'esperando equipo') as VentaPorAsegurar['estado'],
+    }))
+}
+
 /** Redondeo estándar a 2 decimales, evitando el drift de punto flotante. */
 function redondear2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100

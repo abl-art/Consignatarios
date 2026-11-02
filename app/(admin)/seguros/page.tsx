@@ -3,6 +3,7 @@ import {
   getCertificados,
   getSiniestros,
   getCierres,
+  getVentasPorAsegurar,
   sincronizarSeguros,
   type SegurosConfig,
 } from '@/lib/actions/seguros'
@@ -54,7 +55,7 @@ export default async function SegurosPage() {
   let certificadosError = false
   let siniestrosError = false
   let cierresError = false
-  const [config, certificados, siniestros, cierres] = await Promise.all([
+  const [config, certificados, siniestros, cierres, porAsegurar] = await Promise.all([
     getSegurosConfig().catch(() => CONFIG_VACIA),
     getCertificados().catch(() => {
       certificadosError = true
@@ -68,6 +69,7 @@ export default async function SegurosPage() {
       cierresError = true
       return []
     }),
+    getVentasPorAsegurar().catch(() => []),
   ])
 
   const siniestrosAbiertos = siniestros.filter(
@@ -122,6 +124,7 @@ export default async function SegurosPage() {
           primaActual={primaActual}
           siniestralidad={siniestralidad}
           moraPorOrden={moraPorOrden}
+          porAsegurar={porAsegurar}
         />
       ),
     },

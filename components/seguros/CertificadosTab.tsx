@@ -9,7 +9,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { setSeguroActivo, bajaManualCertificado, type CertificadoRow, type SegurosConfig } from '@/lib/actions/seguros'
 import { formatearMoneda } from '@/lib/utils'
-import { filtrarCertificados, puedeDarseDeBaja } from '@/lib/seguros'
+import { filtrarCertificados, puedeDarseDeBaja, type VentaPorAsegurar } from '@/lib/seguros'
 import type { ResumenPrimaActual } from '@/lib/seguros-informes'
 import type { MoraOrden } from '@/lib/gocelular'
 
@@ -110,9 +110,11 @@ interface Props {
   siniestralidad: { emitidos: number; siniestrados: number; tasaPct: number }
   /** Mora por gocuotasOrderId (batch server-side); null = no se pudo consultar. */
   moraPorOrden: Record<string, MoraOrden> | null
+  /** Ventas pagas en camino al certificado (sin vincular / esperando equipo). */
+  porAsegurar: VentaPorAsegurar[]
 }
 
-export default function CertificadosTab({ certificados, config, facturas, operar, primaActual, siniestralidad, moraPorOrden }: Props) {
+export default function CertificadosTab({ certificados, config, facturas, operar, primaActual, siniestralidad, moraPorOrden, porAsegurar }: Props) {
   const router = useRouter()
   const [activo, setActivo] = useState(config.activo)
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
@@ -246,7 +248,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
       </div>
 
       {/* Tarjetas resumen */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Vigentes</p>
           <p className="text-2xl font-bold text-green-700">{vigentes.length}</p>
@@ -263,7 +265,50 @@ export default function CertificadosTab({ certificados, config, facturas, operar
           <p className="text-xs text-gray-500 mb-1">Pendientes de emisión</p>
           <p className="text-2xl font-bold text-amber-700">{pendientes.length}</p>
         </div>
+        <div className="bg-white border border-blue-200 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Por emitir</p>
+          <p className="text-2xl font-bold text-blue-700">{porAsegurar.length}</p>
+          <p className="text-[10px] text-gray-400">ventas pagas esperando equipo</p>
+        </div>
       </div>
+
+      {/* Ventas pagas en camino al certificado: aún sin vincular o esperando
+          que el picking les asigne el equipo/IMEI — todavía no son certificados */}
+      {porAsegurar.length > 0 && (
+        <details className="bg-white border border-blue-200 rounded-xl">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-blue-800">
+            🕐 Por emitir ({porAsegurar.length}) — el certificado se emite solo cuando el picking asigna el IMEI
+          </summary>
+          <div className="overflow-x-auto px-4 pb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                  <th className="py-2 pr-4">Pedido</th>
+                  <th className="py-2 pr-4">Equipo</th>
+                  <th className="py-2 pr-4">Cliente</th>
+                  <th className="py-2 pr-4">Pagada</th>
+                  <th className="py-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {porAsegurar.map((v) => (
+                  <tr key={v.pedidoNumero} className="border-b border-gray-100">
+                    <td className="py-2 pr-4 font-mono text-xs">{v.pedidoNumero}</td>
+                    <td className="py-2 pr-4">{v.articulo ?? '—'}</td>
+                    <td className="py-2 pr-4">{v.cliente ?? '—'}</td>
+                    <td className="py-2 pr-4 text-xs text-gray-500">{fecha(v.paidAt)}</td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v.estado === 'sin vincular' ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-700'}`}>
+                        {v.estado}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
 
       {/* Prima del mes y siniestralidad */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

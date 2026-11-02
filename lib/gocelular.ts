@@ -1232,6 +1232,50 @@ export async function fetchVentasPropiasConFactura(desde: string, hasta: string)
   }
 }
 
+export type VentaPorAsegurarRow = {
+  order_number: string
+  product_name: string | null
+  customer_name: string | null
+  paid_at: string
+  gocuotas_order_id: string | null
+  linked_at: string | null
+}
+
+/**
+ * Ventas PAGAS que todavía no son asegurables (sin vincular a GOcuotas, o
+ * vinculadas pero sin equipo en ready_for_control con IMEI): el "en camino"
+ * de la pestaña Certificados. Trae desde `desdeISO` (el caller usa la
+ * activación del seguro con una ventana hacia atrás: una venta paga antes de
+ * activar que se pickea después TAMBIÉN va a emitir certificado).
+ */
+export async function fetchVentasPorAsegurar(desdeISO: string): Promise<VentaPorAsegurarRow[]> {
+  const pool = getPool()
+  if (!pool) return []
+
+  const client = await pool.connect()
+  try {
+    const res = await client.query<VentaPorAsegurarRow>(
+      `SELECT so.order_number,
+              so.product_name,
+              so.customer_name,
+              so.paid_at::text AS paid_at,
+              so.gocuotas_order_id::text AS gocuotas_order_id,
+              oda.linked_at::text AS linked_at
+       FROM store_orders so
+       LEFT JOIN order_device_assignments oda
+         ON oda.order_id = so.gocuotas_order_id AND oda.unlinked_at IS NULL
+       WHERE so.paid_at IS NOT NULL
+         AND so.paid_at >= $1
+         AND (oda.order_id IS NULL OR oda.state <> 'ready_for_control' OR length(oda.imei) <> 15)
+       ORDER BY so.paid_at DESC`,
+      [desdeISO]
+    )
+    return res.rows
+  } finally {
+    client.release()
+  }
+}
+
 /** Precio de venta publicado en la tienda (store_products.price en centavos) por celular activo. */
 export async function fetchPreciosTiendaCelulares(): Promise<Record<string, number>> {
   const pool = getPool()

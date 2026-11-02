@@ -9,6 +9,7 @@ import {
   prepararCertificados,
   novedadesDeCertificados,
   fechaRoboEnRango,
+  clasificarPorAsegurar,
   type VentaAsegurable,
   type CertActual,
 } from '@/lib/seguros'
@@ -334,5 +335,41 @@ describe('puedeDarseDeBaja', () => {
     expect(puedeDarseDeBaja({ estado: 'pendiente', fechaAnula: null, fechaSiniestro: null })).toBe(false)
     expect(puedeDarseDeBaja({ estado: 'emitido', fechaAnula: '2026-10-20', fechaSiniestro: null })).toBe(false)
     expect(puedeDarseDeBaja({ estado: 'emitido', fechaAnula: null, fechaSiniestro: '2026-10-20' })).toBe(false)
+  })
+})
+
+describe('clasificarPorAsegurar', () => {
+  const ACTIVADO = '2026-11-02T03:02:18+00:00'
+  const base = {
+    order_number: 'SO-AAA111',
+    product_name: 'Motorola Moto G17 128GB',
+    customer_name: 'Juan Pérez',
+    paid_at: '2026-11-02 03:20:00+00',
+    gocuotas_order_id: null as string | null,
+    linked_at: null as string | null,
+  }
+
+  it('venta paga sin vincular → "sin vincular"; vinculada sin equipo listo → "esperando equipo"', () => {
+    const r = clasificarPorAsegurar(
+      [base, { ...base, order_number: 'SO-BBB222', gocuotas_order_id: 'go-1' }],
+      ACTIVADO,
+    )
+    expect(r.map(v => v.estado)).toEqual(['sin vincular', 'esperando equipo'])
+  })
+
+  it('excluye equipos asignados ANTES de la activación (ventas viejas ya entregadas, nunca emiten)', () => {
+    const r = clasificarPorAsegurar(
+      [{ ...base, gocuotas_order_id: 'go-2', linked_at: '2026-10-30 12:00:00+00' }],
+      ACTIVADO,
+    )
+    expect(r).toHaveLength(0)
+  })
+
+  it('equipo re-linkeado después de la activación sí cuenta', () => {
+    const r = clasificarPorAsegurar(
+      [{ ...base, gocuotas_order_id: 'go-3', linked_at: '2026-11-02 10:00:00+00' }],
+      ACTIVADO,
+    )
+    expect(r).toHaveLength(1)
   })
 })

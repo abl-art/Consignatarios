@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import {
   fetchVentasAsegurables,
+  fetchVentasPorAsegurar,
   fetchImeiActualPorOrden,
   fetchOrdenesDescartadas,
   fetchContracargosConFecha,
@@ -20,7 +21,7 @@ import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { publicarListaCelulares } from '@/lib/actions/publicar-precios'
 import { agregarTodosReajuste } from '@/lib/actions/lista-precios-canales'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
-import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
+import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, clasificarPorAsegurar, type CertActual, type VentaPorAsegurar } from '@/lib/seguros'
 import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguros-informes'
 
 // Seguros por Robo: config del switch global + parámetros de prima/ingreso,
@@ -315,6 +316,24 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
   }
 
   return { emitidos, novedades: novedades.length, mails }
+}
+
+/**
+ * Ventas pagas en camino al certificado ("Por emitir" de la pestaña
+ * Certificados): aún sin vincular o esperando el picking. Ventana de 7 días
+ * antes de la activación: una venta paga el viernes que se pickea el lunes
+ * post-activación también emite. Solo con el seguro activo.
+ */
+export async function getVentasPorAsegurar(): Promise<VentaPorAsegurar[]> {
+  const { data: config } = await createAdminClient()
+    .from('seguros_config')
+    .select('activo, activado_at')
+    .eq('id', 1)
+    .maybeSingle()
+  if (!config?.activo || !config.activado_at) return []
+  const desde = new Date(new Date(config.activado_at).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const rows = await fetchVentasPorAsegurar(desde).catch(() => [])
+  return clasificarPorAsegurar(rows, config.activado_at as string)
 }
 
 /** Mails de bienvenida por corrida — mantiene el sync dentro del maxDuration y lejos del límite diario de Gmail. */
