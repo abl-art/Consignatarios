@@ -6,15 +6,19 @@ import { normalizarModelo } from '@/lib/inventario-indicadores'
 // funciones devuelven contra seguros_certificados (scripts/seguros.sql).
 
 
-/** Meses de vigencia de la póliza desde la fecha de alta del pedido. */
-export const MESES_VIGENCIA = 9
+/**
+ * Meses de vigencia de la póliza desde la fecha de alta del pedido. Coincide
+ * con el vencimiento original de la financiación (regla de Emiliano 1/11/2026):
+ * 9 cuotas con la primera cobrada en el acto ⇒ la última vence a los 8 meses.
+ */
+export const MESES_VIGENCIA = 8
 
 /**
  * Recargo de múltiplo que el PVP de celulares debe cargar con el seguro activo
  * para fondear el ingreso embebido: el devengo reconoce ingreso% × suma
  * asegurada (= costo sin IVA, misma base que el múltiplo) en TODO mes
- * calendario tocado por la vigencia — 9 meses de vigencia tocan siempre 10
- * meses calendario. Con ingreso 3%/mes ⇒ +0,30 de múltiplo.
+ * calendario tocado por la vigencia — 8 meses de vigencia tocan siempre 9
+ * meses calendario. Con ingreso 3%/mes ⇒ +0,27 de múltiplo.
  */
 export function recargoSeguroMultiplo(pctIngresoMensual: number): number {
   if (!Number.isFinite(pctIngresoMensual) || pctIngresoMensual <= 0) return 0
@@ -195,7 +199,7 @@ export function aEpocaMs(timestamp: string): number {
 /**
  * Prepara los certificados a emitir para las ventas vinculadas nuevas: filtra las
  * que ya tienen certificado (idempotencia) y las vinculadas antes de activar el
- * seguro, resuelve costo/suma asegurada y calcula la vigencia (9 meses desde el
+ * seguro, resuelve costo/suma asegurada y calcula la vigencia (MESES_VIGENCIA meses desde el
  * alta del pedido, clampeada a fin de mes).
  */
 export function prepararCertificados(

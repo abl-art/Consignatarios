@@ -60,7 +60,7 @@ ${LINK_DENUNCIA}
 
 Te van a pedir tu DNI, el N° de certificado (${numero}) y el número de gestión de la baja del IMEI.
 
-La cobertura es por robo (no incluye extravío ni rotura) y dura 9 meses desde la compra. Si te roban el equipo se reemplaza el teléfono: no se entregan créditos ni vouchers.
+La cobertura es por robo (no incluye extravío ni rotura) y dura 8 meses desde la compra. Si te roban el equipo se reemplaza el teléfono: no se entregan créditos ni vouchers.
 
 GOcelular · Seguro por robo operado con Sancor Seguros a través de ASEGURALO Productores Asesores (Matr. 1574).
 Este mail se envió porque tu compra incluye el seguro contra robo.`
@@ -113,7 +113,7 @@ Este mail se envió porque tu compra incluye el seguro contra robo.`
 
         <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;font-size:13px;color:#4b5563">
           <b>Para tener en cuenta</b><br>
-          • La cobertura es por <b>robo</b> (no incluye extravío ni rotura) y dura <b>9 meses</b> desde la compra.<br>
+          • La cobertura es por <b>robo</b> (no incluye extravío ni rotura) y dura <b>8 meses</b> desde la compra.<br>
           • Si te roban el equipo, <b>se reemplaza el teléfono robado</b>: no se entregan créditos ni vouchers, ni se puede cambiar por otro equipo.
         </div>
       </div>

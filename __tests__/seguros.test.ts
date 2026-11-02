@@ -91,7 +91,7 @@ describe('armarDomicilio', () => {
 })
 
 describe('prepararCertificados', () => {
-  it('con clave en costosPorClave: costoSinIva, sumaAsegurada igual al costo, fuente lista, emitido, finVig a 9 meses', () => {
+  it('con clave en costosPorClave: costoSinIva, sumaAsegurada igual al costo, fuente lista, emitido, finVig a 8 meses (vto original de la última cuota: 9 cuotas, la 1ra en el acto)', () => {
     const key = normalizarModelo('Motorola Moto G06 4/64GB')
     const [c] = prepararCertificados(
       [venta()],
@@ -104,7 +104,7 @@ describe('prepararCertificados', () => {
     expect(c.sumaAsegurada).toBe(242000)
     expect(c.costoFuente).toBe('lista')
     expect(c.estado).toBe('emitido')
-    expect(c.finVig).toBe('2027-07-28')
+    expect(c.finVig).toBe('2027-06-28')
   })
 
   it('sin costo de lista pero con costo por imei: suma igual al costo, fuente inventario', () => {
