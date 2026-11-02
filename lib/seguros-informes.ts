@@ -4,6 +4,7 @@
 // certificados y parámetros de tasa, no toca la base.
 
 import type { CertificadoRow } from '@/lib/actions/seguros'
+import { sumarMeses } from '@/lib/seguros'
 
 /** Redondeo estándar a 2 decimales, evitando el drift de punto flotante. */
 function redondear2(n: number): number {
@@ -88,14 +89,26 @@ function pctVigente(params: ParametroPct[], mes: string): number {
   return mejor ? mejor.porcentaje : 0
 }
 
+/** Meses entre dos 'YYYY-MM' (b − a). */
+function diffMeses(a: string, b: string): number {
+  const [ya, ma] = a.split('-').map(Number)
+  const [yb, mb] = b.split('-').map(Number)
+  return (yb - ya) * 12 + (mb - ma)
+}
+
 /**
  * Devengo mensual de prima e ingreso para una cartera de certificados, mes a mes
- * desde el primer mes en que algún certificado estuvo vigente hasta hastaMes
- * inclusive. Un certificado devenga en todo mes calendario en que estuvo vigente
- * al menos un día (fin efectivo = min(finVig, fechaAnula, fechaSiniestro)); los
- * certificados en estado 'pendiente' no devengan nunca. Los meses sin ningún
- * certificado vigente dentro del rango se incluyen igual, con todo en cero (más
- * simple de consumir y mejor para graficar que omitirlos).
+ * desde el primer mes en que algún certificado devengó hasta hastaMes inclusive.
+ * La prima se paga al INICIO de cada mes de cobertura (regla de Emiliano
+ * 1/11/2026): un certificado devenga en el mes calendario de cada aniversario
+ * mensual del inicio que cae ESTRICTAMENTE ANTES del fin efectivo
+ * (= min(finVig, fechaAnula, fechaSiniestro)). Así una vigencia 2/11 → 2/7
+ * devenga exactamente 8 meses (nov..jun): la prima pagada el 2/6 cubre hasta el
+ * 2/7, y julio — el mes del vencimiento — NO suma. Una anulación corta en el
+ * último aniversario ya pagado (anulada el 15/3 devenga marzo porque el 2/3 se
+ * pagó; anulada el 1/3, no). Los certificados en estado 'pendiente' no devengan
+ * nunca. Los meses sin devengo dentro del rango se incluyen igual, con todo en
+ * cero (más simple de consumir y mejor para graficar que omitirlos).
  */
 export function devengoMensual(
   certs: CertDevengo[],
@@ -105,7 +118,12 @@ export function devengoMensual(
 ): MesDevengo[] {
   const activos = certs
     .filter(c => c.estado !== 'pendiente')
-    .map(c => ({ cert: c, inicio: aMes(c.inicioVig), fin: aMes(finEfectivo(c)) }))
+    .map(c => ({
+      cert: c,
+      inicio: aMes(c.inicioVig),
+      inicioDia: c.inicioVig.slice(0, 10),
+      finEf: finEfectivo(c).slice(0, 10),
+    }))
 
   if (activos.length === 0) return []
 
@@ -126,7 +144,11 @@ export function devengoMensual(
     let ingreso = 0
 
     for (const r of activos) {
-      if (compararMeses(mes, r.inicio) >= 0 && compararMeses(mes, r.fin) <= 0) {
+      const k = diffMeses(r.inicio, mes)
+      // Aniversario mensual del inicio dentro de este mes calendario; devenga
+      // solo si cae antes del fin efectivo (la prima de ese día cubre el mes
+      // que arranca; el día del vencimiento ya no se paga).
+      if (k >= 0 && sumarMeses(r.inicioDia, k) < r.finEf) {
         certificados += 1
         sumaVigente += r.cert.sumaAsegurada
         // Prima e ingreso sobre la MISMA base: la suma asegurada (regla de

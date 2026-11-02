@@ -60,7 +60,7 @@ const PRIMA_2 = [{ porcentaje: 2, vigenteDesde: '2026-01' }]
 const INGRESO_3 = [{ porcentaje: 3, vigenteDesde: '2026-01' }]
 
 describe('devengoMensual', () => {
-  it('cert 2026-10-15 → 2027-07-15: devenga oct..jul (10 meses calendario), oct con prima 4840 / ingreso 7260 / resultado 2420', () => {
+  it('cert 2026-10-15 → 2027-07-15: devenga oct..jun (9 pagos, la prima del 15/6 cubre hasta el vto — julio NO suma), oct con prima 4840 / ingreso 7260 / resultado 2420', () => {
     const resultado = devengoMensual([certDevengo()], PRIMA_2, INGRESO_3, '2027-07')
 
     expect(resultado).toHaveLength(10)
@@ -84,10 +84,16 @@ describe('devengoMensual', () => {
     expect(oct.ingreso).toBe(7260)
     expect(oct.resultado).toBe(2420)
 
-    // devenga en todos los meses del rango, incluido el último (jul) inclusive
+    // el mes del vencimiento NO devenga (la prima del 15/6 ya cubrió hasta el
+    // 15/7); la fila existe en el rango pero en cero
     const jul = resultado[resultado.length - 1]
     expect(jul.mes).toBe('2027-07')
-    expect(jul.certificados).toBe(1)
+    expect(jul.certificados).toBe(0)
+    expect(jul.prima).toBe(0)
+
+    const jun = resultado[resultado.length - 2]
+    expect(jun.mes).toBe('2027-06')
+    expect(jun.certificados).toBe(1)
   })
 
   it('cert anulado 2026-11-03: devenga oct y nov, dic no (mes incluido con ceros, no se omite)', () => {
@@ -106,6 +112,27 @@ describe('devengoMensual', () => {
     expect(resultado[2].prima).toBe(0)
     expect(resultado[2].ingreso).toBe(0)
     expect(resultado[2].resultado).toBe(0)
+  })
+
+  it('anulado ANTES del aniversario del mes: ese mes no devenga (inicio 15/10, anulada 1/11 → nov sin prima)', () => {
+    const cert = certDevengo({
+      inicioVig: '2026-10-15',
+      fechaAnula: '2026-11-01',
+      finVig: '2027-06-15',
+    })
+
+    const resultado = devengoMensual([cert], PRIMA_2, INGRESO_3, '2026-11')
+    expect(resultado[0].certificados).toBe(1) // oct: la prima del 15/10 se pagó
+    expect(resultado[1].certificados).toBe(0) // nov: se anuló antes del 15/11
+  })
+
+  it('vigencia natural de 8 meses (2/11 → 2/7) devenga exactamente 8 pagos: nov..jun', () => {
+    const cert = certDevengo({ inicioVig: '2026-11-02', finVig: '2027-07-02' })
+
+    const resultado = devengoMensual([cert], PRIMA_2, INGRESO_3, '2027-07')
+    const conDevengo = resultado.filter(m => m.certificados === 1).map(m => m.mes)
+    expect(conDevengo).toEqual(['2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06'])
+    expect(resultado.find(m => m.mes === '2027-07')!.certificados).toBe(0)
   })
 
   it('fechaSiniestro 2026-12-20: devenga hasta dic inclusive, ene no', () => {
