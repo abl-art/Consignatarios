@@ -65,8 +65,14 @@ export default function ResultadoTab({ devengo, ingresos, siniestralidad, porMod
     }
     startTransition(async () => {
       try {
-        await setParametro('ingreso', valor, vigenteDesde)
-        setMensaje('Tramo guardado.')
+        const r = await setParametro('ingreso', valor, vigenteDesde)
+        if (r.errorPublicacion) {
+          setError(`Tramo guardado, pero falló la republicación de precios en la tienda: ${r.errorPublicacion}. Publicar a mano desde Lista de Precios (quedó un ToDo en Notas).`)
+        } else if (r.preciosPublicados > 0) {
+          setMensaje(`Tramo guardado. Precios republicados en la tienda con el recargo nuevo: ${r.preciosPublicados} modelos.`)
+        } else {
+          setMensaje('Tramo guardado.')
+        }
         setPct('')
         router.refresh()
       } catch (e) {

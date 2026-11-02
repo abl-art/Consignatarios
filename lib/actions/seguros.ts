@@ -115,11 +115,19 @@ export async function setSeguroActivo(activo: boolean): Promise<ResultadoSetSegu
   }
 }
 
+/**
+ * Un cambio del % de INGRESO con el seguro activo mueve el recargo de múltiplo
+ * de la Lista de Precios ⇒ se republican los celulares en la tienda ahí mismo
+ * (mismo contrato que el switch: si la publicación falla, el % igual queda
+ * guardado y se avisa con ToDo urgente en /notas). OJO: un tramo con vigencia
+ * futura republica igual (precios sin cambio hoy) pero NADA lo republica el
+ * día que entra en vigencia — cargarlo el día que arranca.
+ */
 export async function setParametro(
   tipo: 'prima' | 'ingreso',
   porcentaje: number,
   vigenteDesde: string,
-): Promise<void> {
+): Promise<ResultadoSetSeguro> {
   const supabase = createAdminClient()
   const { error } = await supabase
     .from('seguros_parametros')
@@ -127,6 +135,26 @@ export async function setParametro(
   if (error) throw new Error(error.message)
 
   revalidatePath('/seguros')
+
+  if (tipo !== 'ingreso') return { preciosPublicados: 0, sinPublicar: [] }
+  const { data: cfg, error: errorCfg } = await supabase.from('seguros_config').select('activo').eq('id', 1).single()
+  if (errorCfg) throw new Error(errorCfg.message)
+  if (!cfg?.activo) return { preciosPublicados: 0, sinPublicar: [] }
+
+  revalidatePath('/canales/lista-precios')
+  try {
+    const r = await publicarListaCelulares('SEGURO-PCT')
+    if (r.error) throw new Error(r.error)
+    return { preciosPublicados: r.publicadas.length, sinPublicar: r.sinPublicar }
+  } catch (e) {
+    const detalle = e instanceof Error ? e.message : 'error desconocido'
+    await agregarTodosReajuste([{
+      id: `seguro-precios-pct-${vigenteDesde}`,
+      texto: `Falló la republicación de precios al cambiar el % de ingreso del seguro (${detalle}). Publicar a mano desde Lista de Precios.`,
+      urgente: true,
+    }])
+    return { preciosPublicados: 0, sinPublicar: [], errorPublicacion: detalle }
+  }
 }
 
 // ---------------------------------------------------------------------------
