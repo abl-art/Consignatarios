@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import { getPool, getGocuotasPool } from './db-pool'
 import type { VentaMensualDim, PuntoMensual } from './proyeccion-ventas'
 import { CLIENT_IDS_PROPIOS, SQL_IDS_TODOS, SQL_IDS_PROPIOS, CLIENTES_TODOS, sqlCondicionClientes, type FiltroClientes } from './client-ids'
@@ -5,6 +6,26 @@ import type { OrdenDeDni } from './arrepentimientos'
 import type { VentaAsegurable } from './seguros'
 
 export { CLIENT_IDS_PROPIOS }
+
+// ---------------------------------------------------------------------------
+// Cache de lecturas analíticas (audit de performance, novedad de Pedro
+// 31/10/2026): un TTL por familia según cuán fresco necesita verse el dato.
+// unstable_cache incluye los argumentos en la clave, así que las funciones
+// parametrizadas cachean por combinación de args. Un error dentro de la
+// función NO se cachea: si GOcelular no responde, el próximo request reintenta.
+// ---------------------------------------------------------------------------
+const UNA_HORA = 3600
+const MEDIA_HORA = 1800
+const DIEZ_MIN = 600
+const CINCO_MIN = 300
+
+function cachear<A extends unknown[], R>(
+  fn: (...args: A) => Promise<R>,
+  clave: string,
+  segundos: number,
+): (...args: A) => Promise<R> {
+  return unstable_cache(fn, ['gocelular', clave], { revalidate: segundos })
+}
 
 // ---------------------------------------------------------------------------
 // Ventas por geografía (solo ventas propias)
@@ -29,7 +50,7 @@ export interface GeografiaData {
   pctRetiros: number
 }
 
-export async function fetchVentasGeografia(): Promise<GeografiaData> {
+async function fetchVentasGeografiaLive(): Promise<GeografiaData> {
   const empty: GeografiaData = { provincias: [], ciudades: [], totalOrdenes: 0, retirosSucursal: 0, pctRetiros: 0 }
   const pool = getPool()
   if (!pool) return empty
@@ -129,7 +150,7 @@ export async function fetchVentasHoy(): Promise<VentaDiaria[]> {
  * agrupadas por store_name. Misma base que fetchVentasHoy (órdenes creadas,
  * no entregadas) para que los promedios sean comparables con el día.
  */
-export async function fetchVentasUlt30d(): Promise<VentaDiaria[]> {
+async function fetchVentasUlt30dLive(): Promise<VentaDiaria[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -174,8 +195,15 @@ export type { AsnResumen, AlertaEnvio, Rescate, Siniestro }
 export async function fetchAlertasEnvios(
   ahora: Date = new Date(),
 ): Promise<{ requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] }> {
+  const rows = await fetchAlertasEnviosRaw()
+  if (!rows) return { requierenAtencion: [], expedidosSinImei: [] }
+  return armarAlertasEnvios(rows, ahora)
+}
+
+// Solo la query se cachea: `ahora` cambia en cada llamada y rompería la clave
+const fetchAlertasEnviosRaw = cachear(async (): Promise<AlertaEnvioRaw[] | null> => {
   const pool = getPool()
-  if (!pool) return { requierenAtencion: [], expedidosSinImei: [] }
+  if (!pool) return null
 
   const client = await pool.connect()
   try {
@@ -209,11 +237,11 @@ export async function fetchAlertasEnvios(
            SELECT 1 FROM inventory_items ii
            WHERE ii.assigned_to_order_id::text = so.gocuotas_order_id::text))`
     )
-    return armarAlertasEnvios(res.rows, ahora)
+    return res.rows
   } finally {
     client.release()
   }
-}
+}, 'alertas-envios-raw', CINCO_MIN)
 
 /**
  * Envíos con rescate solicitado a Andreani para la pestaña Rescates de
@@ -221,6 +249,11 @@ export async function fetchAlertasEnvios(
  * outbound sin entregar vuelva al depósito, y se lee de shipments.traces.
  */
 export async function fetchRescates(ahora: Date = new Date(), seguimientos: SeguimientoRescate[] = []): Promise<Rescate[]> {
+  const rows = await fetchRescatesRaw()
+  return armarRescates(rows, ahora, seguimientos)
+}
+
+const fetchRescatesRaw = cachear(async (): Promise<RescateRaw[]> => {
   const pool = getPool()
   if (!pool) return []
 
@@ -240,11 +273,11 @@ export async function fetchRescates(ahora: Date = new Date(), seguimientos: Segu
        WHERE s.type = 'outbound'
          AND s.traces @> '[{"evento":"SolicitudDeRescate"}]'`
     )
-    return armarRescates(res.rows, ahora, seguimientos)
+    return res.rows
   } finally {
     client.release()
   }
-}
+}, 'rescates-raw', DIEZ_MIN)
 
 /**
  * Pestaña Demoras de entrega: envíos despachados sin EnvioEntregado cuya orden
@@ -257,6 +290,14 @@ export async function fetchDemorasEntrega(
   ahora: Date = new Date(),
   excluirTrackings: Set<string> = new Set()
 ): Promise<DemoraEntrega[]> {
+  const rows = await fetchDemorasRaw()
+  return armarDemoras(rows, ahora, excluirTrackings)
+}
+
+// La query más cara del 360 contra GOcelular (escanea los traces jsonb de
+// todos los envíos): solo las filas crudas se cachean — `ahora` y el set de
+// exclusiones cambian por llamada y se aplican en armarDemoras.
+const fetchDemorasRaw = cachear(async (): Promise<DemoraRaw[]> => {
   const pool = getPool()
   if (!pool) return []
 
@@ -323,11 +364,11 @@ export async function fetchDemorasEntrega(
              AND s3.type = 'outbound' AND s3.tracking_number NOT LIKE 'API%'
              AND s3.created_at > s.created_at)`
     )
-    return armarDemoras(res.rows, ahora, excluirTrackings)
+    return res.rows
   } finally {
     client.release()
   }
-}
+}, 'demoras-raw', DIEZ_MIN)
 
 /**
  * Envíos declarados siniestrados/extraviados por Andreani para la pestaña
@@ -354,6 +395,11 @@ export async function fetchSiniestros(
   ahora: Date = new Date(),
   seguimientos: SeguimientoSiniestro[] = [],
 ): Promise<Siniestro[]> {
+  const rows = await fetchSiniestrosRaw()
+  return armarSiniestros(rows, ahora, seguimientos)
+}
+
+const fetchSiniestrosRaw = cachear(async (): Promise<SiniestroRaw[]> => {
   const pool = getPool()
   if (!pool) return []
 
@@ -367,11 +413,11 @@ export async function fetchSiniestros(
             OR t->>'descripcion' ILIKE '%siniestr%'
             OR t->>'descripcion' ILIKE '%extrav%')`
     )
-    return armarSiniestros(res.rows, ahora, seguimientos)
+    return res.rows
   } finally {
     client.release()
   }
-}
+}, 'siniestros-raw', DIEZ_MIN)
 
 /**
  * Datos completos de envíos por número de tracking, para los siniestros
@@ -405,7 +451,7 @@ export interface ProductoStock {
  * accesorios/kits de la tienda) para el desplegable de carga de siniestros de
  * stock. Incluye modelos inactivos: un equipo viejo también puede extraviarse.
  */
-export async function fetchProductosStock(): Promise<ProductoStock[]> {
+async function fetchProductosStockLive(): Promise<ProductoStock[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -461,7 +507,7 @@ export async function fetchDispositivosPorImei(imeis: string[]): Promise<Disposi
  * ASN de /compras/envios. Un celular cuenta como ingresado cuando ya no está
  * in_transit_andreani; un accesorio, por received_quantity.
  */
-export async function fetchAsns(): Promise<AsnResumen[]> {
+async function fetchAsnsLive(): Promise<AsnResumen[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -514,7 +560,7 @@ export async function fetchAsns(): Promise<AsnResumen[]> {
  * y salió del stock: restarla de nuevo sería doble descuento). El lado GOcuotas
  * se acota a órdenes de los últimos 30 días para no arrastrar backlog viejo.
  */
-export async function fetchPendientesPicking(): Promise<{ gocuotas: Record<string, number>; andreani: Record<string, number> }> {
+async function fetchPendientesPickingLive(): Promise<{ gocuotas: Record<string, number>; andreani: Record<string, number> }> {
   const vacio = { gocuotas: {}, andreani: {} }
   const pool = getPool()
   if (!pool) return vacio
@@ -577,7 +623,7 @@ const PATRONES_MARCA: Record<string, string> = {
   xiaomi: '%xiaomi%',
 }
 
-export async function fetchVentasMensualesMarca13m(
+async function fetchVentasMensualesMarca13mLive(
   marca: 'samsung' | 'motorola' | 'xiaomi' | 'otras',
   clientIds: FiltroClientes | null
 ): Promise<VentaMensualMarca[]> {
@@ -622,7 +668,7 @@ export async function fetchVentasMensualesMarca13m(
   }
 }
 
-export async function fetchVentasMensuales13m(): Promise<VentaMensualDim[]> {
+async function fetchVentasMensuales13mLive(): Promise<VentaMensualDim[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -789,7 +835,7 @@ export interface ContracargosData {
   ordenes_afectadas: number
 }
 
-export async function fetchContracargos(clientes?: FiltroClientes): Promise<ContracargosData> {
+async function fetchContracargosLive(clientes?: FiltroClientes): Promise<ContracargosData> {
   const gocuotasPool = getGocuotasPool()
   const gocelularPool = getPool()
   if (!gocuotasPool) return { monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 }
@@ -882,7 +928,7 @@ export async function fetchContracargos(clientes?: FiltroClientes): Promise<Cont
 // Order IDs con contracargo (para marcar como incobrable en Vintage/DPD)
 // ---------------------------------------------------------------------------
 
-export async function fetchOrderIdsConContracargo(): Promise<string[]> {
+async function fetchOrderIdsConContracargoLive(): Promise<string[]> {
   const gocuotasPool = getGocuotasPool()
   if (!gocuotasPool) return []
 
@@ -908,7 +954,7 @@ export async function fetchOrderIdsConContracargo(): Promise<string[]> {
  * exitoso fue hace 30+ días sin confirmarse. Regla de Emiliano (26/8): esos
  * equipos no vuelven a conectarse — la orden completa se castiga incobrable.
  */
-export async function fetchOrderIdsTransicion30d(): Promise<string[]> {
+async function fetchOrderIdsTransicion30dLive(): Promise<string[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -962,7 +1008,7 @@ export interface VentaHistorica {
  * Ventas historicas agrupadas por fecha y store_name.
  * Devuelve store_name crudo para que el consumidor clasifique por canal.
  */
-export async function fetchVentasHistoricas(): Promise<VentaHistorica[]> {
+async function fetchVentasHistoricasLive(): Promise<VentaHistorica[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1038,7 +1084,7 @@ export async function fetchInventarioDisponible(): Promise<InventoryItem[]> {
   }
 }
 
-export async function fetchStockPropioDetalle(): Promise<{model_code: string; model_name: string; qty: number}[]> {
+async function fetchStockPropioDetalleLive(): Promise<{model_code: string; model_name: string; qty: number}[]> {
   const pool = getPool()
   if (!pool) return []
   const client = await pool.connect()
@@ -1057,7 +1103,7 @@ export async function fetchStockPropioDetalle(): Promise<{model_code: string; mo
   }
 }
 
-export async function fetchStockPropio(): Promise<number> {
+async function fetchStockPropioLive(): Promise<number> {
   const pool = getPool()
   if (!pool) return 0
 
@@ -1098,7 +1144,7 @@ export interface VentaPorModelo {
  * Intenta obtener el modelo desde inventory_items/device_models (ecommerce)
  * o desde devices (consignación). Si no se encuentra, usa 'Desconocido'.
  */
-export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
+async function fetchVentasPorModeloLive(): Promise<VentaPorModelo[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1141,7 +1187,7 @@ export async function fetchVentasPorModelo(): Promise<VentaPorModelo[]> {
  * contra el cupo de los bonos. Mismo criterio que fetchVentasPorModelo pero
  * solo client_ids propios.
  */
-export async function fetchVentasPropiasPorModelo(): Promise<{ fecha: string; modelo: string; ventas: number }[]> {
+async function fetchVentasPropiasPorModeloLive(): Promise<{ fecha: string; modelo: string; ventas: number }[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1349,7 +1395,7 @@ export async function fetchPreciosVentaCelulares(): Promise<Record<string, numbe
  * Salidas diarias de kits de seguridad: órdenes entregadas de la tienda propia
  * cuyo producto incluye el kit de regalo. El kit no se cobra, así que no hay monto.
  */
-export async function fetchSalidasKitsDiarias(): Promise<{ fecha: string; cantidad: number }[]> {
+async function fetchSalidasKitsDiariasLive(): Promise<{ fecha: string; cantidad: number }[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1387,7 +1433,7 @@ export interface VentaTercero {
  * Ventas de todas las tiendas, agrupadas por día y store.
  * El filtrado por "terceros" se hace en el consumidor.
  */
-export async function fetchVentasTerceros(): Promise<VentaTercero[]> {
+async function fetchVentasTercerosLive(): Promise<VentaTercero[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1426,7 +1472,7 @@ export interface TrustonicStats {
   tiempoPromActivacionDias: number
 }
 
-export async function fetchTrustonicStats(): Promise<TrustonicStats> {
+async function fetchTrustonicStatsLive(): Promise<TrustonicStats> {
   const pool = getPool()
   if (!pool) return { bloqueados: 0, activos: 0, total: 0, pctBloqueados: 0, tasaActivacion: 0, tiempoPromActivacionDias: 0 }
 
@@ -1491,7 +1537,7 @@ export interface KnoxGuardDevice {
 /**
  * Dispositivos sin Trustonic con cuotas vencidas no cobradas y >3 días de atraso.
  */
-export async function fetchKnoxGuardDevices(): Promise<KnoxGuardDevice[]> {
+async function fetchKnoxGuardDevicesLive(): Promise<KnoxGuardDevice[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1552,7 +1598,7 @@ export interface VentasPorMarca {
   ventas: number
 }
 
-export async function fetchVentasPorMarca(desde: string, hasta: string): Promise<VentasPorMarca[]> {
+async function fetchVentasPorMarcaLive(desde: string, hasta: string): Promise<VentasPorMarca[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1593,7 +1639,7 @@ export interface BloqueadosVsMoraData {
   sinBloquear: number
 }
 
-export async function fetchBloqueadosVsMora(): Promise<BloqueadosVsMoraData> {
+async function fetchBloqueadosVsMoraLive(): Promise<BloqueadosVsMoraData> {
   const pool = getPool()
   if (!pool) return { bloqueados: 0, enTransicion: 0, idle: 0, readyForUse: 0, ordenesMora: 0, sinBloquear: 0 }
 
@@ -1655,7 +1701,7 @@ export interface ConversionDiaria {
  * Porcentaje de conversión (delivered_at IS NOT NULL / total) por día
  * desde la tabla `orders` de GOcuotas directamente.
  */
-export async function fetchConversionGocuotas(): Promise<ConversionDiaria[]> {
+async function fetchConversionGocuotasLive(): Promise<ConversionDiaria[]> {
   const pool = getGocuotasPool()
   if (!pool) return []
 
@@ -1708,7 +1754,7 @@ export interface StockWarehouseRow {
   marca: string | null
 }
 
-export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
+async function fetchStockPorWarehouseLive(): Promise<StockWarehouseRow[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1743,15 +1789,28 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
            AND display_name NOT ILIKE '%E2E%'
          ORDER BY display_name`
       ),
-      // Qty ingested to Andreani per addon SKU
-      client.query<{ payload: { abastecimiento?: { lineas?: Array<{ articulo?: { codigo?: string }; cantidadPedida?: number }> } } }>(
-        `SELECT payload FROM andreani_wh_transactions
-         WHERE tipo = 'abastecimiento' AND estado = 'accepted'`
+      // Qty ingested to Andreani per addon SKU — agregado en SQL: bajar los
+      // payloads completos y sumarlos en JS transfería megas por carga
+      // (hallazgo del audit de performance de Pedro, 31/10)
+      client.query<{ sku: string | null; unidades: string }>(
+        `SELECT l->'articulo'->>'codigo' AS sku,
+                SUM(COALESCE((l->>'cantidadPedida')::int, 0))::text AS unidades
+         FROM andreani_wh_transactions t
+         CROSS JOIN LATERAL jsonb_array_elements(t.payload->'abastecimiento'->'lineas') l
+         WHERE t.tipo = 'abastecimiento' AND t.estado = 'accepted'
+           AND jsonb_typeof(t.payload->'abastecimiento'->'lineas') = 'array'
+         GROUP BY 1`
       ),
-      // Qty dispatched from Andreani per addon SKU
-      client.query<{ payload: { pedido?: { lineas?: Array<{ articulo?: { codigo?: string; cantidad?: number } }> } } }>(
-        `SELECT payload FROM andreani_wh_transactions
-         WHERE tipo = 'pedido' AND estado = 'accepted'`
+      // Qty dispatched from Andreani per addon SKU (cantidad ausente = 1,
+      // mismo default que tenía la suma en JS)
+      client.query<{ sku: string | null; unidades: string }>(
+        `SELECT l->'articulo'->>'codigo' AS sku,
+                SUM(COALESCE((l->'articulo'->>'cantidad')::int, 1))::text AS unidades
+         FROM andreani_wh_transactions t
+         CROSS JOIN LATERAL jsonb_array_elements(t.payload->'pedido'->'lineas') l
+         WHERE t.tipo = 'pedido' AND t.estado = 'accepted'
+           AND jsonb_typeof(t.payload->'pedido'->'lineas') = 'array'
+         GROUP BY 1`
       ),
       // Accesorios informados a GOcelular que Andreani aun no recibio
       client.query<{ sku: string; pendiente: string; desde: Date | null }>(
@@ -1783,21 +1842,11 @@ export async function fetchStockPorWarehouse(): Promise<StockWarehouseRow[]> {
     // Calculate Andreani stock per addon SKU: ingested - dispatched
     const ingested: Record<string, number> = {}
     for (const r of abastRes.rows) {
-      for (const l of r.payload?.abastecimiento?.lineas ?? []) {
-        const code = l.articulo?.codigo
-        if (code && addonSkus.has(code)) {
-          ingested[code] = (ingested[code] ?? 0) + (l.cantidadPedida ?? 0)
-        }
-      }
+      if (r.sku && addonSkus.has(r.sku)) ingested[r.sku] = Number(r.unidades)
     }
     const dispatched: Record<string, number> = {}
     for (const r of pedidoRes.rows) {
-      for (const l of r.payload?.pedido?.lineas ?? []) {
-        const code = l.articulo?.codigo
-        if (code && addonSkus.has(code)) {
-          dispatched[code] = (dispatched[code] ?? 0) + (l.articulo?.cantidad ?? 1)
-        }
-      }
+      if (r.sku && addonSkus.has(r.sku)) dispatched[r.sku] = Number(r.unidades)
     }
 
     const rows: StockWarehouseRow[] = []
@@ -1864,7 +1913,7 @@ export interface AddonStock {
   price: number // en pesos (centavos / 100)
 }
 
-export async function fetchAddonStock(): Promise<AddonStock[]> {
+async function fetchAddonStockLive(): Promise<AddonStock[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1906,7 +1955,7 @@ export interface ActivacionRow {
   promDias: number
 }
 
-export async function fetchActivacionPorMes(): Promise<ActivacionRow[]> {
+async function fetchActivacionPorMesLive(): Promise<ActivacionRow[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -1981,7 +2030,7 @@ export interface PDHardRow {
   pdHard: number
 }
 
-export async function fetchPDHardCuota2(): Promise<PDHardRow[]> {
+async function fetchPDHardCuota2Live(): Promise<PDHardRow[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2050,7 +2099,7 @@ export interface AlertaSucursal {
   detalleOrdenes: AlertaSucursalOrden[]
 }
 
-export async function fetchAlertasSucursales(): Promise<AlertaSucursal[]> {
+async function fetchAlertasSucursalesLive(): Promise<AlertaSucursal[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2183,7 +2232,7 @@ export interface AlertaCuota1 {
   bloqueado: boolean
 }
 
-export async function fetchAlertasCuota1(): Promise<AlertaCuota1[]> {
+async function fetchAlertasCuota1Live(): Promise<AlertaCuota1[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2252,7 +2301,7 @@ export interface AlertaDNI {
   detalles: AlertaDNIDetalle[]
 }
 
-export async function fetchAlertasDNI(): Promise<AlertaDNI[]> {
+async function fetchAlertasDNILive(): Promise<AlertaDNI[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2340,7 +2389,7 @@ export interface AlertaTiendaDNI {
   usuarios: AlertaTiendaDNIUser[]
 }
 
-export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
+async function fetchAlertasTiendaDNILive(): Promise<AlertaTiendaDNI[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2407,7 +2456,7 @@ export async function fetchAlertasTiendaDNI(): Promise<AlertaTiendaDNI[]> {
  * órdenes confirmadas el mismo día en la misma tienda. La clasificación por
  * ritmo (pico vs ruido de fondo) vive en lib/compras-mismo-dia.ts.
  */
-export async function fetchComprasMismoDia(): Promise<StoreMismoDia[]> {
+async function fetchComprasMismoDiaLive(): Promise<StoreMismoDia[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2482,7 +2531,7 @@ export interface AlertaSinImeiTienda {
   ordenes: AlertaSinImeiOrden[]
 }
 
-export async function fetchAlertasSinImei(): Promise<AlertaSinImeiTienda[]> {
+async function fetchAlertasSinImeiLive(): Promise<AlertaSinImeiTienda[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2577,7 +2626,7 @@ export interface AlertaCuotasPagadas {
   detalle: AlertaCuotasPagadasDetalle[]
 }
 
-export async function fetchAlertaCuotasPagadas(): Promise<AlertaCuotasPagadas> {
+async function fetchAlertaCuotasPagadasLive(): Promise<AlertaCuotasPagadas> {
   const pool = getPool()
   if (!pool) return { total: 0, promedioAdelanto: 0, detalle: [] }
 
@@ -2652,7 +2701,7 @@ export interface TiempoEntregaData {
   entregas30d: number
 }
 
-export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
+async function fetchTiempoEntregaLive(): Promise<TiempoEntregaData> {
   const pool = getPool()
   if (!pool) return { promedioDias: 0, medianaDias: 0, totalEnvios: 0, promedio30d: 0, mediana30d: 0, envios30d: 0, promedioEntrega30d: 0, medianaEntrega30d: 0, entregas30d: 0 }
 
@@ -2727,7 +2776,7 @@ export async function fetchTiempoEntrega(): Promise<TiempoEntregaData> {
  * accesorios (unit_price × quantity, EN CENTAVOS — el llamador divide ÷100).
  * Los kits de regalo de los bundles no son ítems addon, no inflan la métrica.
  */
-export async function fetchAccesoriosVentas30d(): Promise<{ ordenes: number; conAccesorios: number; montoCentavos: number }> {
+async function fetchAccesoriosVentas30dLive(): Promise<{ ordenes: number; conAccesorios: number; montoCentavos: number }> {
   const pool = getPool()
   if (!pool) return { ordenes: 0, conAccesorios: 0, montoCentavos: 0 }
 
@@ -2774,7 +2823,7 @@ export interface TiempoAsignacionTienda {
   sinTrustonic: number
 }
 
-export async function fetchTiempoAsignacion(): Promise<TiempoAsignacionTienda[]> {
+async function fetchTiempoAsignacionLive(): Promise<TiempoAsignacionTienda[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -2849,7 +2898,7 @@ export interface OrdenConImei {
   userName: string
 }
 
-export async function fetchOrdenesConImei(): Promise<OrdenConImei[]> {
+async function fetchOrdenesConImeiLive(): Promise<OrdenConImei[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -3241,7 +3290,7 @@ export async function fetchRescateYaSolicitado(tracking: string): Promise<boolea
  * store_products). sellable = disponible por depósito; in_transit = informado
  * y todavía no recibido por Andreani.
  */
-export async function fetchStockGomarket(): Promise<StockWarehouseRow[]> {
+async function fetchStockGomarketLive(): Promise<StockWarehouseRow[]> {
   const pool = getPool()
   if (!pool) return []
 
@@ -3327,7 +3376,7 @@ export interface OrdenPreparacionCruda {
  * outbound (si existe), el último pedido de warehouse y el stock disponible
  * del modelo (match por nombre normalizado, se resuelve en el caller).
  */
-export async function fetchOrdenesPreparacion(): Promise<{ ordenes: OrdenPreparacionCruda[]; disponiblesPorNombre: { nombre: string; disponibles: number }[] }> {
+async function fetchOrdenesPreparacionLive(): Promise<{ ordenes: OrdenPreparacionCruda[]; disponiblesPorNombre: { nombre: string; disponibles: number }[] }> {
   const pool = getPool()
   if (!pool) return { ordenes: [], disponiblesPorNombre: [] }
   const client = await pool.connect()
@@ -3713,3 +3762,50 @@ export async function fetchCostoPorImei(imeis: string[]): Promise<Map<string, nu
     client.release()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Versiones cacheadas (audit de performance, novedad de Pedro 31/10/2026):
+// estas lecturas son agregaciones analíticas — servirlas con TTL evita
+// re-ejecutarlas contra la base de GOcelular en cada visita. Lo operativo
+// (ventas de hoy, lookups por orden/IMEI/tracking, crons de sync) NO se
+// cachea y sigue en vivo más arriba.
+// ---------------------------------------------------------------------------
+export const fetchVentasGeografia = cachear(fetchVentasGeografiaLive, 'ventas-geografia', UNA_HORA)
+export const fetchVentasUlt30d = cachear(fetchVentasUlt30dLive, 'ventas-ult30d', UNA_HORA)
+export const fetchVentasMensualesMarca13m = cachear(fetchVentasMensualesMarca13mLive, 'ventas-mensuales-marca13m', UNA_HORA)
+export const fetchVentasMensuales13m = cachear(fetchVentasMensuales13mLive, 'ventas-mensuales13m', UNA_HORA)
+export const fetchVentasHistoricas = cachear(fetchVentasHistoricasLive, 'ventas-historicas', UNA_HORA)
+export const fetchContracargos = cachear(fetchContracargosLive, 'contracargos', UNA_HORA)
+export const fetchOrderIdsConContracargo = cachear(fetchOrderIdsConContracargoLive, 'order-ids-con-contracargo', UNA_HORA)
+export const fetchOrderIdsTransicion30d = cachear(fetchOrderIdsTransicion30dLive, 'order-ids-transicion30d', UNA_HORA)
+export const fetchVentasPorModelo = cachear(fetchVentasPorModeloLive, 'ventas-por-modelo', UNA_HORA)
+export const fetchVentasPropiasPorModelo = cachear(fetchVentasPropiasPorModeloLive, 'ventas-propias-por-modelo', UNA_HORA)
+export const fetchSalidasKitsDiarias = cachear(fetchSalidasKitsDiariasLive, 'salidas-kits-diarias', UNA_HORA)
+export const fetchVentasTerceros = cachear(fetchVentasTercerosLive, 'ventas-terceros', UNA_HORA)
+export const fetchTrustonicStats = cachear(fetchTrustonicStatsLive, 'trustonic-stats', UNA_HORA)
+export const fetchVentasPorMarca = cachear(fetchVentasPorMarcaLive, 'ventas-por-marca', UNA_HORA)
+export const fetchBloqueadosVsMora = cachear(fetchBloqueadosVsMoraLive, 'bloqueados-vs-mora', UNA_HORA)
+export const fetchConversionGocuotas = cachear(fetchConversionGocuotasLive, 'conversion-gocuotas', UNA_HORA)
+export const fetchActivacionPorMes = cachear(fetchActivacionPorMesLive, 'activacion-por-mes', UNA_HORA)
+export const fetchPDHardCuota2 = cachear(fetchPDHardCuota2Live, 'pdhard-cuota2', UNA_HORA)
+export const fetchAlertasSucursales = cachear(fetchAlertasSucursalesLive, 'alertas-sucursales', UNA_HORA)
+export const fetchAlertasCuota1 = cachear(fetchAlertasCuota1Live, 'alertas-cuota1', UNA_HORA)
+export const fetchAlertasDNI = cachear(fetchAlertasDNILive, 'alertas-dni', UNA_HORA)
+export const fetchAlertasTiendaDNI = cachear(fetchAlertasTiendaDNILive, 'alertas-tienda-dni', UNA_HORA)
+export const fetchComprasMismoDia = cachear(fetchComprasMismoDiaLive, 'compras-mismo-dia', UNA_HORA)
+export const fetchAlertasSinImei = cachear(fetchAlertasSinImeiLive, 'alertas-sin-imei', UNA_HORA)
+export const fetchAlertaCuotasPagadas = cachear(fetchAlertaCuotasPagadasLive, 'alerta-cuotas-pagadas', UNA_HORA)
+export const fetchTiempoEntrega = cachear(fetchTiempoEntregaLive, 'tiempo-entrega', UNA_HORA)
+export const fetchAccesoriosVentas30d = cachear(fetchAccesoriosVentas30dLive, 'accesorios-ventas30d', UNA_HORA)
+export const fetchTiempoAsignacion = cachear(fetchTiempoAsignacionLive, 'tiempo-asignacion', UNA_HORA)
+export const fetchOrdenesConImei = cachear(fetchOrdenesConImeiLive, 'ordenes-con-imei', UNA_HORA)
+export const fetchProductosStock = cachear(fetchProductosStockLive, 'productos-stock', UNA_HORA)
+export const fetchKnoxGuardDevices = cachear(fetchKnoxGuardDevicesLive, 'knox-guard-devices', MEDIA_HORA)
+export const fetchStockPorWarehouse = cachear(fetchStockPorWarehouseLive, 'stock-por-warehouse', CINCO_MIN)
+export const fetchPendientesPicking = cachear(fetchPendientesPickingLive, 'pendientes-picking', CINCO_MIN)
+export const fetchStockPropioDetalle = cachear(fetchStockPropioDetalleLive, 'stock-propio-detalle', CINCO_MIN)
+export const fetchStockPropio = cachear(fetchStockPropioLive, 'stock-propio', CINCO_MIN)
+export const fetchAddonStock = cachear(fetchAddonStockLive, 'addon-stock', CINCO_MIN)
+export const fetchStockGomarket = cachear(fetchStockGomarketLive, 'stock-gomarket', CINCO_MIN)
+export const fetchAsns = cachear(fetchAsnsLive, 'asns', CINCO_MIN)
+export const fetchOrdenesPreparacion = cachear(fetchOrdenesPreparacionLive, 'ordenes-preparacion', CINCO_MIN)

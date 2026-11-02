@@ -24,7 +24,8 @@ import ResultadoTab from '@/components/seguros/ResultadoTab'
 import SiniestrosTab from '@/components/seguros/SiniestrosTab'
 import CierresTab from '@/components/seguros/CierresTab'
 
-// Siempre fresco: sincronizarSeguros() corre emisión/novedades en cada visita
+// Siempre fresco: sincronizarSeguros() corre emisión/novedades al visitar
+// (con throttle de 10 min — audit de Pedro 31/10; el cron diario fuerza)
 // y las server actions (activar/desactivar, setParametro) ya revalidan
 // '/seguros' — sin esto el RSC payload podría quedar cacheado entre cargas.
 export const dynamic = 'force-dynamic'

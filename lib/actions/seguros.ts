@@ -171,8 +171,29 @@ function enLotes<T>(items: T[], tamano: number): T[][] {
   return lotes
 }
 
-export async function sincronizarSeguros(): Promise<{ emitidos: number; novedades: number; mails: number }> {
+/** Ventana mínima entre corridas de sincronización disparadas por visitas a /seguros. */
+const SYNC_THROTTLE_MS = 10 * 60 * 1000
+
+export async function sincronizarSeguros(opts?: { force?: boolean }): Promise<{ emitidos: number; novedades: number; mails: number }> {
   const supabase = createAdminClient()
+
+  // Throttle (audit de performance de Pedro, 31/10): la página /seguros
+  // sincroniza en cada visita y cada corrida lee GOcelular + GOcuotas directa
+  // (ventas, mora, contracargos, facturas). Si la última corrida completa fue
+  // hace menos de 10 min, se sirve lo persistido. El cron diario y el cierre
+  // mensual pasan force: true — el cierre NECESITA la foto completa.
+  if (!opts?.force) {
+    const { data: ultima } = await supabase
+      .from('flujo_config')
+      .select('value')
+      .eq('key', 'seguros_last_sync_at')
+      .maybeSingle()
+    const ultimaMs = ultima?.value ? new Date(ultima.value).getTime() : 0
+    if (ultimaMs && Date.now() - ultimaMs < SYNC_THROTTLE_MS) {
+      return { emitidos: 0, novedades: 0, mails: 0 }
+    }
+  }
+
   const { data: config, error: errorConfig } = await supabase
     .from('seguros_config')
     .select('activo, activado_at')
@@ -314,6 +335,14 @@ export async function sincronizarSeguros(): Promise<{ emitidos: number; novedade
   if (emitidos > 0 || novedades.length > 0) {
     revalidatePath('/seguros')
   }
+
+  // Marca de corrida completa para el throttle — solo al llegar al final:
+  // una corrida que tiró antes no cuenta y el próximo request reintenta.
+  await supabase.from('flujo_config').upsert({
+    key: 'seguros_last_sync_at',
+    value: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })
 
   return { emitidos, novedades: novedades.length, mails }
 }
@@ -866,7 +895,7 @@ export async function congelarCierre(opts?: { mes?: string; force?: boolean }): 
   // después del cierre quedaría fuera del snapshot para siempre (el cron
   // corre 05:00 UTC, antes del seguros-sync de las 12:00). Si el sync
   // falla, mejor no congelar (el cron devuelve 500 y se reintenta).
-  await sincronizarSeguros()
+  await sincronizarSeguros({ force: true })
 
   const [certs, config] = await Promise.all([getCertificados(), getSegurosConfig()])
   const emitidos = certs.filter((c) => c.estado !== 'pendiente')

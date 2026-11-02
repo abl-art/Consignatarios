@@ -29,16 +29,20 @@ export async function GET(request: NextRequest) {
 
   const client = await pool.connect()
   try {
+    // Match por prefijo con LIKE (el TAC son los primeros 8 dígitos del IMEI):
+    // LEFT(imei, 8) = $1 no puede usar índice y barría devices completa en
+    // cada búsqueda (audit de performance de Pedro, 31/10). normalizarTac
+    // garantiza 8 dígitos — sin comodines que escapar.
     const [estados, modelo, listaNegra] = await Promise.all([
       client.query<{ status: string; count: string }>(
         `SELECT trustonic_status AS status, COUNT(*)::text AS count
-         FROM devices WHERE LEFT(imei, 8) = $1 AND is_test_device IS NOT TRUE
+         FROM devices WHERE imei LIKE $1 || '%' AND is_test_device IS NOT TRUE
          GROUP BY 1`,
         [tac]
       ),
       client.query<{ model: string | null; brand: string | null }>(
         `SELECT model, brand FROM devices
-         WHERE LEFT(imei, 8) = $1 AND model IS NOT NULL
+         WHERE imei LIKE $1 || '%' AND model IS NOT NULL
          GROUP BY 1, 2 ORDER BY COUNT(*) DESC LIMIT 1`,
         [tac]
       ),

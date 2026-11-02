@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const resultado = await sincronizarSeguros()
+    const resultado = await sincronizarSeguros({ force: true })
     return NextResponse.json({ ok: true, ...resultado }, { status: 200 })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
