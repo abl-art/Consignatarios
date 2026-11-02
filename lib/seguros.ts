@@ -30,7 +30,7 @@ export type VentaAsegurable = {
   gocuotasOrderId: string
   storeOrderId: string
   pedidoNumero: string
-  linkedAt: string
+  paidAt: string
   orderCreatedAt: string
   imei: string
   dni: string | null
@@ -206,14 +206,14 @@ function resolverCosto(
 
 /**
  * Timestamp con separador espacio ("2026-10-22 18:25:58.527+00", formato nativo
- * de pg — así vienen linkedAt/orderCreatedAt desde lib/gocelular.ts) u 'T' ISO
+ * de pg — así vienen paidAt/orderCreatedAt desde lib/gocelular.ts) u 'T' ISO
  * ("2026-10-28T12:00:00+00:00", formato de PostgREST/Supabase — así viene
  * activadoAt), con o sin fracción de segundos y con offset "+00"/"+00:00"/"Z".
  * Parseo manual (no delega en el parser nativo de Date, cuyo soporte de
  * "T"+offset sin colon es inconsistente) para poder comparar dos timestamps de
  * fuentes distintas de forma numérica y no por orden lexicográfico de string:
  * con comparación de string, ' ' (0x20) < 'T' (0x54) hace que CUALQUIER
- * linkedAt del mismo día que la activación compare como "anterior" para
+ * paidAt del mismo día que la activación compare como "anterior" para
  * siempre, perdiendo certificados en silencio.
  */
 const TS_REGEX = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*(Z|[+-]\d{2}:?\d{0,2})?$/
@@ -250,7 +250,10 @@ export function prepararCertificados(
 ): CertificadoNuevo[] {
   return ventas
     .filter(v => !ordenesExistentes.has(v.gocuotasOrderId))
-    .filter(v => aEpocaMs(v.linkedAt) >= aEpocaMs(activadoAt))
+    // Entra lo PAGADO desde la activación (regla de Emiliano 2/11/2026): solo
+    // esas ventas tienen el recargo del seguro en el precio. El backlog pagado
+    // antes de activar NO emite aunque su equipo se asigne después.
+    .filter(v => aEpocaMs(v.paidAt) >= aEpocaMs(activadoAt))
     .map(v => {
       const { costoSinIva, costoFuente } = resolverCosto(v, costosPorClave, costoPorImei)
       // Suma asegurada = costo sin IVA, sin colchón (regla de Emiliano

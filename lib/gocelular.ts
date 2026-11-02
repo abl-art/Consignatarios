@@ -1244,9 +1244,8 @@ export type VentaPorAsegurarRow = {
 /**
  * Ventas PAGAS que todavía no son asegurables (sin vincular a GOcuotas, o
  * vinculadas pero sin equipo en ready_for_control con IMEI): el "en camino"
- * de la pestaña Certificados. Trae desde `desdeISO` (el caller usa la
- * activación del seguro con una ventana hacia atrás: una venta paga antes de
- * activar que se pickea después TAMBIÉN va a emitir certificado).
+ * de la pestaña Certificados. El caller pasa la activación del seguro como
+ * `desdeISO` — la regla de emisión es pagadas desde la activación.
  */
 export async function fetchVentasPorAsegurar(desdeISO: string): Promise<VentaPorAsegurarRow[]> {
   const pool = getPool()
@@ -3439,7 +3438,7 @@ export async function fetchVentasAsegurables(desdeISO: string): Promise<VentaAse
       gocuotas_order_id: string
       store_order_id: string
       pedido_numero: string
-      linked_at: string
+      paid_at: string
       order_created_at: string
       imei: string
       dni: string | null
@@ -3456,7 +3455,7 @@ export async function fetchVentasAsegurables(desdeISO: string): Promise<VentaAse
       `SELECT oda.order_id AS gocuotas_order_id,
               so.id::text AS store_order_id,
               so.order_number AS pedido_numero,
-              oda.linked_at::text AS linked_at,
+              so.paid_at::text AS paid_at,
               go.order_created_at::text AS order_created_at,
               oda.imei AS imei,
               so.customer_dni AS dni,
@@ -3475,14 +3474,15 @@ export async function fetchVentasAsegurables(desdeISO: string): Promise<VentaAse
        WHERE oda.state = 'ready_for_control'
          AND oda.unlinked_at IS NULL
          AND length(oda.imei) = 15
-         AND oda.linked_at >= $1`,
+         AND so.paid_at IS NOT NULL
+         AND so.paid_at >= $1`,
       [desdeISO]
     )
     return res.rows.map((r) => ({
       gocuotasOrderId: r.gocuotas_order_id,
       storeOrderId: r.store_order_id,
       pedidoNumero: r.pedido_numero,
-      linkedAt: r.linked_at,
+      paidAt: r.paid_at,
       orderCreatedAt: r.order_created_at,
       imei: r.imei,
       dni: r.dni,

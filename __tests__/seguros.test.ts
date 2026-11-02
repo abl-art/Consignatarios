@@ -19,7 +19,7 @@ function venta(over: Partial<VentaAsegurable> = {}): VentaAsegurable {
     gocuotasOrderId: 'go-1',
     storeOrderId: 'store-1',
     pedidoNumero: 'PED-1',
-    linkedAt: '2026-10-01T00:00:00Z',
+    paidAt: '2026-10-01T00:00:00Z',
     orderCreatedAt: '2026-10-28T09:00:00Z',
     imei: '350000000000001',
     dni: '12345678',
@@ -130,9 +130,9 @@ describe('prepararCertificados', () => {
     expect(c.estado).toBe('pendiente')
   })
 
-  it('linkedAt anterior a activadoAt: no genera certificado', () => {
+  it('paidAt anterior a activadoAt: no genera certificado', () => {
     const certs = prepararCertificados(
-      [venta({ linkedAt: '2026-09-01T00:00:00Z' })],
+      [venta({ paidAt: '2026-09-01T00:00:00Z' })],
       new Set(),
       new Map(),
       new Map(),
@@ -141,9 +141,9 @@ describe('prepararCertificados', () => {
     expect(certs).toHaveLength(0)
   })
 
-  it('linkedAt exactamente igual a activadoAt: SÍ genera certificado (>=)', () => {
+  it('paidAt exactamente igual a activadoAt: SÍ genera certificado (>=)', () => {
     const certs = prepararCertificados(
-      [venta({ linkedAt: ACTIVADO_AT })],
+      [venta({ paidAt: ACTIVADO_AT })],
       new Set(),
       new Map(),
       new Map(),
@@ -174,11 +174,11 @@ describe('prepararCertificados', () => {
     expect(c.domicilio).toBe('Av. X 123')
   })
 
-  it('linkedAt formato pg (espacio) posterior a activadoAt ISO (T) el mismo día: SÍ genera certificado', () => {
+  it('paidAt formato pg (espacio) posterior a activadoAt ISO (T) el mismo día: SÍ genera certificado', () => {
     // Regresión: comparar como string haría ' ' (0x20) < 'T' (0x54) y perdería
     // en silencio toda venta vinculada el mismo día de la activación.
     const certs = prepararCertificados(
-      [venta({ linkedAt: '2026-10-28 15:02:13.064+00' })],
+      [venta({ paidAt: '2026-10-28 15:02:13.064+00' })],
       new Set(),
       new Map(),
       new Map(),
@@ -187,9 +187,9 @@ describe('prepararCertificados', () => {
     expect(certs).toHaveLength(1)
   })
 
-  it('linkedAt formato pg (espacio) anterior a activadoAt ISO (T) el mismo día: NO genera certificado', () => {
+  it('paidAt formato pg (espacio) anterior a activadoAt ISO (T) el mismo día: NO genera certificado', () => {
     const certs = prepararCertificados(
-      [venta({ linkedAt: '2026-10-28 09:00:00.000+00' })],
+      [venta({ paidAt: '2026-10-28 09:00:00.000+00' })],
       new Set(),
       new Map(),
       new Map(),
