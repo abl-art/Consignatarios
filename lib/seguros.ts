@@ -14,15 +14,16 @@ import { normalizarModelo } from '@/lib/inventario-indicadores'
 export const MESES_VIGENCIA = 8
 
 /**
- * Recargo de múltiplo que el PVP de celulares debe cargar con el seguro activo
- * para fondear el ingreso embebido: el devengo reconoce ingreso% × suma
- * asegurada (= costo sin IVA, misma base que el múltiplo) en TODO mes
- * calendario tocado por la vigencia — 8 meses de vigencia tocan siempre 9
- * meses calendario. Con ingreso 3%/mes ⇒ +0,27 de múltiplo.
+ * Recargo de múltiplo que el PVP de celulares carga con el seguro activo para
+ * fondear el ingreso embebido: ingreso% mensual × los 8 meses completos de
+ * vigencia, sobre la misma base que el múltiplo (costo sin IVA). Con ingreso
+ * 3%/mes ⇒ +0,24. Regla de Emiliano 1/11/2026: se cobra por los meses de
+ * vigencia contratados, no por los meses calendario que el devengo contable
+ * toca (que son 9 — ese mes extra lo absorbe el margen del seguro).
  */
 export function recargoSeguroMultiplo(pctIngresoMensual: number): number {
   if (!Number.isFinite(pctIngresoMensual) || pctIngresoMensual <= 0) return 0
-  return (pctIngresoMensual / 100) * (MESES_VIGENCIA + 1)
+  return (pctIngresoMensual / 100) * MESES_VIGENCIA
 }
 
 export type VentaAsegurable = {

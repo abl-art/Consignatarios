@@ -685,9 +685,9 @@ describe('armarListaPrecios', () => {
 })
 
 describe('recargo del seguro por robo', () => {
-  it('recargoSeguroMultiplo: ingreso % mensual × meses de devengo (8 de vigencia tocan 9 calendario)', () => {
-    expect(recargoSeguroMultiplo(3)).toBeCloseTo(0.27, 10)
-    expect(recargoSeguroMultiplo(2)).toBeCloseTo(0.18, 10)
+  it('recargoSeguroMultiplo: ingreso % mensual × los 8 meses de vigencia contratados', () => {
+    expect(recargoSeguroMultiplo(3)).toBeCloseTo(0.24, 10)
+    expect(recargoSeguroMultiplo(2)).toBeCloseTo(0.16, 10)
     expect(recargoSeguroMultiplo(0)).toBe(0)
     expect(recargoSeguroMultiplo(-1)).toBe(0)
   })
