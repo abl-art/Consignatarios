@@ -262,13 +262,14 @@ export default function CertificadosTab({ certificados, config, facturas, operar
           <p className="text-2xl font-bold text-red-700">{siniestrados.length}</p>
         </div>
         <div className="bg-white border border-amber-200 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Pendientes de emisión</p>
+          <p className="text-xs text-gray-500 mb-1">⚠️ Frenados sin costo</p>
           <p className="text-2xl font-bold text-amber-700">{pendientes.length}</p>
+          <p className="text-[10px] text-gray-400">certificado creado, revisar costo de lista</p>
         </div>
         <div className="bg-white border border-blue-200 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Por emitir</p>
+          <p className="text-xs text-gray-500 mb-1">🕐 Por emitir</p>
           <p className="text-2xl font-bold text-blue-700">{porAsegurar.length}</p>
-          <p className="text-[10px] text-gray-400">ventas pagas esperando equipo</p>
+          <p className="text-[10px] text-gray-400">ventas pagas esperando equipo — se emiten solos</p>
         </div>
       </div>
 
@@ -393,7 +394,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
             {pendientes.length > 0 && (
               <tr>
                 <td colSpan={operar ? 10 : 9} className="px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium border-b border-amber-100">
-                  Pendientes de emisión — sin costo de lista — revisar
+                  ⚠️ Frenados sin costo de lista — el certificado existe pero no se emite hasta resolver el costo
                 </td>
               </tr>
             )}
