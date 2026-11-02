@@ -89,15 +89,21 @@ function parseResumen(hoja: Celda[][]): { conceptos: ConceptoFactura[]; total: n
       total = fila[idxTotalFc + 1] as number
       continue
     }
-    if (esTexto(fila[idx.item]) && esNum(fila[idx.total])) {
+    const item = fila[idx.item]
+    const totalFila = fila[idx.total]
+    const detalle = fila[idx.detalle]
+    const cantidad = fila[idx.cantidad]
+    const unitario = fila[idx.unitario]
+    const mes = fila[idx.mes]
+    if (esTexto(item) && esNum(totalFila)) {
       conceptos.push({
-        item: fila[idx.item].trim(),
-        detalle: esTexto(fila[idx.detalle]) ? fila[idx.detalle].trim() : String(fila[idx.detalle] ?? ''),
-        cantidad: esNum(fila[idx.cantidad]) ? fila[idx.cantidad] : 0,
-        precio_unitario: esNum(fila[idx.unitario]) ? fila[idx.unitario] : 0,
-        total: fila[idx.total],
+        item: item.trim(),
+        detalle: esTexto(detalle) ? detalle.trim() : String(detalle ?? ''),
+        cantidad: esNum(cantidad) ? cantidad : 0,
+        precio_unitario: esNum(unitario) ? unitario : 0,
+        total: totalFila,
       })
-      if (!periodo && esNum(fila[idx.mes])) periodo = serialAFecha(fila[idx.mes]).slice(0, 7)
+      if (!periodo && esNum(mes)) periodo = serialAFecha(mes).slice(0, 7)
     }
   }
   return { conceptos, total, periodo }
