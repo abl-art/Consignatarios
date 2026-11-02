@@ -27,7 +27,7 @@ export default function SoporteCard() {
   const max = data?.categorias[0]?.cantidad ?? 1
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base font-semibold text-gray-900">Soporte — Top reclamos de clientes</h2>
         <button

@@ -14,6 +14,7 @@ import { fetchCuotasStats } from '@/lib/actions/finanzas'
 import { fetchOrdenesIncobrables } from '@/lib/gocelular'
 import { fetchMixSegmentos, type MixSegmentos } from '@/lib/segmentos'
 import SegmentosClientes from './SegmentosClientes'
+import DashboardTabs from '../finanzas/FinanzasTabs'
 import Link from 'next/link'
 import VentasHistoricasChart from './VentasHistoricasChart'
 import SoporteCard from './SoporteCard'
@@ -67,198 +68,234 @@ export default async function DashboardPage() {
       prefix: c.store_prefix!.toLowerCase(),
     }))
 
+  // --- Tarjetas (JSX) repartidas en pestañas estilo Finanzas ---
+
+  const tiempoEntregaCard = (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Tiempo promedio de entrega</h2>
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Orden confirmada → entregado</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-bold text-gray-900">{tiempoEntrega.promedioEntrega30d}</p>
+            <p className="text-sm text-gray-500">días</p>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            promedio 30d · mediana {tiempoEntrega.medianaEntrega30d} · {tiempoEntrega.entregas30d.toLocaleString('es-AR')} entregas
+          </p>
+        </div>
+        <div className="border-t border-gray-100 pt-3">
+          <p className="text-xs text-gray-500 mb-1">Orden confirmada → tracking Andreani</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-xl font-bold text-gray-700">{tiempoEntrega.mediana30d}</p>
+            <p className="text-sm text-gray-500">días</p>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
+        </div>
+      </div>
+    </div>
+  )
+
+  const accesoriosCard = (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Ventas con Accesorios</h2>
+      <div className="flex items-baseline gap-2">
+        <p className="text-3xl font-bold text-gray-900">{accesorios.pct.toLocaleString('es-AR')}%</p>
+        <p className="text-sm text-gray-500">de las órdenes</p>
+      </div>
+      <p className="text-sm text-gray-500 mt-1">
+        {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d
+      </p>
+      <p className="text-sm text-gray-500">
+        {accesorios.monto >= 1e6
+          ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
+          : formatearMoneda(accesorios.monto)}{' '}
+        facturados
+      </p>
+    </div>
+  )
+
+  const stockCard = (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
+      <div className="grid grid-cols-3 xl:grid-cols-5 gap-3">
+        {[
+          { href: '/inventario', label: 'Celulares', stock: inv('celulares')?.stock ?? 0, valor: inv('celulares')?.valorVenta ?? 0, color: 'text-magenta-700', bg: 'bg-magenta-50' },
+          { href: '/inventario', label: 'Smartwatches', stock: inv('smartwatches')?.stock ?? 0, valor: inv('smartwatches')?.valorVenta ?? 0, color: 'text-blue-700', bg: 'bg-blue-50' },
+          { href: '/inventario', label: 'Parlantes', stock: inv('parlantes')?.stock ?? 0, valor: inv('parlantes')?.valorVenta ?? 0, color: 'text-purple-700', bg: 'bg-purple-50' },
+          { href: '/inventario', label: 'Auriculares', stock: inv('auriculares')?.stock ?? 0, valor: inv('auriculares')?.valorVenta ?? 0, color: 'text-cyan-700', bg: 'bg-cyan-50' },
+          { href: '/inventario/kits-seguridad', label: 'Kits', stock: inv('kits')?.stock ?? 0, valor: inv('kits')?.valorVenta ?? 0, color: 'text-amber-700', bg: 'bg-amber-50' },
+        ].map(cat => (
+          <Link key={cat.label} href={cat.href} className={`${cat.bg} rounded-lg p-4 text-center hover:shadow-md transition-shadow`}>
+            <p className="text-sm text-gray-500 mb-1 truncate">{cat.label}</p>
+            <p className={`text-2xl font-bold ${cat.color}`}>{cat.stock}</p>
+            <p className="text-xs text-gray-400">unidades</p>
+            <p className={`text-sm font-semibold ${cat.color} mt-1`}>{formatearMoneda(cat.valor)}</p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+
+  const incobrablesCard = (
+    <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+      <h2 className="text-base font-semibold text-gray-900 mb-3">Incobrables</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Monto incobrable</p>
+          <p className="text-xl font-bold text-red-700">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
+          <p className="text-xl font-bold text-red-700">
+            {contracargos.monto_total_ventas > 0 ? ((cuotasStats.monto_contracargos / contracargos.monto_total_ventas) * 100).toFixed(2) : '0.00'}%
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Órdenes castigadas</p>
+          <p className="text-xl font-bold text-red-700">{ordenesIncobrables.length}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Contracargos</p>
+          <p className="text-xl font-bold text-red-700">{contracargos.cantidad}</p>
+        </div>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">Contracargos + mora 90+ días + equipos en transición 30+ días (misma fuente que Finanzas)</p>
+    </div>
+  )
+
+  const m = bloqueadosVsMora
+  const pctMora = (n: number) => m.ordenesMora > 0 ? ((n / m.ordenesMora) * 100).toFixed(1) + '%' : '0%'
+  const bloqueadosVsMoraCard = (
+    <div className={`rounded-xl border p-5 ${m.sinBloquear > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+      <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;4 días)</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
+          <p className="text-2xl font-bold text-red-700">{m.bloqueados.toLocaleString('es-AR')}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{pctMora(m.bloqueados)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">En transición</p>
+          <p className="text-2xl font-bold text-amber-600">{m.enTransicion.toLocaleString('es-AR')}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{pctMora(m.enTransicion)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Idle</p>
+          <p className="text-2xl font-bold text-gray-500">{m.idle.toLocaleString('es-AR')}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{pctMora(m.idle)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Ready for use</p>
+          <p className="text-2xl font-bold text-gray-500">{m.readyForUse.toLocaleString('es-AR')}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{pctMora(m.readyForUse)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Total mora &gt;4d</p>
+          <p className="text-2xl font-bold text-gray-700">{m.ordenesMora.toLocaleString('es-AR')}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">100%</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Sin bloquear</p>
+          <p className={`text-2xl font-bold ${m.sinBloquear > 0 ? 'text-red-700' : 'text-green-700'}`}>
+            {m.sinBloquear.toLocaleString('es-AR')}
+          </p>
+          <p className={`text-[10px] mt-0.5 ${m.sinBloquear > 0 ? 'text-red-500' : 'text-gray-400'}`}>{pctMora(m.sinBloquear)}</p>
+        </div>
+      </div>
+    </div>
+  )
+
+  const trustonicCard = (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Activos</p>
+          <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
+          <p className="text-xl font-bold text-red-700">{trustonic.bloqueados}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">% Bloqueados</p>
+          <p className={`text-xl font-bold ${trustonic.pctBloqueados > 5 ? 'text-red-700' : 'text-gray-900'}`}>{trustonic.pctBloqueados}%</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Tasa de activación</p>
+          <p className={`text-xl font-bold ${trustonic.tasaActivacion >= 90 ? 'text-green-700' : 'text-amber-700'}`}>{trustonic.tasaActivacion}%</p>
+          <p className="text-[10px] text-gray-400">activos / asignados (sin idle)</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Mediana activación</p>
+          <p className="text-xl font-bold text-gray-900">{trustonic.tiempoPromActivacionDias} días</p>
+          <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
+        </div>
+      </div>
+    </div>
+  )
+
+  const tabs = [
+    {
+      id: 'performance',
+      label: 'Performance',
+      content: (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <VentasDelDia />
+            {tiempoEntregaCard}
+            {accesoriosCard}
+          </div>
+          <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
+          <ConversionChart data={conversionData} />
+        </div>
+      ),
+    },
+    {
+      id: 'negocio',
+      label: 'Negocio',
+      content: (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <GeografiaVentas data={geografia} />
+            <QueVendemos initialData={ventasMarca} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ProyeccionVentasCard />
+            {stockCard}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {incobrablesCard}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'segmentos',
+      label: 'Segmentos',
+      content: <SegmentosClientes mix={mixSegmentos} />,
+    },
+    {
+      id: 'soporte',
+      label: 'Soporte',
+      content: (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {trustonicCard}
+            {bloqueadosVsMoraCard}
+          </div>
+          <SoporteCard />
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="p-4 md:p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard360</h1>
-      <p className="text-sm text-gray-500 mb-6">Vista general de GOcelular</p>
-
-      {/* Ventas del día + Tiempo de Entrega + Donde vendemos + Qué vendemos */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <VentasDelDia />
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Tiempo promedio de entrega</h2>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Orden confirmada → entregado</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-gray-900">{tiempoEntrega.promedioEntrega30d}</p>
-                <p className="text-sm text-gray-500">días</p>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                promedio 30d · mediana {tiempoEntrega.medianaEntrega30d} · {tiempoEntrega.entregas30d.toLocaleString('es-AR')} entregas
-              </p>
-            </div>
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs text-gray-500 mb-1">Orden confirmada → tracking Andreani</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-xl font-bold text-gray-700">{tiempoEntrega.mediana30d}</p>
-                <p className="text-sm text-gray-500">días</p>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
-            </div>
-            <div className="border-t border-gray-100 pt-4">
-              <h2 className="text-base font-semibold text-gray-900 mb-2">Ventas con Accesorios</h2>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-gray-900">{accesorios.pct.toLocaleString('es-AR')}%</p>
-                <p className="text-sm text-gray-500">de las órdenes</p>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d
-              </p>
-              <p className="text-sm text-gray-500">
-                {accesorios.monto >= 1e6
-                  ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
-                  : formatearMoneda(accesorios.monto)}{' '}
-                facturados
-              </p>
-            </div>
-          </div>
-        </div>
-        <GeografiaVentas data={geografia} />
-        <QueVendemos initialData={ventasMarca} />
-      </div>
-
-      {/* Proyección de ventas + Stock */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        <ProyeccionVentasCard />
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Stock disponible</h2>
-          <div className="grid grid-cols-3 xl:grid-cols-5 gap-3">
-            {[
-              { href: '/inventario', label: 'Celulares', stock: inv('celulares')?.stock ?? 0, valor: inv('celulares')?.valorVenta ?? 0, color: 'text-magenta-700', bg: 'bg-magenta-50' },
-              { href: '/inventario', label: 'Smartwatches', stock: inv('smartwatches')?.stock ?? 0, valor: inv('smartwatches')?.valorVenta ?? 0, color: 'text-blue-700', bg: 'bg-blue-50' },
-              { href: '/inventario', label: 'Parlantes', stock: inv('parlantes')?.stock ?? 0, valor: inv('parlantes')?.valorVenta ?? 0, color: 'text-purple-700', bg: 'bg-purple-50' },
-              { href: '/inventario', label: 'Auriculares', stock: inv('auriculares')?.stock ?? 0, valor: inv('auriculares')?.valorVenta ?? 0, color: 'text-cyan-700', bg: 'bg-cyan-50' },
-              { href: '/inventario/kits-seguridad', label: 'Kits', stock: inv('kits')?.stock ?? 0, valor: inv('kits')?.valorVenta ?? 0, color: 'text-amber-700', bg: 'bg-amber-50' },
-            ].map(cat => (
-              <Link key={cat.label} href={cat.href} className={`${cat.bg} rounded-lg p-4 text-center hover:shadow-md transition-shadow`}>
-                <p className="text-sm text-gray-500 mb-1 truncate">{cat.label}</p>
-                <p className={`text-2xl font-bold ${cat.color}`}>{cat.stock}</p>
-                <p className="text-xs text-gray-400">unidades</p>
-                <p className={`text-sm font-semibold ${cat.color} mt-1`}>{formatearMoneda(cat.valor)}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Contracargos + Bloqueados vs Mora */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div className={`rounded-xl border p-5 ${contracargos.cantidad > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Incobrables</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Monto incobrable</p>
-              <p className="text-xl font-bold text-red-700">{formatearMoneda(cuotasStats.monto_contracargos)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">% sobre ventas</p>
-              <p className="text-xl font-bold text-red-700">
-                {contracargos.monto_total_ventas > 0 ? ((cuotasStats.monto_contracargos / contracargos.monto_total_ventas) * 100).toFixed(2) : '0.00'}%
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Órdenes castigadas</p>
-              <p className="text-xl font-bold text-red-700">{ordenesIncobrables.length}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Contracargos</p>
-              <p className="text-xl font-bold text-red-700">{contracargos.cantidad}</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">Contracargos + mora 90+ días + equipos en transición 30+ días (misma fuente que Finanzas)</p>
-        </div>
-
-        {/* Bloqueados vs Mora */}
-        {(() => {
-        const m = bloqueadosVsMora
-        const pct = (n: number) => m.ordenesMora > 0 ? ((n / m.ordenesMora) * 100).toFixed(1) + '%' : '0%'
-        return (
-          <div className={`rounded-xl border p-5 ${m.sinBloquear > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">Bloqueados vs Mora (&gt;4 días)</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
-                <p className="text-2xl font-bold text-red-700">{m.bloqueados.toLocaleString('es-AR')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{pct(m.bloqueados)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">En transición</p>
-                <p className="text-2xl font-bold text-amber-600">{m.enTransicion.toLocaleString('es-AR')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{pct(m.enTransicion)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Idle</p>
-                <p className="text-2xl font-bold text-gray-500">{m.idle.toLocaleString('es-AR')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{pct(m.idle)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Ready for use</p>
-                <p className="text-2xl font-bold text-gray-500">{m.readyForUse.toLocaleString('es-AR')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{pct(m.readyForUse)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Total mora &gt;4d</p>
-                <p className="text-2xl font-bold text-gray-700">{m.ordenesMora.toLocaleString('es-AR')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">100%</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Sin bloquear</p>
-                <p className={`text-2xl font-bold ${m.sinBloquear > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {m.sinBloquear.toLocaleString('es-AR')}
-                </p>
-                <p className={`text-[10px] mt-0.5 ${m.sinBloquear > 0 ? 'text-red-500' : 'text-gray-400'}`}>{pct(m.sinBloquear)}</p>
-              </div>
-            </div>
-          </div>
-        )
-        })()}
-      </div>
-
-      {/* Segmentos de clientes GO (mix propia vs terceros) */}
-      <SegmentosClientes mix={mixSegmentos} />
-
-      {/* Trustonic - ancho completo */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Trustonic</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Activos</p>
-            <p className="text-xl font-bold text-green-700">{trustonic.activos.toLocaleString('es-AR')}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Bloqueados</p>
-            <p className="text-xl font-bold text-red-700">{trustonic.bloqueados}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">% Bloqueados</p>
-            <p className={`text-xl font-bold ${trustonic.pctBloqueados > 5 ? 'text-red-700' : 'text-gray-900'}`}>{trustonic.pctBloqueados}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Tasa de activación</p>
-            <p className={`text-xl font-bold ${trustonic.tasaActivacion >= 90 ? 'text-green-700' : 'text-amber-700'}`}>{trustonic.tasaActivacion}%</p>
-            <p className="text-[10px] text-gray-400">activos / asignados (sin idle)</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Mediana activación</p>
-            <p className="text-xl font-bold text-gray-900">{trustonic.tiempoPromActivacionDias} días</p>
-            <p className="text-[10px] text-gray-400">P50 asignación → activo (&le;40d)</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Soporte: top reclamos de clientes (mails Knox/Trustonic) */}
-      <SoporteCard />
-
-      {/* Ventas históricas */}
-      <div className="mt-6">
-        <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
-      </div>
-
-      {/* Conversión GOcuotas */}
-      <div className="mt-6">
-        <ConversionChart data={conversionData} />
-      </div>
+      <p className="text-sm text-gray-500 mb-4">Vista general de GOcelular</p>
+      <DashboardTabs tabs={tabs} />
     </div>
   )
 }

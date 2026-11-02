@@ -145,7 +145,7 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
   const fmtDia = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('es-AR')
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
         <h2 className="text-base font-semibold text-gray-900">Segmentos de clientes</h2>
         <span className="text-xs text-gray-400">
