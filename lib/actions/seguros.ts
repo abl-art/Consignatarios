@@ -14,6 +14,8 @@ import {
 } from '@/lib/gocelular'
 import { enviarMail } from '@/lib/mailer'
 import { armarMailCertificado } from '@/lib/seguros-mail'
+import { renderConstanciaSeguro } from '@/lib/pdf/constancia-seguro'
+import { ahoraArgentina } from '@/lib/lista-precios'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
 import { publicarListaCelulares } from '@/lib/actions/publicar-precios'
 import { agregarTodosReajuste } from '@/lib/actions/lista-precios-canales'
@@ -302,7 +304,7 @@ const LOTE_MAILS = 50
 async function enviarMailsPendientes(supabase: ReturnType<typeof createAdminClient>): Promise<number> {
   const { data: sinMail, error } = await supabase
     .from('seguros_certificados')
-    .select('id, numero, store_order_id, articulo, imei, inicio_vig, fin_vig')
+    .select('id, numero, store_order_id, articulo, imei, inicio_vig, fin_vig, cliente, dni, domicilio, cp, localidad')
     .eq('estado', 'emitido')
     .is('mail_enviado_at', null)
     .not('numero', 'is', null)
@@ -337,12 +339,36 @@ async function enviarMailsPendientes(supabase: ReturnType<typeof createAdminClie
       finVig: c.fin_vig as string,
     })
 
+    // Constancia de Cobertura adjunta (best-effort: si el render falla, el
+    // mail sale igual — los 3 requisitos del reclamo son lo que no puede
+    // faltar; el PDF se puede regenerar y reenviar a mano).
+    let adjuntos: { filename: string; content: Buffer }[] | undefined
+    try {
+      const pdf = await renderConstanciaSeguro({
+        numero: c.numero as number,
+        cliente: c.cliente as string | null,
+        dni: c.dni as string | null,
+        domicilio: c.domicilio as string | null,
+        cp: c.cp as string | null,
+        localidad: c.localidad as string | null,
+        articulo: c.articulo as string,
+        imei: c.imei as string,
+        inicioVig: c.inicio_vig as string,
+        finVig: c.fin_vig as string,
+        emitida: ahoraArgentina().toISOString().slice(0, 10),
+      })
+      adjuntos = [{ filename: `Constancia-de-Cobertura-Certificado-${c.numero}.pdf`, content: pdf }]
+    } catch (e) {
+      console.error(`[seguros] constancia del certificado ${c.numero} falló: ${e instanceof Error ? e.message : e}`)
+    }
+
     const resultado = await enviarMail({
       para: email,
       asunto: mail.asunto,
       texto: mail.texto,
       html: mail.html,
       remitente: 'GOcelular',
+      adjuntos,
     })
 
     if (resultado.ok) {

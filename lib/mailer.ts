@@ -10,6 +10,8 @@ export async function enviarMail(opts: {
   html?: string
   /** Nombre del remitente visible; default GOcelular360 (backoffice). Los mails a clientes usan "GOcelular". */
   remitente?: string
+  /** Adjuntos (ej. la Constancia de Cobertura del seguro). */
+  adjuntos?: { filename: string; content: Buffer }[]
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = process.env.MAIL_ARREPENTIMIENTOS_USER
   const pass = process.env.MAIL_ARREPENTIMIENTOS_PASS
@@ -27,6 +29,7 @@ export async function enviarMail(opts: {
       subject: opts.asunto,
       text: opts.texto,
       ...(opts.html ? { html: opts.html } : {}),
+      ...(opts.adjuntos?.length ? { attachments: opts.adjuntos } : {}),
     })
     return { ok: true }
   } catch (e) {
