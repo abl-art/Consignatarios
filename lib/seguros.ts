@@ -7,7 +7,19 @@ import { normalizarModelo } from '@/lib/inventario-indicadores'
 
 
 /** Meses de vigencia de la póliza desde la fecha de alta del pedido. */
-const MESES_VIGENCIA = 9
+export const MESES_VIGENCIA = 9
+
+/**
+ * Recargo de múltiplo que el PVP de celulares debe cargar con el seguro activo
+ * para fondear el ingreso embebido: el devengo reconoce ingreso% × suma
+ * asegurada (= costo sin IVA, misma base que el múltiplo) en TODO mes
+ * calendario tocado por la vigencia — 9 meses de vigencia tocan siempre 10
+ * meses calendario. Con ingreso 3%/mes ⇒ +0,30 de múltiplo.
+ */
+export function recargoSeguroMultiplo(pctIngresoMensual: number): number {
+  if (!Number.isFinite(pctIngresoMensual) || pctIngresoMensual <= 0) return 0
+  return (pctIngresoMensual / 100) * (MESES_VIGENCIA + 1)
+}
 
 export type VentaAsegurable = {
   gocuotasOrderId: string

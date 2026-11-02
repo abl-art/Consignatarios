@@ -15,6 +15,8 @@ import {
 import { enviarMail } from '@/lib/mailer'
 import { armarMailCertificado } from '@/lib/seguros-mail'
 import { getProductosCelularesConPrecio } from '@/lib/actions/lista-precios'
+import { publicarListaCelulares } from '@/lib/actions/publicar-precios'
+import { agregarTodosReajuste } from '@/lib/actions/lista-precios-canales'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
 import { prepararCertificados, novedadesDeCertificados, fechaRoboEnRango, type CertActual } from '@/lib/seguros'
 import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguros-informes'
@@ -59,16 +61,30 @@ export async function getSegurosConfig(): Promise<SegurosConfig> {
   }
 }
 
+export interface ResultadoSetSeguro {
+  preciosPublicados: number
+  sinPublicar: string[]
+  /** La republicación de precios falló (el switch igual quedó aplicado). */
+  errorPublicacion?: string
+}
+
 /**
  * Activo ⇒ entran todas las ventas vinculadas desde ese momento. Cada
  * transición inactivo→activo pisa `activado_at` con `now()` (una nueva
  * ventana de cobertura); desactivar, o re-activar sin haber pasado por
  * inactivo, no toca la fecha.
+ *
+ * Cada cambio real de estado además REPUBLICA todos los celulares de la Lista
+ * de Precios en la tienda: con seguro activo el PVP carga el recargo del
+ * seguro (ingreso % mensual × meses de devengo sobre el costo sin IVA), al
+ * desactivar vuelve al múltiplo base. Si la publicación falla, el switch no
+ * se revierte: queda un ToDo urgente en /notas para publicar a mano.
  */
-export async function setSeguroActivo(activo: boolean): Promise<void> {
+export async function setSeguroActivo(activo: boolean): Promise<ResultadoSetSeguro> {
   const supabase = createAdminClient()
   const { data: actual, error: errorActual } = await supabase.from('seguros_config').select('activo').eq('id', 1).single()
   if (errorActual) throw new Error(errorActual.message)
+  const cambia = activo !== (actual?.activo ?? false)
   const transicionAActivo = activo && !(actual?.activo ?? false)
 
   const update: { activo: boolean; activado_at?: string } = { activo }
@@ -78,6 +94,23 @@ export async function setSeguroActivo(activo: boolean): Promise<void> {
   if (error) throw new Error(error.message)
 
   revalidatePath('/seguros')
+
+  if (!cambia) return { preciosPublicados: 0, sinPublicar: [] }
+
+  revalidatePath('/canales/lista-precios')
+  try {
+    const r = await publicarListaCelulares(activo ? 'SEGURO-ON' : 'SEGURO-OFF')
+    if (r.error) throw new Error(r.error)
+    return { preciosPublicados: r.publicadas.length, sinPublicar: r.sinPublicar }
+  } catch (e) {
+    const detalle = e instanceof Error ? e.message : 'error desconocido'
+    await agregarTodosReajuste([{
+      id: `seguro-precios-${activo ? 'on' : 'off'}-${new Date().toISOString().slice(0, 10)}`,
+      texto: `Falló la republicación de precios al ${activo ? 'ACTIVAR' : 'DESACTIVAR'} el seguro (${detalle}). Publicar a mano desde Lista de Precios.`,
+      urgente: true,
+    }])
+    return { preciosPublicados: 0, sinPublicar: [], errorPublicacion: detalle }
+  }
 }
 
 export async function setParametro(

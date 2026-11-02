@@ -12,6 +12,7 @@ import {
   type TodoNotas,
   type VentaPropiaDiaria,
 } from '@/lib/lista-precios'
+import { recargoSeguroMultiplo } from '@/lib/seguros'
 
 function producto(over: Partial<ProductoLista> = {}): ProductoLista {
   return { id: 'p1', nombre: 'Motorola Moto G17 4/128GB', codigo: 'MOTO-G17-128', ...over }
@@ -680,5 +681,58 @@ describe('armarListaPrecios', () => {
       {}, {}, { ...VENTAS, 'Xiaomi Redmi 14C 128/4 GB': 20 },
     )
     expect(filas.map(f => f.marca)).toEqual(['Motorola', 'Xiaomi'])
+  })
+})
+
+describe('recargo del seguro por robo', () => {
+  it('recargoSeguroMultiplo: ingreso % mensual × meses de devengo (9 de vigencia tocan 10 calendario)', () => {
+    expect(recargoSeguroMultiplo(3)).toBeCloseTo(0.3, 10)
+    expect(recargoSeguroMultiplo(2)).toBeCloseTo(0.2, 10)
+    expect(recargoSeguroMultiplo(0)).toBe(0)
+    expect(recargoSeguroMultiplo(-1)).toBe(0)
+  })
+
+  it('con seguro activo el PVP de celulares usa múltiplo base + recargo; la columna múltiplo sigue mostrando el base', () => {
+    const [fila] = armarListaPrecios(
+      [producto({ categoria: 'Celulares' })],
+      { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] },
+      {}, {}, VENTAS, {}, new Date(), [], [], {}, 0.3,
+    )
+    // 242.000 × (2 + 0,3) = 556.600 → /9 = 61.844,4 → cuota 61.900 → PVP 557.100
+    expect(fila.cuota).toBe(61900)
+    expect(fila.pvp).toBe(557100)
+    expect(fila.multiplo).toBe(2)
+    expect(fila.recargoSeguro).toBe(0.3)
+  })
+
+  it('el recargo NO toca categorías que no son Celulares', () => {
+    const [fila] = armarListaPrecios(
+      [producto({ categoria: 'Accesorios', nombre: 'JBL Go 5' })],
+      { p1: [{ proveedor: 'SYNA SA', precio: 50000 }] },
+      {}, {}, { 'JBL Go 5': 10 }, {}, new Date(), [], [], {}, 0.3,
+    )
+    expect(fila.pvp).toBe(Math.ceil((50000 * 2) / 900) * 900)
+    expect(fila.recargoSeguro).toBe(0)
+  })
+
+  it('el bono descuenta del PVP recargado pero la NC sigue sobre el múltiplo base', () => {
+    const [fila] = armarListaPrecios(
+      [producto({ categoria: 'Celulares' })],
+      { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] },
+      {}, {}, VENTAS, { p1: { monto: 30000 } }, new Date(), [], [], {}, 0.3,
+    )
+    // PVP recargado 557.100 − 30.000 = 527.100 → cuota 58.600 → 527.400
+    expect(fila.pvpConBono).toBe(527400)
+    expect(fila.ncEsperada).toBe(15000) // 30.000 ÷ múltiplo base 2, sin el recargo
+  })
+
+  it('sin recargo (default 0) nada cambia', () => {
+    const [fila] = armarListaPrecios(
+      [producto({ categoria: 'Celulares' })],
+      { p1: [{ proveedor: 'NEWSAN SA', precio: 242000 }] },
+      {}, {}, VENTAS,
+    )
+    expect(fila.pvp).toBe(484200)
+    expect(fila.recargoSeguro).toBe(0)
   })
 })

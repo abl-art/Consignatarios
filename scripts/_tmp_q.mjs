@@ -1,0 +1,10 @@
+import fs from "node:fs";
+import { Client } from "pg";
+const env = fs.readFileSync("/home/cremi/consignacion-app/.env.local", "utf8");
+const m = env.match(/SUPABASE_DB_URL\s*=\s*"?([^"\n]+)"?/);
+const url = m[1].replace(/\\n/g, "").trim();
+const c = new Client({ connectionString: url });
+await c.connect();
+const { rows } = await c.query(fs.readFileSync(process.argv[2], "utf8"));
+console.table(rows);
+await c.end();

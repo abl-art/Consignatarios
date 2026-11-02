@@ -180,6 +180,7 @@ export interface FilaListaPrecios {
   proveedorPreferido: boolean
   costo: number | null
   multiplo: number
+  recargoSeguro: number // extra de múltiplo por seguro activo ya incluido en pvp (0 = sin seguro)
   pvp: number | null
   cuota: number | null
   mup: number | null
@@ -372,6 +373,10 @@ export function armarListaPrecios(
   ventasPropiasDiarias: VentaPropiaDiaria[] = [],
   incluidos: string[] = [],
   preciosTiendaPorSku: Record<string, number> = {},
+  // Con el seguro por robo activo, el PVP de CELULARES carga este extra de
+  // múltiplo (ingreso del seguro embebido en el precio). No toca el múltiplo
+  // guardado ni la NC de bonos (la NC a la marca va por el múltiplo base).
+  recargoSeguro: number = 0,
 ): FilaListaPrecios[] {
   const tienda = porClaveNormalizada(preciosTienda)
   const ventas = porClaveNormalizada(ventas30dPorNombre)
@@ -390,12 +395,13 @@ export function armarListaPrecios(
     // la tienda, nombres que no coinciden) caen al match por SKU vía codigo
     const precioTienda = tienda.get(clave) ?? (p.codigo ? preciosTiendaPorSku[p.codigo] : undefined) ?? null
 
+    const recargo = p.categoria === 'Celulares' ? recargoSeguro : 0
     let pvp: number | null = null
     let cuota: number | null = null
     let mup: number | null = null
     let mupPesos: number | null = null
     if (eleccion) {
-      cuota = Math.ceil((eleccion.costo.precio * multiplo) / 9 / 100) * 100
+      cuota = Math.ceil((eleccion.costo.precio * (multiplo + recargo)) / 9 / 100) * 100
       pvp = cuota * 9
       mup = pvp / IVA / eleccion.costo.precio
       mupPesos = pvp / IVA - eleccion.costo.precio
@@ -456,6 +462,7 @@ export function armarListaPrecios(
       proveedorPreferido: eleccion?.preferido ?? false,
       costo: eleccion?.costo.precio ?? null,
       multiplo,
+      recargoSeguro: recargo,
       pvp,
       cuota,
       mup,

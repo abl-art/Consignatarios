@@ -118,16 +118,27 @@ export default function CertificadosTab({ certificados, config, facturas, operar
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [avisoPrecios, setAvisoPrecios] = useState<string | null>(null)
   const [dniQuery, setDniQuery] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
 
+  function informarPrecios(r: Awaited<ReturnType<typeof setSeguroActivo>>, encendido: boolean) {
+    if (r.errorPublicacion) {
+      setError(`El seguro quedó ${encendido ? 'activado' : 'desactivado'}, pero falló la republicación de precios en la tienda: ${r.errorPublicacion}. Publicar a mano desde Lista de Precios (quedó un ToDo en Notas).`)
+    } else if (r.preciosPublicados > 0) {
+      setAvisoPrecios(`Precios republicados en la tienda ${encendido ? 'CON el recargo del seguro' : 'sin el recargo del seguro'}: ${r.preciosPublicados} modelos${r.sinPublicar.length ? ` (sin publicar: ${r.sinPublicar.join('; ')})` : ''}.`)
+    }
+  }
+
   function activar() {
     setError(null)
+    setAvisoPrecios(null)
     startTransition(async () => {
       try {
-        await setSeguroActivo(true)
+        const r = await setSeguroActivo(true)
         setActivo(true)
+        informarPrecios(r, true)
         router.refresh()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error inesperado')
@@ -137,11 +148,13 @@ export default function CertificadosTab({ certificados, config, facturas, operar
 
   function confirmarDesactivar() {
     setError(null)
+    setAvisoPrecios(null)
     startTransition(async () => {
       try {
-        await setSeguroActivo(false)
+        const r = await setSeguroActivo(false)
         setActivo(false)
         setConfirmandoBaja(false)
+        informarPrecios(r, false)
         router.refresh()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error inesperado')
@@ -220,6 +233,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
         )}
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {avisoPrecios && <p className="text-xs text-green-700">{avisoPrecios}</p>}
 
       {/* Export */}
       <div className="flex justify-end">

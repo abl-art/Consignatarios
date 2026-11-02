@@ -307,6 +307,18 @@ export default function ListaPreciosTable({ filas, agregables = [] }: { filas: F
         <span className="ml-auto"><PublicarPrecios /></span>
       </div>
 
+      {(() => {
+        const recargo = filas.find(f => f.recargoSeguro > 0)?.recargoSeguro
+        return recargo ? (
+          <p className="mb-4 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            🛡 Seguro por robo activo: el PVP de celulares incluye +{recargo.toLocaleString('es-AR', { maximumFractionDigits: 2 })} de
+            múltiplo (ingreso del seguro embebido en el precio). El múltiplo de la columna es el base, sin seguro;
+            la NC de bonos también se calcula sobre el base. Al desactivar el seguro los precios vuelven y se
+            republican solos.
+          </p>
+        ) : null
+      })()}
+
       <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">

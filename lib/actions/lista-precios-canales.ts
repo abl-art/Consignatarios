@@ -34,6 +34,7 @@ import {
   type ProductoLista,
   type TodoNotas,
 } from '@/lib/lista-precios'
+import { recargoSeguroMultiplo } from '@/lib/seguros'
 
 const MULTIPLO_KEY = 'listaprecios_multiplo_'
 const BONO_KEY = 'listaprecios_bono_'
@@ -210,7 +211,7 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
   const ahora = opts?.fechaSimulada ? new Date(`${opts.fechaSimulada}T12:00:00Z`) : ahoraArgentina()
   const supabase = createAdminClient()
 
-  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, preciosTiendaSku, ventasDiarias, ventasPropias] =
+  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, preciosTiendaSku, ventasDiarias, ventasPropias, seguroCfg, seguroParams] =
     await Promise.all([
       // Todas las categorías: celulares entran por ventas 30d, el resto
       // (tablets, accesorios, kits) aparece al fijarse con "+ Agregar modelo"
@@ -223,7 +224,24 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
       fetchPreciosTiendaPorSku().catch(() => ({} as Record<string, number>)),
       fetchVentasPorModelo().catch(() => []),
       fetchVentasPropiasPorModelo().catch(() => []),
+      supabase.from('seguros_config').select('activo').eq('id', 1).maybeSingle(),
+      supabase.from('seguros_parametros').select('tipo, porcentaje, vigente_desde').eq('tipo', 'ingreso'),
     ])
+
+  // Seguro activo ⇒ el PVP de celulares carga el ingreso del seguro como
+  // múltiplo extra (% mensual vigente × meses de devengo). Fail-loud: publicar
+  // precios sin el recargo por un error de lectura silencioso sería vender
+  // regalando el seguro.
+  if (seguroCfg.error) throw new Error(`seguros_config: ${seguroCfg.error.message}`)
+  if (seguroParams.error) throw new Error(`seguros_parametros: ${seguroParams.error.message}`)
+  let recargoSeguro = 0
+  if (seguroCfg.data?.activo) {
+    const hoyDia = ahora.toISOString().slice(0, 10)
+    const vigente = (seguroParams.data ?? [])
+      .filter(p => (p.vigente_desde as string) <= hoyDia)
+      .sort((a, b) => (b.vigente_desde as string).localeCompare(a.vigente_desde as string))[0]
+    recargoSeguro = recargoSeguroMultiplo(Number(vigente?.porcentaje ?? 0))
+  }
 
   const productos: ProductoLista[] = (prods ?? [])
     .filter(p => !p.oculto)
@@ -292,7 +310,7 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
   } catch { /* best-effort */ }
 
   const incluidos = parseIncluidos((cfg ?? []) as { key: string; value: string }[])
-  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos, preciosTiendaSku)
+  return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos, preciosTiendaSku, recargoSeguro)
 }
 
 /** Catálogo completo de productos (no ocultos) para el desplegable "Agregar modelo". */

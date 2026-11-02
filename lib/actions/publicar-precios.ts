@@ -167,6 +167,25 @@ export async function publicarPrecioProducto(
   return { nombre: p.nombre, precio: p.precio, conBono: p.conBono }
 }
 
+/**
+ * Republica en la tienda el precio vigente de TODOS los celulares de la lista
+ * (con bono si corresponde), sin intervención del usuario. La usa el switch
+ * del seguro por robo: al activarlo/desactivarlo los PVP cambian en bloque
+ * (entra/sale el recargo del seguro) y la tienda tiene que reflejarlo ya.
+ */
+export async function publicarListaCelulares(prefijo: string): Promise<{
+  publicadas: { productoId: string; nombre: string; precio: number; conBono: boolean }[]
+  sinPublicar: string[]
+  error?: string
+}> {
+  const filas = await getListaPrecios()
+  const objetivos = filas
+    .filter(f => f.categoria === 'Celulares' && f.pvp !== null)
+    .map(f => ({ productoId: f.productoId, nombre: f.nombre }))
+  if (!objetivos.length) return { publicadas: [], sinPublicar: [], error: 'la lista no tiene celulares con PVP' }
+  return publicarFilasDeProductos(objetivos, prefijo)
+}
+
 export interface ResultadoPublicacionBonos {
   hoy: string
   pendientes: string[]
