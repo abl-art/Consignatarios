@@ -104,16 +104,49 @@ describe('parseFacturaWarehouse', () => {
     expect(parse().avisos).toEqual([])
   })
 
-  it('avisa si la Q facturada no coincide con el detalle', () => {
+  it('avisa si la Q de OUT no coincide ni con unidades ni con pedidos', () => {
     const resumenMal = resumen.map(r => (r[1] === 'OUT UNIDAD' ? [null, 'OUT UNIDAD', 'Unidad', AGO1, 5, 5, 2799.81, 13999.05] : r))
     const r = parseFacturaWarehouse({ resumen: resumenMal, out: outHoja, ingresos: inHoja, seguro: seguroHoja })
     if ('error' in r) throw new Error(r.error)
-    expect(r.avisos.some(a => a.includes('Unidades OUT'))).toBe(true)
+    expect(r.avisos.some(a => a.startsWith('OUT:'))).toBe(true)
+  })
+
+  it('no avisa cuando OUT se factura por pedido (modalidad sep 2026)', () => {
+    // El fixture tiene 3 unidades en 2 órdenes: Q=2 (por pedido) es válida
+    const resumenPorPedido = resumen.map(r => (r[1] === 'OUT UNIDAD' ? [null, 'OUT PEDIDOS', 'Pedidos', AGO1, 2, 2, 2799.81, 5599.62] : r))
+    const r = parseFacturaWarehouse({ resumen: resumenPorPedido, out: outHoja, ingresos: inHoja, seguro: seguroHoja })
+    if ('error' in r) throw new Error(r.error)
+    expect(r.avisos.some(a => a.startsWith('OUT:'))).toBe(false)
   })
 
   it('falla con error claro si no está la hoja resumen', () => {
     const r = parseFacturaWarehouse({ resumen: [['otra cosa']], out: outHoja, ingresos: inHoja, seguro: seguroHoja })
     expect(r).toHaveProperty('error')
+  })
+
+  // Sep 2026: Andreani sacó la columna "REAL" del resumen y todo corrió un
+  // lugar a la izquierda — las columnas se ubican por nombre de encabezado,
+  // no por posición fija (formato real del archivo "2026 09- GO CUOTAS-.xlsx")
+  it('lee el resumen de septiembre (sin la columna REAL, todo corrido)', () => {
+    const SEP1 = 46266 // 2026-09-01
+    const resumenSep: Celda[][] = [
+      ['Patricio Campodonico'],
+      ['Arranca en Agosto´26 (Cte 123734)'],
+      ['Corte Calendario (Fac CASA) Pacheco'],
+      ['GO CUOTAS ', 'Item Facturable', 'Detalle', 'MES/AÑO REAL', 'Q FACT.', '$ Unitario', '$ FACTURACION'],
+      [null, 'IN BULTO', 'Bulto', SEP1, 677, 1149.08, 777927.16],
+      [null, 'ALMACEN ', 'BALDA 60x60x80', SEP1, 48, 15072.51, 723480.48],
+      [null, 'OUT PEDIDOS', 'Pedidos', SEP1, 4319, 2799.81, 12092379.39],
+      [null, 'INSUMOS', 'Bolsas E-Comm', SEP1, 4319, 229.5, 991210.5],
+      [null, 'SEGURO', 0.002, SEP1, 377270236, 0.002, 754540.47],
+      [null, null, null, null, null, 'TOTAL FC', 15339537.99999],
+    ]
+    const r = parseFacturaWarehouse({ resumen: resumenSep, out: outHoja, ingresos: inHoja, seguro: seguroHoja })
+    if ('error' in r) throw new Error(r.error)
+    expect(r.periodo).toBe('2026-09')
+    expect(r.conceptos.map(c => c.item)).toEqual(['IN BULTO', 'ALMACEN', 'OUT PEDIDOS', 'INSUMOS', 'SEGURO'])
+    expect(r.conceptos[0]).toMatchObject({ cantidad: 677, precio_unitario: 1149.08, total: 777927.16 })
+    expect(r.totalFacturado).toBeCloseTo(15339537.99999, 3)
   })
 })
 

@@ -61,16 +61,27 @@ const esNum = (v: Celda): v is number => typeof v === 'number' && Number.isFinit
 const esTexto = (v: Celda): v is string => typeof v === 'string' && v.trim().length > 0
 
 function parseResumen(hoja: Celda[][]): { conceptos: ConceptoFactura[]; total: number | null; periodo: string | null } {
-  // Encabezado: fila que contiene "Item Facturable"; las filas de concepto
-  // tienen item en col 1 y total numérico en col 7. El total general está en
-  // la fila con la celda "TOTAL FC" (el total en la celda siguiente).
+  // Encabezado: fila que contiene "Item Facturable". Las columnas se ubican
+  // POR NOMBRE, no por posición: el layout cambia entre meses (sep 2026 sacó
+  // la columna "REAL" de ago y corrió todo un lugar). El total general está
+  // en la fila con la celda "TOTAL FC" (el total en la celda siguiente).
   const conceptos: ConceptoFactura[] = []
   let total: number | null = null
   let periodo: string | null = null
-  let headerVisto = false
+  let idx: { item: number; detalle: number; mes: number; cantidad: number; unitario: number; total: number } | null = null
   for (const fila of hoja) {
-    if (!headerVisto) {
-      if (fila.some(c => esTexto(c) && c.trim() === 'Item Facturable')) headerVisto = true
+    if (!idx) {
+      const iItem = fila.findIndex(c => esTexto(c) && c.trim() === 'Item Facturable')
+      if (iItem < 0) continue
+      const header = fila.map(c => (esTexto(c) ? c.trim() : ''))
+      idx = {
+        item: iItem,
+        detalle: header.indexOf('Detalle'),
+        mes: header.indexOf('MES/AÑO REAL'),
+        cantidad: header.indexOf('Q FACT.'),
+        unitario: header.indexOf('$ Unitario'),
+        total: header.indexOf('$ FACTURACION'),
+      }
       continue
     }
     const idxTotalFc = fila.findIndex(c => esTexto(c) && c.trim() === 'TOTAL FC')
@@ -78,15 +89,15 @@ function parseResumen(hoja: Celda[][]): { conceptos: ConceptoFactura[]; total: n
       total = fila[idxTotalFc + 1] as number
       continue
     }
-    if (esTexto(fila[1]) && esNum(fila[7])) {
+    if (esTexto(fila[idx.item]) && esNum(fila[idx.total])) {
       conceptos.push({
-        item: fila[1].trim(),
-        detalle: esTexto(fila[2]) ? fila[2].trim() : String(fila[2] ?? ''),
-        cantidad: esNum(fila[5]) ? fila[5] : 0,
-        precio_unitario: esNum(fila[6]) ? fila[6] : 0,
-        total: fila[7],
+        item: fila[idx.item].trim(),
+        detalle: esTexto(fila[idx.detalle]) ? fila[idx.detalle].trim() : String(fila[idx.detalle] ?? ''),
+        cantidad: esNum(fila[idx.cantidad]) ? fila[idx.cantidad] : 0,
+        precio_unitario: esNum(fila[idx.unitario]) ? fila[idx.unitario] : 0,
+        total: fila[idx.total],
       })
-      if (!periodo && esNum(fila[3])) periodo = serialAFecha(fila[3]).slice(0, 7)
+      if (!periodo && esNum(fila[idx.mes])) periodo = serialAFecha(fila[idx.mes]).slice(0, 7)
     }
   }
   return { conceptos, total, periodo }
@@ -196,7 +207,12 @@ export function parseFacturaWarehouse(hojas: {
       avisos.push(`${etiqueta}: la factura cobra ${c.cantidad.toLocaleString('es-AR')} pero el detalle suma ${real.toLocaleString('es-AR')}`)
     }
   }
-  chequeoQ(/^OUT\b/i, unidadesOut, 'Unidades OUT')
+  // OUT: ago 2026 facturaba por UNIDAD y desde sep por PEDIDO (reclamo de
+  // Emiliano del 15/9) — la Q es válida si coincide con cualquiera de las dos
+  const conceptoOut = conceptos.find(x => /^OUT\b/i.test(x.item))
+  if (conceptoOut && Math.abs(conceptoOut.cantidad - unidadesOut) > 0.5 && Math.abs(conceptoOut.cantidad - ordenesOut) > 0.5) {
+    avisos.push(`OUT: la factura cobra ${conceptoOut.cantidad.toLocaleString('es-AR')} pero el detalle suma ${unidadesOut.toLocaleString('es-AR')} unidades en ${ordenesOut.toLocaleString('es-AR')} pedidos`)
+  }
   chequeoQ(/^IN\b/i, bultosIn, 'Bultos IN') // \b para no matchear INSUMOS
   if (pico) chequeoQ(/^SEGURO/i, pico.valor, 'Valor declarado del seguro')
 
