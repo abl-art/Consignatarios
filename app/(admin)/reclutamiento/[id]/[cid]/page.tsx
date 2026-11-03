@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { getCandidato, urlCv } from '@/lib/actions/reclutamiento'
 import EditarScores from '@/components/reclutamiento/EditarScores'
 import EntrevistaCard from '@/components/reclutamiento/EntrevistaCard'
+import EntrevistaPersonal from '@/components/reclutamiento/EntrevistaPersonal'
 import NuevaEntrevista from '@/components/reclutamiento/NuevaEntrevista'
 
 export default async function CandidatoPage({ params }: { params: { id: string; cid: string } }) {
@@ -68,6 +69,8 @@ export default async function CandidatoPage({ params }: { params: { id: string; 
           </div>
         )}
       </div>
+
+      <EntrevistaPersonal candidatoId={candidato.id} entrevista={candidato.entrevistaPersonal} />
 
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-bold text-gray-900">Entrevistas</h2>

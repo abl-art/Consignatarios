@@ -168,3 +168,83 @@ ${JSON.stringify(candidatos, null, 1)}
 
 Escribí una recomendación final en markdown (español rioplatense, directo, sin diplomacia vacía): ranking con justificación por candidato anclada en los criterios prioritarios, el desempate concreto entre los primeros, qué testear en la próxima etapa (assessment) para cada finalista, y qué candidatos sirven para OTROS roles de la empresa aunque no para este. Máximo 350 palabras. No uses tablas.`
 }
+
+// ── Entrevista personal ──────────────────────────────────────────────────────
+// Preguntas personalizadas para la entrevista cara a cara con Emiliano:
+// complementan la técnica (caso práctico) ya hecha — validan riesgos del CV,
+// repreguntan los flancos que dejó la técnica y sondean motivación/encaje.
+
+export interface PreguntaPersonal {
+  id: string
+  tema: string
+  pregunta: string
+  /** Qué mirar en la respuesta: ancla el puntaje 1-5 en vivo. */
+  busca: string
+}
+
+export interface RespuestaPersonal {
+  nota?: string
+  puntaje?: number
+}
+
+export interface EntrevistaPersonal {
+  generada_at: string
+  preguntas: PreguntaPersonal[]
+  respuestas: Record<string, RespuestaPersonal>
+}
+
+export function promptEntrevistaPersonal(
+  criterios: Criterio[],
+  mandato: string | null,
+  ficha: {
+    nombre: string
+    arquetipo: string | null
+    resumen: string | null
+    favor: string[]
+    riesgos: string[]
+    preguntas: string | null
+  },
+  tecnicas: Pick<AnalisisEntrevista, 'veredicto' | 'bien' | 'mal' | 'lectura'>[]
+): string {
+  const bloqueTecnicas =
+    tecnicas.length > 0
+      ? tecnicas
+          .map(
+            (t, i) => `Entrevista técnica ${i + 1} — veredicto: ${t.veredicto ?? 's/d'}
+  Mostró bien: ${(t.bien ?? []).join(' · ') || 's/d'}
+  Quedó flojo: ${(t.mal ?? []).join(' · ') || 's/d'}
+  Lectura del reclutador: ${t.lectura ?? 's/d'}`
+          )
+          .join('\n')
+      : 'Sin entrevista técnica todavía.'
+
+  return `Sos un reclutador senior. Armá la guía de la ENTREVISTA PERSONAL (cara a cara con el dueño de la empresa) para este candidato. Ya pasó una entrevista técnica con caso práctico — esta instancia NO repite el caso: valida trayectoria real, los riesgos del CV, los flancos que dejó la técnica, motivación y encaje.
+
+Búsqueda (mandato): ${mandato || 'No especificado'}
+
+Candidato: ${ficha.nombre}${ficha.arquetipo ? ` — ${ficha.arquetipo}` : ''}
+Resumen del CV: ${ficha.resumen || 's/d'}
+A favor: ${ficha.favor.join(' · ') || 's/d'}
+Riesgos / a validar: ${ficha.riesgos.join(' · ') || 's/d'}
+${ficha.preguntas ? `Notas previas del reclutador: ${ficha.preguntas}` : ''}
+
+Lo que dejaron las entrevistas técnicas:
+${bloqueTecnicas}
+
+Criterios de la búsqueda (anclá las preguntas en los PRIORITARIOS y en los que la técnica dejó flojos):
+${listaCriterios(criterios)}
+
+Armá 10 preguntas, en el orden en que conviene hacerlas (apertura → profundización → cierre):
+- Abiertas y CONDUCTUALES ("contame una vez que..."), que pidan hechos y números del pasado, no opiniones.
+- Cada riesgo del CV tiene que tener su pregunta; cada flanco de la técnica, su repregunta (sin mencionarle que viene de ahí).
+- NO repreguntar lo que ya demostró bien en la técnica.
+- Incluir 1 de motivación/encaje con el mandato y 1 de cierre (expectativas: disponibilidad, remuneración, por qué este proyecto).
+- "busca": qué respuesta vale 5 y qué vale 1, en una línea, para puntuar en vivo.
+
+Respondé ÚNICAMENTE con un JSON válido, sin markdown:
+{
+  "preguntas": [
+    { "tema": "<2-4 palabras, ej 'Liderazgo real'>", "pregunta": "<la pregunta, tal cual se la haría>", "busca": "<5 = ...; 1 = ...>" }
+  ]
+}`
+}

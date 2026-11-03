@@ -6,7 +6,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { CRITERIOS_DEFAULT, type Assessment, type Criterio } from '@/lib/reclutamiento'
+import { CRITERIOS_DEFAULT, type Assessment, type Criterio, type EntrevistaPersonal, type RespuestaPersonal } from '@/lib/reclutamiento'
 
 export interface BusquedaResumen {
   id: string
@@ -130,6 +130,7 @@ export async function getBusqueda(id: string): Promise<BusquedaCompleta | null> 
 
 export interface CandidatoCompleto extends CandidatoRow {
   busqueda: { id: string; nombre: string; mandato: string | null; criterios: Criterio[] }
+  entrevistaPersonal: EntrevistaPersonal | null
 }
 
 export async function getCandidato(id: string): Promise<CandidatoCompleto | null> {
@@ -159,7 +160,35 @@ export async function getCandidato(id: string): Promise<CandidatoCompleto | null
       a.created_at.localeCompare(b2.created_at)
     ),
     busqueda: { id: b.id, nombre: b.nombre, mandato: b.mandato, criterios: b.criterios || [] },
+    entrevistaPersonal: (data.entrevista_personal as EntrevistaPersonal) || null,
   }
+}
+
+/**
+ * Guarda la respuesta/puntaje de UNA pregunta de la entrevista personal
+ * (merge sobre el jsonb — la UI serializa los llamados, no hay carreras).
+ */
+export async function guardarRespuestaPersonal(
+  candidatoId: string,
+  preguntaId: string,
+  resp: RespuestaPersonal
+): Promise<void> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('rec_candidatos')
+    .select('entrevista_personal')
+    .eq('id', candidatoId)
+    .single()
+  if (error) throw new Error(error.message)
+  const ep = data?.entrevista_personal as EntrevistaPersonal | null
+  if (!ep) throw new Error('El candidato no tiene entrevista personal generada')
+  ep.respuestas = ep.respuestas || {}
+  ep.respuestas[preguntaId] = { ...ep.respuestas[preguntaId], ...resp }
+  const { error: errUpdate } = await supabase
+    .from('rec_candidatos')
+    .update({ entrevista_personal: ep })
+    .eq('id', candidatoId)
+  if (errUpdate) throw new Error(errUpdate.message)
 }
 
 export async function setAssessment(candidatoId: string, assessment: Assessment): Promise<void> {
