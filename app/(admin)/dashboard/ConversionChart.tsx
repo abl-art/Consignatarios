@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-
-interface ConversionDiaria {
-  fecha: string
-  total: number
-  delivered: number
-  pct: number
-}
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { ConversionGocuotas } from '@/lib/gocelular'
 
 type Granularidad = 'mensual' | 'diario'
+
+// Paleta validada (dataviz): magenta de marca para la serie principal y el
+// azul del repo para la de referencia — PASS en CVD y contraste sobre blanco.
+const COLOR_USUARIOS = '#E91E7B'
+const COLOR_ORDENES = '#2563eb'
 
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -39,31 +38,43 @@ function formatDay(yyyyMmDd: string): string {
   return `${parseInt(day, 10)} ${monthNames[parseInt(month, 10) - 1]}`
 }
 
-export default function ConversionChart({ data }: { data: ConversionDiaria[] }) {
+export default function ConversionChart({ data }: { data: ConversionGocuotas }) {
   const [granularidad, setGranularidad] = useState<Granularidad>('mensual')
 
+  // La serie mensual viene con DISTINCT real por mes desde la query — acá no
+  // se re-agrega nada, solo se calculan los porcentajes de cada punto.
   const chartData = useMemo(() => {
-    const groups = new Map<string, { total: number; delivered: number }>()
-
-    for (const row of data) {
-      const key = granularidad === 'mensual' ? row.fecha.slice(0, 7) : row.fecha
-      const existing = groups.get(key) ?? { total: 0, delivered: 0 }
-      existing.total += row.total
-      existing.delivered += row.delivered
-      groups.set(key, existing)
-    }
-
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, vals]) => ({
-        label: granularidad === 'mensual' ? formatMonth(key) : formatDay(key),
-        pct: vals.total > 0 ? Math.round((vals.delivered / vals.total) * 10000) / 100 : 0,
-      }))
+    const filas = granularidad === 'mensual' ? data.mensual : data.diaria
+    return filas.map(p => ({
+      label: granularidad === 'mensual' ? formatMonth(p.fecha) : formatDay(p.fecha),
+      pctUsuarios: p.usuarios > 0 ? Math.round((p.usuariosConf / p.usuarios) * 10000) / 100 : 0,
+      pctOrdenes: p.total > 0 ? Math.round((p.delivered / p.total) * 10000) / 100 : 0,
+    }))
   }, [data, granularidad])
+
+  const etiquetaPunto =
+    granularidad === 'mensual'
+      ? (((props: { x: number; y: number; value: number }) => (
+          <text x={props.x} y={props.y - 10} textAnchor="middle" fill="#6b7280" fontSize={9}>
+            {props.value.toFixed(1)}%
+          </text>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        )) as any)
+      : undefined
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-800 mb-4">Conversión GOcuotas (% entregadas)</h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+        <h3 className="text-sm font-semibold text-gray-800">Conversión GOcuotas</h3>
+        {data.ordenesPorUsuario30d !== null && (
+          <p className="text-xs text-gray-500">
+            <span className="font-semibold text-gray-700">{data.ordenesPorUsuario30d.toLocaleString('es-AR')}</span> órdenes creadas por usuario (30d)
+          </p>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mb-4">
+        usuarios que confirman / usuarios que llegan al checkout · la línea azul (por orden) baja cuando la gente necesita más intentos
+      </p>
 
       <div className="flex items-center gap-1 mb-4">
         <Pill label="Mensual" active={granularidad === 'mensual'} onClick={() => setGranularidad('mensual')} />
@@ -77,7 +88,10 @@ export default function ConversionChart({ data }: { data: ConversionDiaria[] }) 
             <XAxis dataKey="label" stroke="#6b7280" fontSize={11} />
             <YAxis stroke="#6b7280" fontSize={11} tickFormatter={(v) => `${v}%`} domain={[0, 'auto']} />
             <Tooltip
-              formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Conversión']}
+              formatter={(value, name) => [
+                `${Number(value).toFixed(2)}%`,
+                name === 'pctUsuarios' ? 'Por usuario único' : 'Por orden',
+              ]}
               labelStyle={{ color: '#374151' }}
               contentStyle={{
                 backgroundColor: '#ffffff',
@@ -86,17 +100,28 @@ export default function ConversionChart({ data }: { data: ConversionDiaria[] }) 
                 fontSize: 12,
               }}
             />
+            <Legend
+              formatter={(value: string) => (
+                <span style={{ color: '#374151', fontSize: 12 }}>
+                  {value === 'pctUsuarios' ? 'Por usuario único' : 'Por orden'}
+                </span>
+              )}
+            />
             <Line
               type="monotone"
-              dataKey="pct"
-              stroke="#10b981"
+              dataKey="pctUsuarios"
+              stroke={COLOR_USUARIOS}
               strokeWidth={2}
-              dot={{ r: 4, fill: '#10b981' }}
-              label={((props: { x: number; y: number; value: number }) => (
-                <text x={props.x} y={props.y - 10} textAnchor="middle" fill="#6b7280" fontSize={9}>
-                  {props.value.toFixed(1)}%
-                </text>
-              )) as any}
+              dot={granularidad === 'mensual' ? { r: 4, fill: COLOR_USUARIOS } : false}
+              label={etiquetaPunto}
+            />
+            <Line
+              type="monotone"
+              dataKey="pctOrdenes"
+              stroke={COLOR_ORDENES}
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              dot={false}
             />
           </LineChart>
         </ResponsiveContainer>

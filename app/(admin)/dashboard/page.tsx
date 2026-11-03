@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   const [contracargos, ventasHistoricas, conversionData, { data: consigs }, { count: stockConsignatarios }, preciosNewsan, { data: dispConsig }, trustonic, bloqueadosVsMora, geografia, ventasMarca, tiempoEntrega, inventarioResumen, cuotasStats, ordenesIncobrables, accesoriosRaw, mixSegmentos] = await Promise.all([
     fetchContracargos().catch(() => ({ monto_contracargos: 0, monto_total_ventas: 0, porcentaje: 0, cantidad: 0, ordenes_afectadas: 0 })),
     fetchVentasHistoricas().catch(() => []),
-    fetchConversionGocuotas().catch(() => []),
+    fetchConversionGocuotas().catch(() => ({ diaria: [], mensual: [], ordenesPorUsuario30d: null })),
     supabase.from('consignatarios').select('nombre, store_prefix'),
     supabase.from('dispositivos').select('*', { count: 'exact', head: true }).eq('estado', 'asignado'),
     getMejorPrecio(),
@@ -72,46 +72,73 @@ export default async function DashboardPage() {
 
   const tiempoEntregaCard = (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h2 className="text-base font-semibold text-gray-900 mb-4">Tiempo promedio de entrega</h2>
-      <div className="space-y-4">
-        <div>
-          <p className="text-xs text-gray-500 mb-1">Orden confirmada → entregado</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-bold text-gray-900">{tiempoEntrega.promedioEntrega30d}</p>
-            <p className="text-sm text-gray-500">días</p>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Tiempo de entrega</h2>
+        <p className="text-sm text-gray-500">últimos 30 días · desde la confirmación</p>
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-blue-700">Entregado al cliente</h3>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl font-bold text-blue-700">{tiempoEntrega.promedioEntrega30d}</p>
+              <p className="text-xs text-gray-400">días</p>
+            </div>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">
-            promedio 30d · mediana {tiempoEntrega.medianaEntrega30d} · {tiempoEntrega.entregas30d.toLocaleString('es-AR')} entregas
+          <p className="text-sm text-gray-500 mt-2">
+            mediana <span className="font-semibold text-gray-700">{tiempoEntrega.medianaEntrega30d} días</span> · {tiempoEntrega.entregas30d.toLocaleString('es-AR')} entregas
           </p>
         </div>
-        <div className="border-t border-gray-100 pt-3">
-          <p className="text-xs text-gray-500 mb-1">Orden confirmada → tracking Andreani</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-xl font-bold text-gray-700">{tiempoEntrega.mediana30d}</p>
-            <p className="text-sm text-gray-500">días</p>
+
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-gray-700">Despachado (tracking)</h3>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl font-bold text-gray-700">{tiempoEntrega.mediana30d}</p>
+              <p className="text-xs text-gray-400">días</p>
+            </div>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">mediana 30d · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos · histórico {tiempoEntrega.medianaDias}</p>
+          <p className="text-sm text-gray-500 mt-2">
+            mediana · {tiempoEntrega.envios30d.toLocaleString('es-AR')} envíos con tracking
+          </p>
         </div>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-sm text-gray-500 mb-1">Histórico completo</p>
+        <p className="text-xl font-bold text-gray-900">
+          {tiempoEntrega.medianaDias} días <span className="text-sm font-normal text-gray-500">mediana al despacho · {tiempoEntrega.totalEnvios.toLocaleString('es-AR')} envíos</span>
+        </p>
       </div>
     </div>
   )
 
   const accesoriosCard = (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h2 className="text-base font-semibold text-gray-900 mb-4">Ventas con Accesorios</h2>
-      <div className="flex items-baseline gap-2">
-        <p className="text-3xl font-bold text-gray-900">{accesorios.pct.toLocaleString('es-AR')}%</p>
-        <p className="text-sm text-gray-500">de las órdenes</p>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Ventas con Accesorios</h2>
+        <p className="text-sm text-gray-500">órdenes pagas de los últimos 30 días</p>
       </div>
-      <p className="text-sm text-gray-500 mt-1">
-        {accesorios.conAccesorios.toLocaleString('es-AR')} de {accesorios.ordenes.toLocaleString('es-AR')} órdenes 30d
-      </p>
-      <p className="text-sm text-gray-500">
-        {accesorios.monto >= 1e6
-          ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
-          : formatearMoneda(accesorios.monto)}{' '}
-        facturados
-      </p>
+
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-emerald-700">Llevan accesorio</h3>
+          <p className="text-2xl font-bold text-emerald-700">{accesorios.pct.toLocaleString('es-AR')}%</p>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          <span className="font-semibold text-gray-700">{accesorios.conAccesorios.toLocaleString('es-AR')}</span> de {accesorios.ordenes.toLocaleString('es-AR')} órdenes
+        </p>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-sm text-gray-500 mb-1">Facturado en accesorios (30d)</p>
+        <p className="text-xl font-bold text-gray-900">
+          {accesorios.monto >= 1e6
+            ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
+            : formatearMoneda(accesorios.monto)}
+        </p>
+      </div>
     </div>
   )
 

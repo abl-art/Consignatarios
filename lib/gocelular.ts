@@ -1690,42 +1690,73 @@ async function fetchBloqueadosVsMoraLive(): Promise<BloqueadosVsMoraData> {
   }
 }
 
-export interface ConversionDiaria {
-  fecha: string // YYYY-MM-DD
+export interface ConversionPunto {
+  fecha: string // YYYY-MM-DD (serie diaria) o YYYY-MM (serie mensual)
   total: number
   delivered: number
-  pct: number
+  usuarios: number
+  usuariosConf: number
+}
+
+export interface ConversionGocuotas {
+  diaria: ConversionPunto[]
+  mensual: ConversionPunto[]
+  /** Órdenes creadas por usuario único (30 días) — señal de fricción del checkout. */
+  ordenesPorUsuario30d: number | null
 }
 
 /**
- * Porcentaje de conversión (delivered_at IS NOT NULL / total) por día
- * desde la tabla `orders` de GOcuotas directamente.
+ * Conversión del checkout desde la tabla `orders` de GOcuotas directa, por
+ * creación de la orden. Dos denominadores (análisis de Emiliano 3/11/2026):
+ * por USUARIO único (la tasa principal — el rebote al checkout crea ~1,6
+ * órdenes por usuario y a nivel orden la conversión se subestima) y por
+ * ORDEN (termómetro de fricción). La serie mensual se calcula con DISTINCT
+ * real por mes: sumar los distintos diarios contaría dos veces al usuario
+ * que reintenta en días distintos.
  */
-async function fetchConversionGocuotasLive(): Promise<ConversionDiaria[]> {
+async function fetchConversionGocuotasLive(): Promise<ConversionGocuotas> {
+  const vacio: ConversionGocuotas = { diaria: [], mensual: [], ordenesPorUsuario30d: null }
   const pool = getGocuotasPool()
-  if (!pool) return []
+  if (!pool) return vacio
 
   const client = await pool.connect()
   try {
-    const res = await client.query<{ fecha: Date; total: string; delivered: string; pct: string }>(
-      `SELECT
-        created_at::date AS fecha,
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) AS delivered,
-        ROUND(100.0 * COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) / NULLIF(COUNT(*), 0), 2) AS pct
+    await client.query(`SET statement_timeout = '50s'`)
+    const selectConv = (bucket: string) => `
+      SELECT ${bucket} AS fecha,
+        COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE delivered_at IS NOT NULL)::text AS delivered,
+        COUNT(DISTINCT user_id)::text AS usuarios,
+        COUNT(DISTINCT user_id) FILTER (WHERE delivered_at IS NOT NULL)::text AS usuarios_conf
       FROM orders
       WHERE client_id::text IN (${SQL_IDS_PROPIOS})
         AND discarded_at IS NULL
         AND created_at >= '2026-01-01'
       GROUP BY 1
       ORDER BY 1`
+    type Fila = { fecha: string; total: string; delivered: string; usuarios: string; usuarios_conf: string }
+    const diaRes = await client.query<Fila>(selectConv(`created_at::date::text`))
+    const mesRes = await client.query<Fila>(selectConv(`to_char(created_at, 'YYYY-MM')`))
+    const ratioRes = await client.query<{ ratio: string | null }>(
+      `SELECT ROUND(COUNT(*)::numeric / NULLIF(COUNT(DISTINCT user_id), 0), 2)::text AS ratio
+       FROM orders
+       WHERE client_id::text IN (${SQL_IDS_PROPIOS})
+         AND discarded_at IS NULL
+         AND created_at >= now() - interval '30 days'`
     )
-    return res.rows.map(r => ({
-      fecha: r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha).slice(0, 10),
-      total: Number(r.total),
-      delivered: Number(r.delivered),
-      pct: Number(r.pct),
-    }))
+    const mapear = (rows: Fila[]): ConversionPunto[] =>
+      rows.map(r => ({
+        fecha: r.fecha,
+        total: Number(r.total),
+        delivered: Number(r.delivered),
+        usuarios: Number(r.usuarios),
+        usuariosConf: Number(r.usuarios_conf),
+      }))
+    return {
+      diaria: mapear(diaRes.rows),
+      mensual: mapear(mesRes.rows),
+      ordenesPorUsuario30d: ratioRes.rows[0]?.ratio ? Number(ratioRes.rows[0].ratio) : null,
+    }
   } finally {
     client.release()
   }
