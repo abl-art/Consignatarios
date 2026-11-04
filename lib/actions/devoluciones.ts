@@ -62,6 +62,10 @@ export interface FilaDevolucion {
   banderaPedro: string | null
   /** Devolución pedida por el webhook del 360 (devoluciones_pedidas); null si la fila nació de un shipment return */
   pedidaWebhook: { modalidad: string; estado: string | null } | null
+  /** true = el tracking vigente salió de devoluciones_retracking (carga MANUAL
+   * en andreani.com porque la generación por el circuito falló) — el de la
+   * réplica está muerto y no se usa */
+  trackingManual: boolean
 }
 
 interface ReturnRaw {
@@ -214,6 +218,32 @@ async function getDevolucionesPedidas(): Promise<DevolucionPedidaRow[]> {
   }
 }
 
+interface RetrackingRow {
+  tracking: string
+  createdAt: string
+}
+
+// Trackings vigentes de devoluciones recargadas A MANO en andreani.com
+// (devoluciones_retracking, por orden): cuando la generación por el circuito
+// de Pedro falla, Andreani crea los envíos con tracking nuevo y el del
+// shipment return de la réplica queda muerto. Si la query falla, la pestaña
+// sigue con los trackings de la réplica.
+async function getRetracking(): Promise<Map<string, RetrackingRow>> {
+  try {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+      .from('devoluciones_retracking')
+      .select('order_number, tracking, created_at')
+    const map = new Map<string, RetrackingRow>()
+    for (const r of data ?? []) {
+      map.set(r.order_number, { tracking: r.tracking, createdAt: r.created_at })
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
 // Mismo contexto de orden/equipo que la query principal, pero arrancando de la
 // orden (la devolución pedida por webhook todavía no tiene shipment return).
 async function contextoPorOrden(orderNumbers: string[]): Promise<Map<string, Omit<ReturnRaw, 'ret_tracking' | 'ret_creado'>>> {
@@ -276,21 +306,36 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
   )
 
   const ahora = new Date()
-  const [seguimientos, pedidas] = await Promise.all([getSeguimientoDevoluciones(), getDevolucionesPedidas()])
+  const [seguimientos, pedidas, retracking] = await Promise.all([
+    getSeguimientoDevoluciones(),
+    getDevolucionesPedidas(),
+    getRetracking(),
+  ])
 
   // Pedidas por webhook sin shipment return en la réplica todavía → fila sintética
   const sinShipment = devolucionesPedidasSinShipment(
     pedidas,
     rows.map(r => ({ orderNumber: r.order_number, tracking: r.ret_tracking ?? null })),
   )
-  const contextos = await contextoPorOrden(sinShipment.map(p => p.orderNumber))
+  // Recargas manuales de Andreani sin fila propia (ni shipment ni pedida):
+  // también fila sintética, con el tracking manual como devolución vigente
+  const ordenesConFila = new Set([...rows.map(r => r.order_number), ...sinShipment.map(p => p.orderNumber)])
+  const retrackingSinFila = [...retracking.entries()].filter(([orden]) => !ordenesConFila.has(orden))
+  const contextos = await contextoPorOrden([
+    ...sinShipment.map(p => p.orderNumber),
+    ...retrackingSinFila.map(([orden]) => orden),
+  ])
   const sinteticas = Promise.all(
     sinShipment.map(async (p): Promise<FilaDevolucion> => {
       const c = contextos.get(p.orderNumber)
-      const seguimiento = p.tracking ? seguimientos.get(p.tracking) : undefined
+      // El retracking manual pisa al tracking de la pedida (si Andreani la
+      // recargó a mano, el de la pedida quedó muerto)
+      const manual = retracking.get(p.orderNumber)
+      const trackingVigente = manual?.tracking ?? p.tracking
+      const seguimiento = trackingVigente ? seguimientos.get(trackingVigente) : undefined
       const [entrega, devolucion, pedroEstado] = await Promise.all([
         consultarAndreani(c?.out_tracking ?? null, ahora),
-        consultarAndreani(p.tracking, ahora),
+        consultarAndreani(trackingVigente, ahora),
         // Resueltas no gastan requests a Pedro (mismo criterio que Rescates)
         seguimiento?.resueltoAt ? Promise.resolve(null) : consultarPedro(p.orderNumber),
       ])
@@ -316,6 +361,51 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         pedroEstado,
         banderaPedro: banderaDiscrepancia(devolucion.estadoActual, pedroEstado),
         pedidaWebhook: { modalidad: p.modalidad, estado: p.estado },
+        trackingManual: !!manual,
+        banderas: banderasDevolucion({
+          entregaEstado: entrega.estadoActual,
+          inventarioStatus: c?.inv_status ?? null,
+          trustonicObservado: c?.tru_obs ?? null,
+          ordenAnulada,
+          devolucionEventos: devolucion.tramos.length,
+        }),
+      }
+    }),
+  )
+
+  // Recargas manuales sin ninguna otra fila → sintética con el tracking manual
+  const manuales = Promise.all(
+    retrackingSinFila.map(async ([orden, manual]): Promise<FilaDevolucion> => {
+      const c = contextos.get(orden)
+      const seguimiento = seguimientos.get(manual.tracking)
+      const [entrega, devolucion, pedroEstado] = await Promise.all([
+        consultarAndreani(c?.out_tracking ?? null, ahora),
+        consultarAndreani(manual.tracking, ahora),
+        seguimiento?.resueltoAt ? Promise.resolve(null) : consultarPedro(orden),
+      ])
+      const ordenAnulada = c?.go_status === 'discarded'
+      return {
+        orderNumber: orden,
+        gocuotasOrderId: c?.gocuotas_order_id ?? null,
+        cliente: c?.cliente ?? '—',
+        dni: c?.dni ?? null,
+        producto: c?.producto ?? '—',
+        imei: c?.out_imei ?? null,
+        ciudad: c?.ciudad ?? null,
+        provincia: c?.provincia ?? null,
+        returnCreadoAt: manual.createdAt,
+        ordenAnulada,
+        gocuotasStatus: c?.go_status ?? null,
+        inventarioStatus: c?.inv_status ?? null,
+        trustonicObservado: c?.tru_obs ?? null,
+        entrega,
+        devolucion,
+        recibidoWhGo: seguimiento?.recibidoWhGo ?? false,
+        resueltoAt: seguimiento?.resueltoAt ?? null,
+        pedroEstado,
+        banderaPedro: banderaDiscrepancia(devolucion.estadoActual, pedroEstado),
+        pedidaWebhook: null,
+        trackingManual: true,
         banderas: banderasDevolucion({
           entregaEstado: entrega.estadoActual,
           inventarioStatus: c?.inv_status ?? null,
@@ -329,10 +419,14 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
 
   const deShipments = Promise.all(
     rows.map(async (r): Promise<FilaDevolucion> => {
-      const seguimiento = seguimientos.get(r.ret_tracking)
+      // Recarga manual en andreani.com → el tracking de la réplica está muerto:
+      // se consulta y muestra el manual (tildes incluidos, por el tracking vigente)
+      const manual = retracking.get(r.order_number)
+      const retTracking = manual?.tracking ?? r.ret_tracking
+      const seguimiento = seguimientos.get(retTracking)
       const [entrega, devolucion, pedroEstado] = await Promise.all([
         consultarAndreani(r.out_tracking, ahora),
-        consultarAndreani(r.ret_tracking, ahora),
+        consultarAndreani(retTracking, ahora),
         // Resueltas no gastan requests a Pedro (mismo criterio que Rescates)
         seguimiento?.resueltoAt ? Promise.resolve(null) : consultarPedro(r.order_number),
       ])
@@ -346,7 +440,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
         imei: r.out_imei,
         ciudad: r.ciudad,
         provincia: r.provincia,
-        returnCreadoAt: r.ret_creado,
+        returnCreadoAt: manual ? manual.createdAt : r.ret_creado,
         ordenAnulada,
         gocuotasStatus: r.go_status,
         inventarioStatus: r.inv_status,
@@ -363,6 +457,7 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
           const pedida = pedidas.find(p => p.orderNumber === r.order_number || (p.tracking !== null && p.tracking === r.ret_tracking))
           return pedida ? { modalidad: pedida.modalidad, estado: null } : null
         })(),
+        trackingManual: !!manual,
         banderas: banderasDevolucion({
           entregaEstado: entrega.estadoActual,
           inventarioStatus: r.inv_status,
@@ -374,6 +469,6 @@ export async function getDevoluciones(): Promise<FilaDevolucion[]> {
     }),
   )
 
-  const [a, b] = await Promise.all([sinteticas, deShipments])
-  return [...a, ...b]
+  const [a, b, c] = await Promise.all([sinteticas, manuales, deShipments])
+  return [...a, ...b, ...c]
 }

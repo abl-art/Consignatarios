@@ -80,6 +80,7 @@ function filaNueva(nombre: string): StockConPedidoRow {
 export function aplicarPedidos(
   rows: StockWarehouseRow[],
   pedidos: PedidoGestor[],
+  opts: { confiarTransitoBase?: boolean } = {},
 ): StockConPedidoRow[] {
   // cantidades por nombre crudo (para crear filas nuevas con nombre lindo)
   const pedidoPorNombre = new Map<string, number>()
@@ -126,10 +127,18 @@ export function aplicarPedidos(
     filaPara(nombre).pedido += cantidad
   }
 
-  for (const [nombre, cantidad] of transitoPorNombre) {
-    const fila = filaPara(nombre)
-    fila.enTransito = Math.max(fila.enTransito, cantidad)
-    if (!fila.enTransitoDesde) fila.enTransitoDesde = transitoDesde.get(nombre) ?? null
+  // GOmarket (confiarTransitoBase): el inventario commerce ya trackea el ciclo
+  // in_transit→sellable, así que el tránsito de la fila es la fuente de verdad.
+  // No lo pisamos con la cantidad del pedido informado — ese pedido nunca se
+  // marca ingresado para gomarket (el sync solo mira tablas de GOcelular) y
+  // quedaría como tránsito fantasma eterno, doble-contando con commerce
+  // (caso Xiaomi Robot Vacuum S40C, oct 2026).
+  if (!opts.confiarTransitoBase) {
+    for (const [nombre, cantidad] of transitoPorNombre) {
+      const fila = filaPara(nombre)
+      fila.enTransito = Math.max(fila.enTransito, cantidad)
+      if (!fila.enTransitoDesde) fila.enTransitoDesde = transitoDesde.get(nombre) ?? null
+    }
   }
 
   return resultado

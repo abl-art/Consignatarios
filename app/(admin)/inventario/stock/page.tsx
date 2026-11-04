@@ -31,7 +31,7 @@ export default async function StockPage() {
       ...r,
       negocio: negocioDe(r.sku, r.nombre, mapaNegocio),
     })),
-    ...completarDisponibilidad(aplicarPedidos(gomarketRows, porPlataforma.gomarket), pendientes).map((r) => ({
+    ...completarDisponibilidad(aplicarPedidos(gomarketRows, porPlataforma.gomarket, { confiarTransitoBase: true }), pendientes).map((r) => ({
       ...r,
       negocio: 'gomarket' as const,
     })),

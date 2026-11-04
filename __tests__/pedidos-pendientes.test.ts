@@ -168,6 +168,41 @@ describe('pedidos informados cuentan como En tránsito con datos del gestor', ()
   })
 })
 
+describe('confiarTransitoBase: GOmarket delega el tránsito a commerce', () => {
+  // Caso real Xiaomi Robot Vacuum S40C (oct 2026): commerce ya reporta los 5 en
+  // andreani_wh (tránsito 0), pero el pedido informado nunca se marca ingresado
+  // para gomarket (el sync no mira tablas commerce) y pisaba el 0 con 5 → doble
+  // conteo. Con la opción activa el tránsito de la fila (commerce) es la verdad.
+  it('un informado NO pisa el tránsito de la fila (commerce manda)', () => {
+    const p = pedido({
+      gocelular: { estado: 'informado', enviadoAt: '2026-10-21T16:20:39.673Z' },
+      items: [{ productoNombre: 'Xiaomi Robot Vacuum S40C', productoCodigo: 'BHR9664EU', cantidad: 5 }],
+    })
+    const base = fila({ sku: 'BHR9664EU', nombre: 'Xiaomi Robot Vacuum S40C', tipo: 'accesorio', whAndreani: 5, total: 5, enTransito: 0 })
+    const rows = aplicarPedidos([base], [p], { confiarTransitoBase: true })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].enTransito).toBe(0)
+    expect(rows[0].pedido).toBe(0)
+  })
+
+  it('un informado no genera fila fantasma en tránsito cuando se confía en commerce', () => {
+    const p = pedido({
+      gocelular: { estado: 'informado', enviadoAt: '2026-10-21T16:20:39.673Z' },
+      items: [{ productoNombre: 'Modelo GOmarket sin fila', cantidad: 3 }],
+    })
+    const rows = aplicarPedidos([], [p], { confiarTransitoBase: true })
+    expect(rows).toHaveLength(0)
+  })
+
+  it('la columna Pedido (sin informar) se mantiene: commerce aún no lo conoce', () => {
+    const p = pedido({ items: [{ productoNombre: 'Xiaomi Robot Vacuum S40C', productoCodigo: 'BHR9664EU', cantidad: 5 }] })
+    const base = fila({ sku: 'BHR9664EU', nombre: 'Xiaomi Robot Vacuum S40C', tipo: 'accesorio', whAndreani: 0, total: 0 })
+    const rows = aplicarPedidos([base], [p], { confiarTransitoBase: true })
+    expect(rows[0].pedido).toBe(5)
+    expect(rows[0].enTransito).toBe(0)
+  })
+})
+
 describe('variantes de capacidad con "+" (caso real Redmi A5, oct 2026)', () => {
   // GOcelular llama al modelo "Xiaomi Redmi A5" a secas; el gestor lo cargó
   // como "Xiaomi Redmi A5 4+128GB " — el pedido debe sumarse a la fila del

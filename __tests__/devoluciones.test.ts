@@ -265,6 +265,7 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
     dni: null,
     producto: 'Producto',
     imei: null,
+    trackingManual: false,
     ciudad: null,
     provincia: null,
     returnCreadoAt: '2026-10-01T00:00:00Z',

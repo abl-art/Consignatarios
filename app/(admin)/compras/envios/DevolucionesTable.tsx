@@ -299,7 +299,17 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
                 {d.inventarioStatus && <div className="text-[10px] text-gray-400">stock: {d.inventarioStatus}</div>}
               </td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.entrega} /></td>
-              <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.devolucion} /></td>
+              <td className="py-2 pr-3 min-w-[220px]">
+                <Seguimiento s={d.devolucion} />
+                {d.trackingManual && (
+                  <span
+                    className="inline-block mt-1 px-1.5 py-0.5 rounded-full border text-[11px] font-medium bg-amber-50 text-amber-700 border-amber-200"
+                    title="Tracking recargado A MANO en andreani.com (op. 1172302) — el envío generado por el circuito falló y este es el seguimiento vigente"
+                  >
+                    ✍ recarga manual
+                  </span>
+                )}
+              </td>
               <td className="py-2 pr-3">
                 <div className="space-y-1">
                   <PedroChip estado={d.pedroEstado} />
