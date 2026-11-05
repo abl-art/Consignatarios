@@ -56,7 +56,7 @@ export default function BotonSincronizarSeguros({ ultimaSync }: { ultimaSync: st
         className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-full px-3 py-1 hover:border-gray-400 disabled:opacity-60"
         title="Corre la sincronización completa ahora (emisión de certificados, novedades, mora, mails). El cron la corre solo cada hora."
       >
-        {corriendo ? 'Sincronizando…' : '↻ Sincronizar ahora'}
+        {corriendo ? 'Sincronizando… (puede tardar ~1 min)' : '↻ Sincronizar ahora'}
       </button>
       {resultado && <span className="text-xs text-green-700">{resultado}</span>}
       {error && <span className="text-xs text-red-600">{error}</span>}

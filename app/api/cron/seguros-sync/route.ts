@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { sincronizarSeguros } from '@/lib/actions/seguros'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 300
 
 // Sincronización diaria de Seguros por Robo: emite certificados de ventas
 // nuevas, reintenta los que quedaron 'pendiente' por falta de costo y aplica

@@ -32,7 +32,10 @@ import CierresTab from '@/components/seguros/CierresTab'
 // lecturas batch a la réplica. force-dynamic porque las server actions
 // revalidan '/seguros' y el RSC payload no debe quedar cacheado.
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// 300 y no 60: el botón "Sincronizar ahora" corre como server action DE ESTA
+// RUTA y la corrida completa con backlog de mails puede pasar el minuto
+// (medido 45s con 17 mails el 5/11). La página en sí carga en segundos.
+export const maxDuration = 300
 
 const CONFIG_VACIA: SegurosConfig = { activo: false, activadoAt: null, parametros: [] }
 

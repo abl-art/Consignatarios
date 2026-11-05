@@ -399,7 +399,10 @@ export async function getVentasPorAsegurar(): Promise<VentaPorAsegurar[]> {
 }
 
 /** Mails de bienvenida por corrida — mantiene el sync dentro del maxDuration y lejos del límite diario de Gmail. */
-const LOTE_MAILS = 50
+// 15 y no 50: cada mail renderiza el PDF de constancia y sale por SMTP en
+// serie (~2s c/u) — un lote grande hace eterna la corrida (el botón de
+// /seguros la espera). Con el cron horario el excedente sale en la siguiente.
+const LOTE_MAILS = 15
 
 /**
  * Envía el mail de bienvenida a los certificados emitidos que aún no lo
