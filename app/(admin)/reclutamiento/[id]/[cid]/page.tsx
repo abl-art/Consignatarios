@@ -7,6 +7,7 @@ import EditarScores from '@/components/reclutamiento/EditarScores'
 import EntrevistaCard from '@/components/reclutamiento/EntrevistaCard'
 import EntrevistaPersonal from '@/components/reclutamiento/EntrevistaPersonal'
 import NuevaEntrevista from '@/components/reclutamiento/NuevaEntrevista'
+import Anotaciones from '@/components/reclutamiento/Anotaciones'
 
 export default async function CandidatoPage({ params }: { params: { id: string; cid: string } }) {
   const candidato = await getCandidato(params.cid)
@@ -69,6 +70,8 @@ export default async function CandidatoPage({ params }: { params: { id: string; 
           </div>
         )}
       </div>
+
+      <Anotaciones candidatoId={candidato.id} valor={candidato.anotaciones} />
 
       <EntrevistaPersonal candidatoId={candidato.id} entrevista={candidato.entrevistaPersonal} />
 

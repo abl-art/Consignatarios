@@ -74,6 +74,8 @@ export interface CandidatoRow {
   assessment_nota: string | null
   // Remuneración actual o pretendida (texto libre, editable en el cuadro)
   remuneracion: string | null
+  // Anotaciones libres: impresiones al ver la entrevista y leer los datos
+  anotaciones: string | null
   entrevistas: EntrevistaRow[]
 }
 
@@ -110,6 +112,7 @@ export async function getBusqueda(id: string): Promise<BusquedaCompleta | null> 
       assessment: (c.assessment as Assessment) || 'pendiente',
       assessment_nota: (c.assessment_nota as string) || null,
       remuneracion: (c.remuneracion as string) || null,
+      anotaciones: (c.anotaciones as string) || null,
       entrevistas: ((c.rec_entrevistas as EntrevistaRow[]) || []).sort((a, b) =>
         a.created_at.localeCompare(b.created_at)
       ),
@@ -156,6 +159,7 @@ export async function getCandidato(id: string): Promise<CandidatoCompleto | null
     assessment: (data.assessment as Assessment) || 'pendiente',
     assessment_nota: data.assessment_nota,
     remuneracion: data.remuneracion ?? null,
+    anotaciones: data.anotaciones ?? null,
     entrevistas: ((data.rec_entrevistas as EntrevistaRow[]) || []).sort((a, b2) =>
       a.created_at.localeCompare(b2.created_at)
     ),
@@ -209,6 +213,18 @@ export async function setRemuneracion(candidatoId: string, remuneracion: string)
     .eq('id', candidatoId)
   if (error) throw new Error(error.message)
   revalidatePath('/reclutamiento')
+}
+
+// Anotaciones libres del candidato (autoguardado desde el cuadro; sin
+// revalidatePath para no interrumpir la escritura en vivo, igual que las
+// respuestas de la entrevista personal).
+export async function setAnotaciones(candidatoId: string, anotaciones: string): Promise<void> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('rec_candidatos')
+    .update({ anotaciones: anotaciones.trim() || null })
+    .eq('id', candidatoId)
+  if (error) throw new Error(error.message)
 }
 
 export async function guardarScores(
