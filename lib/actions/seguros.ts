@@ -174,6 +174,40 @@ function enLotes<T>(items: T[], tamano: number): T[][] {
 /** Ventana mínima entre corridas de sincronización disparadas por visitas a /seguros. */
 const SYNC_THROTTLE_MS = 10 * 60 * 1000
 
+/** Última sincronización completa (flujo_config), para el chip de la página. */
+export async function getUltimaSyncSeguros(): Promise<string | null> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('flujo_config')
+    .select('value')
+    .eq('key', 'seguros_last_sync_at')
+    .maybeSingle()
+  return typeof data?.value === 'string' ? data.value : null
+}
+
+/**
+ * Sincronización manual desde el botón de /seguros (fuerza, ignora el
+ * throttle). La página ya NO sincroniza al cargar — el timeout venía de ahí:
+ * la corrida completa lee la base directa de GOcuotas y en la ventana del
+ * backup (madrugada) la conexión espera hasta 55s y revienta los 60s de la
+ * página. Ahora sincronizan el cron horario y este botón.
+ */
+export async function sincronizarSegurosAhora(): Promise<{
+  ok: boolean
+  emitidos?: number
+  novedades?: number
+  mails?: number
+  error?: string
+}> {
+  try {
+    const r = await sincronizarSeguros({ force: true })
+    revalidatePath('/seguros')
+    return { ok: true, ...r }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error desconocido al sincronizar' }
+  }
+}
+
 export async function sincronizarSeguros(opts?: { force?: boolean }): Promise<{ emitidos: number; novedades: number; mails: number }> {
   const supabase = createAdminClient()
 

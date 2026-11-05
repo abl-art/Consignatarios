@@ -42,7 +42,7 @@
     },
     {
       "path": "/api/cron/seguros-sync",
-      "schedule": "0 12 * * *"
+      "schedule": "15 * * * *"
     },
     {
       "path": "/api/cron/seguros-cierre",

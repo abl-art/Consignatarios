@@ -4,9 +4,10 @@ import {
   getSiniestros,
   getCierres,
   getVentasPorAsegurar,
-  sincronizarSeguros,
+  getUltimaSyncSeguros,
   type SegurosConfig,
 } from '@/lib/actions/seguros'
+import BotonSincronizarSeguros from '@/components/seguros/BotonSincronizarSeguros'
 import {
   devengoMensual,
   tasaSiniestralidad,
@@ -24,10 +25,12 @@ import ResultadoTab from '@/components/seguros/ResultadoTab'
 import SiniestrosTab from '@/components/seguros/SiniestrosTab'
 import CierresTab from '@/components/seguros/CierresTab'
 
-// Siempre fresco: sincronizarSeguros() corre emisión/novedades al visitar
-// (con throttle de 10 min — audit de Pedro 31/10; el cron diario fuerza)
-// y las server actions (activar/desactivar, setParametro) ya revalidan
-// '/seguros' — sin esto el RSC payload podría quedar cacheado entre cargas.
+// La página NO sincroniza al cargar (daba timeout: la corrida completa lee
+// la base directa de GOcuotas y en la ventana del backup la conexión espera
+// hasta 55s). Sincronizan el cron horario (seguros-sync) y el botón
+// "Sincronizar ahora" del header; acá solo se renderiza lo persistido +
+// lecturas batch a la réplica. force-dynamic porque las server actions
+// revalidan '/seguros' y el RSC payload no debe quedar cacheado.
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
@@ -37,15 +40,7 @@ export default async function SegurosPage() {
   const usuario = await getUsuarioActual()
   const operar = usuario?.rol === 'admin' || puedeOperar(usuario?.permisos ?? {}, 'seguros')
 
-  // sincronizarSeguros() puede fallar (lecturas a GOcelular/GOcuotas, RPCs de
-  // emisión) — se captura y se muestra una banda de aviso, pero la página
-  // sigue renderizando con lo que ya está persistido (config + certificados).
-  let syncError: string | null = null
-  try {
-    await sincronizarSeguros()
-  } catch (e) {
-    syncError = e instanceof Error ? e.message : 'Error desconocido al sincronizar'
-  }
+  const ultimaSync = await getUltimaSyncSeguros().catch(() => null)
 
   // getCertificados() ya swallowea errores de query devolviendo [] (ver
   // lib/actions/seguros.ts), pero un fallo antes de esa query (ej.
@@ -173,14 +168,12 @@ export default async function SegurosPage() {
         >
           📖 Manual operativo
         </a>
+        <BotonSincronizarSeguros ultimaSync={ultimaSync} />
       </div>
       <p className="text-sm text-gray-500 mb-6">Certificados, prima mensual y resultado del seguro por robo</p>
 
-      {(syncError || certificadosError || siniestrosError || cierresError) && (
+      {(certificadosError || siniestrosError || cierresError) && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 space-y-1">
-          {syncError && (
-            <p>No se pudo sincronizar automáticamente ({syncError}). Mostrando el último estado guardado.</p>
-          )}
           {certificadosError && (
             <p>No se pudieron leer los certificados — la tabla puede verse vacía aunque haya certificados cargados. Reintentá recargando la página.</p>
           )}
