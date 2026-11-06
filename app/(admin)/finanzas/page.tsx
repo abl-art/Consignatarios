@@ -48,8 +48,18 @@ export default async function FinanzasPage({
   const operarSubitem = (subitem: string) =>
     usuario?.rol === 'admin' || puedeOperar(usuario?.permisos ?? {}, 'finanzas', subitem)
 
+  // El flujo de fondos es lo ÚNICO de la página que lee la base DIRECTA de
+  // GOcuotas — durante la ventana del backup diario (madrugada → ~9:00) esa
+  // base rechaza conexiones y sin este catch moría la página entera. Con el
+  // catch, Finanzas carga igual (PD/DPD/Vintage/Egresos salen de la réplica y
+  // Supabase) y el tab Flujo avisa con un banner.
+  let flujoError = false
+  const FLUJO_VACIO = { total: [], propia: [], terceros: [] }
   const [flujoPorCanal, asistencias, egresosRaw, cuotasStats, egresosStats, proyeccionDiaria, pdIndicadores, dpdIndicadores, vintageData, prestamos, todosMovimientos, deudaConfig, interesesMes, productosFinancieros] = await Promise.all([
-    fetchFlujoDeFondosPorCanal(),
+    fetchFlujoDeFondosPorCanal().catch(() => {
+      flujoError = true
+      return FLUJO_VACIO
+    }),
     fetchAsistencias(),
     fetchEgresos(),
     fetchCuotasStats(),
@@ -158,6 +168,13 @@ export default async function FinanzasPage({
   // no deben entrar al payload de un usuario restringido sin permiso).
   const flujoTab = puedeVerTab('flujo') ? (
     <div>
+      {flujoError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          El flujo de fondos no está disponible en este momento: la base de GOcuotas está en su
+          ventana de backup diario (madrugada hasta ~9:00). El resto de las pestañas funciona
+          normal — recargá la página pasadas las 9:00 para ver el flujo.
+        </div>
+      )}
       <FlujoTab
         canales={{
           total: { flujo, stats: cuotasStats },
@@ -225,6 +242,14 @@ export default async function FinanzasPage({
     <div className="p-4 md:p-6 max-w-full mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Finanzas</h1>
       <p className="text-sm text-gray-500 mb-6">Flujo de fondos y control de caja</p>
+
+      {flujoError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          ⏳ La base de GOcuotas está en su ventana de backup diario (hasta ~9:00): el <b>Flujo de
+          fondos</b> no tiene datos y las alertas de deuda no se calculan. Todo lo demás (Payment
+          Defaults, DPD, Vintage, Egresos, Deuda, Resultado) está al día.
+        </div>
+      )}
 
       <DeudaAlerts alertas={deudaAlertas} />
 
