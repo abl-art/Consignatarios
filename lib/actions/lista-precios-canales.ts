@@ -9,6 +9,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  fetchPreciosListingGomarket,
   fetchPreciosTiendaCelulares,
   fetchPreciosTiendaPorSku,
   fetchVentasPorModelo,
@@ -16,6 +17,8 @@ import {
   fetchVentasPropiasConFactura,
 } from '@/lib/gocelular'
 import { normalizarModelo } from '@/lib/inventario-indicadores'
+import { armarListaGomarket, type FilaGomarket } from '@/lib/lista-precios-gomarket'
+import { getCategoriasGomarket } from '@/lib/actions/sync-gomarket'
 import { armarMargenExtraMensual, type DevengoMensual } from '@/lib/margen-extra'
 import { armarNotasCredito, marcaNC, resumenVentasAccion, PROVEEDOR_NC, type GrupoNC } from '@/lib/notas-credito'
 import { renderNcAccion } from '@/lib/pdf/nc-accion'
@@ -213,9 +216,11 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
 
   const [{ data: prods }, { data: precios }, { data: provs }, { data: cfg }, registrosBase, preciosTienda, preciosTiendaSku, ventasDiarias, ventasPropias, seguroCfg, seguroParams] =
     await Promise.all([
-      // Todas las categorías: celulares entran por ventas 30d, el resto
-      // (tablets, accesorios, kits) aparece al fijarse con "+ Agregar modelo"
-      supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto'),
+      // Todas las categorías de la tienda GOCELULAR: celulares entran por
+      // ventas 30d, el resto (tablets, accesorios, kits) al fijarse con
+      // "+ Agregar modelo". Los productos GOmarket tienen su propia vista
+      // (getListaPreciosGomarket) y quedan afuera de esta.
+      supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto').neq('plataforma', 'gomarket'),
       supabase.from('compras_precios').select('producto_id, proveedor_id, precio, created_at').order('created_at', { ascending: false }),
       supabase.from('compras_proveedores').select('id, nombre'),
       supabase.from('flujo_config').select('key, value').like('key', 'listaprecios_%'),
@@ -313,12 +318,14 @@ export async function getListaPrecios(opts?: { fechaSimulada?: string }): Promis
   return armarListaPrecios(productos, costosPorProducto, multiplos, preciosTienda, ventas30d, bonos, ahora, ventasPropias, incluidos, preciosTiendaSku, recargoSeguro)
 }
 
-/** Catálogo completo de productos (no ocultos) para el desplegable "Agregar modelo". */
+/** Catálogo de productos GOcelular (no ocultos) para el desplegable "Agregar
+ * modelo" de la lista GOcelular — los GOmarket viven en su propia pestaña. */
 export async function getModelosAgregables(): Promise<{ id: string; nombre: string; categoria: string }[]> {
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('compras_productos')
     .select('id, nombre, categoria, oculto')
+    .neq('plataforma', 'gomarket')
     .order('categoria')
     .order('nombre')
   return (data ?? [])
@@ -614,6 +621,91 @@ export async function setMultiploListaPrecios(productoId: string, multiplo: numb
   const { error } = await supabase.from('flujo_config').upsert({
     key: `${MULTIPLO_KEY}${productoId}`,
     value: String(multiplo),
+    updated_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/canales/lista-precios')
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Lista de precios GOmarket (pestaña propia — spec 2026-11-11)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_MULTIPLO_GM_KEY = 'listaprecios_default_multiplo_gm'
+const DEFAULT_MULTIPLO_GM = 1.4
+
+/**
+ * Vista GOmarket: todos los productos de esa plataforma (sin gate de ventas
+ * mientras commerce no venda), costo del gestor, múltiplo por producto (mismo
+ * mecanismo/clave que GOcelular) y el PVP real publicado en GOmarket para la
+ * columna de control de desvíos. La publicación del PVP es manual en su admin.
+ */
+export async function getListaPreciosGomarket(): Promise<{
+  filas: FilaGomarket[]
+  categorias: string[]
+  multiploDefault: number
+}> {
+  const supabase = createAdminClient()
+  const [{ data: prods }, { data: precios }, { data: provs }, { data: cfgDefault }, { data: cfgMultiplos }, preciosListing, categorias] =
+    await Promise.all([
+      supabase.from('compras_productos').select('id, nombre, codigo, categoria, oculto').eq('plataforma', 'gomarket'),
+      supabase.from('compras_precios').select('producto_id, proveedor_id, precio, created_at').order('created_at', { ascending: false }),
+      supabase.from('compras_proveedores').select('id, nombre'),
+      supabase.from('flujo_config').select('value').eq('key', DEFAULT_MULTIPLO_GM_KEY).maybeSingle(),
+      supabase.from('flujo_config').select('key, value').like('key', `${MULTIPLO_KEY}%`),
+      fetchPreciosListingGomarket().catch(() => ({} as Record<string, number>)),
+      getCategoriasGomarket().catch(() => [] as string[]),
+    ])
+
+  const productos = (prods ?? [])
+    .filter(p => !p.oculto)
+    .map(p => ({
+      id: p.id as string,
+      nombre: p.nombre as string,
+      categoria: (p.categoria as string) || null,
+      codigo: (p.codigo as string) || null,
+    }))
+
+  const nombreProveedor = new Map<string, string>((provs ?? []).map(p => [p.id as string, p.nombre as string]))
+  const vistos = new Set<string>()
+  const costosPorProducto: Record<string, { proveedor: string; precio: number }[]> = {}
+  for (const p of precios ?? []) {
+    const key = `${p.producto_id}|${p.proveedor_id}`
+    if (vistos.has(key)) continue
+    vistos.add(key)
+    const proveedor = nombreProveedor.get(p.proveedor_id as string)
+    if (!proveedor) continue
+    ;(costosPorProducto[p.producto_id as string] ??= []).push({ proveedor, precio: Number(p.precio) })
+  }
+
+  const multiplos: Record<string, number> = {}
+  for (const row of cfgMultiplos ?? []) {
+    const valor = Number(row.value)
+    if (Number.isFinite(valor) && valor > 0) multiplos[(row.key as string).slice(MULTIPLO_KEY.length)] = valor
+  }
+
+  const multiploDefault = (() => {
+    const v = Number(cfgDefault?.value)
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_MULTIPLO_GM
+  })()
+
+  return {
+    filas: armarListaGomarket(productos, costosPorProducto, multiplos, multiploDefault, preciosListing),
+    categorias,
+    multiploDefault,
+  }
+}
+
+/** Múltiplo default de GOmarket (aplica a productos sin múltiplo propio). */
+export async function setMultiploDefaultGomarket(valor: number) {
+  if (!Number.isFinite(valor) || valor <= 0 || valor > 10) {
+    return { error: 'El múltiplo debe ser un número mayor a 0' }
+  }
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('flujo_config').upsert({
+    key: DEFAULT_MULTIPLO_GM_KEY,
+    value: String(valor),
     updated_at: new Date().toISOString(),
   })
   if (error) return { error: error.message }

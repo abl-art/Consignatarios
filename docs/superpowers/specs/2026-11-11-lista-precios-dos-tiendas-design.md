@@ -59,7 +59,7 @@ Tabla con columnas: Producto · Categoría · Costo (proveedor elegido, mismo `e
 - Fórmula del PVP sugerido: `cuota = ceil(costo × múltiplo / 9 / 100) × 100; pvp = cuota × 9` — **mi decisión**: misma regla de redondeo a cuota de 9 que GOcelular, porque GOmarket también vende en cuotas GOcuotas; sin recargo de seguro ni bonos.
 - Default de múltiplo GOmarket: clave nueva `listaprecios_multiplo_default_gomarket` en flujo_config, editable desde la UI (un input chico arriba de la tabla). **Mi decisión**: valor inicial **1,40** hasta que Emiliano lo ajuste (el electro lleva menos margen que celulares; es solo el punto de partida, cada producto se pisa individual).
 - Fila sin costo: celda Costo en rojo "sin costo" + link a `/compras/modelos?producto=<id>` para cargarlo.
-- Filtro de categoría: desplegable con las categorías gomarket presentes.
+- Filtro de categoría (aprobado por Emiliano 11/11): pills con las **categorías creadas en el propio GOmarket** (`commerce_categories` activas vía el sync / `getCategoriasGomarket`) — fuente única de verdad, una categoría nueva en GOmarket aparece sola como filtro acá. Default "Todas".
 
 ### 3. Lectura del PVP real de GOmarket
 
