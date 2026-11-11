@@ -85,6 +85,21 @@ export function evaluarResolucion(cw: number, ch: number): { nivel: 'ok' | 'adve
   return { nivel, ladoMayor }
 }
 
+/**
+ * Factor de upscale a pedirle a Real-ESRGAN cuando el producto viene chico,
+ * o null si ya entra nítido (nivel 'ok', factor ≤1,25 — no vale la pena gastar).
+ * Se calcula sobre el lado mayor del producto para que llegue al objetivo
+ * (~1700px); se acota entre 2× y 8× (el modelo admite hasta 10×).
+ */
+export function escalaUpscale(cw: number, ch: number, lienzo = LIENZO_TIENDA, escala = ESCALA_CONTENIDO): number | null {
+  const objetivo = Math.round(lienzo * escala)
+  const lado = Math.max(cw, ch)
+  if (lado <= 0) return null
+  const necesario = objetivo / lado
+  if (necesario <= 1.25) return null
+  return Math.min(8, Math.max(2, Math.ceil(necesario)))
+}
+
 const MARCAS_CONOCIDAS = ['Samsung', 'Motorola', 'Xiaomi', 'Honor', 'Nubia', 'JBL', 'TCL', 'ZTE', 'Redmi'] as const
 
 /**

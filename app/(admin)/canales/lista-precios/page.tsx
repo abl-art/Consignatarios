@@ -9,6 +9,7 @@ import NotasCreditoTable from './NotasCreditoTable'
 import MargenExtraTable from './MargenExtraTable'
 import TabsListaBonos from './TabsListaBonos'
 import TiendaPills from './TiendaPills'
+import { syncProductosGomarket } from '@/lib/actions/sync-gomarket'
 
 export default async function ListaPreciosPage({
   searchParams,
@@ -20,6 +21,12 @@ export default async function ListaPreciosPage({
   // Rama GOmarket: solo sus datos (no corre el armado GOcelular completo).
   // Bonos/NC/Margen extra son reglas del negocio celulares — no se muestran.
   if (tienda === 'gomarket') {
+    // Mismo patrón que /compras/modelos y el gestor: el catálogo GOmarket se
+    // sincroniza desde commerce ANTES de leer — sin esto, un cambio de
+    // categoría/nombre hecho en el admin de GOmarket no se refleja hasta
+    // visitar otra página (caso real: Robot Vacuum 11/11). Best-effort: si
+    // la réplica no responde, se muestra lo persistido.
+    await syncProductosGomarket().catch(() => {})
     const { filas, categorias, multiploDefault } = await getListaPreciosGomarket()
     return (
       <div className="p-4 md:p-6 max-w-full mx-auto">

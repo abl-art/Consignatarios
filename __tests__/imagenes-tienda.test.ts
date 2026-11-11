@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo, evaluarResolucion, marcaDeModelo } from '@/lib/imagenes-tienda'
+import { quitarFondoSolido, bboxAlfa, encajeEnLienzo, slugModelo, evaluarResolucion, escalaUpscale, marcaDeModelo } from '@/lib/imagenes-tienda'
 
 // Arma un buffer RGBA desde una grilla de caracteres: 'B' blanco opaco, 'N' negro opaco,
 // 'R' rojo opaco, '.' transparente
@@ -152,6 +152,31 @@ describe('evaluarResolucion', () => {
   it('el umbral del rechazo: 850 es advertencia, 849 rechazo', () => {
     expect(evaluarResolucion(850, 500).nivel).toBe('advertencia')
     expect(evaluarResolucion(849, 500).nivel).toBe('rechazo')
+  })
+})
+
+describe('escalaUpscale', () => {
+  it('fuente que ya entra nítida (≤1.25x) no se agranda', () => {
+    expect(escalaUpscale(1700, 900)).toBeNull()
+    expect(escalaUpscale(1360, 1000)).toBeNull() // justo el límite 1.25x
+  })
+
+  it('producto mediano pide 2x', () => {
+    expect(escalaUpscale(1000, 800)).toBe(2) // necesita 1.7x → 2
+    expect(escalaUpscale(850, 500)).toBe(2) // necesita 2.0x → 2
+  })
+
+  it('producto chico (nivel rechazo) igual se resuelve con más escala', () => {
+    expect(escalaUpscale(849, 500)).toBe(3) // necesita ~2.003x → 3
+    expect(escalaUpscale(400, 300)).toBe(5) // necesita 4.25x → 5
+  })
+
+  it('se acota a 8x como máximo y 2x como mínimo', () => {
+    expect(escalaUpscale(100, 100)).toBe(8) // necesitaría 17x
+  })
+
+  it('tamaño inválido devuelve null', () => {
+    expect(escalaUpscale(0, 0)).toBeNull()
   })
 })
 

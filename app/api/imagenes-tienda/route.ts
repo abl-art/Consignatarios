@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import sharp, { type OutputInfo } from 'sharp'
+import sharp from 'sharp'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -8,12 +8,24 @@ import {
   bboxAlfa,
   encajeEnLienzo,
   evaluarResolucion,
+  escalaUpscale,
 } from '@/lib/imagenes-tienda'
+import { upscaleConReplicate } from '@/lib/replicate-upscale'
 
 export const maxDuration = 60
 
 const MAX_BYTES = 15 * 1024 * 1024
 const MAX_POR_MODELO = 7
+
+// Decodifica a RGBA, quita el fondo sólido y devuelve el bbox del producto.
+// bb null = la imagen quedó vacía al quitar el fondo.
+async function prepararContenido(buf: Buffer) {
+  const raw = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { width: w, height: h } = raw.info
+  const fondoRemovido = quitarFondoSolido(raw.data, w, h)
+  const bb = bboxAlfa(raw.data, w, h)
+  return { data: raw.data, w, h, bb, fondoRemovido }
+}
 
 // Recibe una imagen cruda (como se bajó de la web), la convierte al formato
 // estándar de la tienda (PNG 2000×2000, fondo transparente, producto centrado
@@ -50,29 +62,55 @@ export async function POST(request: NextRequest) {
     }
 
     const entrada = Buffer.from(await archivo.arrayBuffer())
-    let raw: { data: Buffer; info: OutputInfo }
+    let prep
     try {
-      raw = await sharp(entrada).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+      prep = await prepararContenido(entrada)
     } catch {
       return NextResponse.json({ error: 'No se pudo leer la imagen (formato no soportado)' }, { status: 400 })
     }
-    const { width: w, height: h } = raw.info
-
-    const fondoRemovido = quitarFondoSolido(raw.data, w, h)
-    const bb = bboxAlfa(raw.data, w, h)
-    if (!bb) {
+    if (!prep.bb) {
       return NextResponse.json(
         { error: 'La imagen quedó vacía al quitar el fondo — probá con otra foto' },
         { status: 400 }
       )
     }
 
-    const cw = bb.maxx - bb.minx + 1
-    const ch = bb.maxy - bb.miny + 1
+    let data = prep.data
+    let w = prep.w
+    let h = prep.h
+    let bb = prep.bb
+    const fondoRemovido = prep.fondoRemovido
+    let cw = bb.maxx - bb.minx + 1
+    let ch = bb.maxy - bb.miny + 1
+    // El estándar de la tienda lleva el producto a ~1700px.
+    let resolucion = evaluarResolucion(cw, ch)
+    let upscaled = false
 
-    // El estándar de la tienda lleva el producto a ~1700px: una foto chica
-    // estirada sale borrosa, mejor avisar/rechazar que publicar mousse
-    const resolucion = evaluarResolucion(cw, ch)
+    // Si el producto viene chico, lo agrandamos con Real-ESRGAN (detalle real)
+    // en vez de estirarlo borroso o rechazarlo. Si el servicio falla o no hay
+    // token, cae al aviso/rechazo de siempre: nunca deja sin poder publicar.
+    if (resolucion.nivel !== 'ok' && process.env.REPLICATE_API_TOKEN) {
+      const escala = escalaUpscale(cw, ch)
+      if (escala) {
+        try {
+          const agrandada = await upscaleConReplicate(entrada, escala, archivo.type || 'image/png')
+          const prep2 = await prepararContenido(agrandada)
+          if (prep2.bb) {
+            data = prep2.data
+            w = prep2.w
+            h = prep2.h
+            bb = prep2.bb
+            cw = bb.maxx - bb.minx + 1
+            ch = bb.maxy - bb.miny + 1
+            resolucion = evaluarResolucion(cw, ch)
+            upscaled = true
+          }
+        } catch (e) {
+          console.error('imagenes-tienda: upscale falló, sigo con la original —', e)
+        }
+      }
+    }
+
     if (resolucion.nivel === 'rechazo') {
       // Dos causas distintas piden dos consejos distintos: archivo chico
       // (típico: guardaron la miniatura de Google en vez de la imagen grande)
@@ -87,7 +125,7 @@ export async function POST(request: NextRequest) {
     }
 
     const encaje = encajeEnLienzo(cw, ch)
-    const contenido = await sharp(raw.data, { raw: { width: w, height: h, channels: 4 } })
+    const contenido = await sharp(data, { raw: { width: w, height: h, channels: 4 } })
       .extract({ left: bb.minx, top: bb.miny, width: cw, height: ch })
       .resize(encaje.ancho, encaje.alto, { fit: 'fill' })
       .png()
@@ -110,7 +148,7 @@ export async function POST(request: NextRequest) {
     const advertencia = resolucion.nivel === 'advertencia'
       ? `la foto original es chica (el producto mide ${resolucion.ladoMayor}px, ideal ≥1700px): puede verse algo borrosa en la tienda — revisala en la vista previa`
       : null
-    return NextResponse.json({ path, url: pub.publicUrl, fondoRemovido, advertencia })
+    return NextResponse.json({ path, url: pub.publicUrl, fondoRemovido, advertencia, upscaled })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error inesperado' }, { status: 500 })
   }

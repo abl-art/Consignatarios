@@ -79,6 +79,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
         const json = await res.json()
         if (!res.ok) nuevos.push(`${file.name}: ${json.error}`)
         else if (json.advertencia) nuevosAvisos.push(`${file.name}: ${json.advertencia}`)
+        else if (json.upscaled) nuevosAvisos.push(`${file.name}: ✨ venía chica — la agrandamos con IA. Revisala en la vista previa.`)
       } catch {
         nuevos.push(`${file.name}: error de red`)
       }
@@ -178,7 +179,7 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
             <span className="text-xs text-gray-400">Hasta 7 por modelo · JPG, PNG o WebP · la tienda usa ~5</span>
           </div>
           <p className="text-xs text-gray-400 mb-4">
-            💡 Para que salgan nítidas buscá fotos grandes (el producto ≥1700px): en Google Imágenes → Herramientas → Tamaño → Grande
+            💡 Subí la mejor foto que encuentres: si el producto viene algo chico, lo agrandamos solo con IA. Elegí fotos donde el producto llene el cuadro para el mejor resultado.
           </p>
 
           {errores.length > 0 && (
