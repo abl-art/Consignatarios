@@ -1,14 +1,47 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getListaPrecios, getHistorialBonos, getMargenExtra, getModelosAgregables, getNotasCredito } from '@/lib/actions/lista-precios-canales'
+import { getListaPrecios, getListaPreciosGomarket, getHistorialBonos, getMargenExtra, getModelosAgregables, getNotasCredito } from '@/lib/actions/lista-precios-canales'
 import ListaPreciosTable from './ListaPreciosTable'
+import ListaGomarketTable from './ListaGomarketTable'
 import BonosHistorialTable from './BonosHistorialTable'
 import NotasCreditoTable from './NotasCreditoTable'
 import MargenExtraTable from './MargenExtraTable'
 import TabsListaBonos from './TabsListaBonos'
+import TiendaPills from './TiendaPills'
 
-export default async function ListaPreciosPage() {
+export default async function ListaPreciosPage({
+  searchParams,
+}: {
+  searchParams: { tienda?: string }
+}) {
+  const tienda = searchParams.tienda === 'gomarket' ? 'gomarket' : 'gocelular'
+
+  // Rama GOmarket: solo sus datos (no corre el armado GOcelular completo).
+  // Bonos/NC/Margen extra son reglas del negocio celulares — no se muestran.
+  if (tienda === 'gomarket') {
+    const { filas, categorias, multiploDefault } = await getListaPreciosGomarket()
+    return (
+      <div className="p-4 md:p-6 max-w-full mx-auto">
+        <div className="mb-1">
+          <Link href="/canales" className="text-gray-400 hover:text-gray-600 text-sm">&larr; Canales</Link>
+        </div>
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-2xl font-bold text-gray-900">Lista de Precios</h1>
+          <span className="text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-3 py-1">
+            GOmarket
+          </span>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">
+          Costo del proveedor × múltiplo = PVP sugerido con cuota redonda (÷9 en centenas). El precio se publica a
+          mano en el admin de GOmarket; la columna Dif controla los desvíos.
+        </p>
+        <TiendaPills activa="gomarket" />
+        <ListaGomarketTable filas={filas} categorias={categorias} multiploDefault={multiploDefault} />
+      </div>
+    )
+  }
+
   const [filas, bonos, modelos, notasCredito, margenExtra] = await Promise.all([
     getListaPrecios(),
     getHistorialBonos(),
@@ -40,6 +73,7 @@ export default async function ListaPreciosPage() {
         Costo sin IVA del proveedor de cada marca × múltiplo = PVP con cuota redonda (÷9 en centenas, siempre para
         arriba). Celulares con ventas en los últimos 30 días; tablets y accesorios se suman con &quot;+ Agregar modelo&quot;.
       </p>
+      <TiendaPills activa="gocelular" />
       <TabsListaBonos
         cantidadBonos={bonos.length}
         ncPendientes={notasCredito.filter(g => !g.emitida).length}
