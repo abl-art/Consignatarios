@@ -64,6 +64,7 @@ export default function ModelosClient({
   const router = useRouter()
   const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
   const [filtroMarca, setFiltroMarca] = useState<string>('')
+  const [filtroTienda, setFiltroTienda] = useState<'todas' | 'gocelular' | 'gomarket'>('todas')
   const [showProductForm, setShowProductForm] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [productForm, setProductForm] = useState(emptyProduct)
@@ -79,10 +80,14 @@ export default function ModelosClient({
   const [precioInput, setPrecioInput] = useState('')
   const [plazoInput, setPlazoInput] = useState('Contado')
 
-  // Filter products by category, brand, and visibility
+  // Filter products by store, category, brand, and visibility
+  const porTienda =
+    filtroTienda === 'todas'
+      ? productos
+      : productos.filter((p) => (p.plataforma === 'gomarket' ? 'gomarket' : 'gocelular') === filtroTienda)
   let filtrados = filtroCategoria
-    ? productos.filter((p) => p.categoria === filtroCategoria)
-    : productos
+    ? porTienda.filter((p) => p.categoria === filtroCategoria)
+    : porTienda
   if (filtroMarca && filtroCategoria === 'Celulares') {
     filtrados = filtrados.filter((p) => p.nombre.toLowerCase().includes(filtroMarca.toLowerCase()))
   }
@@ -329,6 +334,23 @@ export default function ModelosClient({
           </form>
         </div>
       )}
+
+      {/* Store filter pills */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {([['todas', 'Todas'], ['gocelular', 'GOcelular'], ['gomarket', 'GOmarket']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setFiltroTienda(id)}
+            className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+              filtroTienda === id
+                ? id === 'gomarket' ? 'bg-violet-600 text-white border-violet-600' : 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Category filter pills */}
       <div className="flex flex-wrap gap-2 mb-3">

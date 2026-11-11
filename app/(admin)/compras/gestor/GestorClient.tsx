@@ -585,9 +585,11 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   const [filtroProvEnviados, setFiltroProvEnviados] = useState('')
   const [filtroFechaEnviados, setFiltroFechaEnviados] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'' | 'transito' | 'recibido' | 'ingresado'>('')
+  const [filtroTienda, setFiltroTienda] = useState<'todas' | Plataforma>('todas')
 
   const pedidosEnviadosTodos = pedidosGuardados.filter(p => p.estado === 'enviado')
   const pedidosEnviados = pedidosEnviadosTodos.filter(p => {
+    if (filtroTienda !== 'todas' && plataformaDePedidoGuardado(p) !== filtroTienda) return false
     if (filtroProvEnviados && p.proveedorId !== filtroProvEnviados) return false
     if (filtroFechaEnviados) {
       const entregadoAt = entregados[p.id] || p.entregadoAt
@@ -1130,7 +1132,22 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       {tab === 'confirmados' && (
         <div>
           {/* Filtros */}
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-3 mb-4 items-center">
+            <div className="flex items-center gap-1">
+              {([['todas', 'Todas'], ['gocelular', 'GOcelular'], ['gomarket', 'GOmarket']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setFiltroTienda(id)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                    filtroTienda === id
+                      ? id === 'gomarket' ? 'bg-violet-600 text-white border-violet-600' : 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <select
               value={filtroProvEnviados}
               onChange={e => setFiltroProvEnviados(e.target.value)}
