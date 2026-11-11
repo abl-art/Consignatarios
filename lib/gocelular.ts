@@ -3367,6 +3367,32 @@ async function fetchStockGomarketLive(): Promise<StockWarehouseRow[]> {
 }
 
 /**
+ * PVP publicado en GOmarket por SKU (commerce_listing_skus.price, EN PESOS —
+ * verificado 11/11/2026 contra listings reales: JBL Charge 6 = 521100 ✓).
+ * Solo filas activas de listings published; si un SKU tuviera varios listings
+ * gana el más reciente (hoy no hay duplicados). Alimenta la columna "Tienda
+ * GOmarket" de la lista de precios.
+ */
+async function fetchPreciosListingGomarketLive(): Promise<Record<string, number>> {
+  const pool = getPool()
+  if (!pool) return {}
+  const { rows } = await pool.query<{ sku: string; price: string }>(
+    `SELECT DISTINCT ON (cs.sku) cs.sku, cls.price
+     FROM commerce_listing_skus cls
+     JOIN commerce_skus cs ON cs.id = cls.sku_id
+     JOIN commerce_listings cl ON cl.id = cls.listing_id
+     WHERE cls.is_active AND cl.status = 'published'
+     ORDER BY cs.sku, cls.created_at DESC`,
+  )
+  const out: Record<string, number> = {}
+  for (const r of rows) {
+    const precio = Number(r.price)
+    if (precio > 0) out[r.sku] = precio
+  }
+  return out
+}
+
+/**
  * Fecha de confirmación de compra (gocuotas_orders.order_delivered_at — es la
  * confirmación, no la entrega física) por order_number de la tienda. Solo
  * órdenes con confirmación conocida.
@@ -3838,5 +3864,6 @@ export const fetchStockPropioDetalle = cachear(fetchStockPropioDetalleLive, 'sto
 export const fetchStockPropio = cachear(fetchStockPropioLive, 'stock-propio', CINCO_MIN)
 export const fetchAddonStock = cachear(fetchAddonStockLive, 'addon-stock', CINCO_MIN)
 export const fetchStockGomarket = cachear(fetchStockGomarketLive, 'stock-gomarket', CINCO_MIN)
+export const fetchPreciosListingGomarket = cachear(fetchPreciosListingGomarketLive, 'precios-listing-gomarket', UNA_HORA)
 export const fetchAsns = cachear(fetchAsnsLive, 'asns', CINCO_MIN)
 export const fetchOrdenesPreparacion = cachear(fetchOrdenesPreparacionLive, 'ordenes-preparacion', CINCO_MIN)
