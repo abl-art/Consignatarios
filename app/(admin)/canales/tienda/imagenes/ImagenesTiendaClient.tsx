@@ -4,7 +4,13 @@ import { useRef, useState, useTransition } from 'react'
 import { getImagenesModelo, borrarImagenTienda, type ImagenTienda } from '@/lib/actions/imagenes-tienda'
 import { slugModelo, marcaDeModelo } from '@/lib/imagenes-tienda'
 
-type Modelo = { id: string; nombre: string; categoria: string }
+type Modelo = { id: string; nombre: string; categoria: string; negocio: 'gocelular' | 'gomarket' }
+type FiltroNegocio = 'todos' | 'gocelular' | 'gomarket'
+const NEGOCIOS: { key: FiltroNegocio; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'gocelular', label: 'GOcelular' },
+  { key: 'gomarket', label: 'GOmarket' },
+]
 
 // Fondo cuadriculado para que se note la transparencia del PNG
 const cuadriculado: React.CSSProperties = {
@@ -37,16 +43,26 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
   const inputRef = useRef<HTMLInputElement>(null)
   const generados = useState(() => new Set(conImagenes))[0]
 
+  const [negocio, setNegocio] = useState<FiltroNegocio>('todos')
   const [marca, setMarca] = useState('Todas')
 
   const modelo = modelos.find(m => m.id === productoId)
   const slug = modelo ? slugModelo(modelo.nombre) : 'imagen'
 
+  // El negocio es la base: marca, categorías y listado se recalculan con él
+  const porNegocio = negocio === 'todos' ? modelos : modelos.filter(m => m.negocio === negocio)
   const ORDEN_MARCAS = ['Samsung', 'Motorola', 'Xiaomi', 'Honor', 'Nubia', 'JBL', 'Otras']
-  const marcasPresentes = new Set(modelos.map(m => marcaDeModelo(m.nombre)))
+  const marcasPresentes = new Set(porNegocio.map(m => marcaDeModelo(m.nombre)))
   const marcas = ['Todas', ...ORDEN_MARCAS.filter(m => marcasPresentes.has(m))]
-  const filtrados = marca === 'Todas' ? modelos : modelos.filter(m => marcaDeModelo(m.nombre) === marca)
+  const filtrados = marca === 'Todas' ? porNegocio : porNegocio.filter(m => marcaDeModelo(m.nombre) === marca)
   const categorias = [...new Set(filtrados.map(m => m.categoria))]
+
+  function elegirNegocio(n: FiltroNegocio) {
+    setNegocio(n)
+    setMarca('Todas')
+    // si el modelo elegido no es del negocio nuevo, se resetea la selección
+    if (modelo && n !== 'todos' && modelo.negocio !== n) elegirModelo('')
+  }
 
   function elegirMarca(m: string) {
     setMarca(m)
@@ -117,6 +133,20 @@ export default function ImagenesTiendaClient({ modelos, conImagenes }: { modelos
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <label className="block text-sm font-medium text-gray-700 mb-2">Modelo</label>
+        <div className="flex items-center gap-1 mb-3">
+          <span className="text-xs text-gray-500 mr-1">Negocio:</span>
+          {NEGOCIOS.map(n => (
+            <button
+              key={n.key}
+              onClick={() => elegirNegocio(n.key)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                negocio === n.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {n.label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-1 mb-3">
           {marcas.map(m => (
             <button

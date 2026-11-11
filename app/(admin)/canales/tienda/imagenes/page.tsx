@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { getModelosAgregables } from '@/lib/actions/lista-precios-canales'
-import { getModelosConImagenes } from '@/lib/actions/imagenes-tienda'
+import { getModelosParaImagenes, getModelosConImagenes } from '@/lib/actions/imagenes-tienda'
 import ImagenesTiendaClient from './ImagenesTiendaClient'
 
 export default async function ImagenesTiendaPage() {
-  const [modelos, conImagenes] = await Promise.all([getModelosAgregables(), getModelosConImagenes()])
+  const [modelos, conImagenes] = await Promise.all([getModelosParaImagenes(), getModelosConImagenes()])
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
