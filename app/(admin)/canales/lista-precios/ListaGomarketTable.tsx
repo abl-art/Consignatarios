@@ -172,7 +172,7 @@ export default function ListaGomarketTable({
                     </div>
                   ) : (
                     <Link
-                      href="/compras/modelos"
+                      href={`/compras/modelos?producto=${f.productoId}`}
                       className="text-xs font-medium text-red-600 hover:underline"
                       title="Este producto no tiene costo de proveedor cargado — cargalo en Compras → Modelos"
                     >
@@ -181,7 +181,9 @@ export default function ListaGomarketTable({
                   )}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <InputMultiplo fila={f} />
+                  {/* key con el múltiplo: al cambiar el default global el input
+                      se remonta y muestra el valor vigente (no el viejo) */}
+                  <InputMultiplo key={`${f.productoId}-${f.multiplo}`} fila={f} />
                 </td>
                 <td className="px-4 py-2 text-right font-bold text-gray-900">{f.pvp !== null ? peso(f.pvp) : '—'}</td>
                 <td className="px-4 py-2 text-right text-gray-600">{f.cuota !== null ? peso(f.cuota) : '—'}</td>

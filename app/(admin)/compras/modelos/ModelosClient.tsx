@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { agregarProducto, editarProducto, eliminarProducto, toggleOcultoProducto, setPrecio, eliminarPrecio } from '@/lib/actions/compras'
+import { filtrosInicialesModelos } from '@/lib/compras-modelos-filtros'
 import { formatearMoneda } from '@/lib/utils'
 
 interface Proveedor {
@@ -65,6 +66,19 @@ export default function ModelosClient({
   const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
   const [filtroMarca, setFiltroMarca] = useState<string>('')
   const [filtroTienda, setFiltroTienda] = useState<'todas' | 'gocelular' | 'gomarket'>('todas')
+  const searchParams = useSearchParams()
+
+  // Llegada con ?producto=<id> (link "sin costo →" de la lista de precios):
+  // preseleccionar la categoría y tienda del producto para que sea visible.
+  useEffect(() => {
+    const ini = filtrosInicialesModelos(searchParams.get('producto'), productos)
+    if (ini) {
+      setFiltroTienda(ini.tienda)
+      setFiltroCategoria(ini.categoria)
+      setFiltroMarca('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [showProductForm, setShowProductForm] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [productForm, setProductForm] = useState(emptyProduct)
