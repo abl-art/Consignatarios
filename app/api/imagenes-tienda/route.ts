@@ -135,7 +135,10 @@ export async function POST(request: NextRequest) {
       create: { width: LIENZO_TIENDA, height: LIENZO_TIENDA, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
       .composite([{ input: contenido, left: encaje.left, top: encaje.top }])
-      .png()
+      // PNG quantizado (paleta): mantiene el fondo transparente pero baja el peso
+      // de ~4MB a ~0,8MB — las imágenes crudas (sobre todo las que pasaron por el
+      // upscale) eran demasiado pesadas para el límite de subida de GOmarket.
+      .png({ palette: true, quality: 85, effort: 10, compressionLevel: 9 })
       .toBuffer()
 
     const path = `${productoId}/${Date.now()}.png`
