@@ -7,10 +7,22 @@ import type { Negocio, FiltroNegocio } from '@/lib/negocio'
 import { DIAS_TRANSITO_TRABADO, diasDesde } from '@/lib/transito'
 import { categoriaAccesorio, type CategoriaAccesorio } from '@/lib/categoria-accesorio'
 
-type TipoFiltro = 'todos' | 'celular' | 'accesorio' | CategoriaAccesorio
+// `cat:<categoría>` = tarjeta dinámica por categoría real de GOmarket
+type TipoFiltro = 'todos' | 'celular' | 'accesorio' | CategoriaAccesorio | `cat:${string}`
 
 // negocio es opcional: /share/stock (vista pública) no lo anota y no muestra píldoras
-type RowConNegocio = StockDisponibilidadRow & { negocio?: Negocio }
+type RowConNegocio = StockDisponibilidadRow & { negocio?: Negocio; categoriaReal?: string | null }
+
+// Bucket de tarjeta de una fila: celulares y las categorías conocidas de la
+// heurística van a sus tarjetas fijas; lo no reconocido usa la categoría REAL
+// del catálogo (GOmarket: heladeras, aires, notebooks…) y si tampoco hay,
+// cae en 'otro' — que SIEMPRE tiene tarjeta (nada queda invisible).
+function bucketDe(r: RowConNegocio): TipoFiltro {
+  if (r.tipo === 'celular') return 'celular'
+  const cat = categoriaAccesorio(r.sku, r.nombre)
+  if (cat !== 'otro') return cat
+  return r.categoriaReal ? `cat:${r.categoriaReal}` : 'otro'
+}
 
 const NEGOCIOS: { key: FiltroNegocio; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -34,7 +46,7 @@ export default function StockTable({ rows: todasLasFilas }: { rows: RowConNegoci
     if (tipoFiltro === 'celular' || tipoFiltro === 'accesorio') {
       if (r.tipo !== tipoFiltro) return false
     } else if (tipoFiltro !== 'todos') {
-      if (r.tipo !== 'accesorio' || categoriaAccesorio(r.sku, r.nombre) !== tipoFiltro) return false
+      if (bucketDe(r) !== tipoFiltro) return false
     }
     if (marcaFiltro !== 'todas' && r.marca !== marcaFiltro) return false
     if (filtro) {
@@ -44,16 +56,21 @@ export default function StockTable({ rows: todasLasFilas }: { rows: RowConNegoci
     return true
   })
 
-  // Tarjetas por tipo de producto: disponible real grande + próxima abajo; clic = filtrar
+  // Tarjetas por tipo de producto: disponible real grande + próxima abajo; clic = filtrar.
+  // Las fijas (negocio celulares) + dinámicas por categoría real de GOmarket + Otros.
+  const categoriasDinamicas = Array.from(
+    new Set(rows.map(bucketDe).filter((b): b is `cat:${string}` => typeof b === 'string' && b.startsWith('cat:'))),
+  ).sort()
   const tiposCard: { key: TipoFiltro; label: string }[] = [
     { key: 'celular', label: 'Celulares' },
     { key: 'kit', label: 'Kits' },
     { key: 'auricular', label: 'Auriculares' },
     { key: 'parlante', label: 'Parlantes' },
     { key: 'smartwatch', label: 'Smartwatches' },
+    ...categoriasDinamicas.map(c => ({ key: c, label: c.slice(4) })),
+    { key: 'otro' as TipoFiltro, label: 'Otros' },
   ]
-  const filasDeTipo = (key: TipoFiltro) =>
-    rows.filter(r => key === 'celular' ? r.tipo === 'celular' : r.tipo === 'accesorio' && categoriaAccesorio(r.sku, r.nombre) === key)
+  const filasDeTipo = (key: TipoFiltro) => rows.filter(r => bucketDe(r) === key)
   const cards = tiposCard
     .map(t => {
       const filas = filasDeTipo(t.key)
@@ -132,6 +149,10 @@ export default function StockTable({ rows: todasLasFilas }: { rows: RowConNegoci
           <option value="auricular">— Auriculares</option>
           <option value="parlante">— Parlantes</option>
           <option value="smartwatch">— Smartwatches</option>
+          {categoriasDinamicas.map(c => (
+            <option key={c} value={c}>— {c.slice(4)}</option>
+          ))}
+          <option value="otro">— Otros</option>
         </select>
         <select
           value={marcaFiltro}

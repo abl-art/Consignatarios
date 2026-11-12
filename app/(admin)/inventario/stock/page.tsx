@@ -26,6 +26,11 @@ export default async function StockPage() {
   const porPlataforma = partirPedidosPorPlataforma(pedidos)
   // Unidad de negocio por fila: flag plataforma de compras_productos (default gocelular)
   const mapaNegocio = armarNegocioMap(productosCompras)
+  const categoriaPorSku = new Map<string, string | null>(
+    productosCompras
+      .filter((p: { plataforma?: string; codigo: string | null }) => p.plataforma === 'gomarket' && p.codigo)
+      .map((p: { codigo: string | null; categoria?: string | null }) => [p.codigo as string, p.categoria ?? null]),
+  )
   const rows = [
     ...completarDisponibilidad(aplicarPedidos(baseRows, porPlataforma.gocelular), pendientes).map((r) => ({
       ...r,
@@ -34,6 +39,10 @@ export default async function StockPage() {
     ...completarDisponibilidad(aplicarPedidos(gomarketRows, porPlataforma.gomarket, { confiarTransitoBase: true }), pendientes).map((r) => ({
       ...r,
       negocio: 'gomarket' as const,
+      // Categoría REAL del catálogo GOmarket (heladeras, aires, notebooks…):
+      // la heurística categoriaAccesorio no las conoce y sin esto caían al
+      // bucket 'otro', que no tenía tarjeta → filas invisibles (bug 12/11)
+      categoriaReal: categoriaPorSku.get(r.sku) ?? null,
     })),
   ]
 
