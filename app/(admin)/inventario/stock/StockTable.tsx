@@ -13,11 +13,16 @@ type TipoFiltro = 'todos' | 'celular' | 'accesorio' | CategoriaAccesorio | `cat:
 // negocio es opcional: /share/stock (vista pública) no lo anota y no muestra píldoras
 type RowConNegocio = StockDisponibilidadRow & { negocio?: Negocio; categoriaReal?: string | null }
 
-// Bucket de tarjeta de una fila: celulares y las categorías conocidas de la
-// heurística van a sus tarjetas fijas; lo no reconocido usa la categoría REAL
-// del catálogo (GOmarket: heladeras, aires, notebooks…) y si tampoco hay,
-// cae en 'otro' — que SIEMPRE tiene tarjeta (nada queda invisible).
+// Bucket de tarjeta de una fila. GOmarket agrupa SIEMPRE por su categoría
+// REAL del catálogo (estandarización 12/11: con la píldora GOmarket las
+// tarjetas son las categorías creadas en el propio GOmarket — un JBL gomarket
+// va a "TV, Sonido y Electronicos", no a la tarjeta Parlantes de GOcelular).
+// GOcelular mantiene celulares + la heurística clásica. Lo irreconocible cae
+// en 'otro', que SIEMPRE tiene tarjeta (nada queda invisible).
 function bucketDe(r: RowConNegocio): TipoFiltro {
+  if (r.negocio === 'gomarket') {
+    return r.categoriaReal ? `cat:${r.categoriaReal}` : 'otro'
+  }
   if (r.tipo === 'celular') return 'celular'
   const cat = categoriaAccesorio(r.sku, r.nombre)
   if (cat !== 'otro') return cat
