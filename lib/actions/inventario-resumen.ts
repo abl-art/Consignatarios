@@ -121,7 +121,7 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     ])
 
     // Reposición en camino por modelo (misma fuente que /inventario/stock)
-    const reposiciones: ReposicionModelo[] = aplicarPedidos(stockWarehouse, pedidos)
+    const reposicionesRaw: ReposicionModelo[] = aplicarPedidos(stockWarehouse, pedidos)
       .filter(r => r.enTransito > 0 || r.pedido > 0)
       .map(r => ({
         modelo: r.marca && !r.nombre.toLowerCase().includes(r.marca.toLowerCase())
@@ -196,6 +196,12 @@ export async function fetchInventarioResumen(): Promise<InventarioResumen> {
     // A5) y el cruce con ventas no matchea: completar desde la variante única
     // de ventas antes de los joins (sin movimiento y cobertura por modelo)
     const ventas30Lista = Array.from(ventas30PorModelo.entries()).map(([modelo, ventas]) => ({ modelo, ventas }))
+    // Las reposiciones (tránsito/pedido) vienen con el nombre del catálogo, a
+    // veces SIN capacidad ("Xiaomi Redmi A5"), mientras los modelos de cobertura
+    // ya adoptaron la capacidad de ventas ("Xiaomi Redmi A5 4+128GB"): sin
+    // completar, las claves no matchean y el pedido/tránsito no se asigna al
+    // modelo → la tarjeta dice "comprá" ignorando las 50 unidades ya pedidas.
+    const reposiciones = completarCapacidadDesdeVentas(reposicionesRaw, ventas30Lista)
     const sinMovimiento = stockSinMovimiento(
       completarCapacidadDesdeVentas(
         Array.from(stockBrutoPorNombre.entries()).map(([modelo, qty]) => ({

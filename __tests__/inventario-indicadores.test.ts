@@ -350,3 +350,22 @@ describe('completarCapacidadDesdeVentas', () => {
     expect(completarCapacidadDesdeVentas(stock, ventas)[0].modelo).toBe('Xiaomi Redmi A5 4+128GB')
   })
 })
+
+describe('reposiciones con capacidad completada se asignan al modelo (bug Redmi A5, nov 2026)', () => {
+  it('un pedido cuyo nombre viene sin capacidad se asigna al modelo con capacidad', () => {
+    // El modelo de cobertura ya adoptó la capacidad de ventas; la reposición
+    // viene del catálogo sin capacidad. Sin completar, no matcheaban y el
+    // pedido quedaba en "—" (la tarjeta decía "comprá" con 50 ya pedidas).
+    const ventas = [{ modelo: 'Xiaomi Redmi A5 4+128GB' }]
+    const reposRaw = [{ modelo: 'Xiaomi Redmi A5', enTransito: 0, pedido: 50 }]
+    const repos = completarCapacidadDesdeVentas(reposRaw, ventas)
+    expect(repos[0].modelo).toBe('Xiaomi Redmi A5 4+128GB')
+
+    const cobertura = [{ modelo: 'Xiaomi Redmi A5 4+128GB', stock: 15, ventaDiaria30: 1.2, cobertura: 12.5 }]
+    const ac = modelosAComprar(cobertura, repos)
+    expect(ac).toHaveLength(1)
+    expect(ac[0].pedido).toBe(50)
+    // Próxima cobertura cuenta las 50 pedidas: (15+50)/1.2 ≈ 54 días (ya repuesto)
+    expect(Math.round(ac[0].proximaCobertura!)).toBe(54)
+  })
+})
