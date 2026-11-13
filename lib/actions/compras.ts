@@ -234,6 +234,12 @@ export interface Pedido {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
+  // Factura del proveedor (proceso Adm y Finanzas): el archivo vive en el bucket
+  // privado 'facturas-pedidos', aca solo la referencia
+  factura?: { path: string; nombre: string; subidaAt: string }
+  // CS = Carga Simple: la factura ya se cargo en el sistema de comprobantes de proveedores
+  cargaSimple?: boolean
+  cargaSimpleAt?: string
   // andreani_wh2 = segundo depósito de Andreani para productos voluminosos (otro contrato)
   destino?: 'andreani_wh' | 'andreani_wh2' | 'local'   // default andreani_wh si falta (pedidos viejos)
   // A qué sistema se informa: 'gocelular' (default, pedidos viejos) o 'gomarket'
@@ -322,6 +328,60 @@ export async function subirImeiPedido(pedidoId: string, imeiData: string) {
     await informarCompraGocelular(pedidoId).catch((e) => console.error('Error informando compra a GOcelular:', e))
   }
   return res
+}
+
+// Sube la factura del proveedor al bucket privado 'facturas-pedidos' y guarda
+// la referencia en el pedido. Si ya habia una factura, la reemplaza.
+export async function subirFacturaPedido(pedidoId: string, formData: FormData) {
+  const file = formData.get('factura') as File | null
+  if (!file) return { error: 'Falta el archivo' }
+  if (file.size > 4 * 1024 * 1024) return { error: 'El archivo supera los 4MB' }
+
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+
+  const nombre = file.name.replace(/[^\w.\-]+/g, '_')
+  const path = `pedido_${pedidoId}/${Date.now()}_${nombre}`
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const { error: errUpload } = await supabase.storage
+    .from('facturas-pedidos')
+    .upload(path, bytes, { contentType: file.type || 'application/octet-stream' })
+  if (errUpload) return { error: `Storage: ${errUpload.message}` }
+
+  const anterior = pedido.factura?.path
+  pedido.factura = { path, nombre: file.name, subidaAt: new Date().toISOString() }
+  const res = await guardarPedido(pedido)
+  if ('error' in res && res.error) return res
+  if (anterior) await supabase.storage.from('facturas-pedidos').remove([anterior])
+  return res
+}
+
+// URL firmada (1h) para ver/descargar la factura de un pedido
+export async function getFacturaPedidoUrl(pedidoId: string) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  if (!pedido.factura) return { error: 'El pedido no tiene factura cargada' }
+  const { data: signed, error } = await supabase.storage
+    .from('facturas-pedidos')
+    .createSignedUrl(pedido.factura.path, 3600)
+  if (error || !signed) return { error: error?.message ?? 'No se pudo generar el link' }
+  return { ok: true as const, url: signed.signedUrl, nombre: pedido.factura.nombre }
+}
+
+// CS = Carga Simple (sistema de carga de comprobantes de proveedores).
+// Es un tilde de proceso: se puede marcar y desmarcar.
+export async function setCargaSimple(pedidoId: string, valor: boolean) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.cargaSimple = valor
+  pedido.cargaSimpleAt = valor ? new Date().toISOString() : undefined
+  return guardarPedido(pedido)
 }
 
 export async function eliminarPedido(pedidoId: string) {

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
 import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
 import { ingresoSinRespaldo } from '@/lib/ingreso-stock'
 
@@ -86,6 +86,9 @@ interface PedidoGuardado {
   entregadoAt?: string
   ingresoStockAt?: string
   imeiFile?: string
+  factura?: { path: string; nombre: string; subidaAt: string }
+  cargaSimple?: boolean
+  cargaSimpleAt?: string
   destino?: Destino
   plataforma?: Plataforma
   gocelular?: {
@@ -578,6 +581,12 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   const [ingresosStock, setIngresosStock] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {}
     pedidosGuardados.forEach(p => { if (p.ingresoStockAt) map[p.id] = p.ingresoStockAt })
+    return map
+  })
+  // CS (Carga Simple) optimista: el valor persistido llega por router.refresh
+  const [cargaSimples, setCargaSimples] = useState<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {}
+    pedidosGuardados.forEach(p => { if (p.cargaSimple) map[p.id] = true })
     return map
   })
   const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null)
@@ -1200,6 +1209,9 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                     <th className="text-right px-4 py-3 font-medium text-gray-600">Total c/IVA</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Estado</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">IMEI</th>
+                    {/* Columnas de proceso Adm y Finanzas, con color propio */}
+                    <th className="text-center px-4 py-3 font-medium text-indigo-700 bg-indigo-50">Factura</th>
+                    <th className="text-center px-4 py-3 font-medium text-amber-700 bg-amber-50" title="Carga Simple: factura cargada en el sistema de comprobantes de proveedores">CS</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Entrega</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Demora</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600">Ingreso stock</th>
@@ -1280,6 +1292,23 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                             <span className="text-xs text-gray-300">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center bg-indigo-50/40" onClick={(e) => e.stopPropagation()}>
+                          <FacturaCell pedidoId={p.id} factura={p.factura} />
+                        </td>
+                        <td className="px-4 py-3 text-center bg-amber-50/40" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={cargaSimples[p.id] ?? false}
+                            title="Carga Simple"
+                            className="w-4 h-4 accent-amber-500 cursor-pointer"
+                            onChange={async (e) => {
+                              const valor = e.target.checked
+                              setCargaSimples(prev => ({ ...prev, [p.id]: valor }))
+                              await setCargaSimple(p.id, valor)
+                              router.refresh()
+                            }}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-center">
                           {entregadoAt ? (
                             <span className="text-xs text-green-700">{new Date(entregadoAt).toLocaleDateString('es-AR')}</span>
@@ -1326,7 +1355,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                       </tr>
                       {expandedPedido === p.id && (
                         <tr>
-                          <td colSpan={9} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                          <td colSpan={11} className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                             {editingPedidoId === p.id ? (
                               <>
                                 <table className="w-full text-xs">
@@ -1559,6 +1588,73 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Factura del proveedor directo en la fila de Enviados (sin desplegar el pedido).
+// El archivo vive en el bucket privado 'facturas-pedidos'; Ver abre una URL firmada.
+function FacturaCell({ pedidoId, factura }: { pedidoId: string; factura?: { path: string; nombre: string; subidaAt: string } }) {
+  const router = useRouter()
+  const [subiendo, setSubiendo] = useState(false)
+  const [abriendo, setAbriendo] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setSubiendo(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('factura', file)
+      const res = await subirFacturaPedido(pedidoId, fd)
+      if ('error' in res && res.error) setError(res.error)
+      else router.refresh()
+    } catch {
+      setError('No se pudo subir — reintentá')
+    } finally {
+      setSubiendo(false)
+    }
+  }
+
+  async function handleVer() {
+    setAbriendo(true)
+    setError(null)
+    try {
+      const res = await getFacturaPedidoUrl(pedidoId)
+      if ('url' in res && res.url) window.open(res.url, '_blank')
+      else setError('error' in res && res.error ? res.error : 'No se pudo abrir')
+    } finally {
+      setAbriendo(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      {factura ? (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleVer}
+            disabled={abriendo}
+            title={factura.nombre}
+            className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors disabled:opacity-50"
+          >
+            {abriendo ? 'Abriendo...' : 'Ver'}
+          </button>
+          <label title="Reemplazar factura" className={`px-1.5 py-1 text-xs text-indigo-400 hover:text-indigo-700 cursor-pointer transition-colors ${subiendo ? 'opacity-50' : ''}`}>
+            {subiendo ? '...' : '↻'}
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={subiendo} />
+          </label>
+        </div>
+      ) : (
+        <label className={`px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer transition-colors ${subiendo ? 'opacity-50' : ''}`}>
+          {subiendo ? 'Subiendo...' : 'Cargar'}
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={subiendo} />
+        </label>
+      )}
+      {error && <span className="text-[10px] text-red-600 max-w-[120px]">{error}</span>}
     </div>
   )
 }
