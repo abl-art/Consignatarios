@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { plataformaDePedido, armarLineasGomarket, armarSupplierCommerce, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
+import { eanProvisorio, esEan13Valido } from '@/lib/ean-provisorio'
 
 const item = (codigo: string, cantidad: number, precio: number, nombre = codigo) => ({
   productoCodigo: codigo,
@@ -35,18 +36,30 @@ describe('armarLineasGomarket', () => {
   it('arma una línea por SKU con unit_cost en pesos como string', () => {
     const { lines, errores } = armarLineasGomarket([item('HELAD-01', 5, 850000.5)])
     expect(errores).toEqual([])
-    expect(lines).toEqual([{ sku: 'HELAD-01', quantity: 5, unit_cost: '850000.50' }])
+    expect(lines).toEqual([{ sku: 'HELAD-01', quantity: 5, unit_cost: '850000.50', ean: eanProvisorio('HELAD-01') }])
   })
 
   it('omite unit_cost cuando el precio no es válido', () => {
     const { lines } = armarLineasGomarket([item('SKU-1', 2, 0)])
-    expect(lines).toEqual([{ sku: 'SKU-1', quantity: 2 }])
+    expect(lines).toEqual([{ sku: 'SKU-1', quantity: 2, ean: eanProvisorio('SKU-1') }])
   })
 
   it('consolida items repetidos del mismo SKU sumando cantidades', () => {
     const { lines, errores } = armarLineasGomarket([item('SKU-1', 2, 100), item('SKU-1', 3, 0)])
     expect(errores).toEqual([])
-    expect(lines).toEqual([{ sku: 'SKU-1', quantity: 5, unit_cost: '100.00' }])
+    expect(lines).toEqual([{ sku: 'SKU-1', quantity: 5, unit_cost: '100.00', ean: eanProvisorio('SKU-1') }])
+  })
+
+  it('sin EAN cargado genera uno provisorio 299 válido y determinístico por SKU', () => {
+    const { lines } = armarLineasGomarket([item('FR901D-NS', 1, 123600)])
+    expect(lines[0].ean).toBe(eanProvisorio('FR901D-NS'))
+    expect(lines[0].ean!.startsWith('299')).toBe(true)
+    expect(esEan13Valido(lines[0].ean!)).toBe(true)
+  })
+
+  it('con EAN real cargado lo usa en vez del provisorio', () => {
+    const { lines } = armarLineasGomarket([{ ...item('FR901D-NS', 1, 123600), ean: ' 7790895000782 ' }])
+    expect(lines[0].ean).toBe('7790895000782')
   })
 
   it('sin código de producto o cantidad inválida → error con el nombre del producto', () => {

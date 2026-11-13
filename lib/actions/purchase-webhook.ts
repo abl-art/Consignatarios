@@ -7,6 +7,7 @@ import { sendPurchaseWebhook, buildTimestamp, type PurchaseLine, type PurchasePa
 import { parseImeiExcel } from '@/lib/imei-excel-parser'
 import { validarCompra, verificarAliasVsPedido, type CatalogoGocelular } from '@/lib/purchase-validation'
 import { plataformaDePedido, armarLineasGomarket, armarSupplierCommerce, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
+import { eanProvisorio } from '@/lib/ean-provisorio'
 import { sendCommercePurchaseWebhook, type CommercePurchasePayload } from '@/lib/gomarket-webhook'
 import type { Pedido, GocelularEstado } from '@/lib/actions/compras'
 
@@ -47,25 +48,27 @@ async function cargarCatalogo(imeis: string[]): Promise<CatalogoGocelular | null
   }
 }
 
-// Categoria y plataforma por producto: PedidoItem no trae ninguna de las dos, se
+// Categoria, plataforma y EAN por producto: PedidoItem no trae ninguno, se
 // resuelven contra compras_productos por productoId. Si el producto no aparece en
 // la tabla se asume 'Celulares' / 'gocelular' (defaults seguros: no genera una
 // linea addon espuria ni desvia la compra al endpoint de GOmarket).
-async function cargarProductosInfo(pedido: Pedido): Promise<{ categorias: Map<string, string>; plataformas: Map<string, string> }> {
+async function cargarProductosInfo(pedido: Pedido): Promise<{ categorias: Map<string, string>; plataformas: Map<string, string>; eans: Map<string, string> }> {
   const ids = [...new Set(pedido.items.map(i => i.productoId))]
   const categorias = new Map<string, string>()
   const plataformas = new Map<string, string>()
-  if (ids.length === 0) return { categorias, plataformas }
+  const eans = new Map<string, string>()
+  if (ids.length === 0) return { categorias, plataformas, eans }
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('compras_productos')
-    .select('id, categoria, plataforma')
+    .select('id, categoria, plataforma, ean')
     .in('id', ids)
-  for (const row of (data ?? []) as { id: string; categoria: string; plataforma: string | null }[]) {
+  for (const row of (data ?? []) as { id: string; categoria: string; plataforma: string | null; ean: string | null }[]) {
     categorias.set(row.id, row.categoria)
     plataformas.set(row.id, row.plataforma ?? 'gocelular')
+    if (row.ean?.trim()) eans.set(row.id, row.ean.trim())
   }
-  return { categorias, plataformas }
+  return { categorias, plataformas, eans }
 }
 
 // Todos los skus conocidos de device_model_skus (para que parseImeiExcel identifique la
@@ -171,7 +174,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
       return { ok: true, estado: 'informado' } // ya informado, no re-disparar
     }
 
-    const { categorias, plataformas } = await cargarProductosInfo(pedido)
+    const { categorias, plataformas, eans } = await cargarProductosInfo(pedido)
 
     // Ruteo por plataforma: los pedidos de GOmarket van al webhook Commerce v1,
     // el resto al webhook de compras clasico de GOcelular. Mezcla = error.
@@ -261,6 +264,9 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         // produce el error de validacion "requieren costo unitario" en vez de crashear.
         ...(tieneCostoAddon(item) ? { unit_cost: item.precio.toFixed(2) } : {}),
         description: item.productoNombre.slice(0, 256),
+        // EAN real si está cargado, provisorio 299 si no (pedido de Pedro 13/11:
+        // con él GOcelular da de alta el producto en Andreani y crea la ASN)
+        ean: eans.get(item.productoId) ?? eanProvisorio(item.productoCodigo),
       })
     }
 
@@ -369,11 +375,15 @@ async function prepararCompraGomarket(pedido: Pedido): Promise<
   | { ok: true; payload: Omit<CommercePurchasePayload, 'mode'>; warnings: string[] }
   | { ok: false; errores: string[]; warnings: string[]; reintentable?: boolean }
 > {
+  // EAN real por producto si está cargado en compras_productos (si no,
+  // armarLineasGomarket genera el provisorio 299 por SKU)
+  const { eans } = await cargarProductosInfo(pedido)
   const { lines, errores: erroresLineas } = armarLineasGomarket(pedido.items.map(i => ({
     productoCodigo: i.productoCodigo,
     productoNombre: i.productoNombre,
     cantidad: i.cantidad,
     precio: i.precio,
+    ean: eans.get(i.productoId) ?? null,
   })))
   if (erroresLineas.length > 0 || lines.length === 0) {
     return { ok: false, errores: erroresLineas.length > 0 ? erroresLineas : ['El pedido no tiene líneas informables'], warnings: [] }

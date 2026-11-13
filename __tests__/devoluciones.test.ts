@@ -9,6 +9,10 @@ import {
   esDevolucionFinalizada,
   separarResueltos,
   devolucionesPedidasSinShipment,
+  etiquetaCircuitoDevolucion,
+  detalleCircuitoDevolucion,
+  sucursalDespacho,
+  rendicionFallida,
 } from '@/lib/devoluciones'
 import type { FilaDevolucion } from '@/lib/actions/devoluciones'
 
@@ -257,6 +261,19 @@ describe('esDevolucionFinalizada', () => {
 
 // Fixture mínimo de una fila de la tabla de devoluciones. Los campos que no
 // importan para separarResueltos quedan con valores neutros.
+function seguimiento(overrides: Partial<FilaDevolucion['devolucion']> = {}): FilaDevolucion['devolucion'] {
+  return {
+    tracking: null,
+    estadoActual: null,
+    tramos: [],
+    totalHoras: 0,
+    consultado: false,
+    sucursalDespacho: null,
+    rendicionFallida: null,
+    ...overrides,
+  }
+}
+
 function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
   return {
     orderNumber: 'ORD-1',
@@ -266,14 +283,15 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
     producto: 'Producto',
     imei: null,
     trackingManual: false,
+    origenManual: false,
     ciudad: null,
     provincia: null,
     returnCreadoAt: '2026-10-01T00:00:00Z',
     ordenAnulada: false,
     inventarioStatus: null,
     trustonicObservado: null,
-    entrega: { tracking: null, estadoActual: null, tramos: [], totalHoras: 0, consultado: false },
-    devolucion: { tracking: null, estadoActual: null, tramos: [], totalHoras: 0, consultado: false },
+    entrega: seguimiento(),
+    devolucion: seguimiento(),
     banderas: [],
     recibidoWhGo: false,
     resueltoAt: null,
@@ -288,7 +306,7 @@ function filaDevolucion(overrides: Partial<FilaDevolucion>): FilaDevolucion {
 describe('separarResueltos', () => {
   it('manda a pendientes una fila con estadoActual terminal (Devuelto) pero resueltoAt null: nada se archiva solo', () => {
     const fila = filaDevolucion({
-      devolucion: { tracking: '123', estadoActual: 'Devuelto', tramos: [], totalHoras: 10, consultado: true },
+      devolucion: seguimiento({ tracking: '123', estadoActual: 'Devuelto', totalHoras: 10, consultado: true }),
       resueltoAt: null,
     })
     const { pendientes, resueltas } = separarResueltos([fila])
@@ -298,7 +316,7 @@ describe('separarResueltos', () => {
 
   it('manda a resueltas una fila con resueltoAt seteado, sin importar el estado de Andreani', () => {
     const fila = filaDevolucion({
-      devolucion: { tracking: '456', estadoActual: 'En retiro', tramos: [], totalHoras: 5, consultado: true },
+      devolucion: seguimiento({ tracking: '456', estadoActual: 'En retiro', totalHoras: 5, consultado: true }),
       resueltoAt: '2026-10-20T12:00:00Z',
     })
     const { pendientes, resueltas } = separarResueltos([fila])
@@ -341,5 +359,99 @@ describe('devolucionesPedidasSinShipment', () => {
   it('pedida sin tracking todavía (Andreani no creó el envío) → sintética', () => {
     const pedidas = [{ orderNumber: 'SO-SINTRACK', tracking: null }]
     expect(devolucionesPedidasSinShipment(pedidas, returns)).toEqual(pedidas)
+  })
+})
+
+// Timeline real del caso SO-YVP4LR (13/11/2026): el cliente despachó en su
+// sucursal de Chaco, el primer intento de rendición en nuestra oficina falló
+// por dirección mal cargada y el segundo entregó el equipo.
+const TIMELINE_RENDICION = {
+  numeroAndreani: '360003139421170',
+  procesoActual: { orden: 5, titulo: 'Retirado', fechaUltimoEvento: '2026-11-11T16:09:58' },
+  timelines: [
+    { orden: 1, titulo: 'Pendiente de ingreso', traducciones: [{ fechaEvento: '2026-10-23T10:33:20', traduccion: 'Devolución pendiente de ingreso al circuito operativo.', sucursal: { nombre: null } }] },
+    { orden: 2, titulo: 'Ingresado', traducciones: [{ fechaEvento: '2026-10-24T09:49:01.18', traduccion: 'Tu solicitud está siendo procesada.', sucursal: { nombre: 'Pres Roque Saenz Peña (ruta 16)' } }] },
+    { orden: 3, titulo: 'En retiro', traducciones: [
+      { fechaEvento: '2026-11-03T10:29:18', traduccion: 'Hoy te visitaremos en tu domicilio para retirar tu devolución.', sucursal: { nombre: 'Villa Allende (av Goycochea)' } },
+      { fechaEvento: '2026-11-03T10:30:27', traduccion: '<p>Te visitamos en tu domicilio, pero no logramos realizar el retiro de tu devolución. Motivo : Direccion Incorrecta No Existe Numero.</p>', sucursal: { nombre: 'Villa Allende (av Goycochea)' } },
+      { fechaEvento: '2026-11-11T07:31:00.54', traduccion: 'Hoy te visitaremos en tu domicilio para retirar tu devolución.', sucursal: { nombre: 'Villa Allende (av Goycochea)' } },
+    ] },
+    { orden: 5, titulo: 'No retirado', traducciones: [{ fechaEvento: '2026-11-03T10:30:27', traduccion: 'No se pudo completar el proceso de devolución.', sucursal: { nombre: 'Villa Allende (av Goycochea)' } }] },
+    { orden: 5, titulo: 'Retirado', traducciones: [{ fechaEvento: '2026-11-11T16:09:58', traduccion: 'Ya realizamos el retiro en tu domicilio.', sucursal: { nombre: 'Villa Allende (av Goycochea)' } }] },
+  ],
+}
+
+describe('etiquetaCircuitoDevolucion', () => {
+  it('traduce los estados crudos de Andreani a la semántica de rendición', () => {
+    expect(etiquetaCircuitoDevolucion('Ingresado')).toBe('Despachada por el cliente')
+    expect(etiquetaCircuitoDevolucion('Retirado')).toBe('Rendida en oficina')
+    expect(etiquetaCircuitoDevolucion('No retirado')).toBe('Rendición fallida')
+  })
+
+  it('deja pasar sin tocar un estado desconocido', () => {
+    expect(etiquetaCircuitoDevolucion('Rezago')).toBe('Rezago')
+    expect(detalleCircuitoDevolucion('Rezago')).toBeNull()
+  })
+})
+
+describe('sucursalDespacho', () => {
+  it('devuelve la sucursal donde el cliente entregó el paquete', () => {
+    const { eventos } = parseTimelineAndreani(TIMELINE_RENDICION)
+    expect(sucursalDespacho(eventos)).toBe('Pres Roque Saenz Peña (ruta 16)')
+  })
+
+  it('devuelve null si todavía no hay evento Ingresado', () => {
+    expect(sucursalDespacho([])).toBeNull()
+  })
+})
+
+describe('rendicionFallida', () => {
+  it('no reporta el fallo si un Retirado posterior lo resolvió', () => {
+    const { eventos } = parseTimelineAndreani(TIMELINE_RENDICION)
+    expect(rendicionFallida(eventos)).toBeNull()
+  })
+
+  it('reporta el último fallo con su motivo cuando sigue sin resolverse', () => {
+    const { eventos } = parseTimelineAndreani(TIMELINE_RENDICION)
+    const sinExito = eventos.filter(e => e.estado !== 'Retirado')
+    const fallo = rendicionFallida(sinExito)
+    expect(fallo).not.toBeNull()
+    expect(fallo!.motivo).toBe('Direccion Incorrecta No Existe Numero')
+  })
+
+  it('detecta el rehusado del fixture viejo como fallo de rendición', () => {
+    const { eventos } = parseTimelineAndreani(TIMELINE_DEVOLUCION)
+    const fallo = rendicionFallida(eventos)
+    expect(fallo).not.toBeNull()
+    expect(fallo!.motivo).toBe('Rehusado Se Niega A Firmar')
+  })
+
+  it('devuelve null sin eventos de fallo', () => {
+    expect(rendicionFallida([])).toBeNull()
+  })
+})
+
+describe('duracionesPorEstado con Retirado terminal', () => {
+  it('corta el reloj en Retirado: la rendición ya se concretó', () => {
+    const { eventos } = parseTimelineAndreani(TIMELINE_RENDICION)
+    const tramos = duracionesPorEstado(eventos, new Date('2026-11-20T12:00:00Z'), ['Devuelto', 'Entregado', 'Retirado'])
+    const ultimo = tramos[tramos.length - 1]
+    expect(ultimo.estado).toBe('Retirado')
+    expect(ultimo.enCurso).toBe(false)
+    expect(ultimo.horas).toBe(0)
+  })
+})
+
+describe('banderasDevolucion rendición fallida', () => {
+  it('levanta la bandera cuando hay un intento de rendición fallido sin resolver', () => {
+    const banderas = banderasDevolucion({
+      entregaEstado: 'Entregado',
+      inventarioStatus: null,
+      trustonicObservado: null,
+      ordenAnulada: false,
+      devolucionEventos: 4,
+      rendicionFallida: true,
+    })
+    expect(banderas).toContain('rendicion_fallida')
   })
 })

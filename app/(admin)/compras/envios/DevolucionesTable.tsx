@@ -3,21 +3,23 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilaDevolucion, SeguimientoAndreani } from '@/lib/actions/devoluciones'
-import { setRecibidoWhGo, setDevolucionResuelta } from '@/lib/actions/devoluciones'
-import { formatearDuracion, separarResueltos } from '@/lib/devoluciones'
+import { setRecibidoWhGo, setDevolucionResuelta, eliminarDevolucionManual } from '@/lib/actions/devoluciones'
+import { formatearDuracion, separarResueltos, etiquetaCircuitoDevolucion, detalleCircuitoDevolucion } from '@/lib/devoluciones'
 import { etiquetaDevolucion, claseDevolucion } from '@/lib/estados-andreani'
 import BotonAnularOrden from './BotonAnularOrden'
+import BotonCargarDevolucion from './BotonCargarDevolucion'
 
 function fecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-// Color del estado actual según dónde está en el circuito.
+// Color del estado actual según dónde está en el circuito. Lo malo ("No
+// retirado") se chequea antes que lo bueno: "retirado" es substring de ambos.
 function colorEstado(estado: string | null): string {
   if (!estado) return 'bg-gray-100 text-gray-500 border-gray-200'
   const e = estado.toLowerCase()
-  if (e.includes('entregado') || e.includes('devuelto') || e.includes('retirado')) return 'bg-green-50 text-green-700 border-green-200'
   if (e.includes('no retirado') || e.includes('rezago')) return 'bg-red-50 text-red-700 border-red-200'
+  if (e.includes('entregado') || e.includes('devuelto') || e.includes('retirado')) return 'bg-green-50 text-green-700 border-green-200'
   if (e.includes('pendiente')) return 'bg-amber-50 text-amber-700 border-amber-200'
   return 'bg-blue-50 text-blue-700 border-blue-200'
 }
@@ -25,18 +27,28 @@ function colorEstado(estado: string | null): string {
 const BANDERAS: Record<string, { label: string; title: string }> = {
   stock_sin_retorno: { label: '⚠️ Stock sin retorno', title: 'El equipo se entregó al cliente pero ya figura DISPONIBLE en stock — riesgo de doble venta si no volvió físicamente.' },
   trustonic_activo_anulada: { label: '⚠️ Trustonic activo', title: 'La orden está anulada pero el equipo sigue ACTIVE en Trustonic — en manos del cliente sin bloquear.' },
-  devolucion_sin_movimiento: { label: '⚠️ Sin movimiento', title: 'La etiqueta de devolución se generó pero Andreani no registra ningún evento — el retiro nunca arrancó.' },
+  devolucion_sin_movimiento: { label: '⚠️ Sin movimiento', title: 'La etiqueta de devolución se generó pero Andreani no registra ningún evento — el circuito nunca arrancó.' },
+  rendicion_fallida: { label: '⚠️ Rendición fallida', title: 'Andreani intentó entregar el equipo en nuestra oficina y no pudo (ver motivo en la columna Devolución) — suele ser la dirección de rendición mal cargada.' },
 }
 
 // Seguimiento de un tracking: estado actual + secuencia de estados con su duración,
-// y link al seguimiento público de Andreani para verificar.
-function Seguimiento({ s }: { s: SeguimientoAndreani }) {
+// y link al seguimiento público de Andreani para verificar. En el circuito de
+// devolución los estados crudos de Andreani se traducen a la semántica real:
+// "Ingresado" = el cliente despachó en SU sucursal, "Retirado" = la RENDICIÓN
+// en nuestra oficina (el "domicilio" de los textos de Andreani es el nuestro).
+function Seguimiento({ s, circuito }: { s: SeguimientoAndreani; circuito?: 'entrega' | 'devolucion' }) {
   if (!s.tracking) return <span className="text-gray-400 text-xs">— sin envío</span>
+  const esDevolucion = circuito === 'devolucion'
+  const etiqueta = (estado: string) => (esDevolucion ? etiquetaCircuitoDevolucion(estado) : estado)
+  const detalle = (estado: string) => (esDevolucion ? detalleCircuitoDevolucion(estado) ?? undefined : undefined)
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <span className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${colorEstado(s.estadoActual)}`}>
-          {s.consultado ? (s.estadoActual ?? 'sin datos') : 'no consultado'}
+        <span
+          className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${colorEstado(s.estadoActual)}`}
+          title={s.estadoActual ? detalle(s.estadoActual) : undefined}
+        >
+          {s.consultado ? (s.estadoActual ? etiqueta(s.estadoActual) : 'sin datos') : 'no consultado'}
         </span>
         <a
           href={`https://www.andreani.com/envio/${s.tracking}`}
@@ -48,11 +60,24 @@ function Seguimiento({ s }: { s: SeguimientoAndreani }) {
           {s.tracking} ↗
         </a>
       </div>
+      {esDevolucion && s.sucursalDespacho && (
+        <div className="text-[10px] text-gray-500" title="Sucursal Andreani donde el cliente entregó el paquete">
+          📦 despachada por el cliente en {s.sucursalDespacho}
+        </div>
+      )}
+      {esDevolucion && s.rendicionFallida && (
+        <div
+          className="text-[10px] text-red-700"
+          title="Andreani intentó entregar el equipo en nuestra oficina y no pudo — revisar la dirección de rendición"
+        >
+          ⚠️ rendición fallida {fecha(s.rendicionFallida.fecha)}{s.rendicionFallida.motivo ? `: ${s.rendicionFallida.motivo}` : ''}
+        </div>
+      )}
       {s.tramos.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-gray-600">
           {s.tramos.map((t, i) => (
-            <span key={i} className="whitespace-nowrap">
-              <span className={t.enCurso ? 'font-semibold text-gray-900' : ''}>{t.estado}</span>
+            <span key={i} className="whitespace-nowrap" title={detalle(t.estado)}>
+              <span className={t.enCurso ? 'font-semibold text-gray-900' : ''}>{etiqueta(t.estado)}</span>
               <span className="text-gray-400"> {formatearDuracion(t.horas)}{t.enCurso ? '…' : ''}</span>
               {i < s.tramos.length - 1 && <span className="text-gray-300"> →</span>}
             </span>
@@ -133,6 +158,59 @@ function PedidaWebhookChip({ orderNumber, pedida }: { orderNumber: string; pedid
       >
         🏷 etiqueta
       </a>
+    </span>
+  )
+}
+
+// Chip de las devoluciones cargadas a mano (botón "Cargar devolución") con su
+// baja en dos pasos, por si se cargó con un pedido o tracking equivocado.
+function ChipCargaExterna({ tracking }: { tracking: string | null }) {
+  const router = useRouter()
+  const [confirmando, setConfirmando] = useState(false)
+  const [enviando, startTransition] = useTransition()
+
+  const quitar = () => {
+    if (!tracking) return
+    startTransition(async () => {
+      const res = await eliminarDevolucionManual(tracking)
+      if (!res.error) router.refresh()
+      setConfirmando(false)
+    })
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 mt-1">
+      <span
+        className="inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium bg-purple-50 text-purple-700 border-purple-200"
+        title="Devolución generada por fuera de GOcelular, cargada a mano con el botón «Cargar devolución»"
+      >
+        ✍ carga externa
+      </span>
+      {tracking && (confirmando ? (
+        <>
+          <button
+            disabled={enviando}
+            onClick={quitar}
+            className="text-[11px] font-bold text-red-700 hover:text-red-800 disabled:opacity-40"
+            title="Confirmar: quitar esta devolución cargada a mano"
+          >
+            {enviando ? '…' : '¿quitar?'}
+          </button>
+          {!enviando && (
+            <button onClick={() => setConfirmando(false)} className="text-[11px] text-gray-400 hover:text-gray-600" title="Cancelar">
+              ✕
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => setConfirmando(true)}
+          className="text-[11px] text-gray-400 hover:text-red-600"
+          title="Quitar esta devolución cargada a mano (p. ej. por error de tipeo)"
+        >
+          ✕
+        </button>
+      ))}
     </span>
   )
 }
@@ -228,11 +306,18 @@ export default function DevolucionesTable({ devoluciones }: { devoluciones: Fila
   }, [devoluciones])
 
   if (devoluciones.length === 0) {
-    return <p className="text-sm text-gray-500">No hay devoluciones registradas.</p>
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-end"><BotonCargarDevolucion /></div>
+        <p className="text-sm text-gray-500">No hay devoluciones registradas.</p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end"><BotonCargarDevolucion /></div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Tarjeta label="Pendientes / gestión" valor={String(resumen.pendientes)} />
         <Tarjeta label="Con alerta" valor={String(resumen.conAlerta)} color={resumen.conAlerta > 0 ? 'text-red-600' : undefined} />
@@ -241,8 +326,10 @@ export default function DevolucionesTable({ devoluciones }: { devoluciones: Fila
       </div>
 
       <p className="text-xs text-gray-500">
-        Los dos seguimientos se consultan en vivo contra la API pública de Andreani. El tiempo de cada estado sale de las fechas reales de Andreani.
+        Los dos seguimientos se consultan en vivo contra la API pública de Andreani. El circuito de devolución se lee así: el cliente despacha el
+        paquete en SU sucursal Andreani («Despachada por el cliente») y Andreani lo entrega en nuestra oficina («Rendida en oficina» = ya lo tenemos).
         El estado de Pedro es una segunda fuente de control. Ninguna devolución se archiva sola: marcá «✓ Resolver» recién cuando el caso quedó cerrado.
+        Las devoluciones generadas por fuera de GOcelular (lado GOcuotas) no llegan solas: cargalas con «+ Cargar devolución».
       </p>
 
       {pendientes.length > 0 ? (
@@ -300,7 +387,7 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
               </td>
               <td className="py-2 pr-3 min-w-[220px]"><Seguimiento s={d.entrega} /></td>
               <td className="py-2 pr-3 min-w-[220px]">
-                <Seguimiento s={d.devolucion} />
+                <Seguimiento s={d.devolucion} circuito="devolucion" />
                 {d.trackingManual && (
                   <span
                     className="inline-block mt-1 px-1.5 py-0.5 rounded-full border text-[11px] font-medium bg-amber-50 text-amber-700 border-amber-200"
@@ -309,6 +396,7 @@ function TablaDevoluciones({ filas }: { filas: FilaDevolucion[] }) {
                     ✍ recarga manual
                   </span>
                 )}
+                {d.origenManual && <ChipCargaExterna tracking={d.devolucion.tracking} />}
               </td>
               <td className="py-2 pr-3">
                 <div className="space-y-1">

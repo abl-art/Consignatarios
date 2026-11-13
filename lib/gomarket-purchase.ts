@@ -4,12 +4,18 @@
 // GOcelular, van SIN IMEIs: una línea por SKU con quantity y unit_cost
 // opcional (pesos como string). Los SKUs deben existir antes en commerce_skus.
 
+import { eanProvisorio } from '@/lib/ean-provisorio'
+
 export type Plataforma = 'gocelular' | 'gomarket'
 
 export interface CommercePurchaseLine {
   sku: string
   quantity: number
   unit_cost?: string
+  // EAN del producto (pedido de Pedro 13/11/2026): real si está cargado en
+  // compras_productos, provisorio 299 determinístico si no — con él GOcelular
+  // da de alta el producto en Andreani y crea la ASN
+  ean?: string
 }
 
 export interface ItemCompraGomarket {
@@ -17,6 +23,7 @@ export interface ItemCompraGomarket {
   productoNombre: string
   cantidad: number
   precio: number
+  ean?: string | null
 }
 
 /**
@@ -69,6 +76,7 @@ export function armarLineasGomarket(items: ItemCompraGomarket[]): { lines: Comme
         sku,
         quantity: item.cantidad,
         ...(costoValido ? { unit_cost: item.precio.toFixed(2) } : {}),
+        ean: item.ean?.trim() || eanProvisorio(sku),
       })
     }
   }

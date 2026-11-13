@@ -159,6 +159,85 @@ export function formatearDuracion(horas: number): string {
   return h > 0 ? `${dias} d ${h} h` : `${dias} d`
 }
 
+// Semántica del circuito de devolución (confirmada con operaciones el 13/11/2026):
+// el cliente despacha el paquete en SU sucursal Andreani ("Ingresado") y Andreani
+// lo RINDE en nuestra oficina — el "domicilio" de los textos de "En retiro"/
+// "Retirado" es el NUESTRO (zona Villa Allende), no el del cliente.
+export const SEMANTICA_DEVOLUCION: Record<string, { etiqueta: string; detalle: string }> = {
+  'Pendiente de ingreso': {
+    etiqueta: 'Solicitada',
+    detalle: 'La devolución se generó pero el cliente todavía no entregó el paquete en Andreani.',
+  },
+  Ingresado: {
+    etiqueta: 'Despachada por el cliente',
+    detalle: 'El cliente entregó el paquete en su sucursal Andreani cercana.',
+  },
+  'En retiro': {
+    etiqueta: 'En rendición',
+    detalle: 'Andreani está por entregar el equipo en nuestra oficina.',
+  },
+  'No retirado': {
+    etiqueta: 'Rendición fallida',
+    detalle: 'Andreani no pudo entregar el equipo en nuestra oficina — revisar el motivo (suele ser la dirección de rendición mal cargada).',
+  },
+  Retirado: {
+    etiqueta: 'Rendida en oficina',
+    detalle: 'Andreani entregó el equipo en nuestra oficina — ya lo tenemos físicamente.',
+  },
+  'En devolución': {
+    etiqueta: 'En circuito Andreani',
+    detalle: 'El paquete sigue dando vueltas en el circuito de Andreani (típico después de un intento de rendición fallido).',
+  },
+  Devuelto: {
+    etiqueta: 'Cerrada por Andreani',
+    detalle: 'Andreani dio por terminado el circuito de devolución.',
+  },
+}
+
+export function etiquetaCircuitoDevolucion(estado: string): string {
+  return SEMANTICA_DEVOLUCION[estado]?.etiqueta ?? estado
+}
+
+export function detalleCircuitoDevolucion(estado: string): string | null {
+  return SEMANTICA_DEVOLUCION[estado]?.detalle ?? null
+}
+
+// Sucursal donde el cliente despachó el paquete (primer evento "Ingresado" con
+// sucursal). Es la punta del circuito del lado del cliente.
+export function sucursalDespacho(eventos: EventoAndreani[]): string | null {
+  for (const e of eventos) {
+    if (e.estado === 'Ingresado' && e.sucursal) return e.sucursal
+  }
+  return null
+}
+
+export interface RendicionFallida {
+  fecha: string
+  motivo: string | null
+}
+
+// Intento de rendición fallido SIN un "Retirado" posterior que lo resuelva:
+// Andreani no pudo entregarnos el equipo y el caso sigue abierto. El motivo
+// sale del texto del evento ("Motivo : Direccion Incorrecta No Existe Numero",
+// "Rehusado Se Niega A Firmar", etc.).
+export function rendicionFallida(eventos: EventoAndreani[]): RendicionFallida | null {
+  const esFallo = (e: EventoAndreani) =>
+    e.estado === 'No retirado' ||
+    (e.estado === 'En retiro' && /no logramos/i.test(e.texto))
+  const fallos = eventos.filter(esFallo)
+  if (fallos.length === 0) return null
+  const ultimoFallo = fallos[fallos.length - 1]
+  const resuelto = eventos.some(e => e.estado === 'Retirado' && e.fecha > ultimoFallo.fecha)
+  if (resuelto) return null
+  // El motivo puede venir en el evento gemelo de "En retiro" y no en el de
+  // "No retirado" — se toma el más reciente que lo traiga.
+  for (let i = fallos.length - 1; i >= 0; i--) {
+    const m = fallos[i].texto.match(/motivo\s*:?\s*(.+?)\.?\s*$/i)
+    if (m) return { fecha: ultimoFallo.fecha, motivo: m[1].trim() }
+  }
+  return { fecha: ultimoFallo.fecha, motivo: null }
+}
+
 // Señales de inconsistencia entre el estado de la devolución y el del equipo/orden.
 export interface DatosBanderas {
   entregaEstado: string | null
@@ -166,6 +245,8 @@ export interface DatosBanderas {
   trustonicObservado: string | null
   ordenAnulada: boolean
   devolucionEventos: number
+  /** Hay un intento de rendición en nuestra oficina fallido y sin resolver */
+  rendicionFallida?: boolean
 }
 
 // Estado terminal del circuito de devolución: el equipo llegó de vuelta al origen.
@@ -206,6 +287,9 @@ export function banderasDevolucion(d: DatosBanderas): string[] {
   }
   if (d.devolucionEventos === 0) {
     banderas.push('devolucion_sin_movimiento')
+  }
+  if (d.rendicionFallida) {
+    banderas.push('rendicion_fallida')
   }
   return banderas
 }
