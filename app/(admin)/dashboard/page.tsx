@@ -4,7 +4,7 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasGomarket, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
 import { resumenAccesorios } from '@/lib/accesorios'
 import { resumenVentasDia } from '@/lib/ventas-dia'
 import { getProyeccionDashboard } from '@/lib/actions/proyecciones'
@@ -339,19 +339,21 @@ async function VentasDelDia() {
 
   let ventasHoy: VentaDiaria[] = []
   let ventasUlt30d: VentaDiaria[] = []
+  let ventasGomarket = { hoy: { ventas: 0, monto: 0 }, total30d: { ventas: 0, monto: 0 } }
   try {
-    ;[ventasHoy, ventasUlt30d] = await Promise.all([fetchVentasHoy(), fetchVentasUlt30d()])
+    ;[ventasHoy, ventasUlt30d, ventasGomarket] = await Promise.all([fetchVentasHoy(), fetchVentasUlt30d(), fetchVentasGomarket()])
   } catch {
     // GOcelular no disponible
   }
 
   if (ventasHoy.length === 0 && ventasUlt30d.length === 0) return null
 
-  const resumen = resumenVentasDia(ventasHoy, ventasUlt30d, prefixes)
+  const resumen = resumenVentasDia(ventasHoy, ventasUlt30d, prefixes, ventasGomarket)
 
   const canales = [
     { key: 'gocelular' as const, label: 'GOcelular', color: 'bg-magenta-50', borderColor: 'border-magenta-200', iconColor: 'text-magenta-700' },
     { key: 'terceros' as const, label: 'Terceros', color: 'bg-gray-50', borderColor: 'border-gray-200', iconColor: 'text-gray-700' },
+    { key: 'gomarket' as const, label: 'GOmarket', color: 'bg-emerald-50', borderColor: 'border-emerald-200', iconColor: 'text-emerald-700' },
   ]
 
   return (

@@ -20,9 +20,17 @@ interface Cifras {
 }
 
 export interface ResumenVentasDia {
-  hoy: { gocelular: Cifras; terceros: Cifras; total: Cifras }
-  prom30d: { gocelular: Cifras; terceros: Cifras; general: Cifras }
+  hoy: { gocelular: Cifras; terceros: Cifras; gomarket: Cifras; total: Cifras }
+  prom30d: { gocelular: Cifras; terceros: Cifras; gomarket: Cifras; general: Cifras }
 }
+
+// GOmarket viene de otra fuente (commerce_orders, no gocuotas_orders), así que
+// sus cifras ya calculadas se inyectan acá: hoy + total 30d (sin promediar).
+export interface VentasGomarketInput {
+  hoy: Cifras
+  total30d: Cifras
+}
+const GOMARKET_VACIO: VentasGomarketInput = { hoy: { ventas: 0, monto: 0 }, total30d: { ventas: 0, monto: 0 } }
 
 type Canal = 'gocelular' | 'consignatarios' | 'terceros'
 
@@ -57,24 +65,35 @@ const DIAS = 30
 export function resumenVentasDia(
   ventasHoy: VentaAgrupada[],
   ventasUlt30d: VentaAgrupada[],
-  prefixes: ConsignatarioPrefix[]
+  prefixes: ConsignatarioPrefix[],
+  gomarket: VentasGomarketInput = GOMARKET_VACIO
 ): ResumenVentasDia {
   const hoyGo = sumar(ventasHoy, 'gocelular', prefixes)
   const hoyTerceros = sumar(ventasHoy, 'terceros', prefixes)
+  const hoyGm = gomarket.hoy
 
   const promGo = promediar(sumar(ventasUlt30d, 'gocelular', prefixes))
   const promTerceros = promediar(sumar(ventasUlt30d, 'terceros', prefixes))
+  const promGm = promediar(gomarket.total30d)
 
   return {
     hoy: {
       gocelular: hoyGo,
       terceros: hoyTerceros,
-      total: { ventas: hoyGo.ventas + hoyTerceros.ventas, monto: hoyGo.monto + hoyTerceros.monto },
+      gomarket: hoyGm,
+      total: {
+        ventas: hoyGo.ventas + hoyTerceros.ventas + hoyGm.ventas,
+        monto: hoyGo.monto + hoyTerceros.monto + hoyGm.monto,
+      },
     },
     prom30d: {
       gocelular: promGo,
       terceros: promTerceros,
-      general: { ventas: promGo.ventas + promTerceros.ventas, monto: promGo.monto + promTerceros.monto },
+      gomarket: promGm,
+      general: {
+        ventas: promGo.ventas + promTerceros.ventas + promGm.ventas,
+        monto: promGo.monto + promTerceros.monto + promGm.monto,
+      },
     },
   }
 }

@@ -51,5 +51,15 @@ describe('resumenVentasDia', () => {
     const r = resumenVentasDia([], [], [])
     expect(r.hoy.total).toEqual({ ventas: 0, monto: 0 })
     expect(r.prom30d.general).toEqual({ ventas: 0, monto: 0 })
+    expect(r.hoy.gomarket).toEqual({ ventas: 0, monto: 0 })
+  })
+
+  it('incluye GOmarket (fuente propia) y lo suma al total y al general', () => {
+    const gomarket = { hoy: { ventas: 3, monto: 1_500_000 }, total30d: { ventas: 30, monto: 15_000_000 } }
+    const r = resumenVentasDia([], [], [], gomarket)
+    expect(r.hoy.gomarket).toEqual({ ventas: 3, monto: 1_500_000 })
+    expect(r.hoy.total).toEqual({ ventas: 3, monto: 1_500_000 })
+    expect(r.prom30d.gomarket).toEqual({ ventas: 1, monto: 500_000 }) // total30d / 30
+    expect(r.prom30d.general).toEqual({ ventas: 1, monto: 500_000 })
   })
 })

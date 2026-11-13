@@ -175,6 +175,41 @@ async function fetchVentasUlt30dLive(): Promise<VentaDiaria[]> {
   }
 }
 
+export interface VentasGomarket {
+  hoy: { ventas: number; monto: number }
+  total30d: { ventas: number; monto: number }
+}
+
+// Ventas GOmarket desde commerce_orders (su tabla de órdenes propia). Una sola
+// pasada con FILTER: cifras de hoy + acumulado 30 días. Venta = orden PAGA y no
+// anulada (paid_at marca el momento de la venta). OJO: `total` se asume en PESOS
+// — verificar con la primera venta real (hoy la tabla está vacía, GOmarket no
+// arrancó). Si viniera en centavos, dividir por 100 acá.
+async function fetchVentasGomarketLive(): Promise<VentasGomarket> {
+  const pool = getPool()
+  const vacio = { hoy: { ventas: 0, monto: 0 }, total30d: { ventas: 0, monto: 0 } }
+  if (!pool) return vacio
+  const client = await pool.connect()
+  try {
+    const { rows } = await client.query<{ hoy_v: string; hoy_m: string; d30_v: string; d30_m: string }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE paid_at::date = CURRENT_DATE)::text AS hoy_v,
+         COALESCE(SUM(total) FILTER (WHERE paid_at::date = CURRENT_DATE), 0)::text AS hoy_m,
+         COUNT(*) FILTER (WHERE paid_at::date >= CURRENT_DATE - 30 AND paid_at::date < CURRENT_DATE)::text AS d30_v,
+         COALESCE(SUM(total) FILTER (WHERE paid_at::date >= CURRENT_DATE - 30 AND paid_at::date < CURRENT_DATE), 0)::text AS d30_m
+       FROM commerce_orders
+       WHERE paid_at IS NOT NULL AND status NOT IN ('cancelled', 'returned', 'payment_expired')`
+    )
+    const r = rows[0]
+    return {
+      hoy: { ventas: Number(r.hoy_v), monto: Number(r.hoy_m) },
+      total30d: { ventas: Number(r.d30_v), monto: Number(r.d30_m) },
+    }
+  } finally {
+    client.release()
+  }
+}
+
 import { armarAsns, type AsnResumen } from './asn'
 import { armarAlertasEnvios, type AlertaEnvio, type AlertaEnvioRaw } from './alertas-envios'
 import { armarComprasMismoDia, type CasoMismoDia, type StoreMismoDia } from './compras-mismo-dia'
@@ -3829,6 +3864,7 @@ export async function fetchCostoPorImei(imeis: string[]): Promise<Map<string, nu
 // ---------------------------------------------------------------------------
 export const fetchVentasGeografia = cachear(fetchVentasGeografiaLive, 'ventas-geografia', UNA_HORA)
 export const fetchVentasUlt30d = cachear(fetchVentasUlt30dLive, 'ventas-ult30d', UNA_HORA)
+export const fetchVentasGomarket = cachear(fetchVentasGomarketLive, 'ventas-gomarket', CINCO_MIN)
 export const fetchVentasMensualesMarca13m = cachear(fetchVentasMensualesMarca13mLive, 'ventas-mensuales-marca13m', UNA_HORA)
 export const fetchVentasMensuales13m = cachear(fetchVentasMensuales13mLive, 'ventas-mensuales13m', UNA_HORA)
 export const fetchVentasHistoricas = cachear(fetchVentasHistoricasLive, 'ventas-historicas', UNA_HORA)
