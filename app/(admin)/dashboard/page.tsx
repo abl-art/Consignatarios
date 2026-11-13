@@ -114,33 +114,7 @@ export default async function DashboardPage() {
     </div>
   )
 
-  const accesoriosCard = (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Ventas con Accesorios</h2>
-        <p className="text-sm text-gray-500">órdenes pagas de los últimos 30 días</p>
-      </div>
-
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-emerald-700">Llevan accesorio</h3>
-          <p className="text-2xl font-bold text-emerald-700">{accesorios.pct.toLocaleString('es-AR')}%</p>
-        </div>
-        <p className="text-sm text-gray-500 mt-2">
-          <span className="font-semibold text-gray-700">{accesorios.conAccesorios.toLocaleString('es-AR')}</span> de {accesorios.ordenes.toLocaleString('es-AR')} órdenes
-        </p>
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <p className="text-sm text-gray-500 mb-1">Facturado en accesorios (30d)</p>
-        <p className="text-xl font-bold text-gray-900">
-          {accesorios.monto >= 1e6
-            ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
-            : formatearMoneda(accesorios.monto)}
-        </p>
-      </div>
-    </div>
-  )
+  const accesoriosCard = <AccesoriosCard accesorios={accesorios} />
 
   const stockCard = (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -327,6 +301,87 @@ export default async function DashboardPage() {
   )
 }
 
+// La tarjeta de accesorios aloja también los promedios diarios 30d por canal
+// (mudados desde Ventas del día el 13/11 para acortar aquella tarjeta y
+// aprovechar el espacio libre de esta). ventasUlt30d y gomarket vienen del
+// cache (1h / 5min) — pedirlos de nuevo acá es gratis; hoy no hace falta.
+async function AccesoriosCard({ accesorios }: { accesorios: { pct: number; conAccesorios: number; ordenes: number; monto: number } }) {
+  const supabase = createClient()
+  const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
+  const prefixes = (consigs ?? [])
+    .filter((c: { store_prefix: string | null }) => c.store_prefix)
+    .map((c: { nombre: string; store_prefix: string | null }) => ({
+      nombre: c.nombre,
+      prefix: c.store_prefix!.toLowerCase(),
+    }))
+
+  let prom30d: ReturnType<typeof resumenVentasDia>['prom30d'] | null = null
+  try {
+    const [ventasUlt30d, ventasGomarket] = await Promise.all([fetchVentasUlt30d(), fetchVentasGomarket()])
+    prom30d = resumenVentasDia([], ventasUlt30d, prefixes, ventasGomarket).prom30d
+  } catch {
+    // GOcelular no disponible: la tarjeta sale sin promedios
+  }
+
+  const filasProm = prom30d
+    ? [
+        { label: 'GOcelular', color: 'text-magenta-700', cifras: prom30d.gocelular },
+        { label: 'Terceros', color: 'text-gray-700', cifras: prom30d.terceros },
+        { label: 'GOmarket', color: 'text-emerald-700', cifras: prom30d.gomarket },
+      ]
+    : []
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Ventas con Accesorios</h2>
+        <p className="text-sm text-gray-500">órdenes pagas de los últimos 30 días</p>
+      </div>
+
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-emerald-700">Llevan accesorio</h3>
+          <p className="text-2xl font-bold text-emerald-700">{accesorios.pct.toLocaleString('es-AR')}%</p>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          <span className="font-semibold text-gray-700">{accesorios.conAccesorios.toLocaleString('es-AR')}</span> de{' '}
+          {accesorios.ordenes.toLocaleString('es-AR')} órdenes ·{' '}
+          <span className="font-semibold text-gray-700">
+            {accesorios.monto >= 1e6
+              ? `$${(accesorios.monto / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M`
+              : formatearMoneda(accesorios.monto)}
+          </span>{' '}
+          facturados
+        </p>
+      </div>
+
+      {prom30d && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-sm text-gray-500 mb-2">Promedio de ventas por día (30d)</p>
+          <div className="space-y-1.5">
+            {filasProm.map(f => (
+              <div key={f.label} className="flex items-baseline justify-between text-sm">
+                <span className={`font-medium ${f.color}`}>{f.label}</span>
+                <span className="text-gray-700">
+                  <span className="font-semibold text-gray-900">{Math.round(f.cifras.ventas)}</span> ventas ·{' '}
+                  <span className="font-semibold text-gray-900">{formatearMoneda(Math.round(f.cifras.monto))}</span>
+                </span>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between text-sm pt-1.5 border-t border-gray-100">
+              <span className="font-semibold text-gray-900">General</span>
+              <span className="text-gray-700">
+                <span className="font-bold text-gray-900">{Math.round(prom30d.general.ventas)}</span> ventas ·{' '}
+                <span className="font-bold text-gray-900">{formatearMoneda(Math.round(prom30d.general.monto))}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 async function VentasDelDia() {
   const supabase = createClient()
   const { data: consigs } = await supabase.from('consignatarios').select('nombre, store_prefix')
@@ -368,10 +423,11 @@ async function VentasDelDia() {
       <div className="space-y-3">
         {canales.map((canal) => {
           const cifras = resumen.hoy[canal.key]
-          const prom = resumen.prom30d[canal.key]
 
           return (
             <div key={canal.key} className={`rounded-lg border ${canal.borderColor} ${canal.color} px-4 py-4`}>
+              {/* Los promedios 30d viven en la tarjeta Ventas con Accesorios
+                  (pedido de Emiliano 13/11: acortar esta tarjeta) */}
               <div className="flex items-center justify-between">
                 <h3 className={`text-base font-bold ${canal.iconColor}`}>{canal.label}</h3>
                 <div className="flex items-center gap-4">
@@ -382,19 +438,9 @@ async function VentasDelDia() {
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
-                prom. <span className="font-semibold text-gray-700">{Math.round(prom.ventas)} ventas</span> · <span className="font-semibold text-gray-700">{formatearMoneda(Math.round(prom.monto))}</span> /día
-              </p>
             </div>
           )
         })}
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <p className="text-sm text-gray-500 mb-1">Promedio general (30d)</p>
-        <p className="text-xl font-bold text-gray-900">
-          {Math.round(resumen.prom30d.general.ventas)} ventas · {formatearMoneda(Math.round(resumen.prom30d.general.monto))} <span className="text-sm font-normal text-gray-500">/día</span>
-        </p>
       </div>
     </div>
   )
