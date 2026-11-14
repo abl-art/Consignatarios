@@ -295,6 +295,8 @@ export default function SegmentosClientes({ mix: mixHistorico }: { mix: MixSegme
       <p className="text-[10px] text-gray-400 mt-3">
         % sobre los compradores del canal elegido. Un cliente que compró en ambos canales cuenta en los dos; en Total, una sola vez.
         {sinDatos > 0 && ` · ${sinDatos} clientes sin segmento (sin límite conocido en GOcuotas).`}
+        {mix.oficiales != null && mix.estimados != null && mix.oficiales > 0 &&
+          ` · Fuente: segmento oficial de GOscore para ${mix.oficiales.toLocaleString('es-AR')} clientes; ${mix.estimados.toLocaleString('es-AR')} estimados con el cálculo propio (sin score reciente).`}
         {filtroActivo && ' · Con filtros: compradores con al menos una orden entregada que los cumpla; el segmento mostrado es el actual (se recalcula a diario), no el del momento de la compra.'}
       </p>
     </div>

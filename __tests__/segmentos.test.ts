@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armarMixSegmentos, condicionesMixSegmentos, ordenarFilasMix, type CompradorCanal } from '@/lib/segmentos'
+import { armarMixSegmentos, condicionesMixSegmentos, ordenarFilasMix, parseSegmentoOficial, type CompradorCanal } from '@/lib/segmentos'
 import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 
 const u = (user_id: string, propia: boolean, terceros: boolean): CompradorCanal => ({
@@ -76,5 +76,21 @@ describe('ordenarFilasMix', () => {
     const ordenadas = ordenarFilasMix(filas)
     expect(ordenadas.map(f => f.segmento)).toEqual(['A4', 'B2', 'S/D'])
     expect(filas.map(f => f.segmento)).toEqual(['S/D', 'B2', 'A4'])
+  })
+})
+
+describe('parseSegmentoOficial', () => {
+  it('acepta los 16 códigos A1–D4 y normaliza espacios y minúsculas', () => {
+    expect(parseSegmentoOficial('C4')).toEqual({ segmento: 'C4', letra: 'C', numero: 4 })
+    expect(parseSegmentoOficial(' b2 ')).toEqual({ segmento: 'B2', letra: 'B', numero: 2 })
+  })
+
+  it('rechaza null, vacío, códigos desconocidos y tipos raros', () => {
+    expect(parseSegmentoOficial(null)).toBeNull()
+    expect(parseSegmentoOficial('')).toBeNull()
+    expect(parseSegmentoOficial('E1')).toBeNull()
+    expect(parseSegmentoOficial('A5')).toBeNull()
+    expect(parseSegmentoOficial('A12')).toBeNull()
+    expect(parseSegmentoOficial(42)).toBeNull()
   })
 })

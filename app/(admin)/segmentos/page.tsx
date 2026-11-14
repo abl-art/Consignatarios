@@ -18,7 +18,7 @@ const NUMEROS = [
   { numero: '1', rango: 'Más de 12 meses activo', desc: 'Historial largo en el ecosistema: su comportamiento de pago ya es conocido.' },
   { numero: '2', rango: 'Entre 4 y 12 meses', desc: 'En consolidación: ya operan pero el historial todavía es corto.' },
   { numero: '3', rango: 'Menos de 4 meses', desc: 'Recién llegados al ecosistema: primeras operaciones BNPL.' },
-  { numero: '4', rango: 'GOcelular fue su 1ª compra', desc: 'Sin historial previo en GO: la compra del celular fue su primera operación en todo el ecosistema. Ahí empieza su historial.' },
+  { numero: '4', rango: 'Sin historial', desc: 'Sin compras BNPL entregadas que cuenten como historial. En el cálculo propio de respaldo también abarca a quien solo compró en GOcelular (su historial del ecosistema empieza ahí).' },
 ]
 
 const CELDAS: Record<string, string> = {
@@ -67,7 +67,9 @@ export default async function SegmentosPage() {
       <p className="text-sm text-gray-500 mb-6">
         Estructura de Crédito del Ecosistema GO: cada cliente se clasifica en uno de 16 segmentos que combinan
         una <strong>letra</strong> (cuánto crédito le confía GO) y un <strong>número</strong> (cuánto historial tiene).
-        Se recalculan todos los días.
+        Desde nov 2026 se usa el <strong>segmento oficial de GOscore</strong> (el que publica GOcuotas con cada
+        evaluación de score); para los clientes sin evaluación reciente se estima con el cálculo propio. Se
+        sincroniza todos los días.
       </p>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
@@ -99,8 +101,10 @@ export default async function SegmentosPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
         <h2 className="text-base font-semibold text-gray-900 mb-1">El número: la antigüedad</h2>
         <p className="text-xs text-gray-500 mb-3">
-          Meses desde su primera orden BNPL en el ecosistema GO — <strong>sin contar las compras hechas en GOcelular</strong>:
-          si el celular fue su primera operación, el cliente es un &ldquo;4&rdquo; porque su historial empieza ahí.
+          Meses desde su primera orden BNPL entregada en el ecosistema GO. Ojo con la diferencia de criterio:
+          el segmento <strong>oficial de GOscore cuenta todas las compras, incluida la de GOcelular</strong> (quien
+          estrenó el ecosistema comprando el celular pasa a &ldquo;3&rdquo; al entregarse); el <strong>cálculo propio de
+          respaldo las excluye</strong> (regla del 21/9: si el celular fue su primera operación, es un &ldquo;4&rdquo;).
         </p>
         <div className="space-y-2">
           {NUMEROS.map(n => (
@@ -127,8 +131,8 @@ export default async function SegmentosPage() {
         </div>
         <p className="text-[10px] text-gray-400 mt-3">
           Lectura rápida: A1 (arriba-izquierda de la matriz) es la mejor cartera; D3/D4 la de mayor riesgo relativo.
-          Con el cron diario, un cliente &ldquo;4&rdquo; que hace su primera compra BNPL fuera de GOcelular pasa a &ldquo;3&rdquo;
-          y va madurando hacia &ldquo;1&rdquo;.
+          Con el sync diario, un cliente &ldquo;4&rdquo; pasa a &ldquo;3&rdquo; cuando se le entrega su primera compra
+          BNPL y va madurando hacia &ldquo;1&rdquo;.
         </p>
       </div>
 

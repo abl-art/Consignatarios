@@ -1,9 +1,19 @@
 // Segmentación de clientes A1–D4 del ecosistema GO (doc "Estructura de Crédito").
-// Letra = límite general medido en tickets promedio: A >4.8 · B 2–4.8 · C 1–2 · D <1.
-// Número = antigüedad desde la activación (primera orden BNPL entregada en GO,
-// EXCLUYENDO las órdenes de la plataforma GOcelular — regla de Emiliano 21/9:
-// si el celular fue su primera compra del ecosistema, es un "4", ahí empieza
-// su historial): 1 = +12 meses · 2 = 4–12 · 3 = <4 · 4 = sin historial previo.
+//
+// FUENTE (desde nov 2026, decisión de Emiliano 14/11): el segmento OFICIAL es
+// el segment_code que GOscore publica en go_credit_scores (base GOcuotas
+// directa, última evaluación por usuario). Para los clientes sin evaluación
+// con segmento (usuarios viejos sin re-score) se usa el CÁLCULO PROPIO como
+// respaldo; la columna fuente ('gocuotas' | 'calculado') distingue ambos.
+//
+// El cálculo propio: Letra = límite general medido en tickets promedio:
+// A >4.8 · B 2–4.8 · C 1–2 · D <1. Número = antigüedad desde la activación
+// (primera orden BNPL entregada en GO, EXCLUYENDO las órdenes de la plataforma
+// GOcelular — regla de Emiliano 21/9: si el celular fue su primera compra del
+// ecosistema, es un "4", ahí empieza su historial): 1 = +12 meses · 2 = 4–12 ·
+// 3 = <4 · 4 = sin historial previo. OJO: el número oficial de GOscore cuenta
+// TODAS las órdenes entregadas (incluida la compra GOcelular) — verificado
+// 14/11 con muestra estratificada (92–99% de ajuste por bucket).
 // Ticket promedio = $ ventas GOcuotas BNPL últimos 30 días / Q ventas,
 // excluyendo las operaciones de GOcelular (clientes propios).
 //
@@ -14,21 +24,61 @@
 // Databricks. El filtro por segmento en PD/DPD/Vintage inyecta los user_ids
 // del segmento (whitelisted) en las queries de la réplica.
 
-import { getPool, getSupabasePool } from '@/lib/db-pool'
+import { getPool, getGocuotasPool, getSupabasePool } from '@/lib/db-pool'
 import { databricksQuery, dbNum } from '@/lib/databricks'
 import { CLIENT_IDS_PROPIOS } from '@/lib/client-ids'
 
 const BATCH_DATABRICKS = 5000
 const BATCH_UPSERT = 1000
+const BATCH_GOCUOTAS = 10000
 
 export const SEGMENTOS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'] as const
 
 export interface ResultadoSync {
   usuarios: number
   conSegmento: number
+  /** Con segment_code oficial de GOscore (go_credit_scores) */
+  oficiales: number
   sinLimite: number
   ticketPromedio: number
   segundos: number
+}
+
+/**
+ * Valida un segment_code oficial de go_credit_scores. GOscore publica los
+ * mismos 16 códigos A1–D4 (desde nov 2026); cualquier otra cosa (null, vacío,
+ * un código futuro desconocido) se descarta y el cliente cae al cálculo propio.
+ */
+export function parseSegmentoOficial(code: unknown): { segmento: string; letra: string; numero: number } | null {
+  if (typeof code !== 'string') return null
+  const c = code.trim().toUpperCase()
+  if (!/^[A-D][1-4]$/.test(c)) return null
+  return { segmento: c, letra: c[0], numero: Number(c[1]) }
+}
+
+// Última evaluación de GOscore por usuario (go_credit_scores de la base
+// GOcuotas directa): el segmento OFICIAL. Tira si la base no está disponible
+// (p. ej. la ventana del backup matinal) — mejor abortar el sync y conservar
+// la tabla de ayer que degradar 26k clientes al cálculo propio por un día.
+async function fetchSegmentosOficiales(userIds: string[]): Promise<Map<string, string>> {
+  const pool = getGocuotasPool()
+  if (!pool) throw new Error('Falta PG_GOCUOTAS_* para leer go_credit_scores')
+  const map = new Map<string, string>()
+  for (let i = 0; i < userIds.length; i += BATCH_GOCUOTAS) {
+    const batch = userIds.slice(i, i + BATCH_GOCUOTAS)
+    const res = await pool.query<{ user_id: string; segment_code: string | null }>(
+      `SELECT DISTINCT ON (user_id) user_id::text AS user_id, segment_code
+       FROM go_credit_scores
+       WHERE user_id = ANY($1::bigint[]) AND segment_code IS NOT NULL
+       ORDER BY user_id, updated_at DESC`,
+      [batch]
+    )
+    for (const r of res.rows) {
+      const oficial = parseSegmentoOficial(r.segment_code)
+      if (oficial) map.set(r.user_id, oficial.segmento)
+    }
+  }
+  return map
 }
 
 function calcularLetra(limite: number, ticketPromedio: number): string {
@@ -95,6 +145,8 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
       )
     `)
     await db.query(`CREATE INDEX IF NOT EXISTS segmentos_clientes_segmento_idx ON segmentos_clientes (segmento)`)
+    // 'gocuotas' = segment_code oficial de GOscore; 'calculado' = respaldo propio
+    await db.query(`ALTER TABLE segmentos_clientes ADD COLUMN IF NOT EXISTS fuente text`)
     await db.query(`
       CREATE TABLE IF NOT EXISTS segmentos_mix (
         segmento text PRIMARY KEY,
@@ -117,6 +169,11 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     `)
     const usuarios = resUsuarios.rows.filter(r => /^\d+$/.test(r.user_id))
     const userIds = usuarios.map(r => r.user_id)
+
+    // Segmento OFICIAL de GOscore donde exista (go_credit_scores). Se consulta
+    // antes de escribir nada: si la base de GOcuotas no responde, el sync
+    // aborta entero y queda la tabla de ayer.
+    const oficiales = await fetchSegmentosOficiales(userIds)
 
     // Órdenes de la plataforma GOcelular por usuario: se excluyen al calcular
     // la activación, así la antigüedad mide solo el historial BNPL previo/ajeno
@@ -143,6 +200,7 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     if (ticketPromedio <= 0) throw new Error('Ticket promedio inválido')
 
     const segmentoPorUser = new Map<string, string | null>()
+    const escritos = new Set<string>()
     let conSegmento = 0
     let sinLimite = 0
 
@@ -180,16 +238,26 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
       for (const r of rows) {
         const userId = r.user_id
         if (!userId) continue
-        const numero = calcularNumero(r.primera_orden)
+        escritos.add(userId)
         const antiguedad = r.primera_orden
           ? Math.round(((Date.now() - new Date(r.primera_orden).getTime()) / (1000 * 60 * 60 * 24 * 30.44)) * 10) / 10
           : null
-        if (r.limite == null) {
+        const limite = r.limite == null ? null : dbNum(r.limite)
+        const limiteEnTickets = limite == null ? null : Math.round((limite / ticketPromedio) * 100) / 100
+
+        // Segmento oficial de GOscore si existe; si no, el cálculo propio
+        // (regla 21/9: la antigüedad excluye las compras GOcelular).
+        const oficial = oficiales.get(userId) ?? null
+        if (oficial) {
+          conSegmento++
+          segmentoPorUser.set(userId, oficial)
+          valores.push([userId, oficial, oficial[0], Number(oficial[1]), limite == null ? null : Math.round(limite), limiteEnTickets, antiguedad, r.sistema, ticketPromedio, 'gocuotas'])
+        } else if (limite == null) {
           sinLimite++
           segmentoPorUser.set(userId, null)
-          valores.push([userId, null, null, numero, null, null, antiguedad, r.sistema, ticketPromedio])
+          valores.push([userId, null, null, calcularNumero(r.primera_orden), null, null, antiguedad, r.sistema, ticketPromedio, 'calculado'])
         } else {
-          const limite = dbNum(r.limite)
+          const numero = calcularNumero(r.primera_orden)
           const letra = calcularLetra(limite, ticketPromedio)
           const segmento = `${letra}${numero}`
           conSegmento++
@@ -200,10 +268,11 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
             letra,
             numero,
             Math.round(limite),
-            Math.round((limite / ticketPromedio) * 100) / 100,
+            limiteEnTickets,
             antiguedad,
             r.sistema,
             ticketPromedio,
+            'calculado',
           ])
         }
       }
@@ -214,13 +283,13 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
         const placeholders = chunk
           .map((v, k) => {
             params.push(...v)
-            const base = k * 9
-            return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, now())`
+            const base = k * 10
+            return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, now())`
           })
           .join(',')
         await db.query(
           `INSERT INTO segmentos_clientes
-             (user_id, segmento, letra, numero, limite, limite_en_tickets, antiguedad_meses, limit_system, ticket_promedio, calculado_at)
+             (user_id, segmento, letra, numero, limite, limite_en_tickets, antiguedad_meses, limit_system, ticket_promedio, fuente, calculado_at)
            VALUES ${placeholders}
            ON CONFLICT (user_id) DO UPDATE SET
              segmento = EXCLUDED.segmento,
@@ -231,10 +300,41 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
              antiguedad_meses = EXCLUDED.antiguedad_meses,
              limit_system = EXCLUDED.limit_system,
              ticket_promedio = EXCLUDED.ticket_promedio,
+             fuente = EXCLUDED.fuente,
              calculado_at = now()`,
           params
         )
       }
+    }
+
+    // Compradores con segmento oficial que Databricks no devolvió (sin campaña
+    // ni órdenes visibles ahí): igual se guardan, con el segmento de GOscore.
+    const soloOficiales = userIds.filter(id => !escritos.has(id) && oficiales.has(id))
+    for (let j = 0; j < soloOficiales.length; j += BATCH_UPSERT) {
+      const chunk = soloOficiales.slice(j, j + BATCH_UPSERT)
+      const params: (string | number | null)[] = []
+      const placeholders = chunk
+        .map((id, k) => {
+          const seg = oficiales.get(id)!
+          conSegmento++
+          segmentoPorUser.set(id, seg)
+          params.push(id, seg, seg[0], Number(seg[1]), ticketPromedio)
+          const base = k * 5
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, 'gocuotas', now())`
+        })
+        .join(',')
+      await db.query(
+        `INSERT INTO segmentos_clientes (user_id, segmento, letra, numero, ticket_promedio, fuente, calculado_at)
+         VALUES ${placeholders}
+         ON CONFLICT (user_id) DO UPDATE SET
+           segmento = EXCLUDED.segmento,
+           letra = EXCLUDED.letra,
+           numero = EXCLUDED.numero,
+           ticket_promedio = EXCLUDED.ticket_promedio,
+           fuente = EXCLUDED.fuente,
+           calculado_at = now()`,
+        params
+      )
     }
 
     // Resumen para el Dashboard360: clientes por segmento y canal.
@@ -257,6 +357,7 @@ export async function sincronizarSegmentos(): Promise<ResultadoSync> {
     return {
       usuarios: userIds.length,
       conSegmento,
+      oficiales: oficiales.size,
       sinLimite,
       ticketPromedio: Math.round(ticketPromedio),
       segundos: Math.round((Date.now() - inicio) / 1000),
@@ -283,6 +384,10 @@ export interface MixSegmentos {
   totalTerceros: number
   totalClientes: number
   actualizadoAt: string | null
+  /** Clientes con segment_code oficial de GOscore (solo en el mix sin filtrar) */
+  oficiales?: number
+  /** Clientes con segmento estimado por el cálculo propio (sin score reciente) */
+  estimados?: number
 }
 
 export async function fetchMixSegmentos(): Promise<MixSegmentos> {
@@ -295,6 +400,22 @@ export async function fetchMixSegmentos(): Promise<MixSegmentos> {
   )
   if (res.rows.length === 0) return vacio
 
+  // Desglose de fuentes: cuántos llevan el segmento oficial de GOscore y
+  // cuántos el estimado propio. Si la columna todavía no existe, se omite.
+  let oficiales: number | undefined
+  let estimados: number | undefined
+  try {
+    const f = await pool.query<{ oficiales: string; estimados: string }>(
+      `SELECT COUNT(*) FILTER (WHERE fuente = 'gocuotas' AND segmento IS NOT NULL) AS oficiales,
+              COUNT(*) FILTER (WHERE fuente IS DISTINCT FROM 'gocuotas' AND segmento IS NOT NULL) AS estimados
+       FROM segmentos_clientes`
+    )
+    oficiales = Number(f.rows[0]?.oficiales ?? 0)
+    estimados = Number(f.rows[0]?.estimados ?? 0)
+  } catch {
+    // columna fuente aún no creada (primer deploy antes del primer sync)
+  }
+
   const filas = res.rows
     .map(r => ({ segmento: r.segmento, propia: Number(r.propia), terceros: Number(r.terceros), total: Number(r.total) }))
     .sort((a, b) => (a.segmento === 'S/D' ? 1 : b.segmento === 'S/D' ? -1 : a.segmento.localeCompare(b.segmento)))
@@ -305,6 +426,8 @@ export async function fetchMixSegmentos(): Promise<MixSegmentos> {
     totalTerceros: filas.reduce((s, f) => s + f.terceros, 0),
     totalClientes: filas.reduce((s, f) => s + f.total, 0),
     actualizadoAt: res.rows[0]?.actualizado_at ?? null,
+    oficiales,
+    estimados,
   }
 }
 

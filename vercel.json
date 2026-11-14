@@ -34,7 +34,7 @@
     },
     {
       "path": "/api/cron/sync-segmentos",
-      "schedule": "30 11 * * *"
+      "schedule": "30 13 * * *"
     },
     {
       "path": "/api/cron/congelar-proyecciones",
