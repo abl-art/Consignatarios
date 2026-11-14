@@ -27,6 +27,8 @@ interface ProductoInput {
   categoria: string
   // A qué sistema se informa la compra: 'gocelular' (default) o 'gomarket'
   plataforma?: string
+  // EAN real de la caja, opcional: sin él los webhooks mandan el provisorio 299
+  ean?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +108,7 @@ export async function agregarProducto(input: ProductoInput) {
     nombre: input.nombre,
     categoria: input.categoria,
     plataforma: input.plataforma === 'gomarket' ? 'gomarket' : 'gocelular',
+    ean: input.ean?.trim() || null,
   })
   if (error) return { error: error.message }
   revalidatePath('/compras')
@@ -119,6 +122,7 @@ export async function editarProducto(id: string, input: ProductoInput) {
     nombre: input.nombre,
     categoria: input.categoria,
     plataforma: input.plataforma === 'gomarket' ? 'gomarket' : 'gocelular',
+    ean: input.ean?.trim() || null,
   }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/compras')

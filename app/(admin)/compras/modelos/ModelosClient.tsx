@@ -20,6 +20,7 @@ interface Producto {
   nombre: string
   categoria: string
   plataforma?: string // 'gocelular' (default) | 'gomarket'
+  ean?: string | null
   oculto?: boolean
 }
 
@@ -36,7 +37,7 @@ const CATEGORIAS = ['Celulares', 'Tablets', 'Smartwatches', 'Parlantes', 'Auricu
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
 const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 
-const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares', plataforma: 'gocelular' }
+const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares', plataforma: 'gocelular', ean: '' }
 
 function parseProvMarcas(notas: string): string[] {
   try {
@@ -153,7 +154,7 @@ export default function ModelosClient({
 
   function startEditProduct(p: Producto) {
     setEditingProductId(p.id)
-    setProductForm({ codigo: p.codigo, nombre: p.nombre, categoria: p.categoria, plataforma: p.plataforma === 'gomarket' ? 'gomarket' : 'gocelular' })
+    setProductForm({ codigo: p.codigo, nombre: p.nombre, categoria: p.categoria, plataforma: p.plataforma === 'gomarket' ? 'gomarket' : 'gocelular', ean: p.ean ?? '' })
     setShowProductForm(true)
   }
 
@@ -267,7 +268,7 @@ export default function ModelosClient({
             {editingProductId ? 'Editar Modelo' : 'Nuevo Modelo'}
           </h3>
           <form onSubmit={handleProductSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Codigo</label>
                 <input
@@ -328,6 +329,20 @@ export default function ModelosClient({
                   <option value="gomarket">GOmarket</option>
                 </select>
                 <p className="text-[10px] text-gray-400 mt-1">Define a qué sistema se informan las compras de este producto</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">EAN <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{8,14}"
+                  title="8 a 14 dígitos, sin espacios"
+                  value={productForm.ean}
+                  onChange={(e) => setProductForm((f) => ({ ...f, ean: e.target.value.replace(/\D/g, '') }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                  placeholder="7790000000000"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Código de barras de la caja. Si no lo tenés, la compra se informa con un EAN provisorio 299 automático</p>
               </div>
             </div>
             {formEsGomarket && (
@@ -500,7 +515,10 @@ export default function ModelosClient({
                 const best = getBestPrecio(prod.id)
                 return (
                   <tr key={prod.id} className={`border-b border-gray-100 hover:bg-gray-50 ${prod.oculto ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{prod.codigo || '-'}</td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                      {prod.codigo || '-'}
+                      {prod.ean && <div className="text-[10px] text-gray-400" title="EAN">EAN {prod.ean}</div>}
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
