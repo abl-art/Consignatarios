@@ -3923,7 +3923,8 @@ export const fetchAlertasSinImei = cachear(fetchAlertasSinImeiLive, 'alertas-sin
 export const fetchAlertaCuotasPagadas = cachear(fetchAlertaCuotasPagadasLive, 'alerta-cuotas-pagadas', UNA_HORA)
 export const fetchTiempoEntrega = cachear(fetchTiempoEntregaLive, 'tiempo-entrega', UNA_HORA)
 export const fetchAccesoriosVentas30d = cachear(fetchAccesoriosVentas30dLive, 'accesorios-ventas30d', UNA_HORA)
-export const fetchProductosVentas30d = cachear(fetchProductosVentas30dLive, 'productos-ventas30d', UNA_HORA)
+// clave -v2: el shape sumó `categoria` y el data cache de Vercel sobrevive deploys
+export const fetchProductosVentas30d = cachear(fetchProductosVentas30dLive, 'productos-ventas30d-v2', UNA_HORA)
 export const fetchTiempoAsignacion = cachear(fetchTiempoAsignacionLive, 'tiempo-asignacion', UNA_HORA)
 export const fetchOrdenesConImei = cachear(fetchOrdenesConImeiLive, 'ordenes-con-imei', UNA_HORA)
 export const fetchProductosStock = cachear(fetchProductosStockLive, 'productos-stock', UNA_HORA)
