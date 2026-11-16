@@ -4,7 +4,8 @@ export const maxDuration = 60
 
 import { createClient } from '@/lib/supabase/server'
 import { formatearMoneda, buscarPrecio } from '@/lib/utils'
-import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasGomarket, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, type VentaDiaria } from '@/lib/gocelular'
+import { fetchVentasHoy, fetchVentasUlt30d, fetchVentasGomarket, fetchContracargos, fetchVentasHistoricas, fetchConversionGocuotas, fetchTrustonicStats, fetchBloqueadosVsMora, fetchVentasGeografia, fetchVentasPorMarca, fetchTiempoEntrega, fetchAccesoriosVentas30d, fetchProductosVentas30d, type VentaDiaria } from '@/lib/gocelular'
+import { armarRankingProductos } from '@/lib/productos-precio'
 import { resumenAccesorios } from '@/lib/accesorios'
 import { resumenVentasDia } from '@/lib/ventas-dia'
 import { getProyeccionDashboard } from '@/lib/actions/proyecciones'
@@ -243,10 +244,11 @@ export default async function DashboardPage() {
       label: 'Performance',
       content: (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
             <VentasDelDia />
             {tiempoEntregaCard}
             {accesoriosCard}
+            <ProductosPorPrecioCard />
           </div>
           <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
           <ConversionChart data={conversionData} />
@@ -442,6 +444,62 @@ async function VentasDelDia() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// Productos vendidos en 30d ordenados del más barato al más caro, con su
+// ranking de ventas y lo facturado — el orden principal lo manda el precio
+async function ProductosPorPrecioCard() {
+  let filas: ReturnType<typeof armarRankingProductos> = []
+  try {
+    filas = armarRankingProductos(await fetchProductosVentas30d())
+  } catch {
+    // GOcelular no disponible
+  }
+  if (filas.length === 0) return null
+
+  const fmtCorto = (n: number) =>
+    n >= 1e6 ? `$${(n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M` : formatearMoneda(Math.round(n))
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold text-gray-900">Productos por precio</h2>
+        <p className="text-sm text-gray-500">del más barato al más caro · ventas de los últimos 30 días</p>
+      </div>
+      <div className="max-h-[420px] overflow-y-auto -mx-1 px-1">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white">
+            <tr className="border-b border-gray-200">
+              <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+              <th className="text-right py-1.5 font-medium text-gray-500">Precio</th>
+              <th className="text-center py-1.5 font-medium text-gray-500" title="Puesto por unidades vendidas en 30 días (1 = el más vendido)">Rk</th>
+              <th className="text-right py-1.5 font-medium text-gray-500">Fact. 30d</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filas.map(f => (
+              <tr key={f.nombre}>
+                <td className="py-1.5 pr-2 text-gray-800">{f.nombre}</td>
+                <td className="py-1.5 text-right whitespace-nowrap text-gray-700 tabular-nums">
+                  {fmtCorto(f.precio)}
+                  {f.precioEstimado && <span className="text-gray-400" title="Sin precio publicado en la tienda: promedio de venta 30d">*</span>}
+                </td>
+                <td className="py-1.5 text-center">
+                  <span className={`inline-block min-w-[26px] px-1 py-0.5 rounded-full text-xs font-bold ${
+                    f.rankingVentas <= 3 ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {f.rankingVentas}
+                  </span>
+                </td>
+                <td className="py-1.5 text-right whitespace-nowrap font-medium text-gray-900 tabular-nums">{fmtCorto(f.monto)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-gray-400 mt-2">Rk = puesto por unidades vendidas (1 = el más vendido) · * precio no publicado, se usa el promedio de venta</p>
     </div>
   )
 }

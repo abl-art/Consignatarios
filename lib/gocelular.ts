@@ -2868,6 +2868,37 @@ async function fetchAccesoriosVentas30dLive(): Promise<{ ordenes: number; conAcc
   }
 }
 
+// Productos vendidos por la tienda propia en 30 días (ítems device + addon de
+// órdenes pagas; los kits de regalo no son ítems y quedan afuera) con el precio
+// actual publicado — alimenta la tarjeta "Productos por precio" del Dashboard 360
+async function fetchProductosVentas30dLive(): Promise<import('@/lib/productos-precio').ProductoVenta30d[]> {
+  const pool = getPool()
+  if (!pool) return []
+  const client = await pool.connect()
+  try {
+    const res = await client.query<{ nombre: string; precio_cents: string | null; unidades: string; monto_cents: string }>(
+      `SELECT
+        COALESCE(sp.display_name, i.display_name) AS nombre,
+        MAX(sp.price) FILTER (WHERE sp.status = 'active') AS precio_cents,
+        SUM(i.quantity)::text AS unidades,
+        SUM(i.unit_price * i.quantity)::text AS monto_cents
+      FROM store_order_items i
+      JOIN store_orders o ON o.id = i.order_id
+      LEFT JOIN store_products sp ON sp.id = i.product_id
+      WHERE o.paid_at >= now() - interval '30 days'
+      GROUP BY 1`
+    )
+    return res.rows.map(r => ({
+      nombre: r.nombre,
+      precioTienda: r.precio_cents !== null ? Number(r.precio_cents) / 100 : null,
+      unidades: Number(r.unidades),
+      monto: Number(r.monto_cents) / 100,
+    }))
+  } finally {
+    client.release()
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tiempo hasta asignación IMEI por tienda (terceros)
 // ---------------------------------------------------------------------------
@@ -3890,6 +3921,7 @@ export const fetchAlertasSinImei = cachear(fetchAlertasSinImeiLive, 'alertas-sin
 export const fetchAlertaCuotasPagadas = cachear(fetchAlertaCuotasPagadasLive, 'alerta-cuotas-pagadas', UNA_HORA)
 export const fetchTiempoEntrega = cachear(fetchTiempoEntregaLive, 'tiempo-entrega', UNA_HORA)
 export const fetchAccesoriosVentas30d = cachear(fetchAccesoriosVentas30dLive, 'accesorios-ventas30d', UNA_HORA)
+export const fetchProductosVentas30d = cachear(fetchProductosVentas30dLive, 'productos-ventas30d', UNA_HORA)
 export const fetchTiempoAsignacion = cachear(fetchTiempoAsignacionLive, 'tiempo-asignacion', UNA_HORA)
 export const fetchOrdenesConImei = cachear(fetchOrdenesConImeiLive, 'ordenes-con-imei', UNA_HORA)
 export const fetchProductosStock = cachear(fetchProductosStockLive, 'productos-stock', UNA_HORA)
