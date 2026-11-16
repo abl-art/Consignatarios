@@ -108,6 +108,7 @@ const MARCAS_FIJAS = Object.keys(PROVEEDOR_NC)
 
 export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
   const [mes, setMes] = useState<string | null>(null)
+  const [marcaFiltro, setMarcaFiltro] = useState<string | null>(null)
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
 
   if (grupos.length === 0) {
@@ -115,12 +116,14 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
   }
 
   const mesesDisponibles = [...new Set(grupos.flatMap(g => g.meses))].sort().reverse()
-  const visibles = mes ? grupos.filter(g => g.meses.includes(mes)) : grupos
+  // Píldoras de marca sobre TODOS los grupos (no los ya filtrados): las fijas + las que aparezcan
+  const marcasDisponibles = [...MARCAS_FIJAS, ...new Set(grupos.map(g => g.marca).filter(m => !MARCAS_FIJAS.includes(m)))]
+  const visibles = grupos.filter(g => (!mes || g.meses.includes(mes)) && (!marcaFiltro || g.marca === marcaFiltro))
 
   const total = visibles.reduce((acc, g) => acc + g.ncTotal, 0)
   const emitidas = visibles.filter(g => g.emitida).reduce((acc, g) => acc + g.ncTotal, 0)
 
-  const marcas = [...MARCAS_FIJAS, ...new Set(visibles.map(g => g.marca).filter(m => !MARCAS_FIJAS.includes(m)))]
+  const marcas = marcaFiltro ? marcasDisponibles.filter(m => m === marcaFiltro) : marcasDisponibles
 
   const toggleAbierto = (key: string) => {
     setAbiertos(prev => {
@@ -133,7 +136,7 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-2">
         {[null, ...mesesDisponibles].map(m => (
           <button
             key={m ?? 'todos'}
@@ -143,6 +146,21 @@ export default function NotasCreditoTable({ grupos }: { grupos: GrupoNC[] }) {
             }`}
           >
             {m ? mesLabel(m) : 'Todos'}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtro por marca */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[null, ...marcasDisponibles].map(m => (
+          <button
+            key={m ?? 'todas'}
+            onClick={() => setMarcaFiltro(m)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              marcaFiltro === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {m ?? 'Todas las marcas'}
           </button>
         ))}
       </div>
