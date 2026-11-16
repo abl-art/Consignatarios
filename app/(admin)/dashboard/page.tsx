@@ -244,11 +244,10 @@ export default async function DashboardPage() {
       label: 'Performance',
       content: (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <VentasDelDia />
             {tiempoEntregaCard}
             {accesoriosCard}
-            <ProductosPorPrecioCard />
           </div>
           <VentasHistoricasChart data={ventasHistoricas} prefixes={prefixes} />
           <ConversionChart data={conversionData} />
@@ -264,6 +263,7 @@ export default async function DashboardPage() {
             <GeografiaVentas data={geografia} />
             <QueVendemos initialData={ventasMarca} />
           </div>
+          <ProductosPorPrecioCard />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ProyeccionVentasCard />
             {stockCard}
@@ -448,19 +448,59 @@ async function VentasDelDia() {
   )
 }
 
-// Productos vendidos en 30d ordenados del más barato al más caro, con su
-// ranking de ventas y lo facturado — el orden principal lo manda el precio
+// Tabla de un grupo (celulares o accesorios): del más barato al más caro, con
+// ranking de ventas DENTRO del grupo y facturación 30d. Los nombres hacen wrap
+// y los números van tabulares — nada fuerza scroll lateral.
+function TablaProductosPrecio({ filas }: { filas: ReturnType<typeof armarRankingProductos> }) {
+  const fmtCorto = (n: number) =>
+    n >= 1e6 ? `$${(n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M` : formatearMoneda(Math.round(n))
+  return (
+    <div className="max-h-[480px] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white">
+          <tr className="border-b border-gray-200">
+            <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
+            <th className="text-right py-1.5 font-medium text-gray-500">Precio</th>
+            <th className="text-center py-1.5 px-1 font-medium text-gray-500" title="Puesto por unidades vendidas en 30 días dentro del grupo (1 = el más vendido)">Rk</th>
+            <th className="text-right py-1.5 font-medium text-gray-500">Fact. 30d</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {filas.map(f => (
+            <tr key={f.nombre}>
+              <td className="py-1.5 pr-2 text-gray-800">{f.nombre}</td>
+              <td className="py-1.5 text-right whitespace-nowrap text-gray-700 tabular-nums">
+                {fmtCorto(f.precio)}
+                {f.precioEstimado && <span className="text-gray-400" title="Sin precio publicado en la tienda: promedio de venta 30d">*</span>}
+              </td>
+              <td className="py-1.5 px-1 text-center">
+                <span className={`inline-block min-w-[26px] px-1 py-0.5 rounded-full text-xs font-bold ${
+                  f.rankingVentas <= 3 ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {f.rankingVentas}
+                </span>
+              </td>
+              <td className="py-1.5 text-right whitespace-nowrap font-medium text-gray-900 tabular-nums">{fmtCorto(f.monto)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Tarjeta de fila completa en Negocio: celulares al 75% del ancho y accesorios
+// al 25%, cada grupo ordenado del más barato al más caro con ranking propio
 async function ProductosPorPrecioCard() {
-  let filas: ReturnType<typeof armarRankingProductos> = []
+  let productos: Awaited<ReturnType<typeof fetchProductosVentas30d>> = []
   try {
-    filas = armarRankingProductos(await fetchProductosVentas30d())
+    productos = await fetchProductosVentas30d()
   } catch {
     // GOcelular no disponible
   }
-  if (filas.length === 0) return null
-
-  const fmtCorto = (n: number) =>
-    n >= 1e6 ? `$${(n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M` : formatearMoneda(Math.round(n))
+  const celulares = armarRankingProductos(productos.filter(p => p.categoria !== 'accesorio'))
+  const accesorios = armarRankingProductos(productos.filter(p => p.categoria === 'accesorio'))
+  if (celulares.length === 0 && accesorios.length === 0) return null
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -468,38 +508,17 @@ async function ProductosPorPrecioCard() {
         <h2 className="text-lg font-semibold text-gray-900">Productos por precio</h2>
         <p className="text-sm text-gray-500">del más barato al más caro · ventas de los últimos 30 días</p>
       </div>
-      <div className="max-h-[420px] overflow-y-auto -mx-1 px-1">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white">
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-1.5 font-medium text-gray-500">Producto</th>
-              <th className="text-right py-1.5 font-medium text-gray-500">Precio</th>
-              <th className="text-center py-1.5 font-medium text-gray-500" title="Puesto por unidades vendidas en 30 días (1 = el más vendido)">Rk</th>
-              <th className="text-right py-1.5 font-medium text-gray-500">Fact. 30d</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filas.map(f => (
-              <tr key={f.nombre}>
-                <td className="py-1.5 pr-2 text-gray-800">{f.nombre}</td>
-                <td className="py-1.5 text-right whitespace-nowrap text-gray-700 tabular-nums">
-                  {fmtCorto(f.precio)}
-                  {f.precioEstimado && <span className="text-gray-400" title="Sin precio publicado en la tienda: promedio de venta 30d">*</span>}
-                </td>
-                <td className="py-1.5 text-center">
-                  <span className={`inline-block min-w-[26px] px-1 py-0.5 rounded-full text-xs font-bold ${
-                    f.rankingVentas <= 3 ? 'bg-magenta-50 text-magenta-700' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {f.rankingVentas}
-                  </span>
-                </td>
-                <td className="py-1.5 text-right whitespace-nowrap font-medium text-gray-900 tabular-nums">{fmtCorto(f.monto)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="md:col-span-3 md:border-r md:border-gray-100 md:pr-6">
+          <h3 className="text-sm font-semibold text-magenta-700 mb-1">Celulares</h3>
+          <TablaProductosPrecio filas={celulares} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-emerald-700 mb-1">Accesorios</h3>
+          <TablaProductosPrecio filas={accesorios} />
+        </div>
       </div>
-      <p className="text-[11px] text-gray-400 mt-2">Rk = puesto por unidades vendidas (1 = el más vendido) · * precio no publicado, se usa el promedio de venta</p>
+      <p className="text-[11px] text-gray-400 mt-2">Rk = puesto por unidades vendidas dentro de cada grupo (1 = el más vendido) · * precio no publicado, se usa el promedio de venta</p>
     </div>
   )
 }

@@ -5,6 +5,8 @@
 
 export interface ProductoVenta30d {
   nombre: string
+  /** 'celular' = ítem principal de la orden (kind main); 'accesorio' = addon */
+  categoria?: 'celular' | 'accesorio'
   /** Precio actual de la tienda en $ (null si el producto ya no está publicado) */
   precioTienda: number | null
   unidades: number

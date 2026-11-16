@@ -2876,9 +2876,10 @@ async function fetchProductosVentas30dLive(): Promise<import('@/lib/productos-pr
   if (!pool) return []
   const client = await pool.connect()
   try {
-    const res = await client.query<{ nombre: string; precio_cents: string | null; unidades: string; monto_cents: string }>(
+    const res = await client.query<{ nombre: string; kind: string; precio_cents: string | null; unidades: string; monto_cents: string }>(
       `SELECT
         COALESCE(sp.display_name, i.display_name) AS nombre,
+        i.kind,
         MAX(sp.price) FILTER (WHERE sp.status = 'active') AS precio_cents,
         SUM(i.quantity)::text AS unidades,
         SUM(i.unit_price * i.quantity)::text AS monto_cents
@@ -2886,10 +2887,11 @@ async function fetchProductosVentas30dLive(): Promise<import('@/lib/productos-pr
       JOIN store_orders o ON o.id = i.order_id
       LEFT JOIN store_products sp ON sp.id = i.product_id
       WHERE o.paid_at >= now() - interval '30 days'
-      GROUP BY 1`
+      GROUP BY 1, 2`
     )
     return res.rows.map(r => ({
       nombre: r.nombre,
+      categoria: (r.kind === 'addon' ? 'accesorio' : 'celular') as 'celular' | 'accesorio',
       precioTienda: r.precio_cents !== null ? Number(r.precio_cents) / 100 : null,
       unidades: Number(r.unidades),
       monto: Number(r.monto_cents) / 100,
