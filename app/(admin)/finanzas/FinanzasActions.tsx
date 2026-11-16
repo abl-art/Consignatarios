@@ -88,7 +88,7 @@ export function CargarEgresoButton() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [flujoDia, setFlujoDia] = useState('')
-  const [concepto, setConcepto] = useState('Celulares')
+  const [concepto, setConcepto] = useState('GOcelulares')
   const [medioDePago, setMedioDePago] = useState('Efectivo')
   const [cuotas, setCuotas] = useState('1')
   const [monto, setMonto] = useState('')
@@ -106,7 +106,7 @@ export function CargarEgresoButton() {
     })
     setLoading(false)
     setFlujoDia('')
-    setConcepto('Celulares')
+    setConcepto('GOcelulares')
     setMedioDePago('Efectivo')
     setCuotas('1')
     setMonto('')
@@ -145,9 +145,9 @@ export function CargarEgresoButton() {
                   onChange={(e) => setConcepto(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 >
-                  <option value="Celulares">Celulares</option>
+                  <option value="GOcelulares">GOcelulares</option>
                   <option value="Licencias">Licencias</option>
-                  <option value="Descartables">Descartables</option>
+                  <option value="GOmarket">GOmarket</option>
                   <option value="Sueldos">Sueldos</option>
                   <option value="Envios">Envios</option>
                   <option value="Interes">Interes</option>
@@ -360,9 +360,9 @@ export function EditarEgresoButton({ id, flujo_dia: initDia, concepto: initConce
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
                 <select value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value="Celulares">Celulares</option>
+                  <option value="GOcelulares">GOcelulares</option>
                   <option value="Licencias">Licencias</option>
-                  <option value="Descartables">Descartables</option>
+                  <option value="GOmarket">GOmarket</option>
                   <option value="Sueldos">Sueldos</option>
                   <option value="Envios">Envios</option>
                   <option value="Interes">Interes</option>

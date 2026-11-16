@@ -122,10 +122,15 @@ export async function fetchEgresos() {
 // fetchFlujoDeFondos – main aggregation
 // ---------------------------------------------------------------------------
 
+// Renombre 16/11/2026 (pedido de Emiliano): GOcelulares = compras de celulares
+// (ex Celulares) y GOmarket = compras GOmarket (la columna interna sigue siendo
+// out_descartables; los egresos viejos de Descartables se migraron a Otros).
+// 'celulares' queda como alias legacy por si sobrevive alguna fila vieja.
 const CONCEPTO_COLUMNS: Record<string, keyof FlujoDiario> = {
+  gocelulares: 'out_celulares',
   celulares: 'out_celulares',
+  gomarket: 'out_descartables',
   licencias: 'out_licencias',
-  descartables: 'out_descartables',
   sueldos: 'out_sueldos',
   envios: 'out_envios',
   interes: 'out_interes',
@@ -755,10 +760,13 @@ export async function fetchEgresosStats(): Promise<{
     .sort((a, b) => b.monto - a.monto)
 
   // --- Monthly pivot ---
+  // Claves internas sin cambio: 'celulares' acumula GOcelulares y
+  // 'descartables' acumula GOmarket (el gráfico les pone el nombre nuevo)
   const CONCEPTO_PIVOT: Record<string, string> = {
+    gocelulares: 'celulares',
     celulares: 'celulares',
+    gomarket: 'descartables',
     licencias: 'licencias',
-    descartables: 'descartables',
     sueldos: 'sueldos',
     envios: 'envios',
     interes: 'interes',

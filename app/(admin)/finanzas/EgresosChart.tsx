@@ -7,9 +7,9 @@ interface EgresosChartProps {
 }
 
 const lines = [
-  { dataKey: 'celulares', name: 'Celulares', stroke: '#E91E7B' },
+  { dataKey: 'celulares', name: 'GOcelulares', stroke: '#E91E7B' },
   { dataKey: 'licencias', name: 'Licencias', stroke: '#3B82F6' },
-  { dataKey: 'descartables', name: 'Descartables', stroke: '#F59E0B' },
+  { dataKey: 'descartables', name: 'GOmarket', stroke: '#F59E0B' },
   { dataKey: 'sueldos', name: 'Sueldos', stroke: '#10B981' },
   { dataKey: 'envios', name: 'Envíos', stroke: '#8B5CF6' },
   { dataKey: 'interes', name: 'Interés', stroke: '#EF4444' },

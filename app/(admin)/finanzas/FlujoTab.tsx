@@ -159,9 +159,9 @@ export default function FlujoTab({ canales, prestamos, limiteDeuda, proyeccionDi
                   <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">Asist</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-green-600">May</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-blue-500">Proy</th>
-                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Cel</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600" title="GOcelulares (compras de celulares)">GOcel</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Lic</th>
-                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Dsc</th>
+                  <th className="text-right px-1.5 py-2.5 font-semibold text-red-600" title="GOmarket (compras GOmarket)">GOmkt</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Suel</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Env</th>
                   <th className="text-right px-1.5 py-2.5 font-semibold text-red-600">Int</th>
