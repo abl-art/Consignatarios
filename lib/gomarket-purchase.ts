@@ -51,8 +51,16 @@ export function plataformaDePedido(
  * cantidades (el costo queda el del primero con costo válido). Sin código de
  * producto o con cantidad inválida → error (el SKU es la identidad del
  * artículo en commerce_skus y en Andreani).
+ *
+ * `enviarEan` agrega el EAN a cada línea (real si está cargado, provisorio 299
+ * si no). Arranca APAGADO: el esquema del webhook Commerce de GOcelular todavía
+ * rechaza la clave `ean` ("Unrecognized key(s): 'ean'", verificado 16/11) — se
+ * prende con COMMERCE_ENVIAR_EAN cuando Pedro habilite su lado.
  */
-export function armarLineasGomarket(items: ItemCompraGomarket[]): { lines: CommercePurchaseLine[]; errores: string[] } {
+export function armarLineasGomarket(
+  items: ItemCompraGomarket[],
+  opts: { enviarEan?: boolean } = {},
+): { lines: CommercePurchaseLine[]; errores: string[] } {
   const errores: string[] = []
   const porSku = new Map<string, CommercePurchaseLine>()
 
@@ -76,7 +84,7 @@ export function armarLineasGomarket(items: ItemCompraGomarket[]): { lines: Comme
         sku,
         quantity: item.cantidad,
         ...(costoValido ? { unit_cost: item.precio.toFixed(2) } : {}),
-        ean: item.ean?.trim() || eanProvisorio(sku),
+        ...(opts.enviarEan ? { ean: item.ean?.trim() || eanProvisorio(sku) } : {}),
       })
     }
   }

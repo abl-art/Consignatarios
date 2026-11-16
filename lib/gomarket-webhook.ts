@@ -30,7 +30,7 @@ export type CommerceResponseBody = {
   code?: string
   error?: string
   retryable?: boolean
-  errors?: { path?: string; sku?: string; [k: string]: unknown }[]
+  errors?: { path?: string; line_reference?: string; sku?: string; message?: string; reason?: string; [k: string]: unknown }[]
 }
 
 export interface CommerceResult {

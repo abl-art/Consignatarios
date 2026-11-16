@@ -8,7 +8,14 @@ import { parseImeiExcel } from '@/lib/imei-excel-parser'
 import { validarCompra, verificarAliasVsPedido, type CatalogoGocelular } from '@/lib/purchase-validation'
 import { plataformaDePedido, armarLineasGomarket, armarSupplierCommerce, validarSkusCommerce, type SkuCommerce } from '@/lib/gomarket-purchase'
 import { eanProvisorio } from '@/lib/ean-provisorio'
-import { sendCommercePurchaseWebhook, type CommercePurchasePayload } from '@/lib/gomarket-webhook'
+
+// El EAN provisorio (pedido de Pedro 13/11) viaja a GOcelular solo con este
+// flag prendido: hoy el esquema de ambos webhooks rechaza la clave `ean`
+// ("Unrecognized key(s): 'ean'", verificado 16/11). Mientras esté apagado, las
+// compras van sin EAN (comportamiento previo, que valida 200). Se prende con
+// COMMERCE_ENVIAR_EAN=1 cuando GOcelular acepte el campo.
+const ENVIAR_EAN = process.env.COMMERCE_ENVIAR_EAN === '1'
+import { sendCommercePurchaseWebhook, type CommercePurchasePayload, type CommerceResponseBody } from '@/lib/gomarket-webhook'
 import type { Pedido, GocelularEstado } from '@/lib/actions/compras'
 
 type PedidoItem = Pedido['items'][number]
@@ -247,7 +254,7 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
           sku: l.sku,
           // Exactamente uno de imeis/serials por linea (el parser ya erroreo si mezclan)
           ...(l.serials.length > 0 ? { serials: l.serials } : { imeis: l.imeis }),
-          ...(l.ean ? { ean: l.ean } : {}),
+          ...(ENVIAR_EAN && l.ean ? { ean: l.ean } : {}),
           ...(costos.has(l.sku) ? { unit_cost: costos.get(l.sku) } : {}),
         })
       }
@@ -265,8 +272,9 @@ export async function informarCompraGocelular(pedidoId: string): Promise<{ ok: b
         ...(tieneCostoAddon(item) ? { unit_cost: item.precio.toFixed(2) } : {}),
         description: item.productoNombre.slice(0, 256),
         // EAN real si está cargado, provisorio 299 si no (pedido de Pedro 13/11:
-        // con él GOcelular da de alta el producto en Andreani y crea la ASN)
-        ean: eans.get(item.productoId) ?? eanProvisorio(item.productoCodigo),
+        // con él GOcelular da de alta el producto en Andreani y crea la ASN).
+        // Gateado: hoy el webhook rechaza la clave `ean` (ver ENVIAR_EAN arriba).
+        ...(ENVIAR_EAN ? { ean: eans.get(item.productoId) ?? eanProvisorio(item.productoCodigo) } : {}),
       })
     }
 
@@ -378,13 +386,16 @@ async function prepararCompraGomarket(pedido: Pedido): Promise<
   // EAN real por producto si está cargado en compras_productos (si no,
   // armarLineasGomarket genera el provisorio 299 por SKU)
   const { eans } = await cargarProductosInfo(pedido)
-  const { lines, errores: erroresLineas } = armarLineasGomarket(pedido.items.map(i => ({
-    productoCodigo: i.productoCodigo,
-    productoNombre: i.productoNombre,
-    cantidad: i.cantidad,
-    precio: i.precio,
-    ean: eans.get(i.productoId) ?? null,
-  })))
+  const { lines, errores: erroresLineas } = armarLineasGomarket(
+    pedido.items.map(i => ({
+      productoCodigo: i.productoCodigo,
+      productoNombre: i.productoNombre,
+      cantidad: i.cantidad,
+      precio: i.precio,
+      ean: eans.get(i.productoId) ?? null,
+    })),
+    { enviarEan: ENVIAR_EAN },
+  )
   if (erroresLineas.length > 0 || lines.length === 0) {
     return { ok: false, errores: erroresLineas.length > 0 ? erroresLineas : ['El pedido no tiene líneas informables'], warnings: [] }
   }
@@ -419,6 +430,17 @@ async function prepararCompraGomarket(pedido: Pedido): Promise<
     },
     warnings: val.warnings,
   }
+}
+
+// Detalle legible de cada error que devuelve el webhook Commerce. Incluye el
+// `message`/`reason` que manda GOcelular (p. ej. "Unrecognized key(s): 'ean'"):
+// sin esto solo se veía "lines[0]", inservible para saber qué corregir.
+function detallesCommerce(errors: CommerceResponseBody['errors']): string[] {
+  return (errors ?? [])
+    .map(e => [e.path, e.line_reference, e.sku, typeof e.message === 'string' ? e.message : typeof e.reason === 'string' ? e.reason : null]
+      .filter(Boolean)
+      .join(' · '))
+    .filter(Boolean)
 }
 
 const MENSAJES_COMMERCE: Record<string, string> = {
@@ -460,7 +482,7 @@ export async function validarCompraGomarket(pedidoId: string): Promise<{ ok: boo
       ],
     }
   }
-  const detalles = (res.body?.errors ?? []).map(e => [e.path, e.sku].filter(Boolean).join(' · ')).filter(Boolean)
+  const detalles = detallesCommerce(res.body?.errors)
   const mensaje = res.body?.code === 'secret_no_configurado'
     ? 'Falta cargar GOMARKET_WEBHOOK_SECRET (el token que pasó Pedro) en Vercel y .env.local'
     : MENSAJES_COMMERCE[res.body?.code ?? ''] ?? `GOmarket rechazó la validación (${res.body?.code ?? 'HTTP ' + res.status})`
@@ -506,7 +528,7 @@ async function informarCompraGomarket(pedidoId: string, pedido: Pedido): Promise
     return { ok: false, estado: 'error_reintentable' }
   }
 
-  const detalles = (res.body?.errors ?? []).map(e => [e.path, e.sku].filter(Boolean).join(' · ')).filter(Boolean)
+  const detalles = detallesCommerce(res.body?.errors)
   await persistir(pedidoId, {
     estado: 'rechazado',
     codigoError: res.body?.code,
