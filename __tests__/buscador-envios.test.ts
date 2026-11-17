@@ -9,6 +9,7 @@ function fuentes(sobre: Partial<FuentesBusqueda> = {}): FuentesBusqueda {
     rescates: [],
     siniestros: [],
     siniestrosWh: [],
+    regresos: [],
     ...sobre,
   }
 }
@@ -105,5 +106,32 @@ describe('buscarEnvios', () => {
 
   it('sin coincidencias devuelve vacío', () => {
     expect(buscarEnvios('99999999', fuentes({ demoras: [DEMORA] }))).toEqual([])
+  })
+})
+
+describe('pendiente de regreso en el buscador', () => {
+  const regreso = {
+    orderNumber: 'SO-WXCWYW',
+    cliente: 'Vanina Murúa',
+    dni: '30111222',
+    tracking: '360003119029200',
+    producto: 'Motorola Moto G06 64GB',
+    imei: '357280532100000',
+    recibido: false,
+  }
+
+  it('encuentra por tracking, orden, DNI e IMEI y apunta a la pestaña', () => {
+    for (const q of ['360003119029200', 'SO-WXCWYW', '30111222', '357280532100000']) {
+      const r = buscarEnvios(q, fuentes({ regresos: [regreso] }))
+      expect(r).toHaveLength(1)
+      expect(r[0].tab).toBe('pendiente-regreso')
+      expect(r[0].titulo).toBe('Vanina Murúa')
+      expect(r[0].estado).toContain('pendiente de regreso')
+    }
+  })
+
+  it('los recibidos se marcan en el estado', () => {
+    const r = buscarEnvios('SO-WXCWYW', fuentes({ regresos: [{ ...regreso, recibido: true }] }))
+    expect(r[0].estado).toContain('recibido')
   })
 })

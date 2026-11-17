@@ -56,6 +56,15 @@ export interface SiniestroBusqueda {
   notaCredito: boolean
   dias: number
 }
+export interface RegresoBusqueda {
+  orderNumber: string | null
+  cliente: string | null
+  dni: string | null
+  tracking: string
+  producto: string | null
+  imei: string | null
+  recibido: boolean
+}
 export interface SiniestroWhBusqueda {
   id: string
   producto: string
@@ -72,6 +81,7 @@ export interface FuentesBusqueda {
   rescates: RescateBusqueda[]
   siniestros: SiniestroBusqueda[]
   siniestrosWh: SiniestroWhBusqueda[]
+  regresos: RegresoBusqueda[]
 }
 
 export type TabBusqueda =
@@ -81,6 +91,7 @@ export type TabBusqueda =
   | 'rescates'
   | 'siniestros'
   | 'siniestros-warehouse'
+  | 'pendiente-regreso'
 
 export const LABEL_TAB: Record<TabBusqueda, string> = {
   alertas: 'Alertas',
@@ -89,6 +100,7 @@ export const LABEL_TAB: Record<TabBusqueda, string> = {
   rescates: 'Rescates',
   siniestros: 'Siniestros Distribución',
   'siniestros-warehouse': 'Siniestros Warehouse',
+  'pendiente-regreso': 'Pendiente de regreso',
 }
 
 export type AccionBusqueda =
@@ -198,6 +210,20 @@ export function buscarEnvios(query: string, fuentes: FuentesBusqueda): Resultado
       producto: s.producto,
       estado: `siniestro hace ${s.dias}d · NC ${s.notaCredito ? 'emitida' : 'pendiente'}`,
       accion: s.tracking ? { tipo: 'siniestro-nc', tracking: s.tracking, notaCredito: s.notaCredito } : null,
+    })
+  }
+
+  for (const r of fuentes.regresos) {
+    if (!coincide(q, r.dni, r.tracking, r.orderNumber, r.imei)) continue
+    resultados.push({
+      tab: 'pendiente-regreso',
+      titulo: r.cliente ?? r.tracking,
+      orden: r.orderNumber,
+      dni: r.dni,
+      tracking: r.tracking,
+      producto: r.producto,
+      estado: r.recibido ? 'no entregado · recibido ✓' : 'no entregado · pendiente de regreso',
+      accion: null,
     })
   }
 

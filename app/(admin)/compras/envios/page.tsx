@@ -155,6 +155,10 @@ export default async function EnviosPage({
     siniestrosWh: siniestrosStock.map(w => ({
       id: w.id, producto: w.producto, imei: w.imei, tipo: w.tipo, estado: w.estado, notaCredito: w.notaCredito,
     })),
+    regresos: regresos.map(r => ({
+      orderNumber: r.orderNumber, cliente: r.cliente, dni: r.dni, tracking: r.tracking,
+      producto: r.producto, imei: r.imei, recibido: r.recibidoAt !== null,
+    })),
   }
 
   return (
