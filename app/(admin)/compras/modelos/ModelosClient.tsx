@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { agregarProducto, editarProducto, eliminarProducto, toggleOcultoProducto, setPrecio, eliminarPrecio } from '@/lib/actions/compras'
-import { filtrosInicialesModelos } from '@/lib/compras-modelos-filtros'
+import { filtrosInicialesModelos, proveedorVendeProducto, MARCAS_CELULARES } from '@/lib/compras-modelos-filtros'
 import { formatearMoneda } from '@/lib/utils'
 
 interface Proveedor {
@@ -30,22 +30,14 @@ interface Precio {
   proveedor_id: string
   precio: number
   plazo: string
+  created_at?: string | null
 }
 
 // Kits de Seguridad no se crean a mano: se sincronizan desde GOcelular (store_products)
 const CATEGORIAS = ['Celulares', 'Tablets', 'Smartwatches', 'Parlantes', 'Auriculares', 'Accesorios', 'Otros']
 const PLAZOS = ['Contado', '24hs', '48hs', '72hs', '1 semana', '2 semanas', '30 dias']
-const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
 
 const emptyProduct = { codigo: '', nombre: '', categoria: 'Celulares', plataforma: 'gocelular', ean: '' }
-
-function parseProvMarcas(notas: string): string[] {
-  try {
-    return JSON.parse(notas)?.marcas || []
-  } catch {
-    return []
-  }
-}
 
 export default function ModelosClient({
   productos,
@@ -67,6 +59,8 @@ export default function ModelosClient({
   const [filtroCategoria, setFiltroCategoria] = useState<string>('Celulares')
   const [filtroMarca, setFiltroMarca] = useState<string>('')
   const [filtroTienda, setFiltroTienda] = useState<'todas' | 'gocelular' | 'gomarket'>('todas')
+  const [busqueda, setBusqueda] = useState('')
+  const [soloSinPrecio, setSoloSinPrecio] = useState(false)
   const searchParams = useSearchParams()
 
   // Llegada con ?producto=<id> (link "sin costo →" de la lista de precios):
@@ -109,20 +103,42 @@ export default function ModelosClient({
   if (!mostrarInactivos) {
     filtrados = filtrados.filter((p) => !p.oculto)
   }
+  // Buscador por nombre o código (la lista crece: encontrar rápido sin scrollear)
+  const q = busqueda.trim().toLowerCase()
+  if (q) {
+    filtrados = filtrados.filter((p) => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+  }
+  // Vista "sin precio": productos que todavía no tienen ningún costo cargado
+  if (soloSinPrecio) {
+    filtrados = filtrados.filter((p) => !precios.some((pr) => pr.producto_id === p.id))
+  }
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
 
-  // Todos los proveedores pueden vender cualquier categoría: no se filtra por
-  // tipo de producto, solo por marca cuando se filtra Celulares por marca
-  const proveedoresFiltrados = proveedores.filter((prov) => {
-    // If filtering by marca, only show proveedores that carry that marca
-    if (filtroMarca && filtroCategoria === 'Celulares') {
-      const marcasProv = parseProvMarcas(prov.notas)
-      // Only filter if proveedor has marcas configured
-      if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
-    }
-    return true
-  })
+  // ¿Este proveedor vende este producto? Criterio = marca (ver lib). Alias local
+  // para no repetir prov.notas en cada llamada.
+  const provVendeProducto = (prov: Proveedor, prod: Producto) => proveedorVendeProducto(prov.notas, prod)
+
+  // Columnas = solo proveedores que venden al menos un producto visible: así la
+  // grilla no arrastra columnas de proveedores que no vienen al caso.
+  const proveedoresFiltrados = proveedores.filter((prov) => filtrados.some((prod) => provVendeProducto(prov, prod)))
+
+  // Cuántos proveedores tienen precio cargado para un producto (chip "N proveedores")
+  function proveedoresConPrecio(productoId: string): number {
+    return precios.filter((p) => p.producto_id === productoId).length
+  }
+
+  // Antigüedad del precio: compras_precios.created_at se refresca en cada carga
+  // (es el "último costo"), así que mide cuánto hace que no se actualiza.
+  function antiguedadPrecio(createdAt?: string | null): { texto: string; viejo: boolean } | null {
+    if (!createdAt) return null
+    const dias = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000)
+    if (dias <= 0) return { texto: 'hoy', viejo: false }
+    if (dias < 30) return { texto: `hace ${dias}d`, viejo: false }
+    if (dias < 60) return { texto: `hace ${dias}d`, viejo: true }
+    const meses = Math.floor(dias / 30)
+    return { texto: `hace ${meses}m`, viejo: true }
+  }
 
   // Helper to get proveedor plazo from their notas
   function getProveedorPlazo(provId: string): string {
@@ -453,6 +469,35 @@ export default function ModelosClient({
         </div>
       )}
 
+      {/* Buscador por nombre/código + vista sin precio */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+          </svg>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar producto por nombre o código…"
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          {busqueda && (
+            <button onClick={() => setBusqueda('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" title="Limpiar">✕</button>
+          )}
+        </div>
+        <button
+          onClick={() => setSoloSinPrecio((v) => !v)}
+          className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+            soloSinPrecio ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+          title="Mostrar solo productos que todavía no tienen ningún precio cargado"
+        >
+          {soloSinPrecio ? 'Solo sin precio ✓' : 'Sin precio'}
+        </button>
+        <span className="text-xs text-gray-400">{filtrados.length} productos</span>
+      </div>
+
       {/* Toggle mostrar inactivos */}
       <div className="flex items-center gap-2 mb-4">
         <button
@@ -494,11 +539,11 @@ export default function ModelosClient({
             </tr>
           </thead>
           <tbody>
-            {filtroCategoria && proveedoresFiltrados.length === 0 && (
+            {filtrados.length > 0 && proveedoresFiltrados.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-3 text-center text-sm text-amber-700 bg-amber-50">
-                  Ningún proveedor tiene la categoría &quot;{filtroCategoria}&quot; entre sus tipos de
-                  producto — asignásela en{' '}
+                  Ningún proveedor vende {filtroMarca ? `${filtroMarca} ` : ''}estos productos — revisá las marcas de cada
+                  proveedor en{' '}
                   <Link href="/compras/proveedores" className="underline font-medium">Proveedores</Link>{' '}
                   para poder cargar precios acá.
                 </td>
@@ -507,7 +552,7 @@ export default function ModelosClient({
             {filtrados.length === 0 ? (
               <tr>
                 <td colSpan={3 + proveedoresFiltrados.length + 1} className="px-4 py-8 text-center text-gray-400">
-                  No hay productos
+                  {busqueda || soloSinPrecio ? 'No hay productos que coincidan con el filtro' : 'No hay productos'}
                 </td>
               </tr>
             ) : (
@@ -519,7 +564,17 @@ export default function ModelosClient({
                       {prod.codigo || '-'}
                       {prod.ean && <div className="text-[10px] text-gray-400" title="EAN">EAN {prod.ean}</div>}
                     </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{prod.nombre}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {prod.nombre}
+                      {(() => {
+                        const n = proveedoresConPrecio(prod.id)
+                        return (
+                          <div className={`text-[10px] font-normal ${n === 0 ? 'text-amber-500' : 'text-gray-400'}`}>
+                            {n === 0 ? 'sin precio' : `${n} ${n === 1 ? 'proveedor' : 'proveedores'}`}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
                       {prod.plataforma === 'gomarket' && (
@@ -527,8 +582,18 @@ export default function ModelosClient({
                       )}
                     </td>
                     {proveedoresFiltrados.map((prov) => {
+                      // El proveedor no vende este producto (por marca): celda inerte,
+                      // no se puede cargar precio ahí.
+                      if (!provVendeProducto(prov, prod)) {
+                        return (
+                          <td key={prov.id} className="px-4 py-3 text-center text-gray-200" title="Este proveedor no vende la marca de este producto">
+                            —
+                          </td>
+                        )
+                      }
                       const precio = getPrecio(prod.id, prov.id)
                       const isBest = precio && best !== null && precio.precio === best
+                      const antig = precio && antiguedadPrecio(precio.created_at)
                       return (
                         <td key={prov.id} className="px-4 py-3 text-center">
                           {precio ? (
@@ -545,6 +610,11 @@ export default function ModelosClient({
                                 {formatearMoneda(precio.precio)}
                               </span>
                               <span className="text-[10px] text-gray-400">{precio.plazo}</span>
+                              {antig && (
+                                <span className={`text-[9px] ${antig.viejo ? 'text-amber-500' : 'text-gray-300'}`} title="Antigüedad del precio cargado">
+                                  {antig.texto}
+                                </span>
+                              )}
                             </button>
                           ) : (
                             <button

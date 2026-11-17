@@ -149,14 +149,14 @@ export async function toggleOcultoProducto(id: string, oculto: boolean) {
 // CRUD: compras_precios
 // ---------------------------------------------------------------------------
 
-export async function getPrecios(): Promise<{ id: string; producto_id: string; proveedor_id: string; precio: number; plazo: string }[]> {
+export async function getPrecios(): Promise<{ id: string; producto_id: string; proveedor_id: string; precio: number; plazo: string; created_at: string | null }[]> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('compras_precios')
-    .select('id, producto_id, proveedor_id, precio, plazo')
+    .select('id, producto_id, proveedor_id, precio, plazo, created_at')
   if (error || !data) return []
 
-  return (data as { id: string; producto_id: string; proveedor_id: string; precio: number; plazo: string }[]).map((r) => ({
+  return (data as { id: string; producto_id: string; proveedor_id: string; precio: number; plazo: string; created_at: string | null }[]).map((r) => ({
     ...r,
     precio: Number(r.precio),
   }))
