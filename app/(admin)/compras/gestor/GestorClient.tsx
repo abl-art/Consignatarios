@@ -7,6 +7,7 @@ import { formatearMoneda } from '@/lib/utils'
 import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
 import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
 import { ingresoSinRespaldo } from '@/lib/ingreso-stock'
+import { proveedorVendeProducto, MARCAS_CELULARES } from '@/lib/compras-modelos-filtros'
 
 interface Proveedor {
   id: string
@@ -15,12 +16,6 @@ interface Proveedor {
   email: string
   direccion: string
   notas: string
-}
-
-const MARCAS_CELULARES = ['Motorola', 'Samsung', 'Nubia', 'Xiaomi', 'Honor']
-
-function parseProvMarcas(notas: string): string[] {
-  try { return JSON.parse(notas)?.marcas || [] } catch { return [] }
 }
 
 interface Producto {
@@ -248,17 +243,12 @@ export default function GestorClient({
     return result
   }, [productos, filtroCategoria, filtroMarca, busqueda, mostrarInactivos])
 
+  // Columnas = solo proveedores que venden al menos uno de los productos
+  // visibles (por categoría + marca, misma lógica que Modelos y Precios): no
+  // tiene sentido ofrecer un proveedor al que no le podés pedir estos productos.
   const proveedoresFiltrados = useMemo(() => {
-    // Todos los proveedores pueden vender cualquier categoría: no se filtra
-    // por tipo de producto, solo por marca cuando se filtra Celulares por marca
-    return proveedores.filter((prov) => {
-      if (filtroMarca && filtroCategoria === 'Celulares') {
-        const marcasProv = parseProvMarcas(prov.notas)
-        if (marcasProv.length > 0 && !marcasProv.includes(filtroMarca)) return false
-      }
-      return true
-    })
-  }, [proveedores, filtroCategoria, filtroMarca])
+    return proveedores.filter((prov) => filtrados.some((prod) => proveedorVendeProducto(prov, prod)))
+  }, [proveedores, filtrados])
 
   function getPrecio(productoId: string, proveedorId: string): Precio | undefined {
     return precios.find((p) => p.producto_id === productoId && p.proveedor_id === proveedorId)
@@ -771,6 +761,14 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{prod.categoria}</span>
                       </td>
                       {proveedoresFiltrados.map((prov) => {
+                        // Proveedor que no vende la marca/categoría de este producto: celda inerte
+                        if (!proveedorVendeProducto(prov, prod)) {
+                          return (
+                            <td key={prov.id} className="px-3 py-2 text-center text-gray-200" title="Este proveedor no vende este producto">
+                              —
+                            </td>
+                          )
+                        }
                         const precio = getPrecio(prod.id, prov.id)
                         const cant = getCantProv(prod.id, prov.id)
                         return (
