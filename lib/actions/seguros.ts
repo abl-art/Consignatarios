@@ -28,6 +28,24 @@ import { armarCierre, esMesCierreValido, type ResumenCierre } from '@/lib/seguro
 // sincronización de emisión (nuevas ventas + reintento de pendientes +
 // novedades de ciclo de vida) y lectura de certificados para la UI/export.
 
+// supabase-js corta todo select en 1000 filas por default y seguros_certificados
+// ya superó ese tope (1.408 emitidos al 19/11/2026). Bug real: la página quedó
+// clavada en ~999 emitidas, el export del broker salía con 1.000 pólizas de
+// 1.408 y las novedades de ciclo de vida no se monitoreaban para el resto.
+// TODA lectura de tabla completa va por acá, con orden estable para paginar.
+async function selectPaginado<T>(
+  pagina: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const filas: T[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await pagina(desde, desde + 999)
+    if (error) throw new Error(error.message)
+    filas.push(...(data ?? []))
+    if (!data || data.length < 1000) break
+  }
+  return filas
+}
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -242,11 +260,10 @@ export async function sincronizarSeguros(opts?: { force?: boolean }): Promise<{ 
   // 1) Ventas nuevas desde la activación → certificados nuevos (emitidos o pendientes).
   const ventas = await fetchVentasAsegurables(config.activado_at)
 
-  const { data: existentesRows, error: errorExistentes } = await supabase
-    .from('seguros_certificados')
-    .select('gocuotas_order_id')
-  if (errorExistentes) throw new Error(errorExistentes.message)
-  const ordenesExistentes = new Set((existentesRows ?? []).map((r) => r.gocuotas_order_id as string))
+  const existentesRows = await selectPaginado<{ gocuotas_order_id: string }>((d, h) =>
+    supabase.from('seguros_certificados').select('gocuotas_order_id').order('id').range(d, h),
+  )
+  const ordenesExistentes = new Set(existentesRows.map((r) => r.gocuotas_order_id))
 
   const productos = await getProductosCelularesConPrecio()
   const costosPorClave = new Map<string, number>()
@@ -289,13 +306,9 @@ export async function sincronizarSeguros(opts?: { force?: boolean }): Promise<{ 
   }
 
   // 2) Certificados pendientes: reintentar costo (lista o imei) y emitir.
-  const { data: pendientesRows, error: errorPendientes } = await supabase
-    .from('seguros_certificados')
-    .select('id, articulo, imei')
-    .eq('estado', 'pendiente')
-  if (errorPendientes) throw new Error(errorPendientes.message)
-
-  const pendientes = pendientesRows ?? []
+  const pendientes = await selectPaginado<{ id: string; articulo: string; imei: string }>((d, h) =>
+    supabase.from('seguros_certificados').select('id, articulo, imei').eq('estado', 'pendiente').order('id').range(d, h),
+  )
   if (pendientes.length > 0) {
     const imeisPendientes = [
       ...new Set(pendientes.filter((p) => costosPorClave.get(normalizarModelo(p.articulo as string)) === undefined).map((p) => p.imei as string)),
@@ -323,10 +336,9 @@ export async function sincronizarSeguros(opts?: { force?: boolean }): Promise<{ 
   }
 
   // 3) Novedades de ciclo de vida: cambio de IMEI, anulación por descarte o contracargo.
-  const { data: certsActualesRows, error: errorCertsActuales } = await supabase
-    .from('seguros_certificados')
-    .select('id, gocuotas_order_id, imei, fecha_anula, fecha_siniestro')
-  if (errorCertsActuales) throw new Error(errorCertsActuales.message)
+  const certsActualesRows = await selectPaginado<{ id: string; gocuotas_order_id: string; imei: string; fecha_anula: string | null; fecha_siniestro: string | null }>((d, h) =>
+    supabase.from('seguros_certificados').select('id, gocuotas_order_id, imei, fecha_anula, fecha_siniestro').order('id').range(d, h),
+  )
 
   const certsActuales: CertActual[] = (certsActualesRows ?? []).map((c) => ({
     id: c.id as string,
@@ -527,20 +539,23 @@ export type CertificadoRow = {
 
 export async function getCertificados(): Promise<CertificadoRow[]> {
   const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('seguros_certificados')
-    .select(
-      'id, numero, gocuotas_order_id, store_order_id, pedido_numero, dni, cliente, domicilio, cp, localidad, articulo, imei, costo_sin_iva, suma_asegurada, costo_fuente, inicio_vig, fin_vig, fecha_anula, motivo_anula, fecha_siniestro, estado, created_at, updated_at',
-    )
-    .order('numero', { ascending: true, nullsFirst: false })
-
-  // Fail-loud: antes un error de lectura (ej. caída de DB) se devolvía como
-  // [] silencioso, indistinguible de "no hay certificados" — el export del
-  // broker (app/api/seguros/export/route.ts) podía salir con un Excel vacío
-  // pero con pinta legítima. Ahora el error se propaga; cada caller decide
-  // cómo mostrarlo (export → 500 json; página → banner de aviso, ver
-  // app/(admin)/seguros/page.tsx).
-  if (error) throw new Error(error.message)
+  // Fail-loud: un error de lectura se propaga (selectPaginado lanza) — antes
+  // se devolvía [] silencioso y el export del broker
+  // (app/api/seguros/export/route.ts) podía salir con un Excel vacío pero con
+  // pinta legítima. Cada caller decide cómo mostrarlo (export → 500 json;
+  // página → banner de aviso, ver app/(admin)/seguros/page.tsx).
+  // Orden secundario por id: numero único pero con NULLs (pendientes) — la
+  // paginación necesita orden total estable.
+  const data = await selectPaginado<Record<string, unknown>>((d, h) =>
+    supabase
+      .from('seguros_certificados')
+      .select(
+        'id, numero, gocuotas_order_id, store_order_id, pedido_numero, dni, cliente, domicilio, cp, localidad, articulo, imei, costo_sin_iva, suma_asegurada, costo_fuente, inicio_vig, fin_vig, fecha_anula, motivo_anula, fecha_siniestro, estado, created_at, updated_at',
+      )
+      .order('numero', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
+      .range(d, h),
+  )
 
   return (data ?? []).map((r) => ({
     id: r.id as string,
