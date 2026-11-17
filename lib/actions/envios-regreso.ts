@@ -102,14 +102,26 @@ export interface ResumenSyncRegreso {
 export async function sincronizarEnviosRegreso(max = 80, dias = 60): Promise<ResumenSyncRegreso> {
   const supabase = createAdminClient()
 
-  const [candidatosReplica, arrep, rescMan, sinMan, devMan, devPedidas, previasRaw] = await Promise.all([
+  // envios_regreso crece sin tope y el select de supabase-js corta en 1000
+  // filas por default: se pagina (bug real del barrido 17/11 — el cron
+  // re-consultaba los mismos trackings porque no los veía como previos)
+  const previasData: { tracking: string; estado: string; consultado_at: string; recibido_at: string | null }[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data: pagina } = await supabase
+      .from('envios_regreso')
+      .select('tracking, estado, consultado_at, recibido_at')
+      .range(desde, desde + 999)
+    previasData.push(...(pagina ?? []))
+    if (!pagina || pagina.length < 1000) break
+  }
+
+  const [candidatosReplica, arrep, rescMan, sinMan, devMan, devPedidas] = await Promise.all([
     fetchCandidatosReplica(dias),
     supabase.from('arrepentimientos').select('tracking, order_number'),
     supabase.from('rescates_seguimiento').select('tracking'),
     supabase.from('siniestros_seguimiento').select('tracking'),
     supabase.from('devoluciones_manuales').select('order_number'),
     supabase.from('devoluciones_pedidas').select('order_number'),
-    supabase.from('envios_regreso').select('tracking, estado, consultado_at, recibido_at'),
   ])
 
   const trackingsExcluidos = new Set<string>()
@@ -127,7 +139,7 @@ export async function sincronizarEnviosRegreso(max = 80, dias = 60): Promise<Res
     .filter(c => !trackingsExcluidos.has(c.tracking) && !ordenesExcluidas.has(c.orderNumber))
     .map(c => c.tracking)
 
-  const previas: ConsultaPrevia[] = (previasRaw.data ?? []).map(p => ({
+  const previas: ConsultaPrevia[] = previasData.map(p => ({
     tracking: p.tracking,
     estado: p.estado as EstadoRegreso,
     consultadoAt: p.consultado_at,
