@@ -115,9 +115,8 @@ export default function ModelosClient({
 
   const categoriasUsadas = Array.from(new Set(productos.map((p) => p.categoria)))
 
-  // ¿Este proveedor vende este producto? Criterio = marca (ver lib). Alias local
-  // para no repetir prov.notas en cada llamada.
-  const provVendeProducto = (prov: Proveedor, prod: Producto) => proveedorVendeProducto(prov.notas, prod)
+  // ¿Este proveedor vende este producto? Filtro por categoría + marca (ver lib).
+  const provVendeProducto = (prov: Proveedor, prod: Producto) => proveedorVendeProducto(prov, prod)
 
   // Columnas = solo proveedores que venden al menos un producto visible: así la
   // grilla no arrastra columnas de proveedores que no vienen al caso.

@@ -22,18 +22,44 @@ export function marcasDeProveedor(notas: string): string[] {
   }
 }
 
-/** ¿El proveedor vende este producto? Criterio = marca (decisión 17/11):
- * proveedor sin marcas configuradas vende todo; producto sin marca inferible
- * (no-celular) se muestra igual (no hay con qué filtrar). */
+/** Tipos de producto que vende el proveedor (columna direccion = JSON array). */
+export function tiposDeProveedor(direccion: string): string[] {
+  try {
+    const v = JSON.parse(direccion)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+// Una categoría de producto matchea el tipo del proveedor si uno contiene al
+// otro (tolera "Tablets" ↔ "Tablets y Computadoras", etc.).
+function categoriaEnTipos(tipos: string[], categoria: string): boolean {
+  if (tipos.length === 0) return true // proveedor sin tipos cargados = cualquier categoría
+  const c = categoria.toLowerCase()
+  return tipos.some((t) => {
+    const tl = t.toLowerCase()
+    return tl.includes(c) || c.includes(tl)
+  })
+}
+
+/** ¿El proveedor vende este producto? Dos filtros (decisión 17/11, refinada):
+ * 1) CATEGORÍA: el proveedor debe vender la categoría del producto (su
+ *    tipo_producto) — así un proveedor de electro/parlantes/kits NO aparece en
+ *    Celulares aunque no tenga marcas cargadas.
+ * 2) MARCA (solo celulares con marca inferible): si tiene marcas configuradas,
+ *    debe incluir la del producto. Sin marcas cargadas = no filtra por marca. */
 export function proveedorVendeProducto(
-  proveedorNotas: string,
+  prov: { direccion: string; notas: string },
   prod: { nombre: string; categoria: string },
 ): boolean {
-  const marcasProv = marcasDeProveedor(proveedorNotas)
-  if (marcasProv.length === 0) return true
+  if (!categoriaEnTipos(tiposDeProveedor(prov.direccion), prod.categoria)) return false
   const marca = marcaDeProducto(prod)
-  if (!marca) return true
-  return marcasProv.includes(marca)
+  if (marca) {
+    const marcasProv = marcasDeProveedor(prov.notas)
+    if (marcasProv.length > 0 && !marcasProv.includes(marca)) return false
+  }
+  return true
 }
 
 export function filtrosInicialesModelos(

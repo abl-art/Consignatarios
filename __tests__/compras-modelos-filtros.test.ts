@@ -42,21 +42,42 @@ describe('marcaDeProducto', () => {
 })
 
 describe('proveedorVendeProducto', () => {
+  const motorola = { nombre: 'Motorola Moto G06 64GB', categoria: 'Celulares' }
   const samsung = { nombre: 'Samsung Galaxy A16', categoria: 'Celulares' }
   const xiaomi = { nombre: 'Xiaomi Redmi 14C 256/4 GB', categoria: 'Celulares' }
   const parlante = { nombre: 'JBL Flip 7', categoria: 'Parlantes' }
+  const prov = (tipos: string[], marcas: string[]) => ({ direccion: JSON.stringify(tipos), notas: JSON.stringify({ marcas }) })
 
-  it('proveedor con marcas vende solo las suyas', () => {
-    const notas = JSON.stringify({ marcas: ['Samsung', 'Motorola'] })
-    expect(proveedorVendeProducto(notas, samsung)).toBe(true)
-    expect(proveedorVendeProducto(notas, xiaomi)).toBe(false)
+  it('celulares: filtra por categoría Y marca', () => {
+    const p = prov(['Celulares', 'Parlantes'], ['Samsung', 'Motorola'])
+    expect(proveedorVendeProducto(p, samsung)).toBe(true)
+    expect(proveedorVendeProducto(p, motorola)).toBe(true)
+    expect(proveedorVendeProducto(p, xiaomi)).toBe(false) // vende Celulares pero no Xiaomi
   })
-  it('proveedor sin marcas configuradas vende todo', () => {
-    expect(proveedorVendeProducto(JSON.stringify({ marcas: [] }), xiaomi)).toBe(true)
-    expect(proveedorVendeProducto('', xiaomi)).toBe(true)
-    expect(proveedorVendeProducto('texto no-json', xiaomi)).toBe(true)
+
+  it('NO muestra un proveedor que no vende la categoría, aunque tenga marcas vacías', () => {
+    // El caso reportado: Avenida Hogar / ELECTRONICCOMMERCE / Mil200 / OHPIC
+    expect(proveedorVendeProducto(prov(['TV, Sonido y Electronicos', 'Linea Blanca'], []), motorola)).toBe(false)
+    expect(proveedorVendeProducto(prov(['Parlantes'], []), motorola)).toBe(false)
+    expect(proveedorVendeProducto(prov(['Kits de Seguridad'], []), motorola)).toBe(false)
+    expect(proveedorVendeProducto(prov(['Auriculares', 'Smartwatches'], []), motorola)).toBe(false)
   })
-  it('producto sin marca inferible (no-celular) se muestra aunque el proveedor tenga marcas', () => {
-    expect(proveedorVendeProducto(JSON.stringify({ marcas: ['Samsung'] }), parlante)).toBe(true)
+
+  it('vende la categoría con marcas vacías → aparece (no filtra por marca)', () => {
+    expect(proveedorVendeProducto(prov(['Celulares'], []), motorola)).toBe(true)
+  })
+
+  it('tolera el nombre de categoría ampliado (Tablets ↔ Tablets y Computadoras)', () => {
+    const tablet = { nombre: 'Samsung Galaxy Tab A11', categoria: 'Tablets' }
+    expect(proveedorVendeProducto(prov(['Tablets y Computadoras'], []), tablet)).toBe(true)
+  })
+
+  it('proveedor sin tipos cargados vende cualquier categoría', () => {
+    expect(proveedorVendeProducto({ direccion: '', notas: '' }, motorola)).toBe(true)
+  })
+
+  it('producto no-celular: solo filtra por categoría, no por marca', () => {
+    expect(proveedorVendeProducto(prov(['Parlantes'], ['Samsung']), parlante)).toBe(true)
+    expect(proveedorVendeProducto(prov(['Celulares'], ['Samsung']), parlante)).toBe(false)
   })
 })
