@@ -23,7 +23,7 @@ interface CandidatoRegreso {
 // SolicitudDeRescate), siniestros (eventos siniestro/extravío) y devoluciones
 // (shipment return de la misma orden). Arrepentimientos y cargas manuales se
 // excluyen después contra las tablas de Supabase.
-async function fetchCandidatosReplica(): Promise<CandidatoRegreso[]> {
+async function fetchCandidatosReplica(dias: number): Promise<CandidatoRegreso[]> {
   const pool = getPool()
   if (!pool) return []
   const client = await pool.connect()
@@ -38,7 +38,7 @@ async function fetchCandidatosReplica(): Promise<CandidatoRegreso[]> {
          -- Solo trackings reales de Andreani (los placeholder tipo API0000170…
          -- no existen en el seguimiento: la API responde body null)
          AND s.tracking_number ~ '^[0-9]{10,}$'
-         AND s.created_at >= now() - interval '60 days'
+         AND s.created_at >= now() - make_interval(days => $1)
          AND s.created_at < now() - interval '5 days'
          AND NOT COALESCE(s.traces, '[]'::jsonb) @> '[{"evento":"SolicitudDeRescate"}]'
          AND NOT EXISTS (
@@ -49,7 +49,8 @@ async function fetchCandidatosReplica(): Promise<CandidatoRegreso[]> {
          AND NOT EXISTS (
            SELECT 1 FROM shipments r
            WHERE r.store_order_id = s.store_order_id AND r.type = 'return')
-       ORDER BY s.created_at ASC`
+       ORDER BY s.created_at ASC`,
+      [dias]
     )
     return res.rows.map(r => ({ tracking: r.tracking, orderNumber: r.order_number }))
   } finally {
@@ -98,11 +99,11 @@ export interface ResumenSyncRegreso {
  * envios_regreso. Los terminales no se vuelven a consultar jamás; los "en
  * viaje" se re-chequean una vez por semana. La página lee SOLO la tabla.
  */
-export async function sincronizarEnviosRegreso(max = 80): Promise<ResumenSyncRegreso> {
+export async function sincronizarEnviosRegreso(max = 80, dias = 60): Promise<ResumenSyncRegreso> {
   const supabase = createAdminClient()
 
   const [candidatosReplica, arrep, rescMan, sinMan, devMan, devPedidas, previasRaw] = await Promise.all([
-    fetchCandidatosReplica(),
+    fetchCandidatosReplica(dias),
     supabase.from('arrepentimientos').select('tracking, order_number'),
     supabase.from('rescates_seguimiento').select('tracking'),
     supabase.from('siniestros_seguimiento').select('tracking'),

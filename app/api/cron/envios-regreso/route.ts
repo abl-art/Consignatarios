@@ -15,6 +15,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const max = Math.min(Number(url.searchParams.get('max')) || 80, 250)
-  const resumen = await sincronizarEnviosRegreso(max)
+  // ?dias= agranda la ventana para barridos puntuales (el diario queda en 60)
+  const dias = Math.min(Number(url.searchParams.get('dias')) || 60, 365)
+  const resumen = await sincronizarEnviosRegreso(max, dias)
   return NextResponse.json({ ok: true, ...resumen })
 }
