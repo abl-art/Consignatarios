@@ -5,7 +5,9 @@
 
 import type { TimelineAndreani } from '@/lib/devoluciones'
 
-export type EstadoRegreso = 'entregado' | 'pendiente_regreso' | 'en_viaje' | 'sin_despacho'
+// 'regresado' = auto-resuelto: el IMEI del envío fallido re-apareció en un envío
+// posterior o volvió como disponible al inventario — el equipo ya está de vuelta
+export type EstadoRegreso = 'entregado' | 'pendiente_regreso' | 'en_viaje' | 'sin_despacho' | 'regresado'
 
 const norm = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()

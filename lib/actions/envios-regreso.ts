@@ -54,6 +54,16 @@ async function fetchCandidatosReplica(dias: number): Promise<CandidatoRegreso[]>
          AND NOT EXISTS (
            SELECT 1 FROM shipments r
            WHERE r.store_order_id = s.store_order_id AND r.type = 'return')
+         -- El equipo ya volvió si su IMEI salió DESPUÉS en otro envío (se
+         -- re-vendió) o si el inventario lo tiene de vuelta como disponible
+         -- (caso real: IMEI 865289070565562 falló en SO-4XF45C y se entregó
+         -- re-vendido en SO-FBBXKL — el regreso pasó silenciosamente)
+         AND NOT EXISTS (
+           SELECT 1 FROM shipments s3
+           WHERE s3.imei = s.imei AND s3.id <> s.id AND s3.type = 'outbound' AND s3.created_at > s.created_at)
+         AND NOT EXISTS (
+           SELECT 1 FROM inventory_items inv
+           WHERE inv.imei = s.imei AND inv.status = 'available')
        ORDER BY s.created_at ASC`,
       [dias]
     )
@@ -96,6 +106,49 @@ export interface ResumenSyncRegreso {
   sinDespacho: number
   errores: number
   restantes: number
+  regresadosAuto: number
+}
+
+// Auto-resolución de pendientes: si el IMEI del envío fallido salió después en
+// otro envío (re-venta) o volvió como disponible al inventario, el equipo ya
+// regresó — pasa a 'regresado' sin intervención manual.
+async function resolverRegresados(supabase: ReturnType<typeof createAdminClient>): Promise<number> {
+  const { data } = await supabase.from('envios_regreso').select('tracking').eq('estado', 'pendiente_regreso')
+  const trackings = (data ?? []).map(r => r.tracking)
+  if (trackings.length === 0) return 0
+
+  const pool = getPool()
+  if (!pool) return 0
+  const client = await pool.connect()
+  let resueltos: string[] = []
+  try {
+    const res = await client.query<{ tracking: string }>(
+      `SELECT s.tracking_number AS tracking
+       FROM shipments s
+       WHERE s.tracking_number = ANY($1) AND s.type = 'outbound'
+         AND (
+           EXISTS (SELECT 1 FROM shipments s3
+                   WHERE s3.imei = s.imei AND s3.id <> s.id AND s3.type = 'outbound' AND s3.created_at > s.created_at)
+           OR EXISTS (SELECT 1 FROM inventory_items inv
+                      WHERE inv.imei = s.imei AND inv.status = 'available')
+         )`,
+      [trackings]
+    )
+    resueltos = res.rows.map(r => r.tracking)
+  } finally {
+    client.release()
+  }
+  if (resueltos.length === 0) return 0
+
+  const { error } = await supabase
+    .from('envios_regreso')
+    .update({ estado: 'regresado', consultado_at: new Date().toISOString() })
+    .in('tracking', resueltos)
+  if (error) {
+    console.error('envios-regreso: auto-resolución falló', error.message)
+    return 0
+  }
+  return resueltos.length
 }
 
 /**
@@ -163,6 +216,7 @@ export async function sincronizarEnviosRegreso(max = 80, dias = 60): Promise<Res
     sinDespacho: 0,
     errores: 0,
     restantes: 0,
+    regresadosAuto: 0,
   }
 
   for (const tracking of aConsultar) {
@@ -215,6 +269,8 @@ export async function sincronizarEnviosRegreso(max = 80, dias = 60): Promise<Res
     new Date(),
   ).length
 
+  resumen.regresadosAuto = await resolverRegresados(supabase)
+
   return resumen
 }
 
@@ -224,6 +280,8 @@ export interface FilaRegreso {
   fechaUltimoEvento: string | null
   detectadoAt: string | null
   recibidoAt: string | null
+  /** true = auto-resuelto: el IMEI se re-vendió o volvió disponible al inventario */
+  regresoAuto: boolean
   orderNumber: string | null
   cliente: string | null
   dni: string | null
@@ -238,8 +296,8 @@ export async function getPendientesRegreso(): Promise<FilaRegreso[]> {
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('envios_regreso')
-    .select('tracking, estado_andreani, fecha_ultimo_evento, detectado_at, recibido_at')
-    .eq('estado', 'pendiente_regreso')
+    .select('tracking, estado, estado_andreani, fecha_ultimo_evento, detectado_at, recibido_at')
+    .in('estado', ['pendiente_regreso', 'regresado'])
   const filas = data ?? []
   if (filas.length === 0) return []
 
@@ -272,6 +330,7 @@ export async function getPendientesRegreso(): Promise<FilaRegreso[]> {
         fechaUltimoEvento: f.fecha_ultimo_evento,
         detectadoAt: f.detectado_at,
         recibidoAt: f.recibido_at,
+        regresoAuto: f.estado === 'regresado',
         orderNumber: extra?.order_number ?? null,
         cliente: extra?.cliente ?? null,
         dni: extra?.dni ?? null,

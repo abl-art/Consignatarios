@@ -115,7 +115,7 @@ export default async function EnviosPage({
   const devoluciones: FilaDevolucion[] = await getDevoluciones().catch(() => [])
   // Pendiente de regreso: no entregados detectados por el cron diario (lee solo la tabla)
   const regresos: FilaRegreso[] = await getPendientesRegreso().catch(() => [])
-  const regresosPendientes = regresos.filter(r => r.recibidoAt === null).length
+  const regresosPendientes = regresos.filter(r => r.recibidoAt === null && !r.regresoAuto).length
   // Pendientes de gestión = las que nadie cerró a mano con el botón Resolver
   // (badge de la pestaña) — ninguna devolución se archiva sola por su estado de Andreani.
   const devolucionesPendientes = separarResueltos(devoluciones).pendientes.length
@@ -157,7 +157,7 @@ export default async function EnviosPage({
     })),
     regresos: regresos.map(r => ({
       orderNumber: r.orderNumber, cliente: r.cliente, dni: r.dni, tracking: r.tracking,
-      producto: r.producto, imei: r.imei, recibido: r.recibidoAt !== null,
+      producto: r.producto, imei: r.imei, recibido: r.recibidoAt !== null || r.regresoAuto,
     })),
   }
 

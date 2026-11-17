@@ -103,10 +103,21 @@ function Tabla({ filas, esHistorial }: { filas: FilaRegreso[]; esHistorial?: boo
                   </a>
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap">
-                  {esHistorial && f.recibidoAt && (
-                    <span className="text-xs text-green-700 mr-2">{new Date(f.recibidoAt).toLocaleDateString('es-AR')}</span>
+                  {f.regresoAuto ? (
+                    <span
+                      className="inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold bg-green-50 text-green-700 border-green-200"
+                      title="Detectado automáticamente: el IMEI se re-vendió en otro envío o volvió como disponible al inventario"
+                    >
+                      volvió al stock ✓
+                    </span>
+                  ) : (
+                    <>
+                      {esHistorial && f.recibidoAt && (
+                        <span className="text-xs text-green-700 mr-2">{new Date(f.recibidoAt).toLocaleDateString('es-AR')}</span>
+                      )}
+                      <BotonRecibido tracking={f.tracking} recibido={f.recibidoAt !== null} />
+                    </>
                   )}
-                  <BotonRecibido tracking={f.tracking} recibido={f.recibidoAt !== null} />
                 </td>
               </tr>
             )
@@ -118,8 +129,10 @@ function Tabla({ filas, esHistorial }: { filas: FilaRegreso[]; esHistorial?: boo
 }
 
 export default function PendienteRegresoTable({ filas }: { filas: FilaRegreso[] }) {
-  const pendientes = filas.filter(f => f.recibidoAt === null)
-  const recibidos = filas.filter(f => f.recibidoAt !== null).sort((a, b) => (b.recibidoAt ?? '').localeCompare(a.recibidoAt ?? ''))
+  const pendientes = filas.filter(f => f.recibidoAt === null && !f.regresoAuto)
+  const recibidos = filas
+    .filter(f => f.recibidoAt !== null || f.regresoAuto)
+    .sort((a, b) => (b.recibidoAt ?? b.fechaUltimoEvento ?? '').localeCompare(a.recibidoAt ?? a.fechaUltimoEvento ?? ''))
   const [verHistorial, setVerHistorial] = useState(false)
 
   return (
@@ -141,7 +154,7 @@ export default function PendienteRegresoTable({ filas }: { filas: FilaRegreso[] 
       {recibidos.length > 0 && (
         <div>
           <button onClick={() => setVerHistorial(v => !v)} className="text-sm text-gray-500 hover:text-gray-700">
-            {verHistorial ? '▾' : '▸'} Recibidos ({recibidos.length})
+            {verHistorial ? '▾' : '▸'} Resueltos ({recibidos.length}) — recibidos a mano y regresos detectados solos
           </button>
           {verHistorial && <div className="mt-2"><Tabla filas={recibidos} esHistorial /></div>}
         </div>
