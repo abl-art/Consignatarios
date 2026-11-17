@@ -5,7 +5,7 @@
 
 import type { TimelineAndreani } from '@/lib/devoluciones'
 
-export type EstadoRegreso = 'entregado' | 'pendiente_regreso' | 'en_viaje'
+export type EstadoRegreso = 'entregado' | 'pendiente_regreso' | 'en_viaje' | 'sin_despacho'
 
 const norm = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
@@ -27,6 +27,10 @@ export function clasificarRegreso(t: Pick<TimelineAndreani, 'estadoActual' | 'ev
   // "Retirado" en un outbound con retiro en sucursal = el cliente lo tiene
   if (estado === 'entregado' || estado === 'retirado') return 'entregado'
   if (SENALES_REGRESO.some(s => estado.includes(s))) return 'pendiente_regreso'
+  // Etiqueta creada que nunca entró a Andreani (visto en el barrido inicial:
+  // outbound de 5+ días clavados ahí = órdenes muertas/canceladas). Terminal:
+  // no es un regreso y no vale la pena re-consultarlo cada semana.
+  if (estado === 'pendiente de ingreso') return 'sin_despacho'
   return 'en_viaje'
 }
 

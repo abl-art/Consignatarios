@@ -35,6 +35,9 @@ async function fetchCandidatosReplica(): Promise<CandidatoRegreso[]> {
        WHERE s.type = 'outbound'
          AND s.status IN ('created', 'in_transit')
          AND s.tracking_number IS NOT NULL
+         -- Solo trackings reales de Andreani (los placeholder tipo API0000170…
+         -- no existen en el seguimiento: la API responde body null)
+         AND s.tracking_number ~ '^[0-9]{10,}$'
          AND s.created_at >= now() - interval '60 days'
          AND s.created_at < now() - interval '5 days'
          AND NOT COALESCE(s.traces, '[]'::jsonb) @> '[{"evento":"SolicitudDeRescate"}]'
@@ -54,7 +57,10 @@ async function fetchCandidatosReplica(): Promise<CandidatoRegreso[]> {
   }
 }
 
-async function consultarAndreani(tracking: string) {
+// 'desconocido' = Andreani respondió HTTP 206 con body null: el número no existe
+// en su seguimiento (etiqueta generada que nunca ingresó físicamente). Es
+// terminal — null es solo error de red/timeout y se reintenta.
+async function consultarAndreani(tracking: string): Promise<ReturnType<typeof parseTimelineAndreani> | 'desconocido' | null> {
   const payload = encodeURIComponent(payloadAndreani(tracking, ANDREANI_KEY, ANDREANI_IV))
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 8000)
@@ -65,7 +71,9 @@ async function consultarAndreani(tracking: string) {
       cache: 'no-store',
     })
     if (!res.ok) return null
-    return parseTimelineAndreani(await res.json())
+    const body = await res.json()
+    if (body === null) return 'desconocido'
+    return parseTimelineAndreani(body)
   } catch {
     return null
   } finally {
@@ -79,6 +87,7 @@ export interface ResumenSyncRegreso {
   entregados: number
   pendientesNuevos: number
   enViaje: number
+  sinDespacho: number
   errores: number
   restantes: number
 }
@@ -133,6 +142,7 @@ export async function sincronizarEnviosRegreso(max = 80): Promise<ResumenSyncReg
     entregados: 0,
     pendientesNuevos: 0,
     enViaje: 0,
+    sinDespacho: 0,
     errores: 0,
     restantes: 0,
   }
@@ -145,11 +155,24 @@ export async function sincronizarEnviosRegreso(max = 80): Promise<ResumenSyncReg
       continue
     }
     resumen.consultados++
+    if (timeline === 'desconocido') {
+      resumen.sinDespacho++
+      const { error } = await supabase.from('envios_regreso').upsert({
+        tracking,
+        estado: 'sin_despacho',
+        estado_andreani: 'Desconocido en Andreani',
+        consultado_at: new Date().toISOString(),
+      })
+      if (error) console.error(`envios-regreso: upsert falló para ${tracking}`, error.message)
+      await dormir(250)
+      continue
+    }
     const estado = clasificarRegreso(timeline)
     if (estado === 'entregado') resumen.entregados++
     else if (estado === 'pendiente_regreso') {
       if (previasPorTracking.get(tracking)?.estado !== 'pendiente_regreso') resumen.pendientesNuevos++
-    } else resumen.enViaje++
+    } else if (estado === 'sin_despacho') resumen.sinDespacho++
+    else resumen.enViaje++
 
     const { error } = await supabase.from('envios_regreso').upsert({
       tracking,

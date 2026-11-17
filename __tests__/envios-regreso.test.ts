@@ -26,7 +26,17 @@ describe('clasificarRegreso', () => {
   it('estados de viaje normal → en_viaje', () => {
     expect(clasificarRegreso(timeline('En distribución'))).toBe('en_viaje')
     expect(clasificarRegreso(timeline('En sucursal'))).toBe('en_viaje')
-    expect(clasificarRegreso(timeline('Pendiente de ingreso'))).toBe('en_viaje')
+  })
+
+  it('Pendiente de ingreso (etiqueta nunca despachada) → sin_despacho, terminal', () => {
+    expect(clasificarRegreso(timeline('Pendiente de ingreso'))).toBe('sin_despacho')
+    const elegidos = elegirConsultas(
+      ['x'],
+      [{ tracking: 'x', estado: 'sin_despacho', consultadoAt: '2026-10-01T00:00:00Z', recibidoAt: null }],
+      10,
+      new Date('2026-11-17T12:00:00Z'),
+    )
+    expect(elegidos).toEqual([])
   })
 
   it('sin estadoActual decide por el último evento del timeline', () => {
