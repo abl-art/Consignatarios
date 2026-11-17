@@ -15,6 +15,8 @@ import { getSiniestrosCompletos } from '@/lib/actions/siniestros'
 import { getRescatesCompletos, type RescateConPedro } from '@/lib/actions/rescates'
 import { getArrepentimientos, type SolicitudArrepentimiento } from '@/lib/actions/arrepentimientos'
 import { getDevoluciones, type FilaDevolucion } from '@/lib/actions/devoluciones'
+import { getPendientesRegreso, type FilaRegreso } from '@/lib/actions/envios-regreso'
+import PendienteRegresoTable from './PendienteRegresoTable'
 import { separarResueltos } from '@/lib/devoluciones'
 import { getDemorasDescartadas } from '@/lib/actions/demoras'
 import { formatearMoneda } from '@/lib/utils'
@@ -111,6 +113,9 @@ export default async function EnviosPage({
   const cortesControlStock: CorteControlStock[] = await getCortesControlStock().catch(() => [])
   // Devoluciones: estado en vivo de los dos seguimientos de Andreani (entrega + devolución)
   const devoluciones: FilaDevolucion[] = await getDevoluciones().catch(() => [])
+  // Pendiente de regreso: no entregados detectados por el cron diario (lee solo la tabla)
+  const regresos: FilaRegreso[] = await getPendientesRegreso().catch(() => [])
+  const regresosPendientes = regresos.filter(r => r.recibidoAt === null).length
   // Pendientes de gestión = las que nadie cerró a mano con el botón Resolver
   // (badge de la pestaña) — ninguna devolución se archiva sola por su estado de Andreani.
   const devolucionesPendientes = separarResueltos(devoluciones).pendientes.length
@@ -290,6 +295,11 @@ export default async function EnviosPage({
           id: 'devoluciones',
           label: devolucionesPendientes > 0 ? `Devoluciones (${devolucionesPendientes})` : 'Devoluciones',
           content: <DevolucionesTable devoluciones={devoluciones} />,
+        },
+        {
+          id: 'pendiente-regreso',
+          label: regresosPendientes > 0 ? `Pendiente de regreso (${regresosPendientes})` : 'Pendiente de regreso',
+          content: <PendienteRegresoTable filas={regresos} />,
         },
         {
           id: 'siniestros',

@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/seguros-cierre",
       "schedule": "0 5 1 * *"
+    },
+    {
+      "path": "/api/cron/envios-regreso",
+      "schedule": "45 10 * * *"
     }
   ]
 }
