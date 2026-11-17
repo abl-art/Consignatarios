@@ -33,7 +33,12 @@ async function fetchCandidatosReplica(dias: number): Promise<CandidatoRegreso[]>
        FROM shipments s
        JOIN store_orders so ON so.id = s.store_order_id
        WHERE s.type = 'outbound'
-         AND s.status IN ('created', 'in_transit')
+         -- 'cancelled' TAMBIÉN entra: GOcelular puede cancelar el shipment con el
+         -- paquete ya en la calle (caso real SO-WXCWYW: cancelado en la réplica y
+         -- "No entregado" en Andreani volviendo por proceso). Si la etiqueta se
+         -- canceló antes de despachar, Andreani responde sin datos y queda
+         -- sin_despacho — no ensucia la pestaña.
+         AND s.status IN ('created', 'in_transit', 'cancelled')
          AND s.tracking_number IS NOT NULL
          -- Solo trackings reales de Andreani (los placeholder tipo API0000170…
          -- no existen en el seguimiento: la API responde body null)
