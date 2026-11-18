@@ -33,12 +33,18 @@ function formatFecha(fecha: string | null): string {
   return new Date(fecha + 'T00:00:00').toLocaleDateString('es-AR')
 }
 
+/** Fecha ART actual, YYYY-MM-DD — misma zona que usa el server para "hoy". */
+function hoyArt(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+}
+
 interface Props {
   merchants: MerchantTercero[]
   onCreada: (c: Cosecha) => void
+  nombresExistentes: string[]
 }
 
-export default function CosechaForm({ merchants, onCreada }: Props) {
+export default function CosechaForm({ merchants, onCreada, nombresExistentes }: Props) {
   const [nombre, setNombre] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
@@ -125,6 +131,8 @@ export default function CosechaForm({ merchants, onCreada }: Props) {
     try {
       const res = await previewCosecha(def)
       setPreview(res)
+    } catch {
+      setPreview({ ok: false, error: 'Ocurrió un error al previsualizar la cosecha. Reintentá en unos segundos.' })
     } finally {
       setPreviewing(false)
     }
@@ -160,12 +168,22 @@ export default function CosechaForm({ merchants, onCreada }: Props) {
       } else {
         setCreateError(res.error)
       }
+    } catch {
+      setCreateError('Ocurrió un error al crear la cosecha. Reintentá en unos segundos.')
     } finally {
       setCreando(false)
     }
   }
 
   const modelosFiltrados = opciones.filter(o => o.label.toLowerCase().includes(modelosBusqueda.toLowerCase()))
+
+  // Rango abierto: si incluye "hoy", la membresía se congela igual al crear
+  // (resolverMiembros corre una sola vez) y las ventas posteriores a la
+  // creación nunca van a entrar — solo aviso, no bloquea.
+  const rangoAbierto = fechaHasta.trim() !== '' && fechaHasta >= hoyArt()
+
+  const nombreDuplicado = nombre.trim() !== '' &&
+    nombresExistentes.some(n => n.trim().toLowerCase() === nombre.trim().toLowerCase())
 
   return (
     <div className="space-y-4">
@@ -179,6 +197,7 @@ export default function CosechaForm({ merchants, onCreada }: Props) {
             placeholder="ej. Cohorte Nov 2026 Knox"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
+          {nombreDuplicado && <p className="text-[11px] text-gray-400 mt-1">Ya existe una cosecha con ese nombre</p>}
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Desde</label>
@@ -199,6 +218,12 @@ export default function CosechaForm({ merchants, onCreada }: Props) {
           />
         </div>
       </div>
+
+      {rangoAbierto && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          ⚠️ El rango incluye hoy: la membresía se congela al crear — las ventas posteriores NO entran. Recreá la cosecha cuando cierre el rango.
+        </p>
+      )}
 
       <FiltrosIndicadores
         canal={canal}

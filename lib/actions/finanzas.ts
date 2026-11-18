@@ -966,6 +966,13 @@ interface PDResumen {
   pd_30: number
 }
 
+/**
+ * `orderIds`: lista opcional para acotar a una cohorte custom (Cosechas).
+ * `undefined` o `[]` significan "sin filtro" (todas las órdenes que matchean
+ * `clientes`/`filtros`) — NO "ninguna orden". Si en el futuro hace falta un
+ * caller que pase explícitamente "cero órdenes", esta función no lo soporta:
+ * hoy un array vacío se trata igual que no pasar el parámetro.
+ */
 export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql, orderIds?: string[]): Promise<{
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
@@ -1127,6 +1134,13 @@ export interface VintageRow {
   pct_recupero_120_plus: number
 }
 
+/**
+ * `orderIds`: lista opcional para acotar a una cohorte custom (Cosechas).
+ * `undefined` o `[]` significan "sin filtro" (todas las órdenes que matchean
+ * `clientes`/`filtros`) — NO "ninguna orden". Si en el futuro hace falta un
+ * caller que pase explícitamente "cero órdenes", esta función no lo soporta:
+ * hoy un array vacío se trata igual que no pasar el parámetro.
+ */
 export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql, orderIds?: string[]): Promise<VintageRow[]> {
   const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
   if (!condClientes) return []

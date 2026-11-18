@@ -98,6 +98,7 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
   )
   const [showForm, setShowForm] = useState(false)
   const [borrando, setBorrando] = useState<string | null>(null)
+  const [errorBorrar, setErrorBorrar] = useState<string | null>(null)
 
   const [metricas, setMetricas] = useState<MetricasCosecha[]>([])
   const [cargandoMetricas, setCargandoMetricas] = useState(false)
@@ -158,6 +159,7 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
   async function handleBorrar(id: string, nombre: string) {
     if (!confirm(`¿Borrar la cosecha "${nombre}"? Esta acción no se puede deshacer.`)) return
     setBorrando(id)
+    setErrorBorrar(null)
     try {
       const res = await borrarCosecha(id)
       if (res.ok) {
@@ -168,7 +170,11 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
           return next
         })
         cacheMetricas.current.delete(id)
+      } else {
+        setErrorBorrar(`No se pudo borrar la cosecha "${nombre}". Reintentá en unos segundos.`)
       }
+    } catch {
+      setErrorBorrar(`No se pudo borrar la cosecha "${nombre}". Reintentá en unos segundos.`)
     } finally {
       setBorrando(null)
     }
@@ -189,11 +195,13 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
           </button>
           {showForm && (
             <div className="border-t border-gray-200 p-5">
-              <CosechaForm merchants={merchants} onCreada={handleCreada} />
+              <CosechaForm merchants={merchants} onCreada={handleCreada} nombresExistentes={lista.map(c => c.nombre)} />
             </div>
           )}
         </div>
       )}
+
+      {errorBorrar && <p className="text-xs text-red-600">{errorBorrar}</p>}
 
       {lista.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
@@ -523,7 +531,7 @@ function CurvaCompare({ metricas }: { metricas: MetricasCosecha[] }) {
                   const idx = dataKey.match(/^c(\d+)_/)?.[1]
                   const fila = (entry?.payload ?? {}) as Record<string, number | undefined>
                   const cobertura = idx !== undefined ? fila[`c${idx}_cobertura`] : undefined
-                  const coberturaTxt = cobertura !== undefined ? ` (cobertura ${Math.round(cobertura * 100)}%)` : ''
+                  const coberturaTxt = cobertura !== undefined ? ` (cobertura ${(cobertura * 100).toFixed(1)}%)` : ''
                   return [`${value.toFixed(2)}%${coberturaTxt}`, String(name)]
                 }}
                 labelFormatter={(label) => `Edad: ${label} días`}

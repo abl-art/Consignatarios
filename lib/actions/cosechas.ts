@@ -7,14 +7,12 @@
 // armada la cosecha deja de computar en las métricas (`ordenesActivas` lo
 // detecta) sin que la membresía original cambie.
 
-import { revalidatePath } from 'next/cache'
 import { getPool, getSupabasePool } from '@/lib/db-pool'
 import { requierePermiso } from '@/lib/permisos-server'
 import { CLIENTES_TODOS, sqlCondicionClientes } from '@/lib/client-ids'
 import { sqlFiltrosIndicadores } from '@/lib/bloqueo'
 import { resolverFiltro, fetchPDIndicadores, fetchVintageAnalysis } from './finanzas'
 import { fetchOrderIdsConContracargo } from '@/lib/gocelular'
-import { normalizarModelo } from '@/lib/inventario-indicadores'
 import {
   MAX_ORDENES_COSECHA,
   ESTADOS_TRUSTONIC,
@@ -243,7 +241,6 @@ export async function crearCosecha(def: DefCosecha): Promise<{ ok: true; cosecha
         miembros.montoTotal,
       ]
     )
-    revalidatePath('/finanzas')
     return { ok: true, cosecha: mapRowACosecha(res.rows[0]) }
   } finally {
     client.release()
@@ -257,7 +254,6 @@ export async function borrarCosecha(id: string): Promise<{ ok: boolean }> {
   const client = await supabasePool.connect()
   try {
     await client.query(`DELETE FROM cosechas WHERE id = $1`, [id])
-    revalidatePath('/finanzas')
     return { ok: true }
   } finally {
     client.release()
@@ -323,7 +319,10 @@ export async function fetchMetricasCosechas(ids: string[]): Promise<MetricasCose
         curva: [],
         madurez: resumenMadurez([], hoy),
         cantOrdenes: orderIds.length,
-        ordenesActivas: 0,
+        // Sin pool no sabemos cuántas siguen activas — asumir cantOrdenes (no
+        // 0) para no mostrar un badge falso de "N anuladas" por una caída de
+        // la réplica. Con orderIds vacío sí es 0 (coincide con cantOrdenes).
+        ordenesActivas: pool ? 0 : orderIds.length,
       })
       continue
     }

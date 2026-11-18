@@ -87,8 +87,8 @@ export function validarDefCosecha(def: DefCosecha): string | null {
     return 'Las fechas deben tener formato YYYY-MM-DD'
   }
   if (def.fechaDesde > def.fechaHasta) return 'La fecha desde no puede ser posterior a la fecha hasta'
-  if (def.limite !== null && (def.limite < 1 || def.limite > MAX_ORDENES_COSECHA)) {
-    return `El límite debe estar entre 1 y ${MAX_ORDENES_COSECHA}`
+  if (def.limite !== null && (!Number.isInteger(def.limite) || def.limite < 1 || def.limite > MAX_ORDENES_COSECHA)) {
+    return `El límite debe ser un número entero entre 1 y ${MAX_ORDENES_COSECHA}`
   }
   return null
 }
@@ -169,8 +169,10 @@ export function agregarVintage(rows: VintageRow[]): CosechaVintage {
  * Curva de evolución de mora por edad de cohorte: en cada punto d (múltiplo
  * de pasoDias) solo entran las órdenes que ya alcanzaron esa edad — así el
  * % no se contamina con órdenes demasiado jóvenes para haber llegado ahí.
+ * pctImpago = monto impago a edad d / monto vencido a edad d (ponderado por
+ * monto, no por cantidad de cuotas — spec decisiones 8 y 14).
  * cobertura < COBERTURA_MINIMA (muy pocas órdenes alcanzaron esa edad todavía)
- * o sin cuotas vencidas en el punto → se omite.
+ * o sin monto vencido en el punto → se omite.
  */
 export function curvaEvolucion(cuotas: CuotaCosecha[], hoy: string, pasoDias: number = PASO_CURVA_DIAS): PuntoCurva[] {
   const activas = cuotas.filter(c => !c.descartada)
@@ -191,18 +193,23 @@ export function curvaEvolucion(cuotas: CuotaCosecha[], hoy: string, pasoDias: nu
   const puntos: PuntoCurva[] = []
   for (let d = pasoDias; d <= edadMaxima; d += pasoDias) {
     const activasEnD = ordenes.filter(o => o.edad >= d)
-    const cobertura = Math.round((activasEnD.length / totalOrdenes) * 100) / 100
-    if (cobertura < COBERTURA_MINIMA) continue
+    const ratioExacto = activasEnD.length / totalOrdenes
+    if (ratioExacto < COBERTURA_MINIMA) continue
+    // cobertura = 1 EXACTO solo si todas las órdenes alcanzaron esta edad;
+    // si no, se redondea a 4 decimales (no 2) para que p. ej. 0.996 no
+    // termine mostrándose como "100%"/sólido en la UI (cobertura === 1).
+    const cobertura = activasEnD.length === totalOrdenes ? 1 : Math.round(ratioExacto * 10000) / 10000
 
     const limitePorOrden = new Map(activasEnD.map(o => [o.orderId, sumarDias(o.venta, d)]))
+    // Ponderado por MONTO (no por cantidad de cuotas): spec decisiones 8/14.
     let vencido = 0
     let impago = 0
     for (const c of activas) {
       const limite = limitePorOrden.get(c.orderId)
       if (limite === undefined || c.due > limite) continue
-      vencido++
+      vencido += c.amount
       const collected = c.cb ? null : c.collected
-      if (collected === null || collected > limite) impago++
+      if (collected === null || collected > limite) impago += c.amount
     }
     if (vencido === 0) continue
 

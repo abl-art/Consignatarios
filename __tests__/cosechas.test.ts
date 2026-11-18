@@ -45,6 +45,10 @@ describe('validarDefCosecha', () => {
     expect(validarDefCosecha(defBase({ limite: MAX_ORDENES_COSECHA + 1 }))).not.toBeNull()
   })
 
+  it('límite no entero (3.5) → error', () => {
+    expect(validarDefCosecha(defBase({ limite: 3.5 }))).not.toBeNull()
+  })
+
   it('límite dentro de rango o null → ok', () => {
     expect(validarDefCosecha(defBase({ limite: 1 }))).toBeNull()
     expect(validarDefCosecha(defBase({ limite: MAX_ORDENES_COSECHA }))).toBeNull()
@@ -203,6 +207,29 @@ describe('curvaEvolucion', () => {
     expect(puntos.map(p => p.edadDias)).toEqual([10, 20, 30, 40, 50, 60])
     expect(puntos.map(p => p.cobertura)).toEqual([1, 1, 0.5, 0.5, 0.5, 0.5])
     expect(puntos[puntos.length - 1].edadDias).toBe(60) // corte: no hay puntos más allá de la orden más vieja
+  })
+
+  it('pctImpago ponderado por MONTO, no por cantidad de cuotas: 100 (al día) + 900 (impaga) → 90%, no 50%', () => {
+    const cuotas = [
+      cuota({ orderId: 'o1', venta: '2026-01-01', due: '2026-01-05', collected: '2026-01-05', amount: 100 }),
+      cuota({ orderId: 'o2', venta: '2026-01-01', due: '2026-01-05', collected: null, amount: 900 }),
+    ]
+    const puntos = curvaEvolucion(cuotas, '2026-02-01', 7)
+    const p = puntos.find(pt => pt.edadDias === 7)!
+    expect(p.pctImpago).toBe(90)
+  })
+
+  it('cobertura: 199/200 órdenes alcanzaron la edad → ratio exacto (0.995), no redondea a 1 (sólido falso)', () => {
+    const cuotas: CuotaCosecha[] = []
+    for (let i = 0; i < 199; i++) {
+      cuotas.push(cuota({ orderId: `vieja-${i}`, venta: '2026-01-01', due: '2026-01-05', collected: '2026-01-05' }))
+    }
+    cuotas.push(cuota({ orderId: 'joven', venta: '2026-02-20', due: '2026-02-25', collected: '2026-02-25' }))
+
+    const puntos = curvaEvolucion(cuotas, '2026-02-21', 10)
+    const p50 = puntos.find(p => p.edadDias === 50)!
+    expect(p50.cobertura).toBeLessThan(1)
+    expect(p50.cobertura).toBeCloseTo(199 / 200, 4)
   })
 })
 
