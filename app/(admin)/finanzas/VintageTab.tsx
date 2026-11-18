@@ -60,7 +60,7 @@ function formatMes(mes: string): string {
   return mes
 }
 
-const SEGMENTS = [
+export const SEGMENTS = [
   { key: 'pct_cobrada_en_termino', label: 'Cobrada en termino', color: '#10B981' },
   { key: 'pct_por_vencer', label: 'Por vencer', color: '#3B82F6' },
   { key: 'pct_mora_1_29', label: 'Mora 1-29', color: '#FCD34D' },
