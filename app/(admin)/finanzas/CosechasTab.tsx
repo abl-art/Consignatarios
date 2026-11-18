@@ -507,7 +507,17 @@ function CurvaCompare({ metricas }: { metricas: MetricasCosecha[] }) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <p className="text-sm font-semibold text-gray-700 mb-3">Curva de evolución (% impago por edad de cohorte)</p>
+      <div className="mb-3">
+        <p className="text-sm font-semibold text-gray-700">
+          Curva de evolución{' '}
+          <span className="font-normal text-gray-500">
+            — a los X días de cada venta, % del monto financiado ya vencido que seguía impago (más abajo = mejor)
+          </span>
+        </p>
+        <p className="text-[11px] text-gray-400 mt-0.5">
+          Tramo sólido = cobertura 100% (todas las órdenes de la cosecha alcanzaron esa edad, comparable). Punteado = solo las más viejas del rango; se corta bajo 50%.
+        </p>
+      </div>
       {sinDatos ? (
         <p className="text-xs text-gray-400 text-center py-8">Todavía no hay suficiente cobertura para graficar la curva</p>
       ) : (
