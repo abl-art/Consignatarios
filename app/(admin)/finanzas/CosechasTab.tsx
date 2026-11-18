@@ -97,6 +97,7 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
     () => new Set(cosechas.slice(0, 2).map(c => c.id)),
   )
   const [showForm, setShowForm] = useState(false)
+  const [showLista, setShowLista] = useState(true)
   const [borrando, setBorrando] = useState<string | null>(null)
   const [errorBorrar, setErrorBorrar] = useState<string | null>(null)
 
@@ -211,7 +212,19 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
         </div>
       ) : (
         <>
-          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowLista(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-sm font-semibold text-gray-900">
+                Cosechas creadas <span className="font-normal text-gray-400">({lista.length} · {seleccionadas.size} seleccionada{seleccionadas.size === 1 ? '' : 's'})</span>
+              </span>
+              <svg className={`w-5 h-5 text-gray-400 transition-transform ${showLista ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div className={`divide-y divide-gray-100 border-t border-gray-100 ${showLista ? '' : 'hidden'}`}>
             {lista.map(c => {
               const metrica = metricas.find(m => m.id === c.id)
               const anuladas = metrica ? metrica.cantOrdenes - metrica.ordenesActivas : 0
@@ -255,6 +268,7 @@ export default function CosechasTab({ cosechas, merchants, operar }: Props) {
                 </div>
               )
             })}
+            </div>
           </div>
 
           {errorMetricas && <p className="text-xs text-red-600">{errorMetricas}</p>}
@@ -288,7 +302,7 @@ function MadurezCompare({ metricas }: { metricas: MetricasCosecha[] }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
       <p className="text-sm font-semibold text-gray-700 mb-3">Madurez</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {metricas.map(m => (
           <div key={m.id} className="border border-gray-200 rounded-lg p-3">
             <p className="text-sm font-medium text-gray-800 mb-2 truncate" title={m.nombre}>{m.nombre}</p>
