@@ -966,7 +966,7 @@ interface PDResumen {
   pd_30: number
 }
 
-export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql): Promise<{
+export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql, orderIds?: string[]): Promise<{
   byOrigination: PDRow[]
   byDueMonth: PDRow[]
   resumen: PDResumen[]
@@ -979,6 +979,8 @@ export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TOD
   if (!pool) return empty
 
   const extra = sqlFiltrosIndicadores(filtros)
+  const condOrderIds = orderIds && orderIds.length > 0 ? 'AND o.order_id::text = ANY($1::text[])' : ''
+  const queryParams = orderIds && orderIds.length > 0 ? [orderIds] : undefined
 
   const baseQuery = (mesExpr: string) => `
     SELECT
@@ -1003,6 +1005,7 @@ export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TOD
       AND o.order_discarded_at IS NULL
       AND ${condClientes}
       ${extra.where}
+      ${condOrderIds}
     GROUP BY 1, 2
     ORDER BY 1, 2
   `
@@ -1011,10 +1014,7 @@ export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TOD
   try {
     type QRow = { mes: Date | string; cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }
 
-    const [resOrig, resDue, resTotal] = await Promise.all([
-      client.query<QRow>(baseQuery("to_char(o.order_delivered_at, 'YYYY-MM')")),
-      client.query<QRow>(baseQuery("to_char(i.installment_due_at, 'YYYY-MM')")),
-      client.query<{ cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }>(`
+    const totalQuery = `
         SELECT
           i.installment_number AS cuota,
           SUM(CASE WHEN i.installment_due_at::date < CURRENT_DATE THEN i.installment_amount ELSE 0 END) AS den_hard,
@@ -1036,9 +1036,21 @@ export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TOD
           AND o.order_discarded_at IS NULL
           AND ${condClientes}
           ${extra.where}
+          ${condOrderIds}
         GROUP BY 1
         ORDER BY 1
-      `),
+      `
+
+    const [resOrig, resDue, resTotal] = await Promise.all([
+      queryParams
+        ? client.query<QRow>(baseQuery("to_char(o.order_delivered_at, 'YYYY-MM')"), queryParams)
+        : client.query<QRow>(baseQuery("to_char(o.order_delivered_at, 'YYYY-MM')")),
+      queryParams
+        ? client.query<QRow>(baseQuery("to_char(i.installment_due_at, 'YYYY-MM')"), queryParams)
+        : client.query<QRow>(baseQuery("to_char(i.installment_due_at, 'YYYY-MM')")),
+      queryParams
+        ? client.query<{ cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }>(totalQuery, queryParams)
+        : client.query<{ cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }>(totalQuery),
     ])
 
     function parseRows(rows: { mes: Date | string; cuota: string; den_hard: string; num_hard: string; den_30: string; num_30: string }[]): PDRow[] {
@@ -1115,13 +1127,15 @@ export interface VintageRow {
   pct_recupero_120_plus: number
 }
 
-export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql): Promise<VintageRow[]> {
+export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_TODOS, filtros?: FiltrosIndicadoresSql, orderIds?: string[]): Promise<VintageRow[]> {
   const condClientes = sqlCondicionClientes(clientes, 'o.client_id::text')
   if (!condClientes) return []
   const pool = getPool()
   if (!pool) return []
 
   const extra = sqlFiltrosIndicadores(filtros)
+  const condOrderIds = orderIds && orderIds.length > 0 ? 'AND o.order_id::text = ANY($1::text[])' : ''
+  const queryParams = orderIds && orderIds.length > 0 ? [orderIds] : undefined
 
   // Órdenes incobrables: contracargos (orden completa) + equipos en transición
   // 30+ días (solo sus cuotas pendientes — las cobradas ya entraron)
@@ -1135,7 +1149,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
 
   const client = await pool.connect()
   try {
-    const res = await client.query<{
+    type VintageQRow = {
       origination_month: Date | string
       amt_total: string
       amt_por_vencer: string
@@ -1149,7 +1163,9 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
       amt_recupero_60_89: string
       amt_recupero_90_119: string
       amt_recupero_120_plus: string
-    }>(`
+    }
+
+    const vintageSql = `
       WITH base AS (
         SELECT
           date_trunc('month', o.order_created_at)::date AS origination_month,
@@ -1171,6 +1187,7 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
           AND o.order_discarded_at IS NULL
           AND ${condClientes}
           ${extra.where}
+          ${condOrderIds}
       ),
       classified AS (
         SELECT
@@ -1213,7 +1230,11 @@ export async function fetchVintageAnalysis(clientes: FiltroClientes = CLIENTES_T
         GROUP BY 1
       )
       SELECT * FROM agg ORDER BY origination_month
-    `)
+    `
+
+    const res = queryParams
+      ? await client.query<VintageQRow>(vintageSql, queryParams)
+      : await client.query<VintageQRow>(vintageSql)
 
     return res.rows
       .filter((r) => r.origination_month != null)
@@ -1283,7 +1304,7 @@ export interface FiltroIndicadores {
   segmentoNumero?: string // '1'..'4' — antigüedad desde la activación
 }
 
-async function resolverFiltro(f: FiltroIndicadores): Promise<{ clientes: FiltroClientes; filtros: FiltrosIndicadoresSql }> {
+export async function resolverFiltro(f: FiltroIndicadores): Promise<{ clientes: FiltroClientes; filtros: FiltrosIndicadoresSql }> {
   // Regla de canales: propios explícitos, terceros = todo lo que no es propio
   let clientes: FiltroClientes =
     f.canal === 'propia' ? CLIENT_IDS_PROPIOS : f.canal === 'terceros' ? CLIENTES_TERCEROS : CLIENTES_TODOS
