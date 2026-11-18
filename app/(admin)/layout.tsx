@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import AdminSidebar, { type AdminNavItem } from '@/components/AdminSidebar'
 import MobileMenu from '@/components/MobileMenu'
+import CeliaWidget from '@/components/celia/CeliaWidget'
 import { contarNovedadesNoLeidas } from '@/lib/actions/novedades'
 import { getUsuarioActual } from '@/lib/permisos-server'
 import { filtrarNavItems } from '@/lib/permisos'
@@ -67,6 +68,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main className="flex-1 overflow-auto min-w-0">
         {children}
       </main>
+
+      {/* Chat flotante de Celia en toda la app (solo admins — la API es admin-only) */}
+      {usuario.rol === 'admin' && <CeliaWidget />}
     </div>
   )
 }
