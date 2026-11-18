@@ -124,6 +124,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
   const [dniQuery, setDniQuery] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState<Estado | null>(null)
 
   function informarPrecios(r: Awaited<ReturnType<typeof setSeguroActivo>>, encendido: boolean) {
     if (r.errorPublicacion) {
@@ -172,8 +173,13 @@ export default function CertificadosTab({ certificados, config, facturas, operar
   const pendientes = conEstado.filter(c => c._estado === 'pendiente')
   const resto = conEstado.filter(c => c._estado !== 'pendiente')
   // El filtro afecta SOLO la tabla; las tarjetas resumen siguen siendo globales.
-  const filas = filtrarCertificados([...pendientes, ...resto], { dni: dniQuery, desde, hasta })
-  const hayFiltro = dniQuery.trim() !== '' || desde !== '' || hasta !== ''
+  const base = estadoFiltro ? conEstado.filter(c => c._estado === estadoFiltro) : [...pendientes, ...resto]
+  const filas = filtrarCertificados(base, { dni: dniQuery, desde, hasta })
+  const hayFiltro = dniQuery.trim() !== '' || desde !== '' || hasta !== '' || estadoFiltro !== null
+
+  function toggleEstado(estado: Estado) {
+    setEstadoFiltro(prev => (prev === estado ? null : estado))
+  }
 
   return (
     <div className="space-y-6">
@@ -249,23 +255,42 @@ export default function CertificadosTab({ certificados, config, facturas, operar
 
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <button
+          type="button"
+          onClick={() => toggleEstado('vigente')}
+          className={`bg-white border rounded-xl p-4 text-left transition-colors ${estadoFiltro === 'vigente' ? 'border-green-700 ring-1 ring-green-700' : 'border-gray-200 hover:border-gray-400'}`}
+        >
           <p className="text-xs text-gray-500 mb-1">Vigentes</p>
           <p className="text-2xl font-bold text-green-700">{vigentes.length}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[10px] text-gray-400">{estadoFiltro === 'vigente' ? 'filtrando — tocá para quitar' : 'tocá para filtrar la tabla'}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleEstado('anulado')}
+          className={`bg-white border rounded-xl p-4 text-left transition-colors ${estadoFiltro === 'anulado' ? 'border-gray-900 ring-1 ring-gray-900' : 'border-gray-200 hover:border-gray-400'}`}
+        >
           <p className="text-xs text-gray-500 mb-1">Anulados</p>
           <p className="text-2xl font-bold text-gray-600">{anulados.length}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[10px] text-gray-400">{estadoFiltro === 'anulado' ? 'filtrando — tocá para quitar' : 'tocá para filtrar la tabla'}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleEstado('siniestrado')}
+          className={`bg-white border rounded-xl p-4 text-left transition-colors ${estadoFiltro === 'siniestrado' ? 'border-red-700 ring-1 ring-red-700' : 'border-gray-200 hover:border-gray-400'}`}
+        >
           <p className="text-xs text-gray-500 mb-1">Siniestrados</p>
           <p className="text-2xl font-bold text-red-700">{siniestrados.length}</p>
-        </div>
-        <div className="bg-white border border-amber-200 rounded-xl p-4">
+          <p className="text-[10px] text-gray-400">{estadoFiltro === 'siniestrado' ? 'filtrando — tocá para quitar' : 'tocá para filtrar la tabla'}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleEstado('pendiente')}
+          className={`bg-white border rounded-xl p-4 text-left transition-colors ${estadoFiltro === 'pendiente' ? 'border-amber-700 ring-1 ring-amber-700' : 'border-amber-200 hover:border-amber-400'}`}
+        >
           <p className="text-xs text-gray-500 mb-1">⚠️ Frenados sin costo</p>
           <p className="text-2xl font-bold text-amber-700">{pendientes.length}</p>
           <p className="text-[10px] text-gray-400">certificado creado, revisar costo de lista</p>
-        </div>
+        </button>
         <div className="bg-white border border-blue-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">🕐 Por emitir</p>
           <p className="text-2xl font-bold text-blue-700">{porAsegurar.length}</p>
@@ -362,7 +387,7 @@ export default function CertificadosTab({ certificados, config, facturas, operar
         {hayFiltro && (
           <button
             type="button"
-            onClick={() => { setDniQuery(''); setDesde(''); setHasta('') }}
+            onClick={() => { setDniQuery(''); setDesde(''); setHasta(''); setEstadoFiltro(null) }}
             className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:text-gray-700 hover:border-gray-300"
           >
             ✕ Limpiar
