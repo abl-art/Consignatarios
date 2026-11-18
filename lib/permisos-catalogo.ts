@@ -173,6 +173,7 @@ export const CATALOGO: SeccionCatalogo[] = [
       { id: 'indicadores', label: 'Payment Defaults', tab: 'indicadores', operar: false },
       { id: 'dpd', label: 'Days Past Due', tab: 'dpd', operar: false },
       { id: 'vintage', label: 'Vintage', tab: 'vintage', operar: false },
+      { id: 'cosechas', label: 'Cosechas', tab: 'cosechas', operar: true },
       { id: 'simulador', label: 'Simulación', tab: 'simulador', operar: true },
       { id: 'precios', label: 'Productos', tab: 'precios', operar: true },
       { id: 'resultado', label: 'Resultado', tab: 'resultado', operar: true },

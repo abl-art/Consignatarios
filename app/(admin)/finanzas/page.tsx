@@ -13,6 +13,8 @@ import FlujoTab from './FlujoTab'
 import IndicadoresTab from './IndicadoresTab'
 import DPDTab from './DPDTab'
 import VintageTab from './VintageTab'
+import CosechasTab from './CosechasTab'
+import { listarCosechas } from '@/lib/actions/cosechas'
 import DeudaTab from './DeudaTab'
 import DeudaAlerts from './DeudaAlerts'
 import SimuladorTab from './SimuladorTab'
@@ -40,7 +42,7 @@ export default async function FinanzasPage({
   // Permisos: admin ve/opera todo. Restringido queda limitado a las tabs y
   // acciones que el catálogo le habilita (ver Task 2/4).
   const usuario = await getUsuarioActual()
-  const TODAS_LAS_TABS = ['flujo', 'egresos', 'deuda', 'indicadores', 'dpd', 'vintage', 'simulador', 'precios', 'resultado']
+  const TODAS_LAS_TABS = ['flujo', 'egresos', 'deuda', 'indicadores', 'dpd', 'vintage', 'cosechas', 'simulador', 'precios', 'resultado']
   const tabIdsPermitidos = usuario?.rol === 'restringido'
     ? tabsPermitidas(usuario.permisos, 'finanzas', TODAS_LAS_TABS)
     : TODAS_LAS_TABS
@@ -97,6 +99,10 @@ export default async function FinanzasPage({
     fetchCuotasStats(CLIENTES_TERCEROS).catch(() => CUOTAS_VACIO),
     getFiltrosTerceros().catch(() => []),
   ])
+
+  // Cosechas: query propia y liviana, corre sola (no entra al Promise.all
+  // principal) y solo si el usuario puede ver la tab.
+  const cosechas = puedeVerTab('cosechas') ? await listarCosechas() : []
 
   // Datos del simulador: reusa el vintage/PD por canal ya fetcheado (prefetch) y
   // corre sus queries propias después. Si falla, arranca sin precargas.
@@ -232,6 +238,7 @@ export default async function FinanzasPage({
     { id: 'indicadores', label: 'Payment Defaults', content: puedeVerTab('indicadores') ? <IndicadoresTab canales={{ total: pdIndicadores, propia: pdPropia, terceros: pdTerceros }} merchants={merchantsTerceros} /> : null },
     { id: 'dpd', label: 'Days Past Due', content: puedeVerTab('dpd') ? <DPDTab canales={{ total: dpdIndicadores, propia: dpdPropia, terceros: dpdTerceros }} merchants={merchantsTerceros} /> : null },
     { id: 'vintage', label: 'Vintage', content: puedeVerTab('vintage') ? <VintageTab canales={{ total: vintageData, propia: vintagePropia, terceros: vintageTerceros }} merchants={merchantsTerceros} /> : null },
+    { id: 'cosechas', label: 'Cosechas', content: puedeVerTab('cosechas') ? <CosechasTab cosechas={cosechas} merchants={merchantsTerceros} operar={operarSubitem('cosechas')} /> : null },
     { id: 'simulador', label: 'Simulación', content: puedeVerTab('simulador') ? <SimuladorTab productos={productosFinancieros} datos={datosSimulador} /> : null },
     { id: 'precios', label: 'Productos', content: puedeVerTab('precios') ? <ProductosTab productos={productosFinancieros} /> : null },
     { id: 'resultado', label: 'Resultado', content: puedeVerTab('resultado') ? <ResultadoTab data={resultadoData} dataTerceros={resultadoTerceros} desde={resultadoDesde} hasta={resultadoHasta} /> : null },

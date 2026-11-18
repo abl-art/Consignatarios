@@ -21,10 +21,10 @@ test('toda ruta top-level de app/(admin) está catalogada (salvo excepciones doc
   }
 })
 
-test('finanzas tiene las 9 pestañas con los ids reales', () => {
+test('finanzas tiene las 10 pestañas con los ids reales', () => {
   const fin = CATALOGO.find(s => s.id === 'finanzas')!
   const tabs = fin.subitems.filter(i => i.tab).map(i => i.tab)
-  expect(tabs).toEqual(['flujo', 'egresos', 'deuda', 'indicadores', 'dpd', 'vintage', 'simulador', 'precios', 'resultado'])
+  expect(tabs).toEqual(['flujo', 'egresos', 'deuda', 'indicadores', 'dpd', 'vintage', 'cosechas', 'simulador', 'precios', 'resultado'])
 })
 
 test('ids de sección únicos y subitems únicos por sección', () => {
