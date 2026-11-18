@@ -5,13 +5,18 @@ import { getPool, getSupabasePool } from '@/lib/db-pool'
 import { ejecutarConsulta, serializarFilas } from '@/lib/celia/sql'
 import { SYSTEM_CELIA } from '@/lib/celia/contexto'
 import { crearBorradorNovedad } from '@/lib/actions/novedades'
+import { crearCosecha, listarCosechas, borrarCosecha, getOpcionesCosechas } from '@/lib/actions/cosechas'
+import { normalizarModelo } from '@/lib/inventario-indicadores'
+import { ESTADOS_TRUSTONIC, type DefCosecha, type FiltrosCosecha } from '@/lib/cosechas'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const MAX_ITERACIONES = 15
+// 30 para que entren lotes de cosechas (ej. 16, una por segmento) aunque el
+// modelo las cree de a una por turno en vez de batchear tool calls.
+const MAX_ITERACIONES = 30
 
 const tools: Anthropic.Tool[] = [
   {
@@ -57,7 +62,73 @@ const tools: Anthropic.Tool[] = [
       required: ['titulo'],
     },
   },
+  {
+    name: 'crear_cosecha',
+    description:
+      'Crea una COSECHA (cohorte congelada de ventas para A/B testing, pestaña Cosechas de Finanzas). Resuelve las ventas que matchean los filtros, congela la membresía y la guarda. Para crear varias (ej. una por segmento), llamá esta tool varias veces — podés batchear varias llamadas en un mismo turno.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre de la cosecha (claro y consistente, ej. "Jul-26 seg A1 (500)")' },
+        fecha_desde: { type: 'string', description: 'Fecha de venta desde, YYYY-MM-DD (inclusive, hora ART)' },
+        fecha_hasta: { type: 'string', description: 'Fecha de venta hasta, YYYY-MM-DD (inclusive)' },
+        canal: { type: 'string', enum: ['total', 'propia', 'terceros'], description: 'Canal de venta (default total)' },
+        merchant_id: { type: 'string', description: 'client_id del merchant tercero (solo con canal terceros)' },
+        store_id: { type: 'string', description: 'store_id de GOcuotas (solo con canal terceros)' },
+        segmento_letra: { type: 'string', enum: ['A', 'B', 'C', 'D'], description: 'Letra del segmento (límite por ticket)' },
+        segmento_numero: { type: 'string', enum: ['1', '2', '3', '4'], description: 'Número del segmento (antigüedad)' },
+        bloqueo: { type: 'string', enum: ['knox', 'motosafe', 'dlc'], description: 'Solución de bloqueo (por marca). Omitir = todas' },
+        trustonic: { type: 'array', items: { type: 'string' }, description: `Estados Trustonic actuales (${ESTADOS_TRUSTONIC.join('/')}). Omitir = todos` },
+        modelos: { type: 'array', items: { type: 'string' }, description: 'Nombres de modelos a incluir (como figuran en devices.model; si alguno no matchea, la tool devuelve las opciones). Omitir = todos' },
+        limite: { type: 'integer', description: 'Límite de ventas: toma las primeras N cronológicas del rango (máx 10.000). Omitir = sin límite' },
+      },
+      required: ['nombre', 'fecha_desde', 'fecha_hasta'],
+    },
+  },
+  {
+    name: 'listar_cosechas',
+    description: 'Lista las cosechas ya creadas (id, nombre, rango, órdenes congeladas de disponibles, monto financiado, filtros).',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'borrar_cosecha',
+    description:
+      'Borra una cosecha por id (de listar_cosechas). SOLO cuando Emiliano lo pide explícitamente — nunca por iniciativa propia.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'id (uuid) de la cosecha a borrar' } },
+      required: ['id'],
+    },
+  },
 ]
+
+// Mapea los modelos pedidos (texto libre) a los labels normalizados que espera
+// crearCosecha. Devuelve error con sugerencias si alguno no matchea.
+async function resolverModelosCelia(pedidos: string[]): Promise<{ ok: true; labels: string[] } | { ok: false; error: string }> {
+  const { modelos: grupos } = await getOpcionesCosechas()
+  const porClave = new Map(grupos.map(g => [normalizarModelo(g.label), g.label]))
+  const labels: string[] = []
+  const sinMatch: string[] = []
+  for (const p of pedidos) {
+    const label = porClave.get(normalizarModelo(p))
+    if (label) {
+      if (!labels.includes(label)) labels.push(label)
+    } else {
+      sinMatch.push(p)
+    }
+  }
+  if (sinMatch.length === 0) return { ok: true, labels }
+  // Sugerencias: grupos que comparten algún token con lo pedido
+  const tokens = new Set(sinMatch.flatMap(p => normalizarModelo(p).split(' ')).filter(t => t.length > 2))
+  const sugeridos = grupos
+    .filter(g => normalizarModelo(g.label).split(' ').some(t => tokens.has(t)))
+    .slice(0, 15)
+    .map(g => g.label)
+  return {
+    ok: false,
+    error: `Estos modelos no matchean ningún grupo: ${sinMatch.join(', ')}. Opciones parecidas disponibles: ${sugeridos.length > 0 ? sugeridos.join(' | ') : '(ninguna)'}. Reintentá con los nombres exactos.`,
+  }
+}
 
 async function ejecutarTool(nombre: string, input: Record<string, unknown>): Promise<{ contenido: string; esError: boolean }> {
   if (nombre === 'redactar_novedad') {
@@ -72,6 +143,67 @@ async function ejecutarTool(nombre: string, input: Record<string, unknown>): Pro
     return {
       contenido: `Borrador creado (id ${r.id}). NO fue enviado: Emiliano lo revisa y despacha desde /novedades → pestaña "Enviadas a GOcelular". Avisale que tiene un borrador esperando aprobación.`,
       esError: false,
+    }
+  }
+
+  if (nombre === 'crear_cosecha') {
+    const filtros: FiltrosCosecha = {
+      canal: input.canal === 'propia' || input.canal === 'terceros' ? input.canal : 'total',
+    }
+    if (input.merchant_id) filtros.merchantId = String(input.merchant_id)
+    if (input.store_id) filtros.storeId = String(input.store_id)
+    if (input.segmento_letra) filtros.segmentoLetra = String(input.segmento_letra)
+    if (input.segmento_numero) filtros.segmentoNumero = String(input.segmento_numero)
+    if (input.bloqueo === 'knox' || input.bloqueo === 'motosafe' || input.bloqueo === 'dlc') filtros.bloqueo = input.bloqueo
+    if (Array.isArray(input.trustonic) && input.trustonic.length > 0) {
+      filtros.trustonic = input.trustonic.map(String).filter(e => (ESTADOS_TRUSTONIC as readonly string[]).includes(e))
+    }
+    if (Array.isArray(input.modelos) && input.modelos.length > 0) {
+      const r = await resolverModelosCelia(input.modelos.map(String))
+      if (!r.ok) return { contenido: r.error, esError: true }
+      filtros.modelos = r.labels
+    }
+    const def: DefCosecha = {
+      nombre: String(input.nombre ?? '').trim(),
+      fechaDesde: String(input.fecha_desde ?? ''),
+      fechaHasta: String(input.fecha_hasta ?? ''),
+      filtros,
+      limite: input.limite != null ? Number(input.limite) : null,
+    }
+    try {
+      const r = await crearCosecha(def)
+      if (!r.ok) return { contenido: `No se pudo crear la cosecha "${def.nombre}": ${r.error}`, esError: true }
+      const c = r.cosecha
+      return {
+        contenido: `Cosecha "${c.nombre}" creada (id ${c.id}): ${c.cantOrdenes} órdenes congeladas de ${c.cantDisponibles} disponibles, monto financiado $${Math.round(c.montoTotal).toLocaleString('es-AR')}. La membresía quedó congelada ahora${def.fechaHasta >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }) ? ' (el rango incluye hoy: ventas posteriores NO entran)' : ''}.`,
+        esError: false,
+      }
+    } catch (e) {
+      return { contenido: `Error creando la cosecha: ${e instanceof Error ? e.message : String(e)}`, esError: true }
+    }
+  }
+
+  if (nombre === 'listar_cosechas') {
+    try {
+      const lista = await listarCosechas()
+      if (lista.length === 0) return { contenido: 'No hay cosechas creadas.', esError: false }
+      const filas = lista.map(c =>
+        `${c.id} | ${c.nombre} | ${c.fechaDesde} a ${c.fechaHasta} | ${c.cantOrdenes} de ${c.cantDisponibles} disponibles | $${Math.round(c.montoTotal).toLocaleString('es-AR')} | filtros: ${JSON.stringify(c.filtros)}${c.limite ? ` | límite ${c.limite}` : ''}`
+      )
+      return { contenido: filas.join('\n'), esError: false }
+    } catch (e) {
+      return { contenido: `Error listando cosechas: ${e instanceof Error ? e.message : String(e)}`, esError: true }
+    }
+  }
+
+  if (nombre === 'borrar_cosecha') {
+    try {
+      const r = await borrarCosecha(String(input.id ?? ''))
+      return r.ok
+        ? { contenido: 'Cosecha borrada.', esError: false }
+        : { contenido: 'No se pudo borrar la cosecha (¿id inexistente?).', esError: true }
+    } catch (e) {
+      return { contenido: `Error borrando la cosecha: ${e instanceof Error ? e.message : String(e)}`, esError: true }
     }
   }
 
@@ -209,6 +341,12 @@ export async function POST(request: Request) {
               const estado =
                 block.name === 'redactar_novedad'
                   ? 'Redactando borrador de novedad...'
+                  : block.name === 'crear_cosecha'
+                  ? `Creando cosecha "${(block.input as { nombre?: string }).nombre ?? ''}"...`
+                  : block.name === 'listar_cosechas'
+                  ? 'Listando cosechas...'
+                  : block.name === 'borrar_cosecha'
+                  ? 'Borrando cosecha...'
                   : `Consultando ${block.name === 'consultar_gocelular' ? 'GOcelular' : 'la plataforma'}...`
               emitir({ tipo: 'estado', texto: estado })
               const { contenido, esError } = await ejecutarTool(block.name, block.input as Record<string, unknown>)
