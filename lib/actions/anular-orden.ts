@@ -2,21 +2,23 @@
 
 // Anular orden (reembolso TOTAL por la API Redirect de GOcuotas) desde las
 // pestañas Rescates y Devoluciones: el botón VIAJA con la línea (decisión de
-// Emiliano 28/10) y se habilita según el estado de la acción de Pedro —
-// rescate_confirmado/recibido o retiro_realizado/devolucion_recibida. La
-// acción de reembolso en sí no cambia (misma API que Arrepentimientos).
+// Emiliano 28/10). La acción de reembolso en sí no cambia (misma API que
+// Arrepentimientos).
 //
-// Seguridad (fix review 29/10): el estado que habilita el reembolso se
-// RE-CONSULTA fresco a Pedro acá adentro — el que manda el browser pinta el
-// botón, nunca autoriza. La traza e idempotencia viven en refunds_api: la
-// fila se inserta antes del refund (PK = candado contra doble disparo) y se
-// borra si el refund falla, para permitir el reintento.
+// Desde el 19/11 el estado de Pedro NO habilita ni bloquea (decisión de
+// Emiliano: solo Yami anula, y las devoluciones recargadas a mano en
+// andreani.com nunca existen en Pedro — caso SO-NZYZPE). Se lo sigue
+// consultando solo para etiquetar el contexto de la traza, sin bloquear si
+// falla. Revisar cuando crezca el equipo. Protecciones vigentes: orden
+// GOcuotas identificada y activa (approved/paid/collected), sesión válida, y
+// la traza e idempotencia en refunds_api: la fila se inserta antes del refund
+// (PK = candado contra doble disparo) y se borra si el refund falla, para
+// permitir el reintento.
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { reembolsarOrdenGocuotas, getOrdenGocuotas } from '@/lib/gocuotas-api'
-import { puedeAnularOrden } from '@/lib/arrepentimientos'
 import { getCancelacionEstado } from '@/lib/gocelular-webhook'
 import { estadosDesdeGetCancelacion } from '@/lib/estados-andreani'
 
@@ -25,22 +27,21 @@ export async function anularOrdenCaso(input: {
   gocuotasStatus: string | null
   orderNumber: string
 }): Promise<{ ok?: true; statusNuevo?: string; error?: string }> {
-  // Estado fresco de Pedro: la única fuente que habilita mover plata
-  const res = await getCancelacionEstado({ order_number: input.orderNumber })
-  if (!res.ok) return { error: 'No se pudo consultar el estado del caso en GOcelular — reintentá en un rato (el reembolso solo se habilita con el estado fresco).' }
-  const { rescateEstado, devolucionEstado } = estadosDesdeGetCancelacion(res.body)
+  // Estado de Pedro: solo para etiquetar la traza (contexto rescate vs
+  // devolución) — si el GET falla no bloquea (ver cabecera)
+  const res = await getCancelacionEstado({ order_number: input.orderNumber }).catch(() => null)
+  const { rescateEstado } = estadosDesdeGetCancelacion(res?.ok ? res.body : null)
 
-  // Mismo guard que Arrepentimientos: la fila de Rescates/Devoluciones es por
-  // definición un caso expedido, el umbral lo pone el estado de Pedro.
-  const guard = puedeAnularOrden({
-    estado: 'pendiente',
-    gocuotasOrderId: input.gocuotasOrderId,
-    gocuotasStatus: input.gocuotasStatus,
-    fulfillment: 'expedido',
-    rescateEstado,
-    devolucionEstado,
-  })
-  if (!guard.ok) return { error: guard.error }
+  // Sin el piso de Pedro, el estado que autoriza no puede venir del browser:
+  // se verifica fresco contra la API de GOcuotas que la orden exista y no esté
+  // ya anulada (único bloqueo vigente además del candado)
+  const ordenActual = await getOrdenGocuotas(input.gocuotasOrderId)
+  if (!ordenActual) {
+    return { error: 'No se pudo consultar la orden en GOcuotas — reintentá en un rato.' }
+  }
+  if (ordenActual.discarded_at) {
+    return { error: 'La orden ya está anulada en GOcuotas.' }
+  }
 
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()

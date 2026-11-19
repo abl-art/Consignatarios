@@ -130,7 +130,7 @@ function PedroChip({ estado }: { estado: string | null }) {
   return (
     <span
       className={`inline-block px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${cls}`}
-      title="Estado reportado por Pedro (GOcelular) — segunda fuente de control; con retiro realizado / devolución recibida se habilita Anular orden"
+      title="Estado reportado por Pedro (GOcelular) — segunda fuente de control, solo informativo (no condiciona Anular orden)"
     >
       {clase === 'mal' ? '⚠️ ' : ''}{etiqueta}
     </span>

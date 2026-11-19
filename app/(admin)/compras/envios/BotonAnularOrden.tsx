@@ -1,9 +1,12 @@
 'use client'
 
 // Anular orden (reembolso TOTAL por API GOcuotas) desde Rescates y
-// Devoluciones: el botón viaja con la línea (decisión de Emiliano 28/10). El
-// estado de Pedro es el PISO de habilitación — rescate_confirmado/recibido o
-// retiro_realizado/devolucion_recibida —; el momento lo decide Yami.
+// Devoluciones: el botón viaja con la línea (decisión de Emiliano 28/10).
+// Desde el 19/11 el estado de Pedro NO es piso de habilitación (decisión de
+// Emiliano: solo Yami anula, y las devoluciones recargadas a mano en
+// andreani.com nunca existen en Pedro — caso SO-NZYZPE). Quedan las
+// protecciones mínimas: orden GOcuotas identificada y activa, más el candado
+// anti-doble-reembolso de la server action. Revisar cuando crezca el equipo.
 // Confirmación en dos pasos, como en Arrepentimientos.
 
 import { useState, useTransition } from 'react'
@@ -33,11 +36,14 @@ export default function BotonAnularOrden({
 
   if (!gocuotasOrderId) return null
 
+  // fulfillment null saltea la regla "expedido → corresponde rescate": acá el
+  // caso es expedido por definición y la habilitación por estado de Pedro está
+  // suspendida (ver cabecera)
   const guard = puedeAnularOrden({
     estado: 'pendiente',
     gocuotasOrderId,
     gocuotasStatus,
-    fulfillment: 'expedido',
+    fulfillment: null,
     rescateEstado: rescateEstado ?? null,
     devolucionEstado: devolucionEstado ?? null,
   })
