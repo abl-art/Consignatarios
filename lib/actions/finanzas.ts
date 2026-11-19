@@ -953,12 +953,17 @@ export async function fetchDPDIndicadores(clientes: FiltroClientes = CLIENTES_TO
 // fetchPDIndicadores – PD Hard & PD30 by origination month and due month
 // ---------------------------------------------------------------------------
 
-interface PDRow {
+export interface PDRowIndicadores {
   mes: string // YYYY-MM
   cuota: number
   pd_hard: number // percentage
   pd_30: number // percentage
+  /** Monto del denominador de PD Hard (cuotas vencidas). 0 = sin datos aún. */
+  den_hard: number
+  /** Monto del denominador de PD30 (cuotas vencidas hace 30+). 0 = sin datos aún. */
+  den_30: number
 }
+type PDRow = PDRowIndicadores
 
 interface PDResumen {
   cuota: number
@@ -1073,6 +1078,8 @@ export async function fetchPDIndicadores(clientes: FiltroClientes = CLIENTES_TOD
             cuota: Number(r.cuota),
             pd_hard: denHard === 0 ? 0 : Math.round((100 * numHard / denHard) * 100) / 100,
             pd_30: den30 === 0 ? 0 : Math.round((100 * num30 / den30) * 100) / 100,
+            den_hard: denHard,
+            den_30: den30,
           }
         })
     }

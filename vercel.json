@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/envios-regreso",
       "schedule": "45 10 * * *"
+    },
+    {
+      "path": "/api/cron/informe-diario",
+      "schedule": "0 9 * * *"
     }
   ]
 }
