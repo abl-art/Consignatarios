@@ -248,3 +248,66 @@ describe('armarInformeDiario', () => {
     expect(texto.length).toBeGreaterThan(10)
   })
 })
+
+// --- hallazgos del dry-run 19/11 ---
+
+import { unificarModelosVendidos } from '@/lib/informe-diario'
+
+describe('rangoAComprar en el HTML (formato)', () => {
+  it('redondea hacia arriba y formatea miles es-AR', () => {
+    const datos = datosBase()
+    datos.ventas = {
+      propia: { ordenes: 1, monto: 100 }, terceros: { ordenes: 0, monto: 0 },
+      modelos: [{ modelo: 'Samsung Galaxy A07 64GB', unidades: 52, diasStock: 9, aComprarMin: 3791.8330654140623, aComprarMax: 4006.683205221848 }],
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).toContain('3.792–4.007 u.')
+    expect(html).not.toContain('3791.83')
+  })
+
+  it('tras redondear, si coinciden muestra un solo número', () => {
+    const datos = datosBase()
+    datos.ventas = {
+      propia: { ordenes: 1, monto: 100 }, terceros: { ordenes: 0, monto: 0 },
+      modelos: [{ modelo: 'X', unidades: 1, diasStock: 20, aComprarMin: 11.2, aComprarMax: 11.9 }],
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).toContain('12 u.')
+    expect(html).not.toContain('12–12')
+  })
+})
+
+describe('unificarModelosVendidos', () => {
+  it('une el nombre de devices sin marca/capacidad con la única variante de la tienda', () => {
+    const r = unificarModelosVendidos([
+      { modelo: 'Moto G06', unidades: 13 },
+      { modelo: 'Motorola Moto G06 64GB', unidades: 11 },
+    ])
+    expect(r).toEqual([{ modelo: 'Motorola Moto G06 64GB', unidades: 24 }])
+  })
+
+  it('con dos capacidades posibles no adivina', () => {
+    const r = unificarModelosVendidos([
+      { modelo: 'Samsung Galaxy A16', unidades: 5 },
+      { modelo: 'Samsung Galaxy A16 4/128GB', unidades: 3 },
+      { modelo: 'Samsung Galaxy A16 8/256GB', unidades: 2 },
+    ])
+    expect(r.length).toBe(3)
+  })
+
+  it('no fusiona modelos distintos (Edge 60 vs Edge 60 Fusion)', () => {
+    const r = unificarModelosVendidos([
+      { modelo: 'Motorola Edge 60', unidades: 2 },
+      { modelo: 'Motorola Edge 60 Fusion 256GB', unidades: 4 },
+    ])
+    expect(r.length).toBe(2)
+  })
+
+  it('tolera la ausencia del token Galaxy', () => {
+    const r = unificarModelosVendidos([
+      { modelo: 'Samsung A07 64GB', unidades: 1 },
+      { modelo: 'Samsung Galaxy A07 64GB', unidades: 2 },
+    ])
+    expect(r).toEqual([{ modelo: 'Samsung Galaxy A07 64GB', unidades: 3 }])
+  })
+})

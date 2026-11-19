@@ -2,7 +2,7 @@
 // Lógica pura y template HTML del mail de las 6 AM. La recolección de datos
 // vive en lib/actions/informe-diario.ts; acá no hay I/O.
 
-import { DIAS_RIESGO, DIAS_CRITICO } from '@/lib/inventario-indicadores'
+import { DIAS_RIESGO, DIAS_CRITICO, normalizarModelo } from '@/lib/inventario-indicadores'
 import type { VintageRow } from '@/lib/actions/finanzas'
 import type { FlujoDiario } from '@/lib/flujo-canal'
 
@@ -171,6 +171,50 @@ export function serieCaja(flujo: FlujoDiario[], hoy: string, dias: number = 7): 
     .map(f => ({ fecha: f.cash_date.slice(0, 10), saldo: f.cash_balance }))
 }
 
+// Tokens que un nombre puede omitir sin dejar de ser el mismo modelo: la
+// marca ("Moto G06" de devices vs "Motorola Moto G06 64GB" de la tienda) y la
+// línea Galaxy de Samsung. OJO: "redmi" NO va acá — distingue modelos
+// ("Xiaomi 14" ≠ "Xiaomi Redmi 14"), igual que "fusion"/"pro"/"plus".
+const TOKENS_OMITIBLES = new Set(['motorola', 'samsung', 'xiaomi', 'nubia', 'honor', 'tcl', 'zte', 'jbl', 'galaxy'])
+
+const esCapacidad = (t: string) => /^\d+gb$/.test(t)
+
+/**
+ * Unifica las filas de modelos vendidos que vienen de dos fuentes con nombres
+ * distintos (propia = product_name de la tienda, terceros = devices.model,
+ * que suele omitir marca y capacidad). Una fila se fusiona en otra solo si
+ * sus tokens son subconjunto de la otra y lo que falta es únicamente marca,
+ * "galaxy" o capacidad — y hay UNA sola candidata (con dos variantes de
+ * capacidad no adivina).
+ */
+export function unificarModelosVendidos(
+  filas: { modelo: string; unidades: number }[],
+): { modelo: string; unidades: number }[] {
+  const conTokens = filas.map(f => ({ ...f, tokens: new Set(normalizarModelo(f.modelo).split(' ')) }))
+
+  // destino[i] = índice de la fila en la que i se fusiona (o i mismo)
+  const destino = conTokens.map((fila, i) => {
+    const candidatos = conTokens
+      .map((otra, j) => ({ otra, j }))
+      .filter(({ otra, j }) => {
+        if (j === i || otra.tokens.size <= fila.tokens.size) return false
+        if (![...fila.tokens].every(t => otra.tokens.has(t))) return false
+        return [...otra.tokens].every(t => fila.tokens.has(t) || esCapacidad(t) || TOKENS_OMITIBLES.has(t))
+      })
+    return candidatos.length === 1 ? candidatos[0].j : i
+  })
+
+  const resolver = (i: number): number => (destino[i] === i ? i : resolver(destino[i]))
+  const porDestino = new Map<number, { modelo: string; unidades: number }>()
+  conTokens.forEach((fila, i) => {
+    const d = resolver(i)
+    const prev = porDestino.get(d)
+    if (prev) prev.unidades += fila.unidades
+    else porDestino.set(d, { modelo: conTokens[d].modelo, unidades: fila.unidades })
+  })
+  return [...porDestino.values()]
+}
+
 // ─── Helpers de formato ───────────────────────────────────────────────────
 
 function moneda(n: number): string {
@@ -191,8 +235,9 @@ function colorDiasStock(dias: number | null): string {
 
 function rangoAComprar(min: number | null, max: number | null): string {
   if (min === null || max === null) return '—'
-  if (min === max) return `${min} u.`
-  return `${min}–${max} u.`
+  const [a, b] = [Math.ceil(min), Math.ceil(max)]
+  if (a === b) return `${a.toLocaleString('es-AR')} u.`
+  return `${a.toLocaleString('es-AR')}–${b.toLocaleString('es-AR')} u.`
 }
 
 // ─── Template HTML ────────────────────────────────────────────────────────

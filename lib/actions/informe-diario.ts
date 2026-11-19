@@ -14,6 +14,7 @@ import {
   cohortesMaduras,
   veredictoForecast,
   serieCaja,
+  unificarModelosVendidos,
 } from '@/lib/informe-diario'
 import { getPool } from '@/lib/db-pool'
 import { sqlCondicionClientes, CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
@@ -123,7 +124,9 @@ async function fetchVentasDeDia(fecha: string): Promise<{
     return {
       propia: porCanal.get('propia') ?? { ordenes: 0, monto: 0 },
       terceros: porCanal.get('terceros') ?? { ordenes: 0, monto: 0 },
-      modelosCrudos: [...porModelo.values()].sort((a, b) => b.unidades - a.unidades),
+      // Segunda pasada: devices.model suele omitir marca/capacidad y la clave
+      // normalizada no alcanza ("Moto G06" vs "Motorola Moto G06 64GB")
+      modelosCrudos: unificarModelosVendidos([...porModelo.values()]).sort((a, b) => b.unidades - a.unidades),
     }
   } finally {
     client.release()
@@ -286,7 +289,10 @@ async function bloqueAgenda(hoy: string): Promise<DatosInforme['agenda']> {
       horaInicio: e.horaInicio.includes('T') ? e.horaInicio.slice(11, 16) : e.horaInicio,
       horaFin: e.horaFin.includes('T') ? e.horaFin.slice(11, 16) : e.horaFin,
     }))
-  } catch {
+  } catch (e) {
+    // Error de la API de Google (≠ no conectado); el mail muestra la misma
+    // nota pero el log distingue para diagnosticar
+    console.error('informe-diario: calendario falló:', e instanceof Error ? e.message : e)
     eventos = null
   }
   return { todos, eventos }
