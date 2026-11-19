@@ -311,3 +311,97 @@ describe('unificarModelosVendidos', () => {
     expect(r).toEqual([{ modelo: 'Samsung Galaxy A07 64GB', unidades: 3 }])
   })
 })
+
+// --- fixes del review final (19/11) ---
+
+import { diaArt, fechasInforme, resumenDeposito } from '@/lib/informe-diario'
+
+describe('diaArt', () => {
+  it('convierte un timestamp UTC al día calendario ART', () => {
+    expect(diaArt('2026-11-19T01:15:00+00:00')).toBe('2026-11-18')
+  })
+  it('respeta timestamps que ya vienen con offset ART', () => {
+    expect(diaArt('2026-11-18T23:59:00-03:00')).toBe('2026-11-18')
+  })
+  it('deja intactas las fechas sin hora', () => {
+    expect(diaArt('2026-11-18')).toBe('2026-11-18')
+  })
+})
+
+describe('fechasInforme', () => {
+  it('sin fecha: todo es hoy real', () => {
+    expect(fechasInforme(undefined, '2026-11-19')).toEqual({ fecha: '2026-11-19', ayer: '2026-11-18', hoy: '2026-11-19' })
+  })
+  it('con fecha: desplaza solo el eje "ayer"; los bloques vivos siguen en hoy real', () => {
+    expect(fechasInforme('2026-10-01', '2026-11-19')).toEqual({ fecha: '2026-10-01', ayer: '2026-09-30', hoy: '2026-11-19' })
+  })
+  it('fecha inválida se ignora', () => {
+    expect(fechasInforme('2026-1-5', '2026-11-19')).toEqual({ fecha: '2026-11-19', ayer: '2026-11-18', hoy: '2026-11-19' })
+  })
+})
+
+describe('resumenDeposito', () => {
+  it('usa la foto viva del snapshot, no los counts por período', () => {
+    const r = resumenDeposito({
+      snapshot: { enCola: 7, enviadosSinExpedir: 3, enPicking: 2 },
+      expedidosPorDia: [{ dia: '2026-11-17', cantidad: 4 }, { dia: '2026-11-18', cantidad: 9 }],
+      requierenAtencion: 1,
+      demoras: [
+        { ref: 'A', dias: 4 }, { ref: 'B', dias: 9 }, { ref: 'C', dias: 2 },
+        { ref: 'D', dias: 7 }, { ref: 'E', dias: 5 }, { ref: 'F', dias: 1 },
+      ],
+      arrepentimientosAbiertos: 2,
+      arrepentimientosAyer: 1,
+      pendientesRegreso: 4,
+      ayer: '2026-11-18',
+    })
+    expect(r.enCola).toBe(7)
+    expect(r.enviadosSinExpedir).toBe(3)
+    expect(r.enPicking).toBe(2)
+    expect(r.requierenAtencion).toBe(1)
+    expect(r.expedidosAyer).toBe(9)
+    expect(r.demorados.cantidad).toBe(6)
+    expect(r.demorados.peores.map(p => p.dias)).toEqual([9, 7, 5, 4, 2])
+  })
+})
+
+describe('render de PD sin denominador', () => {
+  it('celda con denominador 0 muestra — en vez de 0.0%', () => {
+    const datos = datosBase()
+    datos.pd = {
+      celdas: [
+        celda('2026-09', 2), celda('2026-09', 3),
+        { mes: '2026-09', cuota: 4, pdHard: 0, pd30: 0, denHard: 0, den30: 0 },
+      ],
+      meses: ['2026-09'],
+      nota: 'C4 aún sin datos suficientes.',
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).not.toContain('0.0% / 0.0%')
+    expect(html).toContain('—')
+  })
+})
+
+describe('escape de HTML en datos externos', () => {
+  it('escapa títulos de eventos de calendar y textos de ToDos', () => {
+    const datos = datosBase()
+    datos.agenda = {
+      todos: [{ texto: 'Revisar <b>算</b> & co', fecha: '2026-11-19', urgente: false }],
+      eventos: [{ titulo: '<script>alert(1)</script>', horaInicio: '10:00', horaFin: '11:00' }],
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).toContain('Revisar &lt;b&gt;')
+  })
+
+  it('escapa nombres de modelo', () => {
+    const datos = datosBase()
+    datos.ventas = {
+      propia: { ordenes: 1, monto: 100 }, terceros: { ordenes: 0, monto: 0 },
+      modelos: [{ modelo: 'Moto <G06> & Max', unidades: 1, diasStock: null, aComprarMin: null, aComprarMax: null }],
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).toContain('Moto &lt;G06&gt; &amp; Max')
+  })
+})

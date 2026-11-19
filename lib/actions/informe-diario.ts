@@ -15,6 +15,9 @@ import {
   veredictoForecast,
   serieCaja,
   unificarModelosVendidos,
+  diaArt,
+  fechasInforme,
+  resumenDeposito,
 } from '@/lib/informe-diario'
 import { getPool } from '@/lib/db-pool'
 import { sqlCondicionClientes, CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
@@ -36,11 +39,6 @@ import { eventosDelDia } from '@/lib/calendar-google'
 
 function hoyArt(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
-}
-
-function diaAnterior(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10)
 }
 
 /** Ejecuta un bloque; si falla, loguea y devuelve null (el mail sale igual). */
@@ -210,8 +208,9 @@ async function bloqueForecast(hoy: string): Promise<DatosInforme['forecast']> {
 
 async function bloqueSeguros(ayer: string): Promise<DatosInforme['seguros']> {
   const [certs, siniestros] = await Promise.all([getCertificados(), getSiniestros()])
-  const emitidas = certs.filter(c => c.estado === 'emitido' && c.createdAt.slice(0, 10) === ayer).length
-  const denunciados = siniestros.filter(s => s.createdAt.slice(0, 10) === ayer).length
+  // Día calendario ART, no UTC (un created_at de 01:15Z es la noche anterior acá)
+  const emitidas = certs.filter(c => c.estado === 'emitido' && diaArt(c.createdAt) === ayer).length
+  const denunciados = siniestros.filter(s => diaArt(s.createdAt) === ayer).length
   return { emitidas, siniestros: denunciados }
 }
 
@@ -247,23 +246,22 @@ async function bloqueDeposito(ayer: string): Promise<DatosInforme['deposito']> {
     getPendientesRegreso(),
   ])
 
-  const expedidosAyer = reporte.expedidosPorDia.find(d => d.dia.slice(0, 10) === ayer)?.cantidad ?? 0
-  const demorados = [...demoras]
-    .sort((a, b) => b.diasDemora - a.diasDemora)
-  return {
-    expedidosAyer,
-    enCola: reporte.counts.enCola,
-    enviadosSinExpedir: reporte.counts.enviado,
-    enPicking: reporte.counts.picking,
-    requierenAtencion: reporte.counts.requiereAtencion + alertas.requierenAtencion.length,
-    demorados: {
-      cantidad: demoras.length,
-      peores: demorados.slice(0, 5).map(d => ({ ref: `${d.orderNumber} · ${d.producto ?? ''}`.trim(), dias: d.diasDemora })),
+  // Foto VIVA del warehouse = snapshot; counts cuenta transiciones por
+  // período y acá daría siempre 0 (hallazgo del review final)
+  return resumenDeposito({
+    snapshot: {
+      enCola: reporte.snapshot.enCola.cantidad,
+      enviadosSinExpedir: reporte.snapshot.pendientesPicking.cantidad,
+      enPicking: reporte.snapshot.picking.enProceso,
     },
+    expedidosPorDia: reporte.expedidosPorDia,
+    requierenAtencion: alertas.requierenAtencion.length,
+    demoras: demoras.map(d => ({ ref: `${d.orderNumber} · ${d.producto ?? ''}`.trim(), dias: d.diasDemora })),
     arrepentimientosAbiertos: arrepentimientos.filter(a => a.estado === 'pendiente').length,
-    arrepentimientosAyer: arrepentimientos.filter(a => a.emailFecha.slice(0, 10) === ayer).length,
+    arrepentimientosAyer: arrepentimientos.filter(a => diaArt(a.emailFecha) === ayer).length,
     pendientesRegreso: regresos.filter(r => !r.regresoAuto).length,
-  }
+    ayer,
+  })
 }
 
 interface TodoItem { id: string; text: string; done: boolean; prioridad?: string }
@@ -305,9 +303,10 @@ async function bloqueAgenda(hoy: string): Promise<DatosInforme['agenda']> {
  * seguros, depósito-expedidos/ingresos). Lo demás — stock, forecast, caja,
  * cola del depósito, agenda — siempre refleja el momento de la corrida.
  */
-export async function recolectarDatosInforme(fecha?: string): Promise<DatosInforme> {
-  const hoy = fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : hoyArt()
-  const ayer = diaAnterior(hoy)
+export async function recolectarDatosInforme(fechaParam?: string): Promise<DatosInforme> {
+  // Decisión 10 del spec: `fecha` desplaza SOLO el eje "ayer"; los bloques
+  // vivos (forecast, caja, agenda) siempre usan el hoy real de la corrida
+  const { fecha, ayer, hoy } = fechasInforme(fechaParam, hoyArt())
 
   // Secuencia cuidadosa con el pool de la réplica (max 5, compartido con la
   // app): bloques pesados de a pares; caja (base directa) al final, sola.
@@ -327,7 +326,7 @@ export async function recolectarDatosInforme(fecha?: string): Promise<DatosInfor
   const caja = await bloque('caja', () => bloqueCaja(hoy))
 
   return {
-    fecha: hoy,
+    fecha,
     ayer,
     ventas,
     forecast,

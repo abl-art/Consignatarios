@@ -26,6 +26,8 @@ export interface WarehouseSnapshot {
     ultimaHora: number
     ultimoHaceMin: number | null
     atascados: number
+    /** Pedidos actualmente en estado picking (foto viva) */
+    enProceso: number
   }
   hoyFlujos: {
     ingresados: number
@@ -80,7 +82,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
     snapshot: {
       enCola: { cantidad: 0, promHoras: null, maxHoras: null, vencidos: 0 },
       pendientesPicking: { cantidad: 0, promHoras: null, maxHoras: null },
-      picking: { hoy: 0, ultimaHora: 0, ultimoHaceMin: null, atascados: 0 },
+      picking: { hoy: 0, ultimaHora: 0, ultimoHaceMin: null, atascados: 0, enProceso: 0 },
       hoyFlujos: { ingresados: 0, enviadosWh: 0, expedidos: 0 },
       modelos: { enCola: [], pendientesPicking: [], pickeadosHoy: [] },
     },
@@ -277,6 +279,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
     const sentHoras: number[] = []
     let vencidos = 0
     let atascados = 0
+    let pickingVivos = 0
 
     for (const p of snapshotRes.rows) {
       if (p.estado === 'queued' || p.estado === 'sending') {
@@ -287,6 +290,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
         const h = horasDesde(p.sent_at ?? p.updated_at)
         if (h !== null) sentHoras.push(h)
       } else if (p.estado === 'picking') {
+        pickingVivos++
         // Estado transicional (packed → expedido, mediana 2 min): si lleva más de 1h, está atascado
         const h = horasDesde(p.updated_at)
         if (h !== null && h > 1) atascados++
@@ -304,6 +308,7 @@ export async function getWarehouseReport(desdeISO: string, hastaISO: string): Pr
           ultimaHora: Number(packed?.ultima_hora ?? 0),
           ultimoHaceMin: packed?.ultimo_hace_min !== null && packed?.ultimo_hace_min !== undefined ? Number(packed.ultimo_hace_min) : null,
           atascados,
+          enProceso: pickingVivos,
         },
         hoyFlujos: {
           ingresados: Number(flujosRes.rows[0]?.ingresados ?? 0),

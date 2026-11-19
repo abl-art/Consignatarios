@@ -159,6 +159,63 @@ export function veredictoForecast(mes: ForecastMes): VeredictoForecast {
   return { runRate, contraHibrido, contraGocuotas, frase }
 }
 
+/**
+ * Día calendario ART de un timestamp ISO (los timestamptz de Supabase vienen
+ * en UTC: un created_at de 01:15Z es el día ANTERIOR en Argentina). Las
+ * fechas sin hora quedan como están.
+ */
+export function diaArt(iso: string): string {
+  if (!iso.includes('T')) return iso.slice(0, 10)
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+}
+
+function diaAnterior(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10)
+}
+
+/**
+ * Ejes de fecha del informe (decisión 10 del spec): `fechaParam` desplaza
+ * SOLO el eje "ayer" (ventas, seguros, expedidos); los bloques vivos
+ * (forecast, caja, agenda) usan SIEMPRE el hoy real de la corrida.
+ */
+export function fechasInforme(
+  fechaParam: string | undefined,
+  hoyReal: string,
+): { fecha: string; ayer: string; hoy: string } {
+  const base = fechaParam && /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : hoyReal
+  return { fecha: base, ayer: diaAnterior(base), hoy: hoyReal }
+}
+
+/**
+ * Resumen del depósito a partir de la FOTO VIVA del snapshot del warehouse —
+ * nunca de `counts`, que cuenta transiciones por período (con desde===hasta
+ * da 0 siempre; hallazgo del review final 19/11).
+ */
+export function resumenDeposito(args: {
+  snapshot: { enCola: number; enviadosSinExpedir: number; enPicking: number }
+  expedidosPorDia: { dia: string; cantidad: number }[]
+  requierenAtencion: number
+  demoras: { ref: string; dias: number }[]
+  arrepentimientosAbiertos: number
+  arrepentimientosAyer: number
+  pendientesRegreso: number
+  ayer: string
+}): DepositoResumen {
+  const peores = [...args.demoras].sort((a, b) => b.dias - a.dias).slice(0, 5)
+  return {
+    expedidosAyer: args.expedidosPorDia.find(d => d.dia.slice(0, 10) === args.ayer)?.cantidad ?? 0,
+    enCola: args.snapshot.enCola,
+    enviadosSinExpedir: args.snapshot.enviadosSinExpedir,
+    enPicking: args.snapshot.enPicking,
+    requierenAtencion: args.requierenAtencion,
+    demorados: { cantidad: args.demoras.length, peores },
+    arrepentimientosAbiertos: args.arrepentimientosAbiertos,
+    arrepentimientosAyer: args.arrepentimientosAyer,
+    pendientesRegreso: args.pendientesRegreso,
+  }
+}
+
 /** Serie de caja desde hoy hasta hoy+dias inclusive. */
 export function serieCaja(flujo: FlujoDiario[], hoy: string, dias: number = 7): CajaDia[] {
   const [y, m, d] = hoy.split('-').map(Number)
@@ -217,6 +274,11 @@ export function unificarModelosVendidos(
 
 // ─── Helpers de formato ───────────────────────────────────────────────────
 
+/** Todo texto que venga de datos (modelos, ToDos, eventos de calendar) se escapa. */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function moneda(n: number): string {
   return '$' + Math.round(n).toLocaleString('es-AR')
 }
@@ -274,7 +336,7 @@ function bloqueVentas(d: DatosInforme): string {
     Terceros: <strong>${v.terceros.ordenes} órdenes</strong> · ${moneda(v.terceros.monto)}
   </p>`
   const filas = v.modelos.map(m => [
-    m.modelo,
+    esc(m.modelo),
     String(m.unidades),
     m.diasStock === null
       ? `<span style="color:${C.gris};">—</span>`
@@ -346,7 +408,9 @@ function bloquePD(d: DatosInforme): string {
     const fila = [`<strong>C${cuota}</strong>`]
     for (const mes of meses) {
       const c = porKey.get(`${mes}|${cuota}`)
-      fila.push(c ? `${c.pdHard.toFixed(1)}% / ${c.pd30.toFixed(1)}%` : '—')
+      // Sin denominador no hay dato: "—" en vez de un 0% engañoso
+      const lado = (v: number, den: number) => (den > 0 ? `${v.toFixed(1)}%` : '—')
+      fila.push(c ? `${lado(c.pdHard, c.denHard)} / ${lado(c.pd30, c.den30)}` : '—')
     }
     filas.push(fila)
   }
@@ -395,7 +459,7 @@ function bloqueDeposito(d: DatosInforme): string {
   if (dep.demorados.peores.length > 0) {
     demorados += tabla(
       ['Pedido/Envío', 'Días'],
-      dep.demorados.peores.map(p => [p.ref, `<span style="color:${C.rojo};font-weight:600;">${p.dias}</span>`]),
+      dep.demorados.peores.map(p => [esc(p.ref), `<span style="color:${C.rojo};font-weight:600;">${p.dias}</span>`]),
       ['left', 'right']
     )
   }
@@ -412,7 +476,7 @@ function bloqueAgenda(d: DatosInforme): string {
     cuerpo += tabla(
       ['ToDo', 'Fecha'],
       a.todos.map(t => [
-        t.urgente ? `<strong style="color:${C.rojo};">${t.texto}</strong>` : t.texto,
+        t.urgente ? `<strong style="color:${C.rojo};">${esc(t.texto)}</strong>` : esc(t.texto),
         fechaCorta(t.fecha),
       ]),
       ['left', 'right']
@@ -426,7 +490,7 @@ function bloqueAgenda(d: DatosInforme): string {
     cuerpo += `<p style="margin:10px 0 4px;font-size:12px;font-weight:600;color:${C.texto};">Calendario</p>`
     cuerpo += tabla(
       ['Evento', 'Horario'],
-      a.eventos.map(e => [e.titulo, `${e.horaInicio}–${e.horaFin}`]),
+      a.eventos.map(e => [esc(e.titulo), `${esc(e.horaInicio)}–${esc(e.horaFin)}`]),
       ['left', 'right']
     )
   }
