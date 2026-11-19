@@ -314,7 +314,7 @@ describe('unificarModelosVendidos', () => {
 
 // --- fixes del review final (19/11) ---
 
-import { diaArt, fechasInforme, resumenDeposito } from '@/lib/informe-diario'
+import { diaArt, fechasInforme, resumenDeposito, todosDelDia } from '@/lib/informe-diario'
 
 describe('diaArt', () => {
   it('convierte un timestamp UTC al día calendario ART', () => {
@@ -341,11 +341,11 @@ describe('fechasInforme', () => {
 })
 
 describe('resumenDeposito', () => {
-  it('usa la foto viva del snapshot, no los counts por período', () => {
+  it('foto viva del snapshot + flujos del día del informe (como la tarjeta Warehouse)', () => {
     const r = resumenDeposito({
-      snapshot: { enCola: 7, enviadosSinExpedir: 3, enPicking: 2 },
-      expedidosPorDia: [{ dia: '2026-11-17', cantidad: 4 }, { dia: '2026-11-18', cantidad: 9 }],
-      requierenAtencion: 1,
+      snapshot: { enCola: 41, enColaVencidos: 2, pendientesPicking: 17, pickingAtascados: 1 },
+      dia: { ingresados: 50, enviados: 48, pickeados: 60, expedidos: 68 },
+      requierenAtencion: 6,
       demoras: [
         { ref: 'A', dias: 4 }, { ref: 'B', dias: 9 }, { ref: 'C', dias: 2 },
         { ref: 'D', dias: 7 }, { ref: 'E', dias: 5 }, { ref: 'F', dias: 1 },
@@ -353,15 +353,86 @@ describe('resumenDeposito', () => {
       arrepentimientosAbiertos: 2,
       arrepentimientosAyer: 1,
       pendientesRegreso: 4,
-      ayer: '2026-11-18',
     })
-    expect(r.enCola).toBe(7)
-    expect(r.enviadosSinExpedir).toBe(3)
-    expect(r.enPicking).toBe(2)
-    expect(r.requierenAtencion).toBe(1)
-    expect(r.expedidosAyer).toBe(9)
+    expect(r.enCola).toBe(41)
+    expect(r.enColaVencidos).toBe(2)
+    expect(r.pendientesPicking).toBe(17)
+    expect(r.pickingAtascados).toBe(1)
+    expect(r.dia).toEqual({ ingresados: 50, enviados: 48, pickeados: 60, expedidos: 68 })
+    expect(r.requierenAtencion).toBe(6)
     expect(r.demorados.cantidad).toBe(6)
     expect(r.demorados.peores.map(p => p.dias)).toEqual([9, 7, 5, 4, 2])
+  })
+})
+
+describe('render del depósito estilo tarjeta Warehouse', () => {
+  it('muestra las 3 columnas con foto viva, vencidos/atascados y los flujos del día', () => {
+    const datos = datosBase()
+    datos.deposito = {
+      enCola: 41, enColaVencidos: 2, pendientesPicking: 17, pickingAtascados: 1,
+      dia: { ingresados: 50, enviados: 48, pickeados: 60, expedidos: 68 },
+      requierenAtencion: 6,
+      demorados: { cantidad: 0, peores: [] },
+      arrepentimientosAbiertos: 1, arrepentimientosAyer: 0, pendientesRegreso: 2,
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).toContain('En cola')
+    expect(html).toContain('pendientes de Picking')
+    expect(html).toContain('41')
+    expect(html).toContain('17')
+    expect(html).toMatch(/2[^<]*vencid/i)
+    expect(html).toMatch(/1[^<]*atascad/i)
+    expect(html).toContain('Expedidos')
+    expect(html).toContain('68')
+  })
+
+  it('sin vencidos ni atascados no muestra advertencias', () => {
+    const datos = datosBase()
+    datos.deposito = {
+      enCola: 5, enColaVencidos: 0, pendientesPicking: 3, pickingAtascados: 0,
+      dia: { ingresados: 1, enviados: 2, pickeados: 3, expedidos: 4 },
+      requierenAtencion: 0,
+      demorados: { cantidad: 0, peores: [] },
+      arrepentimientosAbiertos: 0, arrepentimientosAyer: 0, pendientesRegreso: 0,
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).not.toMatch(/vencid/i)
+    expect(html).not.toMatch(/atascad/i)
+  })
+})
+
+describe('todosDelDia', () => {
+  it('trae SOLO los ToDos pendientes del día, urgentes primero', () => {
+    const raw = {
+      '2026-04-30': [{ id: '1', text: 'Vencido viejo', done: false }],
+      '2026-11-19': [
+        { id: '2', text: 'Normal de hoy', done: false },
+        { id: '3', text: 'Urgente de hoy', done: false, prioridad: 'urgente' },
+        { id: '4', text: 'Ya hecho', done: true },
+      ],
+      '2026-11-25': [{ id: '5', text: 'Futuro', done: false }],
+    }
+    const r = todosDelDia(raw, '2026-11-19')
+    expect(r.map(t => t.texto)).toEqual(['Urgente de hoy', 'Normal de hoy'])
+    expect(r[0].urgente).toBe(true)
+  })
+})
+
+describe('layout del mail', () => {
+  it('ocupa todo el ancho (sin max-width de 680px)', () => {
+    const { html } = armarInformeDiario(datosBase())
+    expect(html).not.toContain('max-width:680px')
+    expect(html).toMatch(/width:100%/)
+  })
+
+  it('la columna de compras dice resto del mes', () => {
+    const datos = datosBase()
+    datos.ventas = {
+      propia: { ordenes: 1, monto: 100 }, terceros: { ordenes: 0, monto: 0 },
+      modelos: [{ modelo: 'X', unidades: 1, diasStock: 20, aComprarMin: 3, aComprarMax: 5 }],
+    }
+    const { html } = armarInformeDiario(datos)
+    expect(html).toContain('resto del mes')
   })
 })
 

@@ -18,7 +18,10 @@ import {
   diaArt,
   fechasInforme,
   resumenDeposito,
+  todosDelDia,
 } from '@/lib/informe-diario'
+import { simularDeuda } from '@/lib/simular-deuda'
+import { fetchPrestamos, getDeudaConfig } from '@/lib/actions/deuda'
 import { getPool } from '@/lib/db-pool'
 import { sqlCondicionClientes, CLIENT_IDS_PROPIOS, CLIENTES_TERCEROS } from '@/lib/client-ids'
 import { normalizarModelo, coberturaProyectada } from '@/lib/inventario-indicadores'
@@ -158,12 +161,16 @@ async function bloqueVentas(ayer: string): Promise<DatosInforme['ventas']> {
         const fc = forecastCompras(items, [], resumen.reposiciones, proyeccion)
         for (const fila of fc.celulares) {
           const key = normalizarModelo(fila.modelo)
+          // Solo lo que falta comprar en el RESTO del mes en curso (pedido de
+          // Emiliano 19/11) — la primera fila de aComprar es el mes actual
+          // prorrateado por getProyeccionPropiaRun
+          const mesActual = fila.aComprar[0]?.unidades ?? 0
           const prev = aComprarPorKey.get(key)
           if (prev) {
-            prev.min = Math.min(prev.min, fila.totalAComprar)
-            prev.max = Math.max(prev.max, fila.totalAComprar)
+            prev.min = Math.min(prev.min, mesActual)
+            prev.max = Math.max(prev.max, mesActual)
           } else {
-            aComprarPorKey.set(key, { min: fila.totalAComprar, max: fila.totalAComprar })
+            aComprarPorKey.set(key, { min: mesActual, max: mesActual })
           }
         }
       }
@@ -215,8 +222,16 @@ async function bloqueSeguros(ayer: string): Promise<DatosInforme['seguros']> {
 }
 
 async function bloqueCaja(hoy: string): Promise<CajaDia[]> {
-  const flujo = await fetchFlujoDeFondosPorCanal()
-  return serieCaja(flujo.total, hoy, 7)
+  // El saldo que Emiliano mira en /finanzas es el flujo CON la deuda
+  // inyectada (simularDeuda: tomas suman caja, devoluciones restan) — el
+  // flujo crudo da negativo y no es lo que muestra la app
+  const [flujo, prestamos, deudaConfig] = await Promise.all([
+    fetchFlujoDeFondosPorCanal(),
+    fetchPrestamos(),
+    getDeudaConfig(),
+  ])
+  const { flujo: conDeuda } = simularDeuda(flujo.total, prestamos, deudaConfig)
+  return serieCaja(conDeuda, hoy, 7)
 }
 
 async function bloquePD(): Promise<DatosInforme['pd']> {
@@ -237,47 +252,43 @@ async function bloqueIncobrabilidad(): Promise<DatosInforme['incobrabilidad']> {
   }))
 }
 
-async function bloqueDeposito(ayer: string): Promise<DatosInforme['deposito']> {
+async function bloqueDeposito(ayer: string, fecha: string): Promise<DatosInforme['deposito']> {
   const [reporte, alertas, demoras, arrepentimientos, regresos] = await Promise.all([
-    getWarehouseReport(ayer, ayer),
+    // Rango [ayer, fecha): los counts del reporte son los flujos de ese día
+    getWarehouseReport(ayer, fecha),
     fetchAlertasEnvios(),
     fetchDemorasEntrega(),
     getArrepentimientos(),
     getPendientesRegreso(),
   ])
 
-  // Foto VIVA del warehouse = snapshot; counts cuenta transiciones por
-  // período y acá daría siempre 0 (hallazgo del review final)
+  // Como la tarjeta Warehouse: foto VIVA del snapshot + flujos del día del
+  // informe (counts del rango [ayer, fecha))
   return resumenDeposito({
     snapshot: {
       enCola: reporte.snapshot.enCola.cantidad,
-      enviadosSinExpedir: reporte.snapshot.pendientesPicking.cantidad,
-      enPicking: reporte.snapshot.picking.enProceso,
+      enColaVencidos: reporte.snapshot.enCola.vencidos,
+      pendientesPicking: reporte.snapshot.pendientesPicking.cantidad,
+      pickingAtascados: reporte.snapshot.picking.atascados,
     },
-    expedidosPorDia: reporte.expedidosPorDia,
+    dia: {
+      ingresados: reporte.counts.enCola,
+      enviados: reporte.counts.enviado,
+      pickeados: reporte.counts.picking,
+      expedidos: reporte.counts.expedido,
+    },
     requierenAtencion: alertas.requierenAtencion.length,
     demoras: demoras.map(d => ({ ref: `${d.orderNumber} · ${d.producto ?? ''}`.trim(), dias: d.diasDemora })),
     arrepentimientosAbiertos: arrepentimientos.filter(a => a.estado === 'pendiente').length,
     arrepentimientosAyer: arrepentimientos.filter(a => diaArt(a.emailFecha) === ayer).length,
     pendientesRegreso: regresos.filter(r => !r.regresoAuto).length,
-    ayer,
   })
 }
 
-interface TodoItem { id: string; text: string; done: boolean; prioridad?: string }
-
 async function bloqueAgenda(hoy: string): Promise<DatosInforme['agenda']> {
   const todosRaw = await fetchTodos()
-  const todos: { texto: string; fecha: string; urgente: boolean }[] = []
-  for (const [fecha, items] of Object.entries(todosRaw)) {
-    if (!Array.isArray(items) || fecha > hoy) continue
-    for (const it of items as TodoItem[]) {
-      if (it && it.done === false && it.text) {
-        todos.push({ texto: it.text, fecha, urgente: it.prioridad === 'urgente' })
-      }
-    }
-  }
-  todos.sort((a, b) => (Number(b.urgente) - Number(a.urgente)) || a.fecha.localeCompare(b.fecha))
+  // Solo los ToDos del día (pedido de Emiliano 19/11: sin los vencidos viejos)
+  const todos = todosDelDia(todosRaw, hoy)
 
   let eventos: { titulo: string; horaInicio: string; horaFin: string }[] | null
   try {
@@ -320,7 +331,7 @@ export async function recolectarDatosInforme(fechaParam?: string): Promise<Datos
     bloque('incobrabilidad', () => bloqueIncobrabilidad()),
   ])
   const [deposito, agenda] = await Promise.all([
-    bloque('deposito', () => bloqueDeposito(ayer)),
+    bloque('deposito', () => bloqueDeposito(ayer, fecha)),
     bloque('agenda', () => bloqueAgenda(hoy)),
   ])
   const caja = await bloque('caja', () => bloqueCaja(hoy))

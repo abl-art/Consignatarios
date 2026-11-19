@@ -33,10 +33,13 @@ export interface PDCelda { mes: string; cuota: number; pdHard: number; pd30: num
 export interface SegurosDia { emitidas: number; siniestros: number }
 export interface CajaDia { fecha: string; saldo: number }
 export interface DepositoResumen {
-  expedidosAyer: number
+  /** Foto viva del warehouse (misma tarjeta que /compras/envios → Warehouse) */
   enCola: number
-  enviadosSinExpedir: number
-  enPicking: number
+  enColaVencidos: number
+  pendientesPicking: number
+  pickingAtascados: number
+  /** Flujos del día del informe: pedidos que avanzaron de etapa ese día */
+  dia: { ingresados: number; enviados: number; pickeados: number; expedidos: number }
   requierenAtencion: number
   demorados: { cantidad: number; peores: { ref: string; dias: number }[] }
   arrepentimientosAbiertos: number
@@ -188,32 +191,46 @@ export function fechasInforme(
 }
 
 /**
- * Resumen del depósito a partir de la FOTO VIVA del snapshot del warehouse —
- * nunca de `counts`, que cuenta transiciones por período (con desde===hasta
- * da 0 siempre; hallazgo del review final 19/11).
+ * Resumen del depósito espejando la tarjeta Warehouse de /compras/envios:
+ * foto VIVA del snapshot (stock en cada etapa, vencidos, atascados) + los
+ * flujos del día del informe (counts por período de getWarehouseReport con
+ * rango [ayer, fecha) — nunca counts como foto: con rango vacío da 0 siempre).
  */
 export function resumenDeposito(args: {
-  snapshot: { enCola: number; enviadosSinExpedir: number; enPicking: number }
-  expedidosPorDia: { dia: string; cantidad: number }[]
+  snapshot: { enCola: number; enColaVencidos: number; pendientesPicking: number; pickingAtascados: number }
+  dia: { ingresados: number; enviados: number; pickeados: number; expedidos: number }
   requierenAtencion: number
   demoras: { ref: string; dias: number }[]
   arrepentimientosAbiertos: number
   arrepentimientosAyer: number
   pendientesRegreso: number
-  ayer: string
 }): DepositoResumen {
   const peores = [...args.demoras].sort((a, b) => b.dias - a.dias).slice(0, 5)
   return {
-    expedidosAyer: args.expedidosPorDia.find(d => d.dia.slice(0, 10) === args.ayer)?.cantidad ?? 0,
     enCola: args.snapshot.enCola,
-    enviadosSinExpedir: args.snapshot.enviadosSinExpedir,
-    enPicking: args.snapshot.enPicking,
+    enColaVencidos: args.snapshot.enColaVencidos,
+    pendientesPicking: args.snapshot.pendientesPicking,
+    pickingAtascados: args.snapshot.pickingAtascados,
+    dia: args.dia,
     requierenAtencion: args.requierenAtencion,
     demorados: { cantidad: args.demoras.length, peores },
     arrepentimientosAbiertos: args.arrepentimientosAbiertos,
     arrepentimientosAyer: args.arrepentimientosAyer,
     pendientesRegreso: args.pendientesRegreso,
   }
+}
+
+/** ToDos pendientes SOLO del día, urgentes primero (pedido de Emiliano 19/11). */
+export function todosDelDia(
+  todosRaw: Record<string, unknown>,
+  hoy: string,
+): { texto: string; fecha: string; urgente: boolean }[] {
+  const items = todosRaw[hoy]
+  if (!Array.isArray(items)) return []
+  return (items as { text?: string; done?: boolean; prioridad?: string }[])
+    .filter(it => it && it.done === false && it.text)
+    .map(it => ({ texto: it.text!, fecha: hoy, urgente: it.prioridad === 'urgente' }))
+    .sort((a, b) => Number(b.urgente) - Number(a.urgente))
 }
 
 /** Serie de caja desde hoy hasta hoy+dias inclusive. */
@@ -345,7 +362,7 @@ function bloqueVentas(d: DatosInforme): string {
   ])
   const cuerpo = v.modelos.length === 0
     ? fallback('Sin modelos vendidos ayer.')
-    : tabla(['Modelo', 'Vendidos', 'Días de stock', 'A comprar (forecast)'], filas, ['left', 'right', 'right', 'right'])
+    : tabla(['Modelo', 'Vendidos', 'Días de stock', 'A comprar (resto del mes)'], filas, ['left', 'right', 'right', 'right'])
   return tarjeta(`Ventas de ayer (${fechaCorta(d.ayer)})`, resumen + cuerpo)
 }
 
@@ -443,16 +460,27 @@ function bloqueIncobrabilidad(d: DatosInforme): string {
 function bloqueDeposito(d: DatosInforme): string {
   if (!d.deposito) return tarjeta('Depósito', fallback('No disponible — ver /compras/envios.'))
   const dep = d.deposito
+  // Tres columnas como la tarjeta Warehouse: foto viva arriba, el día abajo
+  const col = (titulo: string, numero: number, detalle: string, alerta: string) => `
+    <td style="width:33%;vertical-align:top;padding:8px 10px;border:1px solid ${C.borde};border-radius:8px;">
+      <p style="margin:0;font-size:24px;font-weight:700;color:${C.texto};">${numero}</p>
+      <p style="margin:2px 0 4px;font-size:12px;font-weight:600;color:${C.headerTexto};">${titulo}</p>
+      <p style="margin:0;font-size:11px;color:${C.gris};">${detalle}</p>
+      ${alerta ? `<p style="margin:4px 0 0;font-size:11px;color:${C.rojo};font-weight:600;">${alerta}</p>` : ''}
+    </td>`
+  const dia = fechaCorta(d.ayer)
+  const columnas = `
+  <table style="width:100%;border-collapse:separate;border-spacing:6px 0;margin:0 0 8px;"><tr>
+    ${col('En cola', dep.enCola, `${dia}: +${dep.dia.ingresados} ingresados · −${dep.dia.enviados} enviados`,
+      dep.enColaVencidos > 0 ? `⚠ ${dep.enColaVencidos} vencido${dep.enColaVencidos !== 1 ? 's' : ''} de hora límite` : '')}
+    ${col('Enviados — pendientes de Picking', dep.pendientesPicking, `${dia}: +${dep.dia.enviados} enviados · −${dep.dia.pickeados} pickeados`, '')}
+    ${col(`Pickeados el ${dia}`, dep.dia.pickeados, `Expedidos el ${dia}: ${dep.dia.expedidos}`,
+      dep.pickingAtascados > 0 ? `⚠ ${dep.pickingAtascados} atascado${dep.pickingAtascados !== 1 ? 's' : ''} sin expedir +1h` : '')}
+  </tr></table>`
   const resumen = `
   <p style="margin:0 0 8px;font-size:13px;color:${C.texto};">
-    Expedidos ayer: <strong>${dep.expedidosAyer}</strong>
-    &nbsp;|&nbsp; En cola: <strong>${dep.enCola}</strong>
-    &nbsp;|&nbsp; Enviados sin expedir: <strong>${dep.enviadosSinExpedir}</strong>
-    &nbsp;|&nbsp; En picking: <strong>${dep.enPicking}</strong>
-    &nbsp;|&nbsp; <span style="color:${dep.requierenAtencion > 0 ? C.rojo : C.texto};">Requieren atención: <strong>${dep.requierenAtencion}</strong></span>
-  </p>
-  <p style="margin:0 0 8px;font-size:13px;color:${C.texto};">
-    Arrepentimientos abiertos: <strong>${dep.arrepentimientosAbiertos}</strong> (${dep.arrepentimientosAyer} entraron ayer)
+    <span style="color:${dep.requierenAtencion > 0 ? C.rojo : C.texto};">Requieren atención: <strong>${dep.requierenAtencion}</strong></span>
+    &nbsp;|&nbsp; Arrepentimientos abiertos: <strong>${dep.arrepentimientosAbiertos}</strong> (${dep.arrepentimientosAyer} entraron ayer)
     &nbsp;|&nbsp; Pendientes de regreso: <strong>${dep.pendientesRegreso}</strong>
   </p>`
   let demorados = `<p style="margin:0;font-size:12px;color:${dep.demorados.cantidad > 0 ? C.ambar : C.verde};">Demorados: <strong>${dep.demorados.cantidad}</strong></p>`
@@ -463,7 +491,7 @@ function bloqueDeposito(d: DatosInforme): string {
       ['left', 'right']
     )
   }
-  return tarjeta('Depósito', resumen + demorados)
+  return tarjeta(`Depósito — Warehouse Andreani (${fechaCorta(d.ayer)})`, columnas + resumen + demorados)
 }
 
 function bloqueAgenda(d: DatosInforme): string {
@@ -501,7 +529,7 @@ function bloqueAgenda(d: DatosInforme): string {
 export function armarInformeDiario(datos: DatosInforme): { html: string; texto: string } {
   const html = `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f9fafb;font-family:${FUENTE};">
-<div style="max-width:680px;margin:0 auto;padding:16px;">
+<div style="width:100%;box-sizing:border-box;padding:16px;">
   <div style="background:${C.magenta};border-radius:12px;padding:14px 18px;margin-bottom:16px;">
     <p style="margin:0;font-size:16px;font-weight:700;color:#ffffff;">GOcelular360 — Informe diario</p>
     <p style="margin:2px 0 0;font-size:12px;color:#fbcfe8;">${datos.fecha}</p>
