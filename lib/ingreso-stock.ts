@@ -2,6 +2,17 @@
 // Los conteos vienen de la DB externa: IMEIs del intake presentes en inventory_items
 // (celulares) y received_quantity vs quantity en inventory_intake_addon_items (accesorios).
 
+// Progreso de ingreso por producto dentro de un pedido informado: clave =
+// nombre GOcelular del modelo (devices, via device_model_skus→device_models)
+// o sku del addon (store_products). Permite descontar del "en tránsito" solo
+// lo que realmente falta cuando el ingreso es parcial.
+export interface IngresoProducto {
+  clave: string
+  tipo: 'device' | 'addon'
+  ingresadas: number
+  totales: number
+}
+
 export interface IngresoCounts {
   imeisTotales: number
   imeisIngresados: number

@@ -2,7 +2,7 @@
 
 import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { evaluarIngreso, necesitaSyncIngreso } from '@/lib/ingreso-stock'
+import { evaluarIngreso, necesitaSyncIngreso, type IngresoProducto } from '@/lib/ingreso-stock'
 import type { Pedido } from '@/lib/actions/compras'
 
 interface IngresoRow {
@@ -10,9 +10,11 @@ interface IngresoRow {
   imeis_totales: string
   imeis_ingresados: string
   fecha_devices: Date | null
+  detalle_devices: { clave: string; ingresadas: number; totales: number }[] | null
   addons_totales: string | null
   addons_ingresados: string | null
   fecha_addons: Date | null
+  detalle_addons: { clave: string; ingresadas: number; totales: number }[] | null
 }
 
 // Cruza los pedidos informados a GOcelular contra su DB: los IMEIs del intake que ya
@@ -51,33 +53,52 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
                 COALESCE(d.total, 0) AS imeis_totales,
                 COALESCE(d.ingresados, 0) AS imeis_ingresados,
                 d.ultimo AS fecha_devices,
+                d.detalle AS detalle_devices,
                 a.total AS addons_totales,
                 a.ingresados AS addons_ingresados,
-                a.ultimo AS fecha_addons
+                a.ultimo AS fecha_addons,
+                a.detalle AS detalle_addons
          FROM purchase_intakes pi
          LEFT JOIN LATERAL (
            -- Ingresado = la fila existe y ya no esta en transito: GOcelular crea los items
            -- como in_transit_andreani al confirmar la compra y los pasa a andreani_wh (con
-           -- andreani_received_at) recien cuando Andreani los recibe; destino local nace en 'local'
-           SELECT count(*) AS total,
-                  count(inv.imei) FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ingresados,
-                  max(COALESCE(inv.andreani_received_at, inv.created_at))
-                    FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ultimo
+           -- andreani_received_at) recien cuando Andreani los recibe; destino local nace en 'local'.
+           -- Se agrupa por modelo (alias de la linea → device_models.name) para poder
+           -- descontar ingresos PARCIALES por producto en el "en tránsito" del stock.
+           SELECT sum(t.total) AS total,
+                  sum(t.ingresados) AS ingresados,
+                  max(t.ultimo) AS ultimo,
+                  jsonb_agg(jsonb_build_object('clave', t.nombre, 'ingresadas', t.ingresados, 'totales', t.total)) AS detalle
            FROM (
-             -- Las tablets se identifican por numero de serie (l->'serials'), que GOcelular
-             -- guarda en la MISMA columna imei de inventory_items — el join sirve para ambos
-             SELECT jsonb_array_elements_text(
-               COALESCE(l->'imeis', '[]'::jsonb) || COALESCE(l->'serials', '[]'::jsonb)
-             ) AS imei
-             FROM jsonb_array_elements(pi.source_payload->'lines') l
-           ) x
-           LEFT JOIN inventory_items inv ON inv.imei = x.imei
+             SELECT COALESCE(dm.name, x.sku) AS nombre,
+                    count(*) AS total,
+                    count(inv.imei) FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ingresados,
+                    max(COALESCE(inv.andreani_received_at, inv.created_at))
+                      FILTER (WHERE inv.physical_location IS DISTINCT FROM 'in_transit_andreani') AS ultimo
+             FROM (
+               -- Las tablets se identifican por numero de serie (l->'serials'), que GOcelular
+               -- guarda en la MISMA columna imei de inventory_items — el join sirve para ambos
+               SELECT l->>'sku' AS sku,
+                      jsonb_array_elements_text(
+                        COALESCE(l->'imeis', '[]'::jsonb) || COALESCE(l->'serials', '[]'::jsonb)
+                      ) AS imei
+               FROM jsonb_array_elements(pi.source_payload->'lines') l
+             ) x
+             LEFT JOIN inventory_items inv ON inv.imei = x.imei
+             LEFT JOIN device_model_skus dms ON dms.sku = x.sku
+             LEFT JOIN device_models dm ON dm.model_code = dms.model_code
+             GROUP BY 1
+           ) t
          ) d ON true
          LEFT JOIN LATERAL (
            SELECT sum(ai.quantity) AS total,
                   sum(LEAST(ai.received_quantity, ai.quantity)) AS ingresados,
-                  max(ai.received_at) AS ultimo
+                  max(ai.received_at) AS ultimo,
+                  jsonb_agg(jsonb_build_object('clave', COALESCE(sp.sku, ai.addon_product_id::text),
+                                               'ingresadas', LEAST(ai.received_quantity, ai.quantity),
+                                               'totales', ai.quantity)) AS detalle
            FROM inventory_intake_addon_items ai
+           LEFT JOIN store_products sp ON sp.id = ai.addon_product_id
            WHERE ai.batch_id = pi.addon_batch_id
          ) a ON true
          WHERE pi.purchase_reference = ANY($1)
@@ -108,12 +129,23 @@ export async function sincronizarIngresosGocelular(): Promise<void> {
         addonsIngresados: Number(r.addons_ingresados ?? 0),
       })
 
+      // Detalle por producto para descontar parciales del "en tránsito"; los
+      // numeros de jsonb llegan como number, pero se normaliza por las dudas
+      const ingresoPorProducto: IngresoProducto[] = [
+        ...(r.detalle_devices ?? []).map(e => ({ clave: e.clave, tipo: 'device' as const, ingresadas: Number(e.ingresadas), totales: Number(e.totales) })),
+        ...(r.detalle_addons ?? []).map(e => ({ clave: e.clave, tipo: 'addon' as const, ingresadas: Number(e.ingresadas), totales: Number(e.totales) })),
+      ]
+
       const g = pedido.gocelular!
-      const progresoCambio = g.unidadesIngresadas !== ev.unidadesIngresadas || g.unidadesTotales !== ev.unidadesTotales
+      const progresoCambio =
+        g.unidadesIngresadas !== ev.unidadesIngresadas ||
+        g.unidadesTotales !== ev.unidadesTotales ||
+        JSON.stringify(g.ingresoPorProducto ?? []) !== JSON.stringify(ingresoPorProducto)
       if (!ev.completo && !progresoCambio) continue
 
       g.unidadesIngresadas = ev.unidadesIngresadas
       g.unidadesTotales = ev.unidadesTotales
+      g.ingresoPorProducto = ingresoPorProducto
       if (ev.completo) {
         const fechas = [r.fecha_devices, r.fecha_addons].filter((f): f is Date => f != null)
         const fecha = fechas.length > 0

@@ -6,6 +6,9 @@
 //                 pero puede demorar o trabarse (alias pendiente): por fila se
 //                 toma el MÁXIMO entre su tránsito y el del gestor, así las
 //                 unidades aparecen apenas se informa y no se duplican después.
+//                 En ingresos PARCIALES se descuenta lo ya ingresado según el
+//                 detalle por producto del sync (caso 139 A07: 138 en local y
+//                 1 sin escanear → tránsito 1, no 139).
 //
 // El mapeo a filas de stock intenta primero por productoCodigo == sku (exacto
 // e inmune a renames del producto: el pedido congela el nombre al crearse) y
@@ -25,7 +28,13 @@ export interface PedidoGestor {
   estado: 'borrador' | 'confirmado' | 'enviado'
   items: { productoNombre: string; productoCodigo?: string; cantidad: number }[]
   ingresoStockAt?: string
-  gocelular?: { estado?: string; enviadoAt?: string }
+  gocelular?: {
+    estado?: string
+    enviadoAt?: string
+    unidadesIngresadas?: number
+    unidadesTotales?: number
+    ingresoPorProducto?: { clave: string; tipo: 'device' | 'addon'; ingresadas: number; totales: number }[]
+  }
 }
 
 export type StockConPedidoRow = StockWarehouseRow & { pedido: number }
@@ -50,6 +59,43 @@ function claves(nombre: string): string[] {
 
 function activo(p: PedidoGestor): boolean {
   return (p.estado === 'confirmado' || p.estado === 'enviado') && !p.ingresoStockAt
+}
+
+// Items de un pedido informado con la cantidad que REALMENTE sigue en tránsito:
+// a cada item se le descuenta lo ya ingresado según el detalle por producto del
+// sync (devices por nombre GOcelular con la misma tolerancia de claves(); addons
+// por sku == productoCodigo). Sin detalle (pedidos viejos), con un solo item se
+// descuenta el agregado unidadesIngresadas; con varios no hay forma de atribuir
+// y se mantiene la cantidad completa (comportamiento previo).
+function itemsEnTransito(p: PedidoGestor): { productoNombre: string; productoCodigo?: string; cantidad: number }[] {
+  const items = p.items ?? []
+  const detalle = p.gocelular?.ingresoPorProducto
+  if (detalle && detalle.length > 0) {
+    const entradas = detalle.map((e) => ({ ...e, usadas: 0 }))
+    return items.map((it) => {
+      let restante = it.cantidad
+      const clavesItem = claves(it.productoNombre)
+      for (const e of entradas) {
+        if (restante <= 0) break
+        const matchea =
+          e.tipo === 'addon'
+            ? !!it.productoCodigo && it.productoCodigo.trim() === e.clave
+            : claves(e.clave).some((c) => clavesItem.includes(c))
+        if (!matchea) continue
+        const disponibles = e.ingresadas - e.usadas
+        if (disponibles <= 0) continue
+        const usar = Math.min(disponibles, restante)
+        e.usadas += usar
+        restante -= usar
+      }
+      return { ...it, cantidad: restante }
+    })
+  }
+  const ingresadas = p.gocelular?.unidadesIngresadas ?? 0
+  if (ingresadas > 0 && items.length === 1) {
+    return [{ ...items[0], cantidad: Math.max(0, items[0].cantidad - ingresadas) }]
+  }
+  return items
 }
 
 function sumarItems(destino: Map<string, number>, p: PedidoGestor, codigoPorNombre: Map<string, string>) {
@@ -89,9 +135,12 @@ export function aplicarPedidos(
   const codigoPorNombre = new Map<string, string>()
   for (const p of pedidos.filter(activo)) {
     if (p.gocelular?.estado === 'informado') {
-      sumarItems(transitoPorNombre, p, codigoPorNombre)
+      // Ingresos parciales: en tránsito va solo lo que falta ingresar — lo ya
+      // ingresado lo cuenta el stock del depósito (si no, se duplica)
+      const restantes = itemsEnTransito(p).filter((it) => it.cantidad > 0)
+      sumarItems(transitoPorNombre, { ...p, items: restantes }, codigoPorNombre)
       if (p.gocelular.enviadoAt) {
-        for (const it of p.items ?? []) {
+        for (const it of restantes) {
           const nombre = it.productoNombre.trim()
           const previo = transitoDesde.get(nombre)
           if (!previo || p.gocelular.enviadoAt < previo) transitoDesde.set(nombre, p.gocelular.enviadoAt)

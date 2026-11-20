@@ -222,6 +222,10 @@ export interface GocelularEstado {
   ingresoDetectadoAt?: string
   unidadesIngresadas?: number
   unidadesTotales?: number
+  // Progreso por producto (sync-ingresos): clave = nombre GOcelular del modelo
+  // (devices) o sku (addons). Lo usa aplicarPedidos para dejar "en tránsito"
+  // solo lo que falta ingresar cuando el ingreso es parcial.
+  ingresoPorProducto?: import('@/lib/ingreso-stock').IngresoProducto[]
 }
 
 export interface Pedido {

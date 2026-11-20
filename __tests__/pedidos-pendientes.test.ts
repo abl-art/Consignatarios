@@ -168,6 +168,101 @@ describe('pedidos informados cuentan como En tránsito con datos del gestor', ()
   })
 })
 
+describe('ingresos parciales: en tránsito queda solo lo que falta', () => {
+  it('descuenta por producto con el detalle del sync (caso 139 A07: 138 en local)', () => {
+    const p = pedido({
+      items: [{ productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 139 }],
+      gocelular: {
+        estado: 'informado',
+        enviadoAt: '2026-11-11T11:39:31.857Z',
+        unidadesIngresadas: 138,
+        unidadesTotales: 139,
+        ingresoPorProducto: [
+          { clave: 'Celular Samsung Galaxy A07 4/64 GB', tipo: 'device', ingresadas: 138, totales: 139 },
+        ],
+      },
+    })
+    const rows = aplicarPedidos([fila({ nombre: 'Celular Samsung Galaxy A07 4/64 GB', sku: 'SAM-A07', marca: 'Samsung' })], [p])
+    expect(rows[0].enTransito).toBe(1)
+  })
+
+  it('con varios productos cada uno descuenta lo suyo (device por nombre, addon por sku)', () => {
+    const p = pedido({
+      items: [
+        { productoNombre: 'Samsung Galaxy A07 4/64GB', cantidad: 50 },
+        { productoNombre: 'Auriculares Redmi Buds 6 Play', productoCodigo: 'RB6P', cantidad: 20 },
+      ],
+      gocelular: {
+        estado: 'informado',
+        ingresoPorProducto: [
+          { clave: 'Celular Samsung Galaxy A07 4/64 GB', tipo: 'device', ingresadas: 30, totales: 50 },
+          { clave: 'RB6P', tipo: 'addon', ingresadas: 20, totales: 20 },
+        ],
+      },
+    })
+    const rows = aplicarPedidos(
+      [
+        fila({ nombre: 'Celular Samsung Galaxy A07 4/64 GB', sku: 'SAM-A07', marca: 'Samsung' }),
+        fila({ nombre: 'Redmi Buds 6 Play', sku: 'RB6P', tipo: 'accesorio', marca: 'Xiaomi' }),
+      ],
+      [p],
+    )
+    expect(rows[0].enTransito).toBe(20)
+    expect(rows[1].enTransito).toBe(0)
+  })
+
+  it('un item completamente ingresado no fija enTransitoDesde ni genera fila nueva', () => {
+    const p = pedido({
+      items: [{ productoNombre: 'Motorola Moto G67 4/256GB', cantidad: 10 }],
+      gocelular: {
+        estado: 'informado',
+        enviadoAt: '2026-11-11T00:00:00.000Z',
+        ingresoPorProducto: [{ clave: 'Motorola Moto G67 4/256GB', tipo: 'device', ingresadas: 10, totales: 10 }],
+      },
+    })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].enTransitoDesde).toBeNull()
+  })
+
+  it('sin detalle por producto pero con un solo item descuenta el agregado', () => {
+    const p = pedido({
+      gocelular: { estado: 'informado', unidadesIngresadas: 85, unidadesTotales: 90 },
+    })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows[0].enTransito).toBe(5)
+  })
+
+  it('sin detalle y con varios items mantiene la cantidad completa (no se puede atribuir)', () => {
+    const p = pedido({
+      items: [
+        { productoNombre: 'Xiaomi Redmi 14C 256/4 GB', cantidad: 60 },
+        { productoNombre: 'Motorola Moto G67 4/256GB', cantidad: 30 },
+      ],
+      gocelular: { estado: 'informado', unidadesIngresadas: 40, unidadesTotales: 90 },
+    })
+    const rows = aplicarPedidos([fila()], [p])
+    expect(rows[0].enTransito).toBe(60)
+    expect(rows[1].enTransito).toBe(30)
+  })
+
+  it('dos items del mismo producto consumen el mismo detalle sin duplicar el descuento', () => {
+    const p = pedido({
+      items: [
+        { productoNombre: 'Xiaomi Redmi 14C 256/4 GB', cantidad: 40 },
+        { productoNombre: 'Xiaomi Redmi 14C 256/4 GB', cantidad: 50 },
+      ],
+      gocelular: {
+        estado: 'informado',
+        ingresoPorProducto: [{ clave: 'Xiaomi Redmi 14C 256/4 GB', tipo: 'device', ingresadas: 60, totales: 90 }],
+      },
+    })
+    const rows = aplicarPedidos([fila()], [p])
+    // 40 del primero + 20 del segundo ingresados → quedan 30 en tránsito
+    expect(rows[0].enTransito).toBe(30)
+  })
+})
+
 describe('confiarTransitoBase: GOmarket delega el tránsito a commerce', () => {
   // Caso real Xiaomi Robot Vacuum S40C (oct 2026): commerce ya reporta los 5 en
   // andreani_wh (tránsito 0), pero el pedido informado nunca se marca ingresado
