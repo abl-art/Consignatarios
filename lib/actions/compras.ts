@@ -5,6 +5,7 @@ import { SQL_IDS_TODOS } from '@/lib/client-ids'
 import { revalidatePath } from 'next/cache'
 import { elegirCosto, type CostoProveedor } from '@/lib/lista-precios'
 import { normalizarMarca } from '@/lib/marca'
+import { listaFacturas, agregarFactura, quitarFactura } from '@/lib/facturas-pedido'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -239,8 +240,10 @@ export interface Pedido {
   ingresoStockAt?: string
   imeiFile?: string
   // Factura del proveedor (proceso Adm y Finanzas): el archivo vive en el bucket
-  // privado 'facturas-pedidos', aca solo la referencia
+  // privado 'facturas-pedidos', aca solo la referencia. `factura` es el campo
+  // legacy de una sola; desde 20/11/2026 las nuevas van a `facturas` (hasta 6)
   factura?: { path: string; nombre: string; subidaAt: string }
+  facturas?: { path: string; nombre: string; subidaAt: string }[]
   // CS = Carga Simple: la factura ya se cargo en el sistema de comprobantes de proveedores
   cargaSimple?: boolean
   cargaSimpleAt?: string
@@ -334,8 +337,9 @@ export async function subirImeiPedido(pedidoId: string, imeiData: string) {
   return res
 }
 
-// Sube la factura del proveedor al bucket privado 'facturas-pedidos' y guarda
-// la referencia en el pedido. Si ya habia una factura, la reemplaza.
+// Sube UNA factura más del proveedor al bucket privado 'facturas-pedidos' y la
+// agrega a la lista del pedido (hasta MAX_FACTURAS_PEDIDO; los pedidos viejos
+// con `factura` única se migran a la lista al agregar).
 export async function subirFacturaPedido(pedidoId: string, formData: FormData) {
   const file = formData.get('factura') as File | null
   if (!file) return { error: 'Falta el archivo' }
@@ -346,34 +350,56 @@ export async function subirFacturaPedido(pedidoId: string, formData: FormData) {
   if (!data) return { error: 'Pedido no encontrado' }
   const pedido = JSON.parse(data.value) as Pedido
 
+  const lista = listaFacturas(pedido)
   const nombre = file.name.replace(/[^\w.\-]+/g, '_')
-  const path = `pedido_${pedidoId}/${Date.now()}_${nombre}`
+  const nueva = { path: `pedido_${pedidoId}/${Date.now()}_${nombre}`, nombre: file.name, subidaAt: new Date().toISOString() }
+  const agregado = agregarFactura(lista, nueva)
+  if ('error' in agregado) return agregado
+
   const bytes = Buffer.from(await file.arrayBuffer())
   const { error: errUpload } = await supabase.storage
     .from('facturas-pedidos')
-    .upload(path, bytes, { contentType: file.type || 'application/octet-stream' })
+    .upload(nueva.path, bytes, { contentType: file.type || 'application/octet-stream' })
   if (errUpload) return { error: `Storage: ${errUpload.message}` }
 
-  const anterior = pedido.factura?.path
-  pedido.factura = { path, nombre: file.name, subidaAt: new Date().toISOString() }
-  const res = await guardarPedido(pedido)
-  if ('error' in res && res.error) return res
-  if (anterior) await supabase.storage.from('facturas-pedidos').remove([anterior])
-  return res
+  pedido.facturas = agregado.ok
+  pedido.factura = agregado.ok[0] // espejo legacy, por si algo viejo lo lee
+  return guardarPedido(pedido)
 }
 
-// URL firmada (1h) para ver/descargar la factura de un pedido
-export async function getFacturaPedidoUrl(pedidoId: string) {
+// Borra una factura puntual del pedido (referencia + archivo del bucket)
+export async function eliminarFacturaPedido(pedidoId: string, path: string) {
   const supabase = createAdminClient()
   const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
   if (!data) return { error: 'Pedido no encontrado' }
   const pedido = JSON.parse(data.value) as Pedido
-  if (!pedido.factura) return { error: 'El pedido no tiene factura cargada' }
+
+  const lista = listaFacturas(pedido)
+  if (!lista.some(f => f.path === path)) return { error: 'Esa factura no está en el pedido' }
+  const quedan = quitarFactura(lista, path)
+  pedido.facturas = quedan
+  pedido.factura = quedan[0]
+  const res = await guardarPedido(pedido)
+  if ('error' in res && res.error) return res
+  await supabase.storage.from('facturas-pedidos').remove([path])
+  return res
+}
+
+// URL firmada (1h) para ver/descargar una factura del pedido. Sin `path` abre
+// la primera (compatibilidad con el flujo viejo de factura única).
+export async function getFacturaPedidoUrl(pedidoId: string, path?: string) {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  const lista = listaFacturas(pedido)
+  const factura = path ? lista.find(f => f.path === path) : lista[0]
+  if (!factura) return { error: 'El pedido no tiene esa factura cargada' }
   const { data: signed, error } = await supabase.storage
     .from('facturas-pedidos')
-    .createSignedUrl(pedido.factura.path, 3600)
+    .createSignedUrl(factura.path, 3600)
   if (error || !signed) return { error: error?.message ?? 'No se pudo generar el link' }
-  return { ok: true as const, url: signed.signedUrl, nombre: pedido.factura.nombre }
+  return { ok: true as const, url: signed.signedUrl, nombre: factura.nombre }
 }
 
 // CS = Carga Simple (sistema de carga de comprobantes de proveedores).

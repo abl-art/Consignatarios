@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, eliminarFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
 import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
 import { ingresoSinRespaldo } from '@/lib/ingreso-stock'
 import { proveedorVendeProducto, MARCAS_CELULARES } from '@/lib/compras-modelos-filtros'
@@ -82,6 +82,7 @@ interface PedidoGuardado {
   ingresoStockAt?: string
   imeiFile?: string
   factura?: { path: string; nombre: string; subidaAt: string }
+  facturas?: { path: string; nombre: string; subidaAt: string }[]
   cargaSimple?: boolean
   cargaSimpleAt?: string
   destino?: Destino
@@ -1291,7 +1292,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                           )}
                         </td>
                         <td className="px-4 py-3 text-center bg-indigo-50/40" onClick={(e) => e.stopPropagation()}>
-                          <FacturaCell pedidoId={p.id} factura={p.factura} />
+                          <FacturaCell pedidoId={p.id} facturas={p.facturas && p.facturas.length > 0 ? p.facturas : p.factura ? [p.factura] : []} />
                         </td>
                         <td className="px-4 py-3 text-center bg-amber-50/40" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -1590,12 +1591,14 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
   )
 }
 
-// Factura del proveedor directo en la fila de Enviados (sin desplegar el pedido).
-// El archivo vive en el bucket privado 'facturas-pedidos'; Ver abre una URL firmada.
-function FacturaCell({ pedidoId, factura }: { pedidoId: string; factura?: { path: string; nombre: string; subidaAt: string } }) {
+// Facturas del proveedor directo en la fila de Enviados (sin desplegar el
+// pedido). Hasta 6 por pedido: un chip numerado por factura (click = URL
+// firmada del bucket privado 'facturas-pedidos', ✕ al lado la borra) y "+"
+// para agregar otra.
+function FacturaCell({ pedidoId, facturas }: { pedidoId: string; facturas: { path: string; nombre: string; subidaAt: string }[] }) {
   const router = useRouter()
   const [subiendo, setSubiendo] = useState(false)
-  const [abriendo, setAbriendo] = useState(false)
+  const [ocupado, setOcupado] = useState<string | null>(null) // path en acción (abrir/borrar)
   const [error, setError] = useState<string | null>(null)
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1617,42 +1620,64 @@ function FacturaCell({ pedidoId, factura }: { pedidoId: string; factura?: { path
     }
   }
 
-  async function handleVer() {
-    setAbriendo(true)
+  async function handleVer(path: string) {
+    setOcupado(path)
     setError(null)
     try {
-      const res = await getFacturaPedidoUrl(pedidoId)
+      const res = await getFacturaPedidoUrl(pedidoId, path)
       if ('url' in res && res.url) window.open(res.url, '_blank')
       else setError('error' in res && res.error ? res.error : 'No se pudo abrir')
     } finally {
-      setAbriendo(false)
+      setOcupado(null)
     }
   }
 
+  async function handleBorrar(f: { path: string; nombre: string }) {
+    if (!window.confirm(`¿Borrar la factura "${f.nombre}"?`)) return
+    setOcupado(f.path)
+    setError(null)
+    try {
+      const res = await eliminarFacturaPedido(pedidoId, f.path)
+      if ('error' in res && res.error) setError(res.error)
+      else router.refresh()
+    } finally {
+      setOcupado(null)
+    }
+  }
+
+  const botonAgregar = (
+    <label className={`px-2 py-1 text-xs rounded cursor-pointer transition-colors ${facturas.length === 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'text-indigo-500 hover:text-indigo-700 border border-dashed border-indigo-300'} ${subiendo ? 'opacity-50' : ''}`}>
+      {subiendo ? 'Subiendo...' : facturas.length === 0 ? 'Cargar' : '+'}
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={subiendo} />
+    </label>
+  )
+
   return (
     <div className="flex flex-col items-center gap-0.5">
-      {factura ? (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleVer}
-            disabled={abriendo}
-            title={factura.nombre}
-            className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors disabled:opacity-50"
-          >
-            {abriendo ? 'Abriendo...' : 'Ver'}
-          </button>
-          <label title="Reemplazar factura" className={`px-1.5 py-1 text-xs text-indigo-400 hover:text-indigo-700 cursor-pointer transition-colors ${subiendo ? 'opacity-50' : ''}`}>
-            {subiendo ? '...' : '↻'}
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={subiendo} />
-          </label>
-        </div>
-      ) : (
-        <label className={`px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer transition-colors ${subiendo ? 'opacity-50' : ''}`}>
-          {subiendo ? 'Subiendo...' : 'Cargar'}
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={subiendo} />
-        </label>
-      )}
-      {error && <span className="text-[10px] text-red-600 max-w-[120px]">{error}</span>}
+      <div className="flex items-center justify-center gap-1 flex-wrap max-w-[150px]">
+        {facturas.map((f, i) => (
+          <span key={f.path} className="inline-flex items-center rounded bg-indigo-100 overflow-hidden">
+            <button
+              onClick={() => handleVer(f.path)}
+              disabled={ocupado === f.path}
+              title={f.nombre}
+              className="px-1.5 py-1 text-xs text-indigo-700 hover:bg-indigo-200 transition-colors disabled:opacity-50"
+            >
+              {ocupado === f.path ? '...' : `F${i + 1}`}
+            </button>
+            <button
+              onClick={() => handleBorrar(f)}
+              disabled={ocupado === f.path}
+              title={`Borrar ${f.nombre}`}
+              className="px-1 py-1 text-[10px] text-indigo-300 hover:text-red-600 transition-colors"
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        {facturas.length < 6 && botonAgregar}
+      </div>
+      {error && <span className="text-[10px] text-red-600 max-w-[140px]">{error}</span>}
     </div>
   )
 }
