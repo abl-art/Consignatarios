@@ -297,6 +297,18 @@ export async function actualizarEstadoPedido(pedidoId: string, estado: 'borrador
   return guardarPedido(pedido)
 }
 
+// Cambia SOLO la fecha de la nota (lee-modifica-escribe para no pisar el resto
+// del pedido: facturas, estado gocelular, timestamps). Formato "D/M/YYYY".
+export async function actualizarFechaPedido(pedidoId: string, fecha: string) {
+  if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fecha)) return { error: 'Fecha inválida' }
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()
+  if (!data) return { error: 'Pedido no encontrado' }
+  const pedido = JSON.parse(data.value) as Pedido
+  pedido.fecha = fecha
+  return guardarPedido(pedido)
+}
+
 export async function modificarItemsPedido(pedidoId: string, items: Pedido['items']) {
   const supabase = createAdminClient()
   const { data } = await supabase.from('flujo_config').select('value').eq('key', `pedido_${pedidoId}`).single()

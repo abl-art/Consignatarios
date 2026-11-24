@@ -4,7 +4,8 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatearMoneda } from '@/lib/utils'
-import { guardarPedido, actualizarEstadoPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, eliminarFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
+import { guardarPedido, actualizarEstadoPedido, actualizarFechaPedido, eliminarPedido, marcarEntregado, marcarIngresoStock, subirImeiPedido, modificarItemsPedido, subirFacturaPedido, eliminarFacturaPedido, getFacturaPedidoUrl, setCargaSimple } from '@/lib/actions/compras'
+import { fechaAIso, isoAFecha, filtrarNotas } from '@/lib/notas-pedido-filtros'
 import { enviarPedidoEmail } from '@/lib/actions/enviar-email'
 import { ingresoSinRespaldo } from '@/lib/ingreso-stock'
 import { proveedorVendeProducto, MARCAS_CELULARES } from '@/lib/compras-modelos-filtros'
@@ -195,6 +196,9 @@ export default function GestorClient({
 
   // Send modal
   const [sendModal, setSendModal] = useState<{ nota: NotaPedido } | null>(null)
+  const [filtroNotasProveedor, setFiltroNotasProveedor] = useState('')
+  const [filtroNotasDesde, setFiltroNotasDesde] = useState('')
+  const [filtroNotasHasta, setFiltroNotasHasta] = useState('')
   const [emailEnviando, setEmailEnviando] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
 
@@ -607,6 +611,20 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
     return true
   })
   const notasSinEnviar = notas.filter(n => n.estado !== 'enviado')
+  const notasFiltradas = filtrarNotas(notasSinEnviar, {
+    proveedorId: filtroNotasProveedor || undefined,
+    desde: filtroNotasDesde || undefined,
+    hasta: filtroNotasHasta || undefined,
+  })
+  const proveedoresDeNotas = [...new Map(notasSinEnviar.map(n => [n.proveedor.id, n.proveedor])).values()]
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+  function cambiarFechaNota(nota: NotaPedido, iso: string) {
+    const fecha = isoAFecha(iso)
+    if (!fecha) return
+    setNotas(prev => prev.map(n => (n.id === nota.id ? { ...n, fecha } : n)))
+    actualizarFechaPedido(nota.id, fecha)
+  }
 
   const tabs = [
     { key: 'catalogo' as Tab, label: 'Catalogo' },
@@ -950,13 +968,50 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
       {/* Notas de Pedido tab */}
       {tab === 'notas' && (
         <div>
+          {notasSinEnviar.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+              <select
+                value={filtroNotasProveedor}
+                onChange={(e) => setFiltroNotasProveedor(e.target.value)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+              >
+                <option value="">Todos los proveedores</option>
+                {proveedoresDeNotas.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                Desde
+                <input type="date" value={filtroNotasDesde} onChange={(e) => setFiltroNotasDesde(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                Hasta
+                <input type="date" value={filtroNotasHasta} onChange={(e) => setFiltroNotasHasta(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+              </label>
+              {(filtroNotasProveedor || filtroNotasDesde || filtroNotasHasta) && (
+                <button
+                  onClick={() => { setFiltroNotasProveedor(''); setFiltroNotasDesde(''); setFiltroNotasHasta('') }}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  ✕ Limpiar
+                </button>
+              )}
+              <span className="ml-auto text-xs text-gray-400">{notasFiltradas.length} de {notasSinEnviar.length} notas</span>
+            </div>
+          )}
           {notasSinEnviar.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <p className="text-gray-400 text-sm">No hay notas de pedido. Arma un pedido desde el Catalogo y genera las notas.</p>
             </div>
+          ) : notasFiltradas.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <p className="text-gray-400 text-sm">Ninguna nota coincide con el filtro.</p>
+            </div>
           ) : (
             <div className="space-y-6">
-              {notasSinEnviar.map((nota) => {
+              {notasFiltradas.map((nota) => {
                 const total = nota.items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                 return (
                   <div key={nota.id} className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
@@ -966,9 +1021,17 @@ td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}
                         <h3 className="font-semibold text-gray-900">
                           Nota de Pedido - {nota.proveedor.nombre}
                         </h3>
-                        <p className="text-xs text-gray-500">
-                          Fecha: {nota.fecha} | ID: {nota.id}
-                          {nota.destino && <> | Destino: {DESTINO_LABEL[nota.destino]}</>}
+                        <p className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
+                          Fecha:
+                          <input
+                            type="date"
+                            value={fechaAIso(nota.fecha)}
+                            onChange={(e) => cambiarFechaNota(nota, e.target.value)}
+                            className="px-1.5 py-0.5 border border-gray-200 rounded text-xs text-gray-700 bg-white hover:border-gray-400"
+                            title="Editar la fecha de la nota"
+                          />
+                          <span>| ID: {nota.id}</span>
+                          {nota.destino && <span>| Destino: {DESTINO_LABEL[nota.destino]}</span>}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
