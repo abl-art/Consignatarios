@@ -52,6 +52,28 @@ export async function agregarStockOption(input: StockOptionInput): Promise<{ ok?
   return { ok: true }
 }
 
+/** Edicion completa del grant (corregir errores de carga sin eliminar). */
+export async function editarStockOption(id: number, input: StockOptionInput): Promise<{ ok?: true; error?: string }> {
+  const err = validar(input)
+  if (err) return { error: err }
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('fc_grupogo_stock_options')
+    .update({
+      nombre: input.nombre.trim(),
+      fecha_otorgamiento: input.fechaOtorgamiento,
+      sueldo_mensual_usd: input.sueldoMensualUsd,
+      multiplo: input.multiplo,
+      valuacion_ingreso_usd: input.valuacionIngresoUsd,
+      cliff_anios: input.cliffAnios,
+      periodo_anios: input.periodoAnios,
+      esquema: input.esquema,
+    })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 /** Cierre por salida del colaborador: congela el devengamiento en la fecha.
  *  'recompra' exige el monto pagado (congelado); 'conserva' no lleva monto. */
 export async function cerrarStockOption(

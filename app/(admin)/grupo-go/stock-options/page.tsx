@@ -11,7 +11,7 @@ import {
   getStockOptions, agregarStockOption, eliminarStockOption,
   getValuacionesEmpresa, agregarValuacionEmpresa,
   getContratosMeta, subirContrato, descargarContrato,
-  cerrarStockOption, reabrirStockOption,
+  cerrarStockOption, reabrirStockOption, editarStockOption,
 } from '@/lib/actions/stock-options'
 import {
   calcularPaquete, proximoHito, ultimaValuacion, rowToGrant,
@@ -39,6 +39,7 @@ export default function StockOptionsPage() {
   const [loading, setLoading] = useState(true)
   const [panelId, setPanelId] = useState<number | null>(null)
   const [cierreId, setCierreId] = useState<number | null>(null)
+  const [editId, setEditId] = useState<number | null>(null)
   const [listaAbierta, setListaAbierta] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showVal, setShowVal] = useState(false)
@@ -172,6 +173,17 @@ export default function StockOptionsPage() {
 
         {listaAbierta && (<>
         {showForm && <FormPersona onDone={() => { setShowForm(false); cargar() }} />}
+        {editId !== null && rows.find(r => r.id === editId) && (
+          <div className="border-b border-gray-200">
+            <div className="px-6 pt-3 flex items-center justify-between bg-gray-50">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                Editando a {rows.find(r => r.id === editId)!.nombre}
+              </span>
+              <button onClick={() => setEditId(null)} className="text-xs text-gray-400 hover:text-gray-600">✕ cancelar</button>
+            </div>
+            <FormPersona key={editId} inicial={rows.find(r => r.id === editId)!} onDone={() => { setEditId(null); cargar() }} />
+          </div>
+        )}
 
         {rows.length === 0 ? (
           <p className="px-6 py-8 text-center text-gray-500 text-sm">Todavia no hay stock options cargadas.</p>
@@ -216,6 +228,7 @@ export default function StockOptionsPage() {
                       </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
                         <button onClick={() => setPanelId(r.id)} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3">Ver panel</button>
+                        <button onClick={() => { setEditId(r.id); setShowForm(false) }} className="text-gray-600 hover:text-gray-900 text-xs font-medium mr-3">Editar</button>
                         {r.cierre_tipo ? (
                           <button
                             onClick={async () => {
@@ -313,9 +326,19 @@ function FormValuacion({ onDone }: { onDone: () => void }) {
   )
 }
 
-function FormPersona({ onDone }: { onDone: () => void }) {
-  const [v, setV] = useState({ nombre: '', fecha: '', sueldo: '', multiplo: '12', valuacion: '', cliff: '1', periodo: '4' })
-  const [esquema, setEsquema] = useState<EsquemaAnio[]>(esquemaParejo(4))
+function FormPersona({ inicial, onDone }: { inicial?: StockOptionRow; onDone: () => void }) {
+  const [v, setV] = useState(inicial ? {
+    nombre: inicial.nombre,
+    fecha: inicial.fecha_otorgamiento,
+    sueldo: String(Number(inicial.sueldo_mensual_usd)),
+    multiplo: String(Number(inicial.multiplo)),
+    valuacion: String(Number(inicial.valuacion_ingreso_usd)),
+    cliff: String(Number(inicial.cliff_anios)),
+    periodo: String(Number(inicial.periodo_anios)),
+  } : { nombre: '', fecha: '', sueldo: '', multiplo: '12', valuacion: '', cliff: '1', periodo: '4' })
+  const [esquema, setEsquema] = useState<EsquemaAnio[]>(
+    inicial && Array.isArray(inicial.esquema) && inicial.esquema.length > 0 ? inicial.esquema : esquemaParejo(inicial ? Number(inicial.periodo_anios) : 4)
+  )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement>) => setV({ ...v, [k]: e.target.value })
@@ -374,19 +397,20 @@ function FormPersona({ onDone }: { onDone: () => void }) {
       <button
         onClick={async () => {
           setSaving(true); setErr(null)
-          const r = await agregarStockOption({
+          const input = {
             nombre: v.nombre, fechaOtorgamiento: v.fecha,
             sueldoMensualUsd: parseFloat(v.sueldo), multiplo: parseFloat(v.multiplo),
             valuacionIngresoUsd: parseFloat(v.valuacion),
             cliffAnios: parseInt(v.cliff), periodoAnios: parseInt(v.periodo),
             esquema,
-          })
+          }
+          const r = inicial ? await editarStockOption(inicial.id, input) : await agregarStockOption(input)
           if (r.error) setErr(r.error); else onDone()
           setSaving(false)
         }}
         disabled={saving || !sumaOk}
         className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50"
-      >{saving ? 'Guardando...' : 'Guardar persona'}</button>
+      >{saving ? 'Guardando...' : inicial ? 'Guardar cambios' : 'Guardar persona'}</button>
     </div>
   )
 }
