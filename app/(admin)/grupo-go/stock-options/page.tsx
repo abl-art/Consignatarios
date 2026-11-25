@@ -14,7 +14,8 @@ import {
 } from '@/lib/actions/stock-options'
 import {
   calcularPaquete, proximoHito, ultimaValuacion, rowToGrant,
-  type StockOptionRow, type ValuacionEmpresa,
+  filasPorAnio, esquemaParejo, validarEsquema,
+  type EsquemaAnio, type StockOptionRow, type ValuacionEmpresa,
 } from '@/lib/stock-options'
 
 const fmt = (n: number) =>
@@ -132,7 +133,7 @@ export default function StockOptionsPage() {
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {r.nombre}
                         <span className="block text-[10px] font-normal text-gray-400">
-                          {g.multiplo}x sueldo · cliff {g.cliffMeses}m · {g.periodoMeses}m {g.devengamiento}
+                          {g.multiplo}x sueldo · cliff {g.cliffAnios} {g.cliffAnios === 1 ? 'año' : 'años'} · {g.periodoAnios} años, esquema anual
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{fecha(r.fecha_otorgamiento)}</td>
@@ -219,10 +220,25 @@ function FormValuacion({ onDone }: { onDone: () => void }) {
 }
 
 function FormPersona({ onDone }: { onDone: () => void }) {
-  const [v, setV] = useState({ nombre: '', fecha: '', sueldo: '', multiplo: '12', valuacion: '', cliff: '12', periodo: '48', devengamiento: 'mensual' })
+  const [v, setV] = useState({ nombre: '', fecha: '', sueldo: '', multiplo: '12', valuacion: '', cliff: '1', periodo: '4' })
+  const [esquema, setEsquema] = useState<EsquemaAnio[]>(esquemaParejo(4))
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV({ ...v, [k]: e.target.value })
+  const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement>) => setV({ ...v, [k]: e.target.value })
+
+  // Al cambiar el periodo se regenera la tabla de anios (pareja por default, despues la edita)
+  const setPeriodo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const periodo = e.target.value
+    setV({ ...v, periodo })
+    const n = parseInt(periodo)
+    if (n >= 1 && n <= 30) setEsquema(esquemaParejo(n))
+  }
+  const setPct = (anio: number, pct: string) =>
+    setEsquema(esquema.map(x => x.anio === anio ? { ...x, pct: pct === '' ? 0 : parseFloat(pct) } : x))
+
+  const suma = esquema.reduce((s, x) => s + (Number(x.pct) || 0), 0)
+  const sumaOk = Math.abs(suma - 100) <= 0.01
+
   return (
     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -231,16 +247,35 @@ function FormPersona({ onDone }: { onDone: () => void }) {
         <Campo label="Sueldo mensual al ingreso (USD)"><input type="number" value={v.sueldo} onChange={set('sueldo')} placeholder="2000" className={inputCls} /></Campo>
         <Campo label="Multiplo del sueldo"><input type="number" value={v.multiplo} onChange={set('multiplo')} className={inputCls} /></Campo>
         <Campo label="Valuacion de la empresa al ingreso (USD)"><input type="number" value={v.valuacion} onChange={set('valuacion')} placeholder="10000000" className={inputCls} /></Campo>
-        <Campo label="Cliff (meses)"><input type="number" value={v.cliff} onChange={set('cliff')} className={inputCls} /></Campo>
-        <Campo label="Periodo total (meses)"><input type="number" value={v.periodo} onChange={set('periodo')} className={inputCls} /></Campo>
-        <Campo label="Devengamiento">
-          <select value={v.devengamiento} onChange={set('devengamiento')} className={`${inputCls} bg-white`}>
-            <option value="mensual">Mensual</option>
-            <option value="trimestral">Trimestral</option>
-            <option value="anual">Anual</option>
-          </select>
-        </Campo>
+        <Campo label="Cliff (años)"><input type="number" min="0" value={v.cliff} onChange={set('cliff')} className={inputCls} /></Campo>
+        <Campo label="Periodo total (años)"><input type="number" min="1" max="30" value={v.periodo} onChange={setPeriodo} className={inputCls} /></Campo>
       </div>
+
+      {/* Esquema de devengamiento por anio: que % devenga cada anio (suma 100) */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-500 font-medium">Esquema de devengamiento — % del paquete que devenga cada año</span>
+          <span className={`text-xs font-bold ${sumaOk ? 'text-emerald-700' : 'text-red-600'}`}>
+            Total: {suma.toFixed(2)}% {sumaOk ? '✓' : '(debe sumar 100%)'}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {esquema.map(x => (
+            <div key={x.anio} className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 w-[92px]">
+              <div className="text-[10px] text-gray-400 mb-0.5">Año {x.anio}</div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min="0" max="100" step="0.01" value={x.pct}
+                  onChange={e => setPct(x.anio, e.target.value)}
+                  className="w-full text-sm font-semibold text-gray-900 outline-none"
+                />
+                <span className="text-xs text-gray-400">%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {err && <div className="mb-3 text-sm text-red-600">{err}</div>}
       <button
         onClick={async () => {
@@ -249,13 +284,13 @@ function FormPersona({ onDone }: { onDone: () => void }) {
             nombre: v.nombre, fechaOtorgamiento: v.fecha,
             sueldoMensualUsd: parseFloat(v.sueldo), multiplo: parseFloat(v.multiplo),
             valuacionIngresoUsd: parseFloat(v.valuacion),
-            cliffMeses: parseInt(v.cliff), periodoMeses: parseInt(v.periodo),
-            devengamiento: v.devengamiento,
+            cliffAnios: parseInt(v.cliff), periodoAnios: parseInt(v.periodo),
+            esquema,
           })
           if (r.error) setErr(r.error); else onDone()
           setSaving(false)
         }}
-        disabled={saving}
+        disabled={saving || !sumaOk}
         className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50"
       >{saving ? 'Guardando...' : 'Guardar persona'}</button>
     </div>
@@ -282,8 +317,10 @@ function PanelPersona({ row, valuacion, contrato, onClose, onChange, onError }: 
   const [subiendo, setSubiendo] = useState(false)
   const g = rowToGrant(row)
   const hoy = new Date()
-  const c = calcularPaquete(g, valuacion ? Number(valuacion.valuacion_usd) : null, hoy)
+  const valUsd = valuacion ? Number(valuacion.valuacion_usd) : null
+  const c = calcularPaquete(g, valUsd, hoy)
   const hito = proximoHito(g, hoy)
+  const filas = filasPorAnio(g, valUsd, hoy)
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -323,7 +360,7 @@ function PanelPersona({ row, valuacion, contrato, onClose, onChange, onError }: 
           <div>
             <h2 className="text-lg font-bold text-gray-900">{row.nombre}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Otorgado el {fecha(row.fecha_otorgamiento)} · {g.multiplo}x sueldo · cliff {g.cliffMeses} meses · {g.periodoMeses} meses, devengamiento {g.devengamiento}
+              Otorgado el {fecha(row.fecha_otorgamiento)} · {g.multiplo}x sueldo · cliff {g.cliffAnios} {g.cliffAnios === 1 ? 'año' : 'años'} · {g.periodoAnios} años, esquema anual
             </p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-700 text-xl leading-none px-2 py-1">✕</button>
@@ -353,7 +390,7 @@ function PanelPersona({ row, valuacion, contrato, onClose, onChange, onError }: 
           <div>
             <div className="flex justify-between text-[11px] text-gray-500 mb-1">
               <span>Devengamiento</span>
-              <span>{pct(c.fraccionDevengada)} de {g.periodoMeses} meses</span>
+              <span>{pct(c.fraccionDevengada)} de {g.periodoAnios} años</span>
             </div>
             <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full bg-pink-500 rounded-full" style={{ width: `${Math.min(100, c.fraccionDevengada * 100)}%` }} />
@@ -362,6 +399,48 @@ function PanelPersona({ row, valuacion, contrato, onClose, onChange, onError }: 
               {hito
                 ? <>Proximo hito: <b>{fecha(hito.fecha)}</b> → pasa a {pct(hito.fraccion)} devengado</>
                 : 'Periodo completo: 100% devengado.'}
+            </p>
+          </div>
+
+          {/* Tabla año por año: que devenga, % de la empresa y que va ganando */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Año por año</h3>
+            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Año</th>
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Cierra</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Devenga</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Acum.</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase" title="Porcentaje de la empresa que le corresponde acumulado a ese año">% empresa</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase" title="Diferencia que suma ese año a valuación actual">Gana en el año</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase" title="Diferencia acumulada cobrable al cierre de ese año">Cobrable acum.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map(f => (
+                    <tr key={f.anio} className={`border-b border-gray-100 last:border-b-0 ${f.cumplido ? 'bg-emerald-50/50' : ''}`}>
+                      <td className="px-3 py-2 font-medium text-gray-900">
+                        Año {f.anio}
+                        {f.cumplido && <span className="text-emerald-600 ml-1" title="Año ya cumplido">✓</span>}
+                        {f.preCliff && <span className="block text-[10px] text-amber-600">se cobra al cliff</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{fecha(f.fecha)}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{f.pct}%</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{f.pctAcumulado.toFixed(f.pctAcumulado % 1 ? 2 : 0)}%</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{pct(f.fraccionEmpresaAcum, 4)}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{f.ganaEnElAnio === null ? '—' : fmt(f.ganaEnElAnio)}</td>
+                      <td className={`px-3 py-2 text-right font-semibold ${f.cumplido && !f.preCliff ? 'text-emerald-700' : 'text-gray-900'}`}>
+                        {f.acumuladoCobrable === null ? '—' : fmt(f.acumuladoCobrable)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              "Gana en el año" y "Cobrable" calculados a la valuación actual de la empresa; cambian cuando la actualices.
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { StockOptionRow, ValuacionEmpresa } from '@/lib/stock-options'
+import { validarEsquema, type EsquemaAnio, type StockOptionRow, type ValuacionEmpresa } from '@/lib/stock-options'
 
 export interface StockOptionInput {
   nombre: string
@@ -9,9 +9,9 @@ export interface StockOptionInput {
   sueldoMensualUsd: number
   multiplo: number
   valuacionIngresoUsd: number
-  cliffMeses: number
-  periodoMeses: number
-  devengamiento: string
+  cliffAnios: number
+  periodoAnios: number
+  esquema: EsquemaAnio[]
 }
 
 function validar(input: StockOptionInput): string | null {
@@ -20,10 +20,9 @@ function validar(input: StockOptionInput): string | null {
   if (!(input.sueldoMensualUsd > 0)) return 'El sueldo mensual (USD) debe ser mayor a 0'
   if (!(input.multiplo > 0)) return 'El multiplo debe ser mayor a 0'
   if (!(input.valuacionIngresoUsd > 0)) return 'La valuacion al ingreso debe ser mayor a 0'
-  if (input.cliffMeses < 0 || input.periodoMeses <= 0) return 'Cliff/periodo invalidos'
-  if (input.cliffMeses > input.periodoMeses) return 'El cliff no puede superar el periodo'
-  if (!['mensual', 'trimestral', 'anual'].includes(input.devengamiento)) return 'Devengamiento invalido'
-  return null
+  if (!(input.cliffAnios >= 0) || !(input.periodoAnios >= 1) || input.periodoAnios > 30) return 'Cliff/periodo invalidos'
+  if (input.cliffAnios > input.periodoAnios) return 'El cliff no puede superar el periodo'
+  return validarEsquema(input.esquema, input.periodoAnios)
 }
 
 export async function getStockOptions(): Promise<StockOptionRow[]> {
@@ -45,9 +44,9 @@ export async function agregarStockOption(input: StockOptionInput): Promise<{ ok?
     sueldo_mensual_usd: input.sueldoMensualUsd,
     multiplo: input.multiplo,
     valuacion_ingreso_usd: input.valuacionIngresoUsd,
-    cliff_meses: input.cliffMeses,
-    periodo_meses: input.periodoMeses,
-    devengamiento: input.devengamiento,
+    cliff_anios: input.cliffAnios,
+    periodo_anios: input.periodoAnios,
+    esquema: input.esquema,
   })
   if (error) return { error: error.message }
   return { ok: true }

@@ -1,16 +1,24 @@
-// Logica pura de stock options de Grupo GO (opcion clasica, decision de
-// Emiliano 25/11: la persona cobra la DIFERENCIA entre el valor actual de su
-// paquete y el valor al ingreso, devengada segun cliff + periodo + frecuencia).
+// Logica pura de stock options de Grupo GO. Decisiones de Emiliano (25/11):
+// - Opcion clasica: la persona cobra la DIFERENCIA entre el valor actual de su
+//   paquete y el valor al ingreso (nunca negativa).
+// - Devengamiento ANUAL y PERSONALIZADO: cliff y periodo en anios, y un
+//   esquema editable de % por anio (suma 100). Antes del cliff no se cobra
+//   nada; al cumplirlo se devenga de golpe lo acumulado de esos anios.
 // Todo en USD. Sin fechas implicitas: "hoy" siempre entra por parametro.
+
+export interface EsquemaAnio {
+  anio: number // 1..periodoAnios
+  pct: number  // porcentaje del paquete que devenga ese anio (0-100)
+}
 
 export interface GrantParams {
   fechaOtorgamiento: string // YYYY-MM-DD
   sueldoMensualUsd: number
   multiplo: number
   valuacionIngresoUsd: number
-  cliffMeses: number
-  periodoMeses: number
-  devengamiento: 'mensual' | 'trimestral' | 'anual'
+  cliffAnios: number
+  periodoAnios: number
+  esquema: EsquemaAnio[]
 }
 
 export interface StockOptionRow {
@@ -20,9 +28,9 @@ export interface StockOptionRow {
   sueldo_mensual_usd: number
   multiplo: number
   valuacion_ingreso_usd: number
-  cliff_meses: number
-  periodo_meses: number
-  devengamiento: string
+  cliff_anios: number
+  periodo_anios: number
+  esquema: EsquemaAnio[]
   created_at: string
 }
 
@@ -34,54 +42,46 @@ export interface ValuacionEmpresa {
   created_at: string
 }
 
-const PASO: Record<GrantParams['devengamiento'], number> = {
-  mensual: 1,
-  trimestral: 3,
-  anual: 12,
-}
-
 function parseFecha(iso: string): { y: number; m: number; d: number } {
   const [y, m, d] = iso.split('-').map(Number)
   return { y, m, d }
 }
 
-/** Meses COMPLETOS transcurridos desde una fecha ISO hasta `hoy` (0 si es futura). */
-export function mesesCompletos(desdeIso: string, hoy: Date): number {
+/** Anios COMPLETOS transcurridos desde una fecha ISO hasta `hoy` (0 si es futura). */
+export function aniosCompletos(desdeIso: string, hoy: Date): number {
   const { y, m, d } = parseFecha(desdeIso)
-  let meses = (hoy.getUTCFullYear() - y) * 12 + (hoy.getUTCMonth() + 1 - m)
-  if (hoy.getUTCDate() < d) meses -= 1
-  return Math.max(0, meses)
+  let anios = hoy.getUTCFullYear() - y
+  const mesHoy = hoy.getUTCMonth() + 1
+  if (mesHoy < m || (mesHoy === m && hoy.getUTCDate() < d)) anios -= 1
+  return Math.max(0, anios)
 }
 
-/** Suma `n` meses a una fecha ISO conservando el dia (regla simple, dia 1-28 seguro). */
-function sumarMeses(iso: string, n: number): string {
+/** Fecha ISO del aniversario N del otorgamiento. */
+export function fechaAniversario(iso: string, n: number): string {
   const { y, m, d } = parseFecha(iso)
-  const total = (m - 1) + n
-  const anio = y + Math.floor(total / 12)
-  const mes = (total % 12) + 1
-  return `${anio}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  return `${y + n}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-/** Meses devengados: 0 antes del cliff; en el cliff se devenga cliff de una
- *  vez; despues suma por pasos enteros de la frecuencia hasta el periodo. */
-function mesesDevengados(g: Pick<GrantParams, 'fechaOtorgamiento' | 'cliffMeses' | 'periodoMeses' | 'devengamiento'>, hoy: Date): number {
-  const paso = PASO[g.devengamiento] ?? 1
-  const meses = mesesCompletos(g.fechaOtorgamiento, hoy)
-  if (meses < g.cliffMeses) return 0
-  const extra = Math.floor((meses - g.cliffMeses) / paso) * paso
-  return Math.min(g.periodoMeses, g.cliffMeses + extra)
+/** % acumulado del esquema hasta el anio `n` inclusive (0-100). */
+function pctAcumulado(esquema: EsquemaAnio[], n: number): number {
+  return esquema.reduce((s, e) => s + (e.anio <= n ? Number(e.pct) || 0 : 0), 0)
 }
 
-/** Fraccion [0..1] del paquete devengada a la fecha `hoy`. */
-export function fraccionDevengada(g: Pick<GrantParams, 'fechaOtorgamiento' | 'cliffMeses' | 'periodoMeses' | 'devengamiento'>, hoy: Date): number {
-  if (g.periodoMeses <= 0) return 0
-  return mesesDevengados(g, hoy) / g.periodoMeses
+/** Fraccion [0..1] devengada a `hoy`: 0 antes del cliff; despues, el acumulado
+ *  del esquema hasta el ultimo anio cumplido. */
+export function fraccionDevengada(
+  g: Pick<GrantParams, 'fechaOtorgamiento' | 'cliffAnios' | 'periodoAnios' | 'esquema'>,
+  hoy: Date,
+): number {
+  const anios = aniosCompletos(g.fechaOtorgamiento, hoy)
+  if (anios < g.cliffAnios) return 0
+  return Math.min(1, pctAcumulado(g.esquema, Math.min(anios, g.periodoAnios)) / 100)
 }
 
 export interface PaqueteCalculado {
   /** Valor del paquete al ingreso: sueldo mensual x multiplo (USD) */
   base: number
-  /** Porcentaje de la empresa que representa el paquete (base / valuacion al ingreso) */
+  /** Porcentaje de la empresa que representa el paquete completo */
   fraccionEmpresa: number
   /** base x (valuacion actual / valuacion ingreso); null sin valuacion actual */
   valorActualPaquete: number | null
@@ -101,29 +101,84 @@ export function calcularPaquete(g: GrantParams, valuacionActualUsd: number | nul
   }
   const valorActualPaquete = base * (valuacionActualUsd / g.valuacionIngresoUsd)
   const diferenciaTotal = Math.max(0, valorActualPaquete - base)
-  return {
-    base,
-    fraccionEmpresa,
-    valorActualPaquete,
-    diferenciaTotal,
-    fraccionDevengada: fd,
-    diferenciaDevengada: diferenciaTotal * fd,
-  }
+  return { base, fraccionEmpresa, valorActualPaquete, diferenciaTotal, fraccionDevengada: fd, diferenciaDevengada: diferenciaTotal * fd }
 }
 
-/** Proxima fecha en que sube lo devengado, con la fraccion que quedara vigente. */
-export function proximoHito(g: Pick<GrantParams, 'fechaOtorgamiento' | 'cliffMeses' | 'periodoMeses' | 'devengamiento'>, hoy: Date): { fecha: string; fraccion: number } | null {
-  const actuales = mesesDevengados(g, hoy)
-  if (actuales >= g.periodoMeses) return null
-  const paso = PASO[g.devengamiento] ?? 1
-  const meses = mesesCompletos(g.fechaOtorgamiento, hoy)
-  const siguientes = meses < g.cliffMeses
-    ? g.cliffMeses
-    : Math.min(g.periodoMeses, actuales + paso)
-  return {
-    fecha: sumarMeses(g.fechaOtorgamiento, siguientes),
-    fraccion: siguientes / g.periodoMeses,
+export interface FilaAnio {
+  anio: number
+  fecha: string // aniversario que cierra el anio
+  pct: number // % del paquete que devenga ese anio
+  pctAcumulado: number
+  /** % de la empresa que le corresponde acumulado a ese anio */
+  fraccionEmpresaAcum: number
+  /** lo que gana ESE anio (diferenciaTotal x pct); null sin valuacion */
+  ganaEnElAnio: number | null
+  /** acumulado cobrable al cierre de ese anio (0 si el anio es pre-cliff) */
+  acumuladoCobrable: number | null
+  /** true = el % de este anio recien se cobra al cumplirse el cliff */
+  preCliff: boolean
+  cumplido: boolean
+}
+
+/** Tabla anio por anio para el panel: que devenga, que % de la empresa le
+ *  corresponde y que va ganando en cada anio. */
+export function filasPorAnio(g: GrantParams, valuacionActualUsd: number | null, hoy: Date): FilaAnio[] {
+  const c = calcularPaquete(g, valuacionActualUsd, hoy)
+  const anios = aniosCompletos(g.fechaOtorgamiento, hoy)
+  const filas: FilaAnio[] = []
+  for (let n = 1; n <= g.periodoAnios; n++) {
+    const pct = Number(g.esquema.find(e => e.anio === n)?.pct) || 0
+    const acum = pctAcumulado(g.esquema, n)
+    const preCliff = n < g.cliffAnios
+    filas.push({
+      anio: n,
+      fecha: fechaAniversario(g.fechaOtorgamiento, n),
+      pct,
+      pctAcumulado: acum,
+      fraccionEmpresaAcum: c.fraccionEmpresa * (acum / 100),
+      ganaEnElAnio: c.diferenciaTotal === null ? null : c.diferenciaTotal * (pct / 100),
+      acumuladoCobrable: c.diferenciaTotal === null ? null : (preCliff ? 0 : c.diferenciaTotal * (acum / 100)),
+      preCliff,
+      cumplido: anios >= n,
+    })
   }
+  return filas
+}
+
+/** Proximo aniversario en que sube lo cobrable, con la fraccion que quedara vigente. */
+export function proximoHito(
+  g: Pick<GrantParams, 'fechaOtorgamiento' | 'cliffAnios' | 'periodoAnios' | 'esquema'>,
+  hoy: Date,
+): { fecha: string; fraccion: number } | null {
+  const anios = aniosCompletos(g.fechaOtorgamiento, hoy)
+  const actual = fraccionDevengada(g, hoy)
+  for (let n = anios + 1; n <= g.periodoAnios; n++) {
+    const enN = n < g.cliffAnios ? 0 : Math.min(1, pctAcumulado(g.esquema, n) / 100)
+    if (enN > actual) return { fecha: fechaAniversario(g.fechaOtorgamiento, n), fraccion: enN }
+  }
+  return null
+}
+
+/** Esquema parejo por default para un periodo (suma exactamente 100). */
+export function esquemaParejo(periodoAnios: number): EsquemaAnio[] {
+  if (periodoAnios <= 0) return []
+  const pct = Math.floor((100 / periodoAnios) * 100) / 100
+  const filas = Array.from({ length: periodoAnios }, (_, i) => ({ anio: i + 1, pct }))
+  filas[filas.length - 1].pct = Math.round((100 - pct * (periodoAnios - 1)) * 100) / 100
+  return filas
+}
+
+/** null si el esquema es valido; mensaje de error si no. */
+export function validarEsquema(esquema: EsquemaAnio[], periodoAnios: number): string | null {
+  if (esquema.length !== periodoAnios) return `El esquema debe tener ${periodoAnios} anios`
+  for (let n = 1; n <= periodoAnios; n++) {
+    const e = esquema.find(x => x.anio === n)
+    if (!e) return `Falta el anio ${n} en el esquema`
+    if (!(Number(e.pct) >= 0)) return `El % del anio ${n} es invalido`
+  }
+  const suma = esquema.reduce((s, e) => s + Number(e.pct), 0)
+  if (Math.abs(suma - 100) > 0.01) return `Los porcentajes suman ${suma.toFixed(2)}% — tienen que sumar 100%`
+  return null
 }
 
 /** Ultima valuacion de la empresa (por fecha, empate por created_at/id). */
@@ -143,8 +198,8 @@ export function rowToGrant(r: StockOptionRow): GrantParams {
     sueldoMensualUsd: Number(r.sueldo_mensual_usd),
     multiplo: Number(r.multiplo),
     valuacionIngresoUsd: Number(r.valuacion_ingreso_usd),
-    cliffMeses: Number(r.cliff_meses),
-    periodoMeses: Number(r.periodo_meses),
-    devengamiento: (['mensual', 'trimestral', 'anual'].includes(r.devengamiento) ? r.devengamiento : 'mensual') as GrantParams['devengamiento'],
+    cliffAnios: Number(r.cliff_anios),
+    periodoAnios: Number(r.periodo_anios),
+    esquema: Array.isArray(r.esquema) ? r.esquema : [],
   }
 }
