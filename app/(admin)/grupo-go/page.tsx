@@ -26,12 +26,21 @@ export default function GrupoGoPage() {
       iconPath: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
       external: true,
     },
+    {
+      href: '/grupo-go/stock-options',
+      title: 'Stock Options',
+      description: 'Paquetes por persona, devengamiento y valuacion actual de la empresa',
+      color: 'violet',
+      iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7zm8-6v4m2-2h-4',
+      external: false,
+    },
   ]
 
   const colorClasses: Record<string, { bg: string; badge: string }> = {
     indigo: { bg: 'bg-indigo-600', badge: 'bg-indigo-100 text-indigo-700' },
     emerald: { bg: 'bg-emerald-600', badge: 'bg-emerald-100 text-emerald-700' },
     pink: { bg: 'bg-pink-600', badge: 'bg-pink-100 text-pink-700' },
+    violet: { bg: 'bg-violet-600', badge: 'bg-violet-100 text-violet-700' },
   }
 
   return (
