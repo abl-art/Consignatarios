@@ -31,6 +31,12 @@ export interface StockOptionRow {
   cliff_anios: number
   periodo_anios: number
   esquema: EsquemaAnio[]
+  /** Cierre (salida del colaborador): deja de devengar en esta fecha. NULL = vigente. */
+  cierre_fecha: string | null
+  /** 'recompra' (la empresa pago lo devengado) | 'conserva' (mantiene lo devengado) */
+  cierre_tipo: string | null
+  /** Pagado en la recompra (USD, congelado al cierre) */
+  cierre_monto_usd: number | null
   created_at: string
 }
 
@@ -179,6 +185,68 @@ export function validarEsquema(esquema: EsquemaAnio[], periodoAnios: number): st
   const suma = esquema.reduce((s, e) => s + Number(e.pct), 0)
   if (Math.abs(suma - 100) > 0.01) return `Los porcentajes suman ${suma.toFixed(2)}% — tienen que sumar 100%`
   return null
+}
+
+/** Fecha efectiva de calculo del devengamiento: el cierre congela el reloj. */
+export function fechaCalculo(row: Pick<StockOptionRow, 'cierre_fecha'>, hoy: Date): Date {
+  if (!row.cierre_fecha) return hoy
+  const corte = new Date(`${row.cierre_fecha}T00:00:00Z`)
+  return corte < hoy ? corte : hoy
+}
+
+export interface Indicadores {
+  /** Fraccion de la empresa comprometida en stock options vigentes + conservadas */
+  comprometido: number
+  /** De lo comprometido, lo ya devengado */
+  devengado: number
+  /** De lo comprometido, lo que falta devengar (solo grants vigentes) */
+  porDevengar: number
+  /** USD pagados en recompras (congelado por cierre) */
+  gastoRecompras: number
+}
+
+// Reglas (decision de Emiliano 25/11):
+// - vigente: compromete TODO su % (devengado + por devengar)
+// - conserva: compromete solo lo devengado al cierre (lo no devengado vuelve)
+// - recompra: no compromete nada (la empresa recupero el %) y suma al gasto
+export function indicadores(rows: StockOptionRow[], hoy: Date): Indicadores {
+  let comprometido = 0, devengado = 0, gastoRecompras = 0
+  for (const r of rows) {
+    const g = rowToGrant(r)
+    const fe = g.valuacionIngresoUsd > 0 ? (g.sueldoMensualUsd * g.multiplo) / g.valuacionIngresoUsd : 0
+    if (r.cierre_tipo === 'recompra') {
+      gastoRecompras += Number(r.cierre_monto_usd) || 0
+      continue
+    }
+    const fd = fraccionDevengada(g, fechaCalculo(r, hoy))
+    if (r.cierre_tipo === 'conserva') {
+      comprometido += fe * fd
+      devengado += fe * fd
+    } else {
+      comprometido += fe
+      devengado += fe * fd
+    }
+  }
+  return { comprometido, devengado, porDevengar: Math.max(0, comprometido - devengado), gastoRecompras }
+}
+
+export interface ProfitPersona {
+  nombre: string
+  /** 'liquidado' = recompra (cobro y salio) · 'acumulado' = vigente o conserva */
+  tipo: 'liquidado' | 'acumulado'
+  monto: number
+}
+
+/** Datos del grafico: profit liquidado (recompras, congelado) vs acumulado
+ *  (vigentes/conservadas: diferencia devengada a valuacion actual). */
+export function profitPorPersona(rows: StockOptionRow[], valuacionActualUsd: number | null, hoy: Date): ProfitPersona[] {
+  return rows.map(r => {
+    if (r.cierre_tipo === 'recompra') {
+      return { nombre: r.nombre, tipo: 'liquidado' as const, monto: Number(r.cierre_monto_usd) || 0 }
+    }
+    const c = calcularPaquete(rowToGrant(r), valuacionActualUsd, fechaCalculo(r, hoy))
+    return { nombre: r.nombre, tipo: 'acumulado' as const, monto: c.diferenciaDevengada ?? 0 }
+  })
 }
 
 /** Ultima valuacion de la empresa (por fecha, empate por created_at/id). */

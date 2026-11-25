@@ -52,6 +52,37 @@ export async function agregarStockOption(input: StockOptionInput): Promise<{ ok?
   return { ok: true }
 }
 
+/** Cierre por salida del colaborador: congela el devengamiento en la fecha.
+ *  'recompra' exige el monto pagado (congelado); 'conserva' no lleva monto. */
+export async function cerrarStockOption(
+  id: number,
+  fecha: string,
+  tipo: 'recompra' | 'conserva',
+  montoUsd: number | null,
+): Promise<{ ok?: true; error?: string }> {
+  if (!fecha) return { error: 'Falta la fecha de cierre' }
+  if (tipo !== 'recompra' && tipo !== 'conserva') return { error: 'Tipo de cierre invalido' }
+  if (tipo === 'recompra' && !(Number(montoUsd) >= 0)) return { error: 'Falta el monto de la recompra (puede ser 0)' }
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('fc_grupogo_stock_options')
+    .update({ cierre_fecha: fecha, cierre_tipo: tipo, cierre_monto_usd: tipo === 'recompra' ? montoUsd : null })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+/** Deshace un cierre hecho por error: el grant vuelve a devengar normalmente. */
+export async function reabrirStockOption(id: number): Promise<{ ok?: true; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('fc_grupogo_stock_options')
+    .update({ cierre_fecha: null, cierre_tipo: null, cierre_monto_usd: null })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 export async function eliminarStockOption(id: number): Promise<{ ok?: true; error?: string }> {
   const supabase = createAdminClient()
   const { error } = await supabase.from('fc_grupogo_stock_options').delete().eq('id', id)

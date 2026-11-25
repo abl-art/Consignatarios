@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   aniosCompletos, fraccionDevengada, calcularPaquete, filasPorAnio,
   proximoHito, esquemaParejo, validarEsquema,
+  fechaCalculo, indicadores, profitPorPersona, type StockOptionRow,
 } from '@/lib/stock-options'
 
 // Esquema NO uniforme de 4 anios: 10/20/30/40, cliff 1
@@ -116,6 +117,84 @@ describe('proximoHito', () => {
   })
   it('periodo completo: sin hito', () => {
     expect(proximoHito(grant, new Date('2029-02-01'))).toBeNull()
+  })
+})
+
+// Fila completa de la tabla a partir del grant de prueba
+function fila(over: Partial<StockOptionRow> = {}): StockOptionRow {
+  return {
+    id: 1, nombre: 'Juan Perez',
+    fecha_otorgamiento: grant.fechaOtorgamiento,
+    sueldo_mensual_usd: grant.sueldoMensualUsd,
+    multiplo: grant.multiplo,
+    valuacion_ingreso_usd: grant.valuacionIngresoUsd,
+    cliff_anios: grant.cliffAnios,
+    periodo_anios: grant.periodoAnios,
+    esquema: grant.esquema,
+    cierre_fecha: null, cierre_tipo: null, cierre_monto_usd: null,
+    created_at: '2025-01-15T00:00:00Z',
+    ...over,
+  }
+}
+
+describe('cierres: fechaCalculo congela el devengamiento', () => {
+  it('sin cierre usa hoy; con cierre usa la fecha de cierre', () => {
+    const hoy = new Date('2028-06-01')
+    expect(fechaCalculo(fila(), hoy)).toEqual(hoy)
+    expect(fechaCalculo(fila({ cierre_fecha: '2026-11-30' }), hoy)).toEqual(new Date('2026-11-30T00:00:00Z'))
+  })
+  it('un cierre futuro no adelanta el reloj', () => {
+    const hoy = new Date('2026-06-01')
+    expect(fechaCalculo(fila({ cierre_fecha: '2026-11-30' }), hoy)).toEqual(hoy)
+  })
+})
+
+describe('indicadores', () => {
+  const hoy = new Date('2027-06-01') // 2 anios cumplidos → 30% devengado
+  it('vigente compromete todo su %, devengado segun esquema', () => {
+    const r = indicadores([fila()], hoy)
+    expect(r.comprometido).toBeCloseTo(0.0024)
+    expect(r.devengado).toBeCloseTo(0.0024 * 0.3)
+    expect(r.porDevengar).toBeCloseTo(0.0024 * 0.7)
+    expect(r.gastoRecompras).toBe(0)
+  })
+  it('conserva: compromete solo lo devengado al cierre, sin por devengar', () => {
+    const r = indicadores([fila({ cierre_fecha: '2026-11-30', cierre_tipo: 'conserva' })], hoy)
+    // al 30/11/2026 cumplio 1 anio → 10%
+    expect(r.comprometido).toBeCloseTo(0.0024 * 0.1)
+    expect(r.devengado).toBeCloseTo(0.0024 * 0.1)
+    expect(r.porDevengar).toBeCloseTo(0)
+  })
+  it('recompra: libera el % y suma al gasto', () => {
+    const r = indicadores([fila({ cierre_fecha: '2026-11-30', cierre_tipo: 'recompra', cierre_monto_usd: 1200 })], hoy)
+    expect(r.comprometido).toBe(0)
+    expect(r.devengado).toBe(0)
+    expect(r.gastoRecompras).toBe(1200)
+  })
+  it('mezcla: suma por persona', () => {
+    const r = indicadores([
+      fila(),
+      fila({ id: 2, cierre_fecha: '2026-11-30', cierre_tipo: 'recompra', cierre_monto_usd: 500 }),
+    ], hoy)
+    expect(r.comprometido).toBeCloseTo(0.0024)
+    expect(r.gastoRecompras).toBe(500)
+  })
+})
+
+describe('profitPorPersona (grafico)', () => {
+  const hoy = new Date('2027-06-01')
+  it('recompra = liquidado congelado; vigente = acumulado a valuacion actual', () => {
+    const r = profitPorPersona([
+      fila(),
+      fila({ id: 2, nombre: 'Ana Gomez', cierre_fecha: '2026-11-30', cierre_tipo: 'recompra', cierre_monto_usd: 1200 }),
+    ], 15_000_000, hoy)
+    expect(r[0]).toEqual({ nombre: 'Juan Perez', tipo: 'acumulado', monto: expect.closeTo(3600, 5) })
+    expect(r[1]).toEqual({ nombre: 'Ana Gomez', tipo: 'liquidado', monto: 1200 })
+  })
+  it('conserva = acumulado con devengamiento congelado pero valuacion viva', () => {
+    const r = profitPorPersona([fila({ cierre_fecha: '2026-11-30', cierre_tipo: 'conserva' })], 15_000_000, hoy)
+    // 10% devengado congelado x diferencia 12000
+    expect(r[0].monto).toBeCloseTo(1200)
   })
 })
 
