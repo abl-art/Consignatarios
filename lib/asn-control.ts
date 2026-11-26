@@ -26,15 +26,17 @@ export function compararLectura(esperados: string[], leidos: string[], sobrantes
   return { ok, faltantes, sobrantes }
 }
 
-/** Texto de la novedad para GOcelular cuando el control cerro con diferencias. */
+/** Texto de la novedad para GOcelular cuando el control cerro con faltantes.
+ *  Los "sobrantes" (escaneos que no matchean) se IGNORAN en todos los reportes:
+ *  suelen ser codigos equivocados del operario, no informacion real
+ *  (decision de Emiliano 26/11 — solo importa que esten los que deben estar). */
 export function textoNovedadDiferencias(asnTransaccion: string, r: ResultadoControl, nota?: string | null): { titulo: string; detalle: string } {
-  const titulo = `Control de ingreso ASN ${asnTransaccion}: ${r.faltantes.length} faltante(s), ${r.sobrantes.length} sobrante(s)`
+  const titulo = `Control de ingreso ASN ${asnTransaccion}: ${r.faltantes.length} faltante(s)`
   const partes = [
     `Control de recepcion fisica contra la ASN ${asnTransaccion} (escaneo en deposito Andreani).`,
     `Esperados: ${r.ok.length + r.faltantes.length} · Escaneados OK: ${r.ok.length}.`,
   ]
   if (r.faltantes.length > 0) partes.push(`FALTANTES (no escaneados): ${r.faltantes.join(', ')}`)
-  if (r.sobrantes.length > 0) partes.push(`SOBRANTES (no pertenecen a la ASN): ${r.sobrantes.join(', ')}`)
   if (nota) partes.push(`Nota del operario: ${nota}`)
   return { titulo, detalle: partes.join('\n') }
 }

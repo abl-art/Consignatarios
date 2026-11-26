@@ -34,12 +34,12 @@ describe('compararLectura', () => {
 })
 
 describe('textoNovedadDiferencias', () => {
-  it('arma titulo y detalle con faltantes, sobrantes y nota', () => {
+  it('arma titulo y detalle solo con faltantes y nota (los sobrantes se ignoran)', () => {
     const t = textoNovedadDiferencias('17619593', { ok: ['1'], faltantes: ['2', '3'], sobrantes: ['9'] }, 'caja mojada')
     expect(t.titulo).toContain('17619593')
     expect(t.titulo).toContain('2 faltante')
     expect(t.detalle).toContain('FALTANTES (no escaneados): 2, 3')
-    expect(t.detalle).toContain('SOBRANTES')
+    expect(t.detalle).not.toContain('SOBRANTES')
     expect(t.detalle).toContain('caja mojada')
   })
 })

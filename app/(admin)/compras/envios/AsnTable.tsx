@@ -103,7 +103,9 @@ export default function AsnTable({ asns, controles = {}, shareToken = '', mailsC
             const completo = asn.totalUnidades > 0 && asn.pendientes === 0
             const expandido = abierto === asn.id
             const control = controles[asn.id]
-            const dif = control ? control.resultado.faltantes.length + control.resultado.sobrantes.length : 0
+            // Solo cuentan los FALTANTES: los escaneos que no matchean suelen ser
+            // codigos equivocados del operario y se ignoran (Emiliano 26/11)
+            const dif = control ? control.resultado.faltantes.length : 0
             return (
               <Fragment key={asn.id}>
                 <tr
@@ -137,7 +139,7 @@ export default function AsnTable({ asns, controles = {}, shareToken = '', mailsC
                       </span>
                     ) : (
                       <span className="inline-block px-2 py-0.5 rounded-full border text-xs font-semibold bg-red-50 text-red-700 border-red-200">
-                        ⚠ {control.resultado.faltantes.length} falt. · {control.resultado.sobrantes.length} sobr.
+                        ⚠ {control.resultado.faltantes.length} faltantes
                       </span>
                     )}
                     {control?.novedad_enviada_at && (
@@ -151,9 +153,6 @@ export default function AsnTable({ asns, controles = {}, shareToken = '', mailsC
                     <td colSpan={7} className="px-6 py-3 text-xs text-gray-700 space-y-1.5">
                       {control.resultado.faltantes.length > 0 && (
                         <div><b className="text-red-700">Faltantes (no escaneados en depósito):</b> <span className="font-mono">{control.resultado.faltantes.join(', ')}</span></div>
-                      )}
-                      {control.resultado.sobrantes.length > 0 && (
-                        <div><b className="text-amber-700">Sobrantes (no pertenecen a la ASN):</b> <span className="font-mono">{control.resultado.sobrantes.join(', ')}</span></div>
                       )}
                       {control.nota && <div><b>Nota del operario:</b> {control.nota}</div>}
                       {!control.novedad_enviada_at && (

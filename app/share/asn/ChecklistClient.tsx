@@ -9,7 +9,7 @@ import { useRef, useState } from 'react'
 import { finalizarControlAsn, type ChecklistAsn } from '@/lib/actions/asn-control'
 import { normalizarScan } from '@/lib/asn-control'
 
-type Flash = { tipo: 'ok' | 'sobrante' | 'repetido'; valor: string; modelo?: string } | null
+type Flash = { tipo: 'ok' | 'nocorresponde' | 'repetido'; valor: string; modelo?: string } | null
 
 async function sha256Hex(s: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
@@ -19,7 +19,6 @@ async function sha256Hex(s: string): Promise<string> {
 export default function ChecklistClient({ token, checklist }: { token: string; checklist: ChecklistAsn }) {
   const [leidos, setLeidos] = useState<string[]>([])
   const [porModelo, setPorModelo] = useState<Record<string, number>>({})
-  const [sobrantes, setSobrantes] = useState<string[]>([])
   const [valor, setValor] = useState('')
   const [flash, setFlash] = useState<Flash>(null)
   const [nota, setNota] = useState('')
@@ -37,7 +36,7 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
         <div className="text-4xl">✅</div>
         <h1 className="text-lg font-bold text-gray-900">Control de la ASN {checklist.transaccion} finalizado</h1>
         <p className="text-sm text-gray-600">
-          {hecho ? '¡Gracias! El control quedó registrado en GOCUOTAS.' : r ? `${r.ok} OK · ${r.faltantes} faltantes · ${r.sobrantes} sobrantes` : ''}
+          {hecho ? '¡Gracias! El control quedó registrado en GOCUOTAS.' : r ? `${r.ok} tomados · ${r.faltantes} faltantes` : ''}
         </p>
         <a href={`/share/asn?token=${token}`} className="inline-block text-sm text-emerald-700 font-semibold">← Volver a las ASN pendientes</a>
       </div>
@@ -50,7 +49,7 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
     inputRef.current?.focus()
     if (!v) return
     const h = await sha256Hex(`${token}:${v}`)
-    if (hashesLeidos.current.has(h) || sobrantes.includes(v)) {
+    if (hashesLeidos.current.has(h)) {
       setFlash({ tipo: 'repetido', valor: v })
       return
     }
@@ -61,17 +60,19 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
       setPorModelo(prev => ({ ...prev, [modelo]: (prev[modelo] ?? 0) + 1 }))
       setFlash({ tipo: 'ok', valor: v, modelo })
     } else {
-      setSobrantes(prev => [...prev, v])
-      setFlash({ tipo: 'sobrante', valor: v })
+      // No matchea: suele ser un codigo equivocado (caja, serie interna) — se
+      // avisa y NO se registra (decision de Emiliano: solo importa que esten
+      // los que deben estar)
+      setFlash({ tipo: 'nocorresponde', valor: v })
     }
   }
 
   const faltan = checklist.totalEsperados - leidos.length
-  const conDiferencias = faltan > 0 || sobrantes.length > 0
+  const conDiferencias = faltan > 0
 
   const finalizar = async () => {
     setEnviando(true); setErr(null)
-    const r = await finalizarControlAsn(token, checklist.asnId, leidos, sobrantes, nota)
+    const r = await finalizarControlAsn(token, checklist.asnId, leidos, [], nota)
     if (r.error) setErr(r.error)
     else setHecho(true)
     setEnviando(false)
@@ -103,11 +104,11 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
         {flash && (
           <div className={`mt-2 rounded-lg px-3 py-2 text-sm font-semibold ${
             flash.tipo === 'ok' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-            : flash.tipo === 'sobrante' ? 'bg-red-50 text-red-800 border border-red-200'
+            : flash.tipo === 'nocorresponde' ? 'bg-amber-50 text-amber-800 border border-amber-200'
             : 'bg-amber-50 text-amber-800 border border-amber-200'
           }`}>
             {flash.tipo === 'ok' && <>✓ {flash.valor} — {flash.modelo}</>}
-            {flash.tipo === 'sobrante' && <>✗ {flash.valor} — NO pertenece a esta ASN (quedó anotado)</>}
+            {flash.tipo === 'nocorresponde' && <>{flash.valor} no corresponde a esta ASN — verificá que estés escaneando el IMEI de la caja</>}
             {flash.tipo === 'repetido' && <>⟳ {flash.valor} — ya lo escaneaste</>}
           </div>
         )}
@@ -139,14 +140,6 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
             )
           })}
         </div>
-        {sobrantes.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-gray-100">
-            <h3 className="text-xs font-semibold text-red-600 uppercase mb-1">No pertenecen a esta ASN ({sobrantes.length})</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {sobrantes.map(s => <span key={s} className="text-xs bg-red-50 text-red-700 border border-red-200 rounded px-1.5 py-0.5 font-mono">{s}</span>)}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
@@ -164,13 +157,13 @@ export default function ChecklistClient({ token, checklist }: { token: string; c
             disabled={enviando}
             className="w-full px-5 py-3 bg-gray-900 text-white text-base font-semibold rounded-xl hover:bg-gray-700 disabled:opacity-50"
           >
-            {enviando ? 'Enviando…' : conDiferencias ? `Finalizar control (faltan ${faltan}${sobrantes.length ? ` · ${sobrantes.length} no corresponden` : ''})` : 'Finalizar control ✓'}
+            {enviando ? 'Enviando…' : conDiferencias ? `Finalizar control (faltan ${faltan})` : 'Finalizar control ✓'}
           </button>
         ) : (
           <div className="space-y-2">
             <p className="text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-              Vas a cerrar con {faltan} faltantes{sobrantes.length > 0 ? ` y ${sobrantes.length} unidades que no corresponden` : ''}.
-              Las diferencias se informan a GOCUOTAS. ¿Estás seguro de que querés cerrar?
+              Vas a cerrar con {faltan} faltantes. Los faltantes se informan a GOCUOTAS.
+              ¿Estás seguro de que querés cerrar?
             </p>
             <div className="flex gap-2">
               <button onClick={finalizar} disabled={enviando}

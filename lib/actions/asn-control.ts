@@ -100,37 +100,34 @@ async function mailarCierreControl(asnId: string, transaccion: string, r: Result
   }
 
   const total = r.ok.length + r.faltantes.length
-  const conDif = r.faltantes.length > 0 || r.sobrantes.length > 0
   const cierre = new Date().toLocaleString('es-AR', {
     timeZone: 'America/Argentina/Cordoba',
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
-  const asunto = conDif
-    ? `⚠ Control ASN ${transaccion}: ${r.faltantes.length} faltantes · ${r.sobrantes.length} sobrantes`
+  const asunto = r.faltantes.length > 0
+    ? `⚠ Control ASN ${transaccion}: ${r.faltantes.length} faltantes de ${total}`
     : `✓ Control ASN ${transaccion}: ingresó completa (${total} unidades)`
 
   const lineas = [
     `El depósito de Andreani finalizó el control de ingreso de la ASN ${transaccion} el ${cierre} (hora Argentina).`,
     '',
-    `Tomados: ${r.ok.length} de ${total} esperados · Faltantes: ${r.faltantes.length} · Sobrantes: ${r.sobrantes.length}`,
+    `Tomados: ${r.ok.length} de ${total} esperados · Faltantes: ${r.faltantes.length}`,
     '',
     'Resumen por modelo (tomados / esperados):',
     ...[...resumenModelo.entries()]
       .sort((a, b) => b[1].total - a[1].total)
       .map(([modelo, e]) => `  • ${modelo}: ${e.ok} / ${e.total}${e.ok < e.total ? ` — faltan ${e.total - e.ok}` : ' ✓'}`),
   ]
-  if (r.sobrantes.length > 0) lineas.push('', `SOBRANTES (no pertenecen a la ASN): ${r.sobrantes.join(', ')}`)
   if (nota) lineas.push('', `Nota del operario: ${nota}`)
   lineas.push('', 'En el Excel adjunto están todos los IMEIs tomados; el detalle también queda en GOcelular360 → Compras → Envíos → pestaña ASN.')
 
-  // Excel: hoja "Tomados" (IMEI, modelo, hoja de ruta OK/sobrante) + hoja "Faltantes"
+  // Excel: hoja "Tomados" (solo los esperados que escanearon) + hoja "Faltantes"
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
   const tomados = [
-    ['IMEI', 'Modelo', 'Resultado'],
-    ...r.ok.map(i => [i, modeloPor.get(i) ?? '', 'OK']),
-    ...r.sobrantes.map(i => [i, '', 'SOBRANTE (no pertenece a la ASN)']),
+    ['IMEI', 'Modelo'],
+    ...r.ok.map(i => [i, modeloPor.get(i) ?? '']),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tomados), 'Tomados')
   if (r.faltantes.length > 0) {
@@ -209,7 +206,7 @@ export interface ChecklistAsn {
   totalEsperados: number
   finalizado: boolean
   /** solo CANTIDADES para el operario (los IMEIs del detalle los ve Emiliano en la pestaña ASN) */
-  resumenFinal: { ok: number; faltantes: number; sobrantes: number } | null
+  resumenFinal: { ok: number; faltantes: number } | null
 }
 
 function hashImei(token: string, imei: string): string {
@@ -248,7 +245,7 @@ export async function getChecklistAsn(token: string, asnId: string): Promise<Che
   let resumenFinal: ChecklistAsn['resumenFinal'] = null
   if (finalizado) {
     const r = compararLectura(items.map(i => i.imei), c?.leidos ?? [], c?.sobrantes ?? [])
-    resumenFinal = { ok: r.ok.length, faltantes: r.faltantes.length, sobrantes: r.sobrantes.length }
+    resumenFinal = { ok: r.ok.length, faltantes: r.faltantes.length }
   }
   return {
     asnId: asn.id,
@@ -331,7 +328,7 @@ export async function avisarDiferenciasAsn(controlId: number): Promise<{ ok?: tr
   if (c.estado !== 'finalizado') return { error: 'El control todavia no fue finalizado' }
   const esperados = await imeisDeAsn(c.asn_id)
   const r = compararLectura(esperados, c.leidos ?? [], c.sobrantes ?? [])
-  if (r.faltantes.length === 0 && r.sobrantes.length === 0) return { error: 'El control cerro sin diferencias — no hay nada que avisar' }
+  if (r.faltantes.length === 0) return { error: 'El control cerro sin faltantes — no hay nada que avisar' }
   const { titulo, detalle } = textoNovedadDiferencias(c.asn_transaccion, r, c.nota)
   const envio = await enviarNovedadGocelular({ titulo, detalle, tipo: 'aviso', referencia: `asn:${c.asn_transaccion}` })
   if (!envio.ok) return { error: envio.error ?? 'No se pudo enviar la novedad' }
