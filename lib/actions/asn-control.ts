@@ -71,25 +71,80 @@ export async function setMailsControlAsn(mails: string): Promise<{ ok?: true; er
   return { ok: true }
 }
 
-// Best-effort: el cierre del control nunca falla por el mail (se loguea)
-async function mailarCierreControl(transaccion: string, r: ResultadoControl, nota: string | null): Promise<void> {
+// Best-effort: el cierre del control nunca falla por el mail (se loguea).
+// Lleva adjunto un Excel con todos los IMEIs tomados y, en el cuerpo, el
+// resumen por modelo con fecha y hora del cierre (pedido de Emiliano 26/11).
+async function mailarCierreControl(asnId: string, transaccion: string, r: ResultadoControl, nota: string | null): Promise<void> {
   const para = await getMailsControlAsn()
   if (!para) return
+
+  // Modelo por IMEI (para el resumen por modelo y el Excel)
+  const pool = getPool()
+  const modeloPor = new Map<string, string>()
+  if (pool) {
+    const { rows } = await pool.query<{ imei: string; modelo: string }>(
+      `SELECT ii.imei, COALESCE(dm.name, ii.resolved_sku, ii.model_code, 'Sin modelo') AS modelo
+       FROM inventory_intake_items ii
+       LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+       WHERE ii.asn_transaction_id = $1`,
+      [asnId],
+    )
+    for (const row of rows) modeloPor.set(normalizarScan(row.imei), row.modelo)
+  }
+  const resumenModelo = new Map<string, { ok: number; total: number }>()
+  for (const [imei, modelo] of modeloPor) {
+    const e = resumenModelo.get(modelo) ?? { ok: 0, total: 0 }
+    e.total += 1
+    if (r.ok.includes(imei)) e.ok += 1
+    resumenModelo.set(modelo, e)
+  }
+
   const total = r.ok.length + r.faltantes.length
   const conDif = r.faltantes.length > 0 || r.sobrantes.length > 0
+  const cierre = new Date().toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Cordoba',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+
   const asunto = conDif
     ? `⚠ Control ASN ${transaccion}: ${r.faltantes.length} faltantes · ${r.sobrantes.length} sobrantes`
     : `✓ Control ASN ${transaccion}: ingresó completa (${total} unidades)`
+
   const lineas = [
-    `El depósito de Andreani finalizó el control de ingreso de la ASN ${transaccion}.`,
+    `El depósito de Andreani finalizó el control de ingreso de la ASN ${transaccion} el ${cierre} (hora Argentina).`,
     '',
-    `Esperadas: ${total} · Escaneadas OK: ${r.ok.length} · Faltantes: ${r.faltantes.length} · Sobrantes: ${r.sobrantes.length}`,
+    `Tomados: ${r.ok.length} de ${total} esperados · Faltantes: ${r.faltantes.length} · Sobrantes: ${r.sobrantes.length}`,
+    '',
+    'Resumen por modelo (tomados / esperados):',
+    ...[...resumenModelo.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([modelo, e]) => `  • ${modelo}: ${e.ok} / ${e.total}${e.ok < e.total ? ` — faltan ${e.total - e.ok}` : ' ✓'}`),
   ]
-  if (r.faltantes.length > 0) lineas.push('', `FALTANTES (no escaneados):`, r.faltantes.join(', '))
-  if (r.sobrantes.length > 0) lineas.push('', `SOBRANTES (no pertenecen a la ASN):`, r.sobrantes.join(', '))
+  if (r.sobrantes.length > 0) lineas.push('', `SOBRANTES (no pertenecen a la ASN): ${r.sobrantes.join(', ')}`)
   if (nota) lineas.push('', `Nota del operario: ${nota}`)
-  lineas.push('', 'Detalle completo: GOcelular360 → Compras → Envíos → pestaña ASN.')
-  const envio = await enviarMail({ para, asunto, texto: lineas.join('\n') })
+  lineas.push('', 'En el Excel adjunto están todos los IMEIs tomados; el detalle también queda en GOcelular360 → Compras → Envíos → pestaña ASN.')
+
+  // Excel: hoja "Tomados" (IMEI, modelo, hoja de ruta OK/sobrante) + hoja "Faltantes"
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  const tomados = [
+    ['IMEI', 'Modelo', 'Resultado'],
+    ...r.ok.map(i => [i, modeloPor.get(i) ?? '', 'OK']),
+    ...r.sobrantes.map(i => [i, '', 'SOBRANTE (no pertenece a la ASN)']),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tomados), 'Tomados')
+  if (r.faltantes.length > 0) {
+    const faltantes = [['IMEI', 'Modelo'], ...r.faltantes.map(i => [i, modeloPor.get(i) ?? ''])]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(faltantes), 'Faltantes')
+  }
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+
+  const envio = await enviarMail({
+    para,
+    asunto,
+    texto: lineas.join('\n'),
+    adjuntos: [{ filename: `control-asn-${transaccion}.xlsx`, content: buffer }],
+  })
   if (!envio.ok) console.error(`mail de cierre ASN ${transaccion} falló:`, envio.error)
 }
 
@@ -244,7 +299,7 @@ export async function finalizarControlAsn(
 
   // Mail de aviso a los destinatarios configurados (best-effort, no bloquea)
   const esperados = await imeisDeAsn(asnId)
-  await mailarCierreControl(rows[0].id_transaccion, compararLectura(esperados, leidosNorm, sobrantesNorm), notaLimpia)
+  await mailarCierreControl(asnId, rows[0].id_transaccion, compararLectura(esperados, leidosNorm, sobrantesNorm), notaLimpia)
 
   revalidatePath('/compras/envios')
   return { ok: true }
