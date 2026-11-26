@@ -16,3 +16,7 @@ create table if not exists asn_controles (
 );
 create unique index if not exists asn_controles_asn_id on asn_controles (asn_id);
 alter table asn_controles disable row level security;
+
+-- Rediseño 26/11 (feedback Emiliano): link UNICO (token en flujo_config key
+-- 'share_asn_token'); el token por control ya no se usa.
+alter table asn_controles alter column token drop not null;

@@ -1,12 +1,13 @@
 'use server'
 
-// Control de ingreso de ASN por link publico (provisorio): ver
-// docs/superpowers/specs/2026-11-26-control-ingreso-asn-design.md.
-// Las ASN y sus IMEIs viven en la replica de GOcelular; el control (token,
-// escaneos, resultado) en Supabase (asn_controles). Novedad a GOcelular:
-// SIEMPRE manual desde la vista admin (decision de Emiliano 26/11).
+// Control de ingreso de ASN por LINK UNICO (provisorio): el deposito de
+// Andreani usa siempre el mismo link (/share/asn?token=<unico>, token en
+// flujo_config 'share_asn_token'). La pagina lista las ASN con celulares
+// pendientes de control; dentro de cada una se tildan los IMEIs al escanear.
+// La marca del control vive en la pestaña ASN de /compras/envios, y el aviso
+// de diferencias a GOcelular es SIEMPRE manual (decisiones de Emiliano 26/11).
 
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -17,89 +18,36 @@ export interface ControlAsn {
   id: number
   asn_id: string
   asn_transaccion: string
-  token: string
   estado: string
   leidos: string[]
   sobrantes: string[]
   nota: string | null
   finalizado_at: string | null
   novedad_enviada_at: string | null
-  created_at: string
 }
 
-export interface AsnResumen {
-  asnId: string
-  transaccion: string
-  fecha: string
-  estadoAndreani: string
-  imeis: number
-  addonsUnidades: number
-  control: ControlAsn | null
-  resultado: ResultadoControl | null
-}
+// --- Token unico -----------------------------------------------------------
 
-interface AsnReplicaRow {
-  id: string
-  id_transaccion: string
-  estado: string
-  created_at: string
-  imeis: string
-  addons_unidades: string | null
-}
-
-// ASNs (abastecimientos) recientes de la replica con cuantos IMEIs y unidades
-// de addons las componen, cruzadas con su control en Supabase.
-export async function getAsnsRecientes(dias = 60): Promise<AsnResumen[]> {
-  const pool = getPool()
-  if (!pool) return []
-  const { rows } = await pool.query<AsnReplicaRow>(
-    `SELECT t.id, t.id_transaccion, t.estado, t.created_at,
-            COALESCE(d.total, 0) AS imeis,
-            a.total AS addons_unidades
-     FROM andreani_wh_transactions t
-     LEFT JOIN LATERAL (
-       SELECT count(*) AS total FROM inventory_intake_items ii WHERE ii.asn_transaction_id = t.id
-     ) d ON true
-     LEFT JOIN LATERAL (
-       SELECT sum(ai.quantity) AS total FROM inventory_intake_addon_items ai WHERE ai.asn_transaction_id = t.id
-     ) a ON true
-     WHERE t.tipo = 'abastecimiento'
-       AND t.superseded_at IS NULL
-       AND t.created_at >= now() - make_interval(days => $1)
-       -- sin IMEIs ni bultos no hay nada que controlar (versiones viejas/vacias)
-       AND (COALESCE(d.total, 0) > 0 OR COALESCE(a.total, 0) > 0)
-     ORDER BY t.created_at DESC`,
-    [dias],
-  )
-
+async function tokenUnico(): Promise<string> {
   const supabase = createAdminClient()
-  const { data: controles } = await supabase
-    .from('asn_controles')
-    .select('*')
-    .in('asn_id', rows.map(r => r.id))
-  const porAsn = new Map<string, ControlAsn>((controles ?? []).map(c => [c.asn_id, c as ControlAsn]))
-
-  const resumenes: AsnResumen[] = []
-  for (const r of rows) {
-    const control = porAsn.get(r.id) ?? null
-    let resultado: ResultadoControl | null = null
-    if (control && control.estado === 'finalizado') {
-      const esperados = await imeisDeAsn(r.id)
-      resultado = compararLectura(esperados, control.leidos, control.sobrantes)
-    }
-    resumenes.push({
-      asnId: r.id,
-      transaccion: r.id_transaccion,
-      fecha: r.created_at,
-      estadoAndreani: r.estado,
-      imeis: Number(r.imeis),
-      addonsUnidades: Number(r.addons_unidades ?? 0),
-      control,
-      resultado,
-    })
-  }
-  return resumenes
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', 'share_asn_token').maybeSingle()
+  if (data?.value) return data.value as string
+  const token = randomUUID()
+  await supabase.from('flujo_config').upsert({ key: 'share_asn_token', value: token })
+  return token
 }
+
+async function tokenValido(token: string | undefined): Promise<boolean> {
+  if (!token || token.length < 20) return false
+  return token === (await tokenUnico())
+}
+
+/** Link completo para mandarle a Andreani (lo usa el boton Copiar de la pestaña ASN). */
+export async function getShareAsnToken(): Promise<string> {
+  return tokenUnico()
+}
+
+// --- Datos de la replica ---------------------------------------------------
 
 async function imeisDeAsn(asnId: string): Promise<string[]> {
   const pool = getPool()
@@ -111,80 +59,159 @@ async function imeisDeAsn(asnId: string): Promise<string[]> {
   return rows.map(r => r.imei)
 }
 
-async function addonsDeAsn(asnId: string): Promise<{ sku: string; cantidad: number }[]> {
+// --- Lado publico (operario del deposito, link unico) ----------------------
+
+export interface AsnPendiente {
+  asnId: string
+  transaccion: string
+  fecha: string
+  imeis: number
+}
+
+/** ASNs con celulares (IMEIs) de los ultimos 60 dias que aun no tienen
+ *  control finalizado — es lo unico que ve el deposito en el link. */
+export async function getAsnsPendientesPublico(token: string): Promise<AsnPendiente[] | null> {
+  if (!(await tokenValido(token))) return null
   const pool = getPool()
   if (!pool) return []
-  const { rows } = await pool.query<{ sku: string; cantidad: string }>(
-    `SELECT COALESCE(sp.sku, ai.addon_product_id::text) AS sku, sum(ai.quantity) AS cantidad
-     FROM inventory_intake_addon_items ai
-     LEFT JOIN store_products sp ON sp.id = ai.addon_product_id
-     WHERE ai.asn_transaction_id = $1
-     GROUP BY 1 ORDER BY 1`,
+  const { rows } = await pool.query<{ id: string; id_transaccion: string; created_at: string; imeis: string }>(
+    `SELECT t.id, t.id_transaccion, t.created_at, d.total AS imeis
+     FROM andreani_wh_transactions t
+     JOIN LATERAL (
+       SELECT count(*) AS total FROM inventory_intake_items ii WHERE ii.asn_transaction_id = t.id
+     ) d ON true
+     WHERE t.tipo = 'abastecimiento' AND t.superseded_at IS NULL
+       AND t.created_at >= now() - interval '60 days'
+       AND d.total > 0
+     ORDER BY t.created_at DESC`,
+  )
+  const supabase = createAdminClient()
+  const { data: finalizados } = await supabase
+    .from('asn_controles')
+    .select('asn_id')
+    .eq('estado', 'finalizado')
+    .in('asn_id', rows.map(r => r.id))
+  const ya = new Set((finalizados ?? []).map(f => f.asn_id))
+  return rows
+    .filter(r => !ya.has(r.id))
+    .map(r => ({ asnId: r.id, transaccion: r.id_transaccion, fecha: r.created_at, imeis: Number(r.imeis) }))
+}
+
+export interface ChecklistAsn {
+  asnId: string
+  transaccion: string
+  /** Unidades esperadas POR MODELO — el operario nunca ve los IMEIs */
+  modelos: { modelo: string; total: number }[]
+  /** sha256(token + imei normalizado) → modelo: el cliente valida cada escaneo
+   *  contra esto sin conocer la lista (anti-trampa, pedido de Emiliano 26/11) */
+  hashes: Record<string, string>
+  totalEsperados: number
+  finalizado: boolean
+  /** solo CANTIDADES para el operario (los IMEIs del detalle los ve Emiliano en la pestaña ASN) */
+  resumenFinal: { ok: number; faltantes: number; sobrantes: number } | null
+}
+
+function hashImei(token: string, imei: string): string {
+  return createHash('sha256').update(`${token}:${normalizarScan(imei)}`).digest('hex')
+}
+
+export async function getChecklistAsn(token: string, asnId: string): Promise<ChecklistAsn | null> {
+  if (!(await tokenValido(token))) return null
+  const pool = getPool()
+  if (!pool) return null
+  const { rows } = await pool.query<{ id: string; id_transaccion: string }>(
+    `SELECT id, id_transaccion FROM andreani_wh_transactions WHERE id = $1 AND tipo = 'abastecimiento'`,
     [asnId],
   )
-  return rows.map(r => ({ sku: r.sku, cantidad: Number(r.cantidad) }))
-}
+  const asn = rows[0]
+  if (!asn) return null
 
-/** Crea (o devuelve, si ya existe) el control con su token para el link. */
-export async function crearControlAsn(asnId: string, transaccion: string): Promise<{ token?: string; error?: string }> {
+  // IMEIs esperados con su modelo (nombre GOcelular; fallback al alias de la linea)
+  const { rows: items } = await pool.query<{ imei: string; modelo: string }>(
+    `SELECT ii.imei, COALESCE(dm.name, ii.resolved_sku, ii.model_code, 'Sin modelo') AS modelo
+     FROM inventory_intake_items ii
+     LEFT JOIN device_models dm ON dm.model_code = ii.model_code
+     WHERE ii.asn_transaction_id = $1`,
+    [asn.id],
+  )
+  const porModelo = new Map<string, number>()
+  const hashes: Record<string, string> = {}
+  for (const it of items) {
+    porModelo.set(it.modelo, (porModelo.get(it.modelo) ?? 0) + 1)
+    hashes[hashImei(token, it.imei)] = it.modelo
+  }
+
   const supabase = createAdminClient()
-  const { data: existente } = await supabase.from('asn_controles').select('token').eq('asn_id', asnId).maybeSingle()
-  if (existente) return { token: existente.token }
-  const token = randomUUID()
-  const { error } = await supabase.from('asn_controles').insert({ asn_id: asnId, asn_transaccion: transaccion, token })
-  if (error) return { error: error.message }
-  revalidatePath('/compras/ingresos-asn')
-  return { token }
-}
-
-// --- Lado publico (el operario del deposito, via token; sin login) ---
-
-export interface ControlPublico {
-  transaccion: string
-  estado: string
-  esperados: string[]
-  addons: { sku: string; cantidad: number }[]
-  /** solo si ya esta finalizado */
-  resultado: ResultadoControl | null
-  nota: string | null
-  finalizadoAt: string | null
-}
-
-export async function getControlPorToken(token: string): Promise<ControlPublico | null> {
-  if (!token || token.length < 20) return null
-  const supabase = createAdminClient()
-  const { data: c } = await supabase.from('asn_controles').select('*').eq('token', token).maybeSingle()
-  if (!c) return null
-  const esperados = await imeisDeAsn(c.asn_id)
-  const addons = await addonsDeAsn(c.asn_id)
-  const resultado = c.estado === 'finalizado' ? compararLectura(esperados, c.leidos ?? [], c.sobrantes ?? []) : null
-  return { transaccion: c.asn_transaccion, estado: c.estado, esperados, addons, resultado, nota: c.nota, finalizadoAt: c.finalizado_at }
+  const { data: c } = await supabase.from('asn_controles').select('*').eq('asn_id', asn.id).maybeSingle()
+  const finalizado = c?.estado === 'finalizado'
+  let resumenFinal: ChecklistAsn['resumenFinal'] = null
+  if (finalizado) {
+    const r = compararLectura(items.map(i => i.imei), c?.leidos ?? [], c?.sobrantes ?? [])
+    resumenFinal = { ok: r.ok.length, faltantes: r.faltantes.length, sobrantes: r.sobrantes.length }
+  }
+  return {
+    asnId: asn.id,
+    transaccion: asn.id_transaccion,
+    modelos: [...porModelo.entries()].map(([modelo, total]) => ({ modelo, total })).sort((a, b) => b.total - a.total),
+    hashes,
+    totalEsperados: items.length,
+    finalizado,
+    resumenFinal,
+  }
 }
 
 export async function finalizarControlAsn(
   token: string,
+  asnId: string,
   leidos: string[],
   sobrantes: string[],
   nota: string,
 ): Promise<{ ok?: true; error?: string }> {
-  if (!token || token.length < 20) return { error: 'Token invalido' }
+  if (!(await tokenValido(token))) return { error: 'Link invalido' }
   if (leidos.length > 5000 || sobrantes.length > 5000) return { error: 'Demasiados escaneos' }
+  const pool = getPool()
+  if (!pool) return { error: 'Base no disponible' }
+  const { rows } = await pool.query<{ id_transaccion: string }>(
+    `SELECT id_transaccion FROM andreani_wh_transactions WHERE id = $1 AND tipo = 'abastecimiento'`,
+    [asnId],
+  )
+  if (!rows[0]) return { error: 'ASN inexistente' }
   const supabase = createAdminClient()
-  const { data: c } = await supabase.from('asn_controles').select('id, estado').eq('token', token).maybeSingle()
-  if (!c) return { error: 'Control inexistente' }
-  if (c.estado === 'finalizado') return { error: 'Este control ya fue finalizado' }
-  const { error } = await supabase
-    .from('asn_controles')
-    .update({
+  const { data: previo } = await supabase.from('asn_controles').select('estado').eq('asn_id', asnId).maybeSingle()
+  if (previo?.estado === 'finalizado') return { error: 'Este control ya fue finalizado' }
+  const { error } = await supabase.from('asn_controles').upsert(
+    {
+      asn_id: asnId,
+      asn_transaccion: rows[0].id_transaccion,
       estado: 'finalizado',
       leidos: leidos.map(normalizarScan).slice(0, 5000),
       sobrantes: sobrantes.map(normalizarScan).slice(0, 5000),
       nota: nota.trim().slice(0, 500) || null,
       finalizado_at: new Date().toISOString(),
-    })
-    .eq('id', c.id)
+    },
+    { onConflict: 'asn_id' },
+  )
   if (error) return { error: error.message }
+  revalidatePath('/compras/envios')
   return { ok: true }
+}
+
+// --- Lado admin (pestaña ASN de /compras/envios) ---------------------------
+
+export interface ControlConResultado extends ControlAsn {
+  resultado: ResultadoControl
+}
+
+/** Controles finalizados, por asn_id, con su resultado — para la marca en la pestaña ASN. */
+export async function getControlesAsn(): Promise<Record<string, ControlConResultado>> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('asn_controles').select('*').eq('estado', 'finalizado')
+  const out: Record<string, ControlConResultado> = {}
+  for (const c of data ?? []) {
+    const esperados = await imeisDeAsn(c.asn_id)
+    out[c.asn_id] = { ...(c as ControlAsn), resultado: compararLectura(esperados, c.leidos ?? [], c.sobrantes ?? []) }
+  }
+  return out
 }
 
 /** Aviso MANUAL de diferencias a GOcelular por el canal de Novedades v2. */
@@ -200,6 +227,6 @@ export async function avisarDiferenciasAsn(controlId: number): Promise<{ ok?: tr
   const envio = await enviarNovedadGocelular({ titulo, detalle, tipo: 'aviso', referencia: `asn:${c.asn_transaccion}` })
   if (!envio.ok) return { error: envio.error ?? 'No se pudo enviar la novedad' }
   await supabase.from('asn_controles').update({ novedad_enviada_at: new Date().toISOString() }).eq('id', controlId)
-  revalidatePath('/compras/ingresos-asn')
+  revalidatePath('/compras/envios')
   return { ok: true }
 }
