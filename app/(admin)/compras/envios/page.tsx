@@ -29,7 +29,7 @@ import WarehouseFacturaUpload from './WarehouseFacturaUpload'
 import FacturasWarehouseTable from './FacturasWarehouseTable'
 import WarehouseAndreani from './WarehouseAndreani'
 import AsnTable from './AsnTable'
-import { getControlesAsn, getShareAsnToken, type ControlConResultado } from '@/lib/actions/asn-control'
+import { getControlesAsn, getShareAsnToken, getMailsControlAsn, type ControlConResultado } from '@/lib/actions/asn-control'
 import ControlStockTable from './ControlStockTable'
 import AlertasTable from './AlertasTable'
 import RescatesTable from './RescatesTable'
@@ -52,13 +52,14 @@ export default async function EnviosPage({
   let asns: AsnResumen[] = []
   let controlesAsn: Record<string, ControlConResultado> = {}
   let shareAsnToken = ''
+  let mailsControlAsn = ''
   let alertas: { requierenAtencion: AlertaEnvio[]; expedidosSinImei: AlertaEnvio[] } = { requierenAtencion: [], expedidosSinImei: [] }
   let rescates: RescateConPedro[] = []
   let siniestros: Siniestro[] = []
   let productosStock: ProductoStock[] = []
   let demoras: DemoraEntrega[] = []
   try {
-    ;[asns, alertas, rescates, siniestros, productosStock, controlesAsn, shareAsnToken] = await Promise.all([
+    ;[asns, alertas, rescates, siniestros, productosStock, controlesAsn, shareAsnToken, mailsControlAsn] = await Promise.all([
       fetchAsns(),
       fetchAlertasEnvios(),
       getRescatesCompletos(),
@@ -66,6 +67,7 @@ export default async function EnviosPage({
       fetchProductosStock(),
       getControlesAsn().catch(() => ({})),
       getShareAsnToken().catch(() => ''),
+      getMailsControlAsn().catch(() => ''),
     ])
     // Después de rescates: sus trackings (incluidos los cargados a mano) se
     // excluyen de Demoras, igual que los descartes manuales (verificados
@@ -273,7 +275,7 @@ export default async function EnviosPage({
         {
           id: 'asn',
           label: 'ASN',
-          content: <AsnTable asns={asns} controles={controlesAsn} shareToken={shareAsnToken} />,
+          content: <AsnTable asns={asns} controles={controlesAsn} shareToken={shareAsnToken} mailsControl={mailsControlAsn} />,
         },
         {
           id: 'alertas',

@@ -3,7 +3,7 @@
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AsnResumen } from '@/lib/gocelular'
-import { avisarDiferenciasAsn, type ControlConResultado } from '@/lib/actions/asn-control'
+import { avisarDiferenciasAsn, setMailsControlAsn, type ControlConResultado } from '@/lib/actions/asn-control'
 
 const ESTADOS: Record<string, { label: string; cls: string }> = {
   accepted: { label: 'Aceptado', cls: 'bg-green-50 text-green-700 border-green-200' },
@@ -11,17 +11,22 @@ const ESTADOS: Record<string, { label: string; cls: string }> = {
   sending: { label: 'Enviando', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 }
 
-export default function AsnTable({ asns, controles = {}, shareToken = '' }: {
+export default function AsnTable({ asns, controles = {}, shareToken = '', mailsControl = '' }: {
   asns: AsnResumen[]
   /** Controles de ingreso finalizados por asn_id (escaneo del deposito via link unico) */
   controles?: Record<string, ControlConResultado>
   shareToken?: string
+  /** Destinatarios del mail que se manda al cerrarse cada control */
+  mailsControl?: string
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
   const [avisando, setAvisando] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [editMails, setEditMails] = useState(false)
+  const [mails, setMails] = useState(mailsControl)
+  const [guardandoMails, setGuardandoMails] = useState(false)
 
   if (asns.length === 0) {
     return <p className="text-sm text-gray-500">No hay ASN registrados.</p>
@@ -34,16 +39,49 @@ export default function AsnTable({ asns, controles = {}, shareToken = '' }: {
           <span className="text-xs text-gray-500">
             Control de ingreso en depósito: link único para Andreani (lista las ASN con celulares pendientes de escaneo)
           </span>
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText(`${window.location.origin}/share/asn?token=${shareToken}`)
-              setCopiado(true)
-              setTimeout(() => setCopiado(false), 2000)
-            }}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-          >
-            {copiado ? '✓ Copiado' : 'Copiar link de control'}
-          </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            {editMails ? (
+              <span className="flex items-center gap-1.5">
+                <input
+                  value={mails}
+                  onChange={e => setMails(e.target.value)}
+                  placeholder="mail1@gocuotas.com, mail2@…"
+                  className="text-xs border border-gray-300 rounded px-2 py-1 w-64 outline-none focus:border-indigo-500"
+                  autoFocus
+                />
+                <button
+                  onClick={async () => {
+                    setGuardandoMails(true); setError(null)
+                    const r = await setMailsControlAsn(mails)
+                    if (r.error) setError(r.error)
+                    else { setEditMails(false); router.refresh() }
+                    setGuardandoMails(false)
+                  }}
+                  disabled={guardandoMails}
+                  className="text-xs font-medium text-emerald-700 hover:text-emerald-900 disabled:opacity-50"
+                >{guardandoMails ? '…' : 'Guardar'}</button>
+                <button onClick={() => { setEditMails(false); setMails(mailsControl) }} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setEditMails(true)}
+                className="text-xs text-gray-500 hover:text-gray-800"
+                title="Cada vez que el depósito cierra un control, se manda un mail con el resultado a estos destinatarios"
+              >
+                📧 {mailsControl ? mailsControl : 'Configurar mail de cierre'} <span className="text-indigo-600 font-medium">editar</span>
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                await navigator.clipboard.writeText(`${window.location.origin}/share/asn?token=${shareToken}`)
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2000)
+              }}
+              className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+            >
+              {copiado ? '✓ Copiado' : 'Copiar link de control'}
+            </button>
+          </div>
         </div>
       )}
       {error && <div className="px-6 py-2 text-sm text-red-600 border-b border-gray-100">{error}</div>}

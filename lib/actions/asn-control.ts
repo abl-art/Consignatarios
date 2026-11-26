@@ -13,6 +13,7 @@ import { getPool } from '@/lib/db-pool'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { compararLectura, normalizarScan, textoNovedadDiferencias, type ResultadoControl } from '@/lib/asn-control'
 import { enviarNovedadGocelular } from '@/lib/actions/novedades'
+import { enviarMail } from '@/lib/mailer'
 
 export interface ControlAsn {
   id: number
@@ -45,6 +46,51 @@ async function tokenValido(token: string | undefined): Promise<boolean> {
 /** Link completo para mandarle a Andreani (lo usa el boton Copiar de la pestaña ASN). */
 export async function getShareAsnToken(): Promise<string> {
   return tokenUnico()
+}
+
+// --- Mail de aviso al cierre de cada control -------------------------------
+
+const RE_MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Destinatarios (separados por coma) del mail que se manda al cerrarse un control. */
+export async function getMailsControlAsn(): Promise<string> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('flujo_config').select('value').eq('key', 'asn_control_mails').maybeSingle()
+  return (data?.value as string) ?? ''
+}
+
+export async function setMailsControlAsn(mails: string): Promise<{ ok?: true; error?: string }> {
+  const lista = mails.split(',').map(m => m.trim().toLowerCase()).filter(Boolean)
+  if (lista.some(m => !RE_MAIL.test(m))) return { error: 'Hay un mail con formato inválido' }
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('flujo_config')
+    .upsert({ key: 'asn_control_mails', value: lista.join(', '), updated_at: new Date().toISOString() })
+  if (error) return { error: error.message }
+  revalidatePath('/compras/envios')
+  return { ok: true }
+}
+
+// Best-effort: el cierre del control nunca falla por el mail (se loguea)
+async function mailarCierreControl(transaccion: string, r: ResultadoControl, nota: string | null): Promise<void> {
+  const para = await getMailsControlAsn()
+  if (!para) return
+  const total = r.ok.length + r.faltantes.length
+  const conDif = r.faltantes.length > 0 || r.sobrantes.length > 0
+  const asunto = conDif
+    ? `⚠ Control ASN ${transaccion}: ${r.faltantes.length} faltantes · ${r.sobrantes.length} sobrantes`
+    : `✓ Control ASN ${transaccion}: ingresó completa (${total} unidades)`
+  const lineas = [
+    `El depósito de Andreani finalizó el control de ingreso de la ASN ${transaccion}.`,
+    '',
+    `Esperadas: ${total} · Escaneadas OK: ${r.ok.length} · Faltantes: ${r.faltantes.length} · Sobrantes: ${r.sobrantes.length}`,
+  ]
+  if (r.faltantes.length > 0) lineas.push('', `FALTANTES (no escaneados):`, r.faltantes.join(', '))
+  if (r.sobrantes.length > 0) lineas.push('', `SOBRANTES (no pertenecen a la ASN):`, r.sobrantes.join(', '))
+  if (nota) lineas.push('', `Nota del operario: ${nota}`)
+  lineas.push('', 'Detalle completo: GOcelular360 → Compras → Envíos → pestaña ASN.')
+  const envio = await enviarMail({ para, asunto, texto: lineas.join('\n') })
+  if (!envio.ok) console.error(`mail de cierre ASN ${transaccion} falló:`, envio.error)
 }
 
 // --- Datos de la replica ---------------------------------------------------
@@ -179,19 +225,27 @@ export async function finalizarControlAsn(
   const supabase = createAdminClient()
   const { data: previo } = await supabase.from('asn_controles').select('estado').eq('asn_id', asnId).maybeSingle()
   if (previo?.estado === 'finalizado') return { error: 'Este control ya fue finalizado' }
+  const leidosNorm = leidos.map(normalizarScan).slice(0, 5000)
+  const sobrantesNorm = sobrantes.map(normalizarScan).slice(0, 5000)
+  const notaLimpia = nota.trim().slice(0, 500) || null
   const { error } = await supabase.from('asn_controles').upsert(
     {
       asn_id: asnId,
       asn_transaccion: rows[0].id_transaccion,
       estado: 'finalizado',
-      leidos: leidos.map(normalizarScan).slice(0, 5000),
-      sobrantes: sobrantes.map(normalizarScan).slice(0, 5000),
-      nota: nota.trim().slice(0, 500) || null,
+      leidos: leidosNorm,
+      sobrantes: sobrantesNorm,
+      nota: notaLimpia,
       finalizado_at: new Date().toISOString(),
     },
     { onConflict: 'asn_id' },
   )
   if (error) return { error: error.message }
+
+  // Mail de aviso a los destinatarios configurados (best-effort, no bloquea)
+  const esperados = await imeisDeAsn(asnId)
+  await mailarCierreControl(rows[0].id_transaccion, compararLectura(esperados, leidosNorm, sobrantesNorm), notaLimpia)
+
   revalidatePath('/compras/envios')
   return { ok: true }
 }
