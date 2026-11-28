@@ -53,6 +53,32 @@ export async function POST(req: NextRequest) {
     control: ctlPor.get(asnId) ?? null,
   })).sort((a, b) => a.fecha.localeCompare(b.fecha))
 
+  // detalle: lista los IMEIs esperados que NO vinieron en el excel, por ASN
+  let detalle: { asnId: string; transaccion?: string; fecha?: string; faltantes: { imei: string; sku: string | null }[] }[] = []
+  if (body.detalle === true) {
+    const ids = Array.isArray(body.asnIds) && body.asnIds.length ? (body.asnIds as string[]) : [...porAsn.keys()]
+    const { rows } = await pool.query(
+      `SELECT asn_transaction_id AS asn_id, imei, COALESCE(resolved_sku, model_code) AS sku
+       FROM inventory_intake_items WHERE asn_transaction_id = ANY($1)`,
+      [ids],
+    )
+    const setExcel = new Set(imeis)
+    const por = new Map<string, { imei: string; sku: string | null }[]>()
+    for (const r of rows) {
+      const im = normalizarScan(r.imei)
+      if (setExcel.has(im)) continue
+      const l = por.get(r.asn_id) ?? []
+      l.push({ imei: im, sku: r.sku })
+      por.set(r.asn_id, l)
+    }
+    detalle = [...por.entries()].map(([asnId, faltantes]) => ({
+      asnId,
+      transaccion: porAsn.get(asnId)?.transaccion,
+      fecha: porAsn.get(asnId)?.fecha,
+      faltantes,
+    }))
+  }
+
   // aplicar: registra el control (finalizado, sin mail) de las ASN pedidas
   let aplicadas: string[] = []
   if (body.aplicar === true && Array.isArray(body.asnIds)) {
@@ -81,6 +107,7 @@ export async function POST(req: NextRequest) {
     conMatch: match.length,
     sinMatch: imeis.length - new Set(match.map(m => normalizarScan(m.imei))).size,
     resumen,
+    detalle,
     aplicadas,
   })
 }
