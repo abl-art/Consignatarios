@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   )
   const porAsn = new Map<string, { transaccion: string; fecha: string; tomados: string[] }>()
   for (const m of match) {
-    const e = porAsn.get(m.asn_id) ?? { transaccion: m.id_transaccion, fecha: String(m.fecha).slice(0, 10), tomados: [] }
+    const e = porAsn.get(m.asn_id) ?? { transaccion: m.id_transaccion, fecha: String(m.fecha).slice(0, 10), tomados: [] as string[] }
     e.tomados.push(normalizarScan(m.imei))
     porAsn.set(m.asn_id, e)
   }
